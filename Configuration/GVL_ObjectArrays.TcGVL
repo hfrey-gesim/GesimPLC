@@ -1,0 +1,87 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<TcPlcObject Version="1.1.0.1" ProductVersion="3.1.4024.11">
+  <GVL Name="GVL_ObjectArrays" Id="{7fa2e5f2-a79a-41b3-b0ca-08c540a081b3}">
+    <Declaration><![CDATA[{attribute 'contextName':='PlcTask'}
+VAR_GLOBAL
+	//Instanzierung der Objekte, sollten vom jeweiligem Objekttyp die Anzahl geändert werden müssen
+	//dann die jeweilige Constante cMax....... ändern
+	
+	//MultiZ-Tools
+	afbMzHead 			: ARRAY[1..cMaxMzHeads] OF FB_MzHead;				//MultiZ-Kopf - Anzahl bei 2 Ebenenplotter auf 2 Stück erhöhen
+	afbPiezoPip 		: ARRAY[1..cMaxPiezoPips] OF FB_PiezoPip;			//Piezopipetten - Anzahl kann theoretisch auf 7 erhöht werden (pro Z-Scheibe 1 Pipette)
+	afbPassivPip		: ARRAY[1..cMaxPassivPips] OF FB_PassivPip;			//Passivpipetten - Anzahl kann theoretisch auf 7 erhöht werden (pro Z-Scheibe 1 Pipette)
+	afbPowderPip 		: ARRAY[1..cMaxPowderPips] OF FB_PowderPip;			//Pulverpipette
+	afbMultiCartHolder	: ARRAY[1..cMaxMultiCartHolder] OF FB_MultiCartHolder;	//ehemals Corshell-Dispenser
+	afbHybridDispenser	: ARRAY[1..cMaxHybridDispenser] OF FB_HybridDispenser;//
+	afbCartDisp			: ARRAY[1..cMaxCartDisp] OF FB_CartDispenser;		//Kartuschen-Dispenser
+	afbCartDispStirrer	: ARRAY[1..cMaxCartDispStirrer] OF FB_CartDispStirrer;	//Kartuschen-Dispenser mit Rührer
+	afbCartHolder		: ARRAY[1..cMaxCartHolder] OF FB_CartHolder;		//Kartuschen-Halter
+	afbCamera			: ARRAY[1..cMaxCameras] OF FB_Camera;				//Kamera oder Mikroskop oder Scanner
+	afbZLevelSensor		: ARRAY[1..cMaxZLevelSensors] OF FB_ZLevelSensor;	//Z-Levelsensor
+	afbStampSupport		: ARRAY[1..cMaxStampSupports] OF FB_StampSupport;	//Stempelkopf/Support
+	afbDeloDot			: ARRAY[1..cMaxDeloDots] OF FB_DeloDot;				//DeloDot
+	afbExposure			: ARRAY[1..cMaxExposure] OF FB_Exposure;			//Belichtung
+	afbTriplePip		: ARRAY[1..cMaxTriplePip] OF FB_TriplePip;			//TriplePipette
+	afbFlipTubeHandler	: ARRAY[1..cMaxFlipTubeHandler] OF FB_FlipTubeHandler;
+	afbLuer				: ARRAY[1..cMaxLuer] OF FB_Luer;					
+	afbVacuumHandler	: ARRAY[1..cMaxLuer] OF FB_VacuumHandler;
+	afbSinglePiezoHolder: ARRAY[1..cMaxSinglePiezoHolder] OF FB_SingelPiezoHolder;
+	afbTwinPiezoHolder	: ARRAY[1..cMaxTwinPiezoHolder] OF FB_TwinPiezoHolder;
+	afbSolenoidPip		: ARRAY[1..cMaxSolenoidPip] OF FB_SolenoidPip;
+	afbExtruder			: ARRAY[1..cMaxExtruder] OF FB_Extruder;
+	afbpHElectrode		: ARRAY[1..cMaxpHElectrodes] OF FB_pHElectrode;
+	afbTitrationTool	: ARRAY[1..cMaxTitrationTools] OF FB_TitrationTool;
+	afbTwinExtruder		: ARRAY[1..cMaxTwinExtruder] OF FB_TwinExtruder;
+	afbVermesDisp		: ARRAY[1..cMaxVermesDisp] OF FB_VermesDisp;
+	afbDummyTool		: ARRAY[1..cMaxDummyTools] OF FB_DummyTool;	//Universelles Tool, welches außer den Move-Actions keine speziellen Funktionalitäten hat
+	afbGripper			: ARRAY[1..cMaxGripper] OF FB_Gripper;
+	afbPickPlacePip		: ARRAY[1..cMaxPickPlacePip] OF FB_PickPlacePip;
+	
+	//passive Targets
+	afbWorkplate		: ARRAY[1..cMaxWorkplates] OF FB_Workplate;			//repräsentiert die gesamte Arbeitsfläche (Root) und kann nur 1x vorhanden sein
+	afbSpotArray		: ARRAY[1..cMaxSpotArrays] OF FB_SpotArray;			//SpotArray
+	afbDryPad			: ARRAY[1..cMaxDrayPads] OF FB_DryPad;				//Trockenpad
+	afbSeptumWaste		: ARRAY[1..cMaxSeptumWaste] OF FB_SeptumWaste;		//SeptumWaste
+	
+	afbStampMagazine	: ARRAY[1..cMaxStampMagazines] OF FB_StampMagazine;	//Stempelmagazin
+	afbSpotPattern		: ARRAY[1..cMaxSpotPatterns] OF FB_SpotPattern;		//Spotpattern
+	afbNeedleRack		: ARRAY[1..cMaxNeedleRack] OF FB_NeedleRack;		//NeedleRack
+	afbTipRack			: ARRAY[1..cMaxTipRack] OF FB_TipRack;				//TipRack
+	afbFlipTubeRack		: ARRAY[1..cMaxFlipTubeRack] OF FB_FlipTubeRack;	//FlipTubeRack
+	afbSeptumRack		: ARRAY[1..cMaxSeptumRack] OF FB_SeptumRack;		//SeptumRack
+	afbVialRack			: ARRAY[1..cMaxVialRack] OF FB_VialRack;			//VialRack
+	afbPortRack			: ARRAY[1..cMaxPortRack] OF FB_PortRack;			//PortRack
+	afbpHElectrodeCapRack : ARRAY[1..cMaxpHElectrodeCapRack] OF FB_pHElectrodeCapRack;	//Rack für Konditionierungsgefäß pH-Elektrode
+	afbTipCleanerGen2	: ARRAY[1..cMaxTipCleanerGen2] OF FB_TipCleanerGen2;
+	
+	//aktive Targets
+	afbWashStation		: ARRAY[1..cMaxWashStations] OF FB_WashStation;		//Waschstation
+	afbTipCleaner		: ARRAY[1..cMaxTipCleaners] OF FB_TipCleaner;		//Tip-Reinigung
+	afbTipCalibrator	: ARRAY[1..cMaxTipCalibrators] OF FB_TipCalibrator;	//Tip-Kalibrierung
+	afbStroboscope		: ARRAY[1..cMaxStroboscopes] OF FB_Stroboscope;		//Stroboskop
+	afbMtpHolder		: ARRAY[1..cMaxMtpHolders] OF FB_MtpHolder;			//Mikrotiterplattenhalter, kann heizen oder kühlen
+	afbSubstHolder		: ARRAY[1..cMaxSubstHolders] OF FB_SubstHolder;		//Substrathalter, kann heizen oder kühlen
+	{IF defined(Unistat)}
+	afbSubstHolderUnistat: ARRAY[1..cMaxSubstHolderUnistat] OF FB_SubstHolderUnistat;		//Substrathalter mit Huber Unistat 405
+	{END_IF}
+	afbInkStation		: ARRAY[1..cMaxInkStations] OF FB_InkStation;		//Lackschleuder für µCP
+	afbPowderStation	: ARRAY[1..cMaxPowderStations] OF FB_PowderStation;	//Pulvervorrat für Pulverpipette
+	afbReactor			: ARRAY[1..cMaxReactors] OF FB_Reactor;				//Reaktor
+	afbLiquidReserve	: ARRAY[1..cMaxLiquidReserve] OF FB_LiquidReserve;	//LiquidReserve
+	afbHighVoltTray		: ARRAY[1..cMaxHighVoltTray] OF FB_HighVoltTray;	//Hochspannungstablett für MES
+	afbWorkplateCamera	: ARRAY[1..cMaxWorkplateCameras] OF FB_WorkplateCamera;
+	afbCustomUnitType1	: ARRAY[1..cMaxCustomUnitTyp1] OF FB_CustomUnitType1;
+	afbCustomUnitType2	: ARRAY[1..cMaxCustomUnitTyp2] OF FB_CustomUnitType2;
+	afbTrayTransporter	: ARRAY[1..cMaxTrayTransporter] OF FB_TrayTransporter;
+	
+	//sonstige Devices
+	afbDiluter			: ARRAY[1..cMaxDiluters] OF FB_Diluter;				//Spritzenpumpen
+	afbDiluter3Inputs	: ARRAY[1..cMaxDiluters3Inputs] OF FB_Diluter3Inputs;
+	afbStacker			: ARRAY[1..cMaxStacker] OF FB_Stacker;
+	
+
+	////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////	
+END_VAR
+]]></Declaration>
+  </GVL>
+</TcPlcObject>

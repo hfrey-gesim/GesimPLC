@@ -1,0 +1,12 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<TcPlcObject Version="1.1.0.1" ProductVersion="3.1.4020.12">
+  <DUT Name="E_DilPrepareMode" Id="{37528f9d-faf5-4857-b422-f66bf905a1e2}">
+    <Declaration><![CDATA[TYPE E_DilPrepareMode :
+(
+	ForAspirate := 0,
+	ForDispense := 1
+)USINT;
+END_TYPE
+]]></Declaration>
+  </DUT>
+</TcPlcObject>

@@ -1,0 +1,17 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<TcPlcObject Version="1.1.0.1" ProductVersion="3.1.4020.12">
+  <DUT Name="E_CompOperator" Id="{32146621-6a41-4cd7-947a-393ed583ba39}">
+    <Declaration><![CDATA[{attribute 'qualified_only'}
+TYPE E_CompOperator :
+(
+	COMP_OP_GT,	//>
+	COMP_OP_LT,	//<
+	COMP_OP_GE,	//>=
+	COMP_OP_LE,	//<=
+	COMP_OP_EQ,	//=
+	COMP_OP_NE	//<>
+)USINT;
+END_TYPE
+]]></Declaration>
+  </DUT>
+</TcPlcObject>

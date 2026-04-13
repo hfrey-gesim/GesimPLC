@@ -1,0 +1,18 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<TcPlcObject Version="1.1.0.1" ProductVersion="3.1.0.25">
+  <DUT Name="E_MoveDirection" Id="{b068f3d9-b7b1-4e74-93dd-6e40da353a05}">
+    <Declaration><![CDATA[TYPE E_MoveDirection :
+(
+	DIRECTION_STOP := 0,
+	DIRECTION_XPLUS := 1,
+	DIRECTION_XMINUS := 2,
+	DIRECTION_YPLUS := 3,
+	DIRECTION_YMINUS := 4,
+	DIRECTION_ZPLUS := 5,
+	DIRECTION_ZMINUS := 6
+)USINT;
+END_TYPE
+]]></Declaration>
+    <ObjectProperties />
+  </DUT>
+</TcPlcObject>

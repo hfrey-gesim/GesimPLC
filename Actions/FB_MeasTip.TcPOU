@@ -1,0 +1,742 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<TcPlcObject Version="1.1.0.1" ProductVersion="3.1.4022.18">
+  <POU Name="FB_MeasTip" Id="{418641d8-55ea-4a79-b669-16e5b41a5ccd}" SpecialFunc="None">
+    <Declaration><![CDATA[FUNCTION_BLOCK FB_MeasTip
+VAR_INPUT
+	bExecute 		: BOOL;
+	pMzTool			: POINTER TO FB_MzBase;
+	pTipCalibrator	: POINTER TO FB_TipCalibrator;
+	nDirection 		: USINT;	//1: X, 2: Y, 3: Z
+	nZFeedStart		: DINT;		//Anfangsschrittweite in Z (µm)
+	nZFeedEnde		: DINT;		//Endschrittweite in Z (µm)
+	nZFeedMax		: DINT;
+	stStartPos		: ST_3DPoint;
+	stEndPos		: ST_3DPoint;
+	stTempPoint		: ST_3DPoint;
+END_VAR
+VAR_OUTPUT
+	bBusy		: BOOL;
+	bError		: BOOL;
+	nErrorId	: ERRORID;
+	stProbePos	: ST_3DPoint;
+END_VAR
+VAR
+	stError				: ST_Error;
+	pXDrive				: POINTER TO FB_XYDriveBase;
+	pYDrive				: POINTER TO FB_XYDriveBase;
+	nState				: USINT;
+	stCurrentPos		: ST_3DPoint;
+	stCalibPoint		: ST_3DPoint;
+	stPassIntersect		: ST_3DPoint;	
+	stActionData		: ST_ActionData;
+	rCapturedPos1		: REAL;
+	rCapturedPos2		: REAL;
+	nStateA_ProbeX		: USINT;
+	nStateA_ProbeY		: USINT;
+	bSingleProbe		: BOOL;
+	bDirPositive		: BOOL;
+	nStartPos			: DINT;
+	nEndPos				: DINT;
+	bBeginStartPos		: BOOL;
+	nProbeSpeed			: DINT := 20000;
+	bProbeSuccess		: BOOL;
+	nProbeErrorId		: UINT;
+	bProbePositiveOK	: BOOL;
+	bProbeNegativeOK	: BOOL;
+	bProbeMissingTouch	: BOOL;
+	bProbeFlag			: BOOL;
+	bTouchProbe			: BOOL;
+	nProbeCount			: USINT;
+	nZFeed				: DINT;
+	nZFeedSum			: DINT;
+	bMaxFeedAchieved	: BOOL;
+END_VAR
+]]></Declaration>
+    <Implementation>
+      <ST><![CDATA[IF bExecute THEN
+	IF nDirection = 1 THEN	//X
+		A_MeasureX();
+	ELSIF nDirection = 2 THEN //Y
+		A_MeasureY();
+	ELSIF nDirection = 3 THEN	//Z
+		A_MeasureZ();
+	END_IF
+ELSE
+	bError := FALSE;
+	nErrorId := 0;
+	nState := 0;
+	nStateA_ProbeX := 0;
+	nStateA_ProbeY := 0;
+END_IF]]></ST>
+    </Implementation>
+    <Action Name="A_MeasureX" Id="{a53ff7f2-52bd-4b7a-ad33-4ceb7ecc3453}">
+      <Implementation>
+        <ST><![CDATA[IF pMzTool^.P_bError THEN
+	nState := 99;
+	bError := TRUE;
+	stError := pMzTool^.P_stError;
+	nErrorId := stError.ErrorId; 
+END_IF
+
+CASE nState OF
+	0:	
+		nStartPos := REAL_TO_DINT(stStartPos.X);
+		nEndPos := REAL_TO_DINT(stEndPos.X);
+		bBusy := TRUE;
+		bBeginStartPos := TRUE;
+		bSingleProbe := FALSE;
+		nState := 1;
+
+	1:	//XProbe
+		A_ProbeX();
+		IF nStateA_ProbeX = 80 THEN
+			nStateA_ProbeX := 0;
+			IF bProbeSuccess AND bProbePositiveOK AND bProbeNegativeOK THEN
+				//Checken, ob beide Probe-Positionen nicht zu weit voneinander abweichen (max5mm)
+				IF ABS(rCapturedPos1 - rCapturedPos2) > 20000 THEN
+					bError := TRUE;
+					nErrorId := E_ErrorIdCmd.ERRORID_MeasureTouchProbeFail;
+					bBusy := FALSE;
+					RETURN;	
+				END_IF				
+				stTempPoint.X := (rCapturedPos1 + rCapturedPos2) / 2;
+				stTempPoint :=  pMzTool^.M_RawPosToRealPos(stTempPoint);
+				stProbePos.X := stTempPoint.X;
+				bBusy := FALSE;	
+			END_IF
+		ELSIF nStateA_ProbeX = 99 THEN
+			nStateA_ProbeX := 0;
+			bBusy := FALSE;
+			bError := TRUE;
+			nErrorId := nProbeErrorId;
+		END_IF
+		
+	70:	//Abbrechen
+		IF nStateA_ProbeX > 0 THEN
+			nStateA_ProbeX := 70;
+			A_ProbeX();
+			nState := 71;
+		END_IF
+		
+	71:	
+		A_ProbeX();
+		IF nStateA_ProbeX >= 80 THEN
+			IF nStateA_ProbeX >= 99 THEN
+				nErrorId := nProbeErrorId;
+				bError := TRUE;
+			END_IF
+			nStateA_ProbeX := 0;
+			bBusy := FALSE;
+		END_IF
+END_CASE]]></ST>
+      </Implementation>
+    </Action>
+    <Action Name="A_MeasureY" Id="{8d31b1f5-d4d7-4f0c-ac2f-d1b0f8902aed}">
+      <Implementation>
+        <ST><![CDATA[IF pMzTool^.P_bError THEN
+	nState := 90;
+	bError := TRUE;
+	stError := pMzTool^.P_stError;
+	nErrorId := stError.ErrorId; 
+END_IF
+
+CASE nState OF
+	0:	
+		nStartPos := REAL_TO_DINT(stStartPos.Y);
+		nEndPos := REAL_TO_DINT(stEndPos.Y);
+		bBusy := TRUE;
+		bBeginStartPos := FALSE;
+		bSingleProbe := FALSE;
+		nState := 1;
+
+	1:	//YProbe
+		A_ProbeY();
+		IF nStateA_ProbeY = 80 THEN
+			nStateA_ProbeY := 0;
+			IF bProbeSuccess AND bProbePositiveOK AND bProbeNegativeOK THEN
+				//Checken, ob beide Probe-Positionen nicht zu weit voneinander abweichen (max5mm)
+				IF ABS(rCapturedPos1 - rCapturedPos2) > 20000 THEN
+					bError := TRUE;
+					nErrorId := E_ErrorIdCmd.ERRORID_MeasureTouchProbeFail;
+					bBusy := FALSE;
+					RETURN;	
+				END_IF
+				stTempPoint.Y := (rCapturedPos1 + rCapturedPos2) / 2;
+				stTempPoint :=  pMzTool^.M_RawPosToRealPos(stTempPoint);
+				stProbePos.Y := stTempPoint.Y;
+				bBusy := FALSE;	
+			END_IF
+		ELSIF nStateA_ProbeY = 99 THEN
+			nStateA_ProbeY := 0;
+			bBusy := FALSE;
+			bError := TRUE;
+			nErrorId := nProbeErrorId;
+		END_IF
+		
+	70:	//Abbrechen
+		IF nStateA_ProbeY > 0 THEN
+			nStateA_ProbeY := 70;
+			A_ProbeY();
+			nState := 71;
+		END_IF
+		
+	71:	
+		A_ProbeY();
+		IF nStateA_ProbeY >= 80 THEN
+			IF nStateA_ProbeY >= 99 THEN
+				bError := TRUE;
+			END_IF
+			nStateA_ProbeY := 0;
+			bBusy := FALSE;
+		END_IF		
+END_CASE
+]]></ST>
+      </Implementation>
+    </Action>
+    <Action Name="A_MeasureZ" Id="{ea2e0f50-f3b4-40bb-833c-6c73d9476aad}">
+      <Implementation>
+        <ST><![CDATA[IF pMzTool^.P_bError THEN
+	nState := 90;
+	stError := pMzTool^.P_stError;
+	nErrorId := stError.ErrorId; 
+END_IF
+		
+CASE nState OF
+	0:	//
+		nStartPos := REAL_TO_DINT(stStartPos.X);
+		nEndPos := REAL_TO_DINT(stEndPos.X);
+		nZFeed := nZFeedStart;
+		bBusy := TRUE;
+		nZFeedSum := 0;
+		bBeginStartPos := TRUE;
+		bMaxFeedAchieved := FALSE;
+		nState := 1;
+
+	1:	//XProbe
+		bSingleProbe := TRUE;
+		IF nZFeed > 0 THEN
+			bProbeMissingTouch := TRUE;
+		ELSE
+			bProbeMissingTouch := FALSE;
+		END_IF
+		
+		A_ProbeX();
+		IF nStateA_ProbeX = 80 THEN
+			nStateA_ProbeX := 0;
+			bBeginStartPos := FALSE;
+			IF bProbeSuccess THEN
+				//wenn hier schon erfolgreich, dann noch einmal in die andere Richtung und dann auf Encoderwert fahren
+				IF bProbePositiveOK XOR bProbeNegativeOK THEN
+					RETURN;
+				ELSIF bProbePositiveOK AND bProbeNegativeOK THEN
+					//Checken, ob beide Probe-Positionen nicht zu weit voneinander abweichen (max5mm)
+					IF ABS(rCapturedPos1 - rCapturedPos2) > 20000 THEN
+						bError := TRUE;
+						nErrorId := E_ErrorIdCmd.ERRORID_MeasureTouchProbeFail;
+						bBusy := FALSE;
+						RETURN;	
+					END_IF					
+					//auf ermittelten Wert fahren
+					nState := 4;
+				ELSE
+					bError := TRUE;
+					bBusy := FALSE;
+				END_IF
+			ELSE
+				nState := 2;
+			END_IF
+			
+		ELSIF nStateA_ProbeX = 99 THEN
+			nStateA_ProbeX := 0;
+			bBusy := FALSE;
+			nErrorId := nProbeErrorId;
+			bError := TRUE;
+		END_IF
+		
+	2:	//ZMove
+		IF bMaxFeedAchieved THEN
+			bError := TRUE;
+			nErrorId := E_ErrorIdCmd.ERRORID_MeasureZDistanceExeeded;
+			bBusy := FALSE;
+			RETURN;
+		END_IF
+		nZFeedSum := nZFeedSum + nZFeed;
+		IF nZFeedSum <= nZFeedMax THEN	//Feed auf begrenzen
+			nZFeed := nZFeedSum - nZFeedMax;
+			nZFeedSum := nZFeedMax;
+			//letzter Move
+			bMaxFeedAchieved := TRUE;
+		END_IF
+
+		MEMSET(ADR(stActionData),0,SIZEOF(stActionData));
+		stActionData.eAction := E_Action.ACTION_MoveZ;
+		stActionData.aParams[1] := E_MoveMode.MODE_Relative;
+		stActionData.aParams[2] := nZFeed;	//Verfahrweg in Z
+		stActionData.aParams[3] := -1;	//Speed		
+		nErrorId := pMzTool^.M_ExeAction(stActionData);
+		nState := 3;
+		
+	3:	//Warten bis ZMove fertig
+		IF NOT pMzTool^.M_GetActionBusy(E_Action.ACTION_MoveZ) THEN
+			nState := 1;
+		END_IF
+		
+	4:	//XMove auf Mittelwert der beiden Probe-Werte
+		MEMSET(ADR(stActionData),0,SIZEOF(stActionData));
+		stActionData.eAction := E_Action.ACTION_MoveX;
+		stActionData.aParams[1] := E_MoveMode.MODE_AbsNoneOffset;
+		stActionData.aParams[2] := REAL_TO_DINT((rCapturedPos1 + rCapturedPos2) / 2);
+		stActionData.aParams[3] := -1; //FastSpeed
+		stActionData.aParams[4] := 1;	//Z-Kollision ignorieren
+		nErrorId := pMzTool^.M_ExeAction(stActionData);
+		nState := 5;
+		
+	5:	//Warten bis XMove fertig
+		IF NOT pMzTool^.M_GetActionBusy(E_Action.ACTION_MoveX) THEN
+			stProbePos := pMzTool^.P_stCurrentPosPhys;
+			IF pTipCalibrator^.P_bXSensor THEN //steht nicht auf Sensor
+				bBeginStartPos := TRUE;
+				bSingleProbe := TRUE;
+				nZFeed := 100;
+				bProbeFlag := TRUE;
+				nState := 7;	
+			ELSE	//steht auf Sensor
+				//in Z nach oben fahren
+				MEMSET(ADR(stActionData),0,SIZEOF(stActionData));
+				stActionData.eAction := E_Action.ACTION_MoveZ;
+				stActionData.aParams[1] := E_MoveMode.MODE_Relative;
+				stActionData.aParams[2] := 5000;	//Verfahrweg in Z
+				stActionData.aParams[3] := 1600;	//Speed		
+				nErrorId := pMzTool^.M_ExeAction(stActionData);
+				nState := 6;
+			END_IF
+		END_IF
+		
+	6:	//Warten bis ZMove fertig oder Sensor
+		IF pTipCalibrator^.P_bXSensor THEN	//Stoppen
+			stActionData.eAction := E_Action.ACTION_Stop;
+			nErrorId := pMzTool^.M_ExeAction(stActionData);
+		END_IF
+		
+		IF NOT pMzTool^.M_GetActionBusy(E_Action.ACTION_MoveZ) THEN
+			bBeginStartPos := TRUE;
+			nZFeed := 100;
+			bProbeFlag := TRUE;
+			nState := 7;
+		END_IF
+
+	7:	//Probe ob oberhalb oder unterhalb Sensor	
+		A_ProbeX();
+		IF nStateA_ProbeX = 80 THEN
+			nStateA_ProbeX := 0;
+			bBeginStartPos := FALSE;
+			IF bProbeFlag THEN	//wurde noch nicht nach unten getaktet
+				bProbeFlag := FALSE;
+				IF bProbeSuccess THEN	//steht unterhalb Sensor muss also nach oben
+					nState := 8;
+				ELSE //steht oberhalb Sensor
+					nZFeed := -nZFeed;
+					nState := 8;
+				END_IF
+			ELSE //es wurde bereits nach unten getaktet
+				IF bProbeMissingTouch THEN //es wurde nach oben getaktet
+					IF bProbeSuccess THEN
+						//wieder nach unten takten, aber mit halber Schrittweite
+						nZFeed := -nZFeed / 2;
+					END_IF
+				ELSE //es wurde nach unten getaktet
+					IF bProbeSuccess THEN
+						IF nZFeed >= nZFeedEnde THEN
+							IF bProbePositiveOK AND bProbeNegativeOK THEN
+								stTempPoint := pMzTool^.P_stCurrentPosPhys;
+								stProbePos.Z := stTempPoint.Z;
+								bBusy := FALSE;
+							ELSE
+								RETURN;
+							END_IF
+						END_IF
+						nZFeed := -nZFeed / 2;
+					END_IF
+				END_IF
+				nState := 8;
+			END_IF
+		ELSIF nStateA_ProbeX = 99 THEN
+			nStateA_ProbeX := 0;
+			bBusy := FALSE;
+			bError := TRUE;
+			nErrorId := nProbeErrorId;
+		END_IF
+
+	8:	//ZMove
+		nZFeedSum := nZFeedSum + nZFeed;
+		IF nZFeedSum < (nZFeedMax -100) THEN
+			nErrorId := E_ErrorIdCmd.ERRORID_MeasureZDistanceExeeded;
+			bError := TRUE;
+			bBusy := FALSE;
+			RETURN;
+		END_IF	
+		MEMSET(ADR(stActionData),0,SIZEOF(stActionData));
+		stActionData.eAction := E_Action.ACTION_MoveZ;
+		stActionData.aParams[1] := E_MoveMode.MODE_Relative;
+		stActionData.aParams[2] := nZFeed;	//Verfahrweg in Z
+		stActionData.aParams[3] := -1;	//Speed		
+		nErrorId := pMzTool^.M_ExeAction(stActionData);
+		nState := 9;
+		
+	9:	//Warten bis ZMove fertig
+		IF NOT pMzTool^.M_GetActionBusy(E_Action.ACTION_MoveZ) THEN
+			IF nZFeed < 0 THEN
+				bProbeMissingTouch := FALSE;
+ 			ELSE
+				bProbeMissingTouch := TRUE;
+				bSingleProbe := TRUE;
+			END_IF
+			nState := 7;
+		END_IF
+		
+	70:	//Abbrechen
+		IF nStateA_ProbeX > 0 THEN
+			nStateA_ProbeX := 70;
+			A_ProbeX();
+			nState := 71;
+		ELSIF nStateA_ProbeY > 0 THEN
+			nStateA_ProbeY := 70;
+			A_ProbeY();
+			nState := 72;
+		ELSIF pMzTool^.M_GetActionBusy(E_Action.ACTION_MoveX) THEN
+			pMzTool^.M_CancelAction(E_Action.ACTION_MoveX);
+		ELSIF pMzTool^.M_GetActionBusy(E_Action.ACTION_MoveZ) THEN
+			pMzTool^.M_CancelAction(E_Action.ACTION_MoveZ);
+		ELSE
+			bBusy := FALSE;
+		END_IF
+	
+	71:	
+		A_ProbeX();
+		IF nStateA_ProbeX >= 80 THEN
+			IF nStateA_ProbeX >= 99 THEN
+				bError := TRUE;
+			END_IF
+			nStateA_ProbeX := 0;
+			bBusy := FALSE;
+		END_IF
+
+	72:
+		A_ProbeY();
+		IF nStateA_ProbeY >= 80 THEN
+			IF nStateA_ProbeY >= 99 THEN
+				bError := TRUE;
+			END_IF
+			nStateA_ProbeY := 0;
+			bBusy := FALSE;
+		END_IF			
+END_CASE]]></ST>
+      </Implementation>
+    </Action>
+    <Action Name="A_ProbeX" Id="{c0fecc4a-16cc-49ec-9107-dc5589bce41e}">
+      <Implementation>
+        <ST><![CDATA[CASE nStateA_ProbeX OF
+	0:		
+		pXDrive := pMzTool^.P_pXDrive;
+		IF pXDrive = 0 THEN
+			nStateA_ProbeX := 99;
+			RETURN;
+		END_IF
+		
+		IF bBeginStartPos THEN	//MoveX zum Startpunkt
+			MEMSET(ADR(stActionData),0,SIZEOF(stActionData));
+			stActionData.eAction := E_Action.ACTION_MoveX;
+			stActionData.aParams[1] := E_MoveMode.MODE_AbsWithOffset;
+			stActionData.aParams[2] := nStartPos;
+			stActionData.aParams[3] := -1; //FastSpeed
+			stActionData.aParams[4] := 1;	//Z-Kollision ignorieren
+			nProbeErrorId := pMzTool^.M_ExeAction(stActionData);
+			bDirPositive := FALSE; //erste Richtung festlegen
+			bProbePositiveOK := FALSE;
+			bProbeNegativeOK := FALSE;
+			MEMSET(ADR(stTempPoint),0,SIZEOF(stTempPoint));
+			nStateA_ProbeX := 1;
+		ELSE
+			bDirPositive := NOT bDirPositive; //Richtung umkehren
+			IF bDirPositive THEN
+				bProbePositiveOK := FALSE;
+			ELSE
+				bProbeNegativeOK := FALSE;
+			END_IF
+			nStateA_ProbeX := 2;
+		END_IF
+			nProbeCount := 0;
+			bProbeSuccess := FALSE;
+
+	1:	//Warte	bis MoveX fertig
+		IF NOT pMzTool^.M_GetActionBusy(E_Action.ACTION_MoveX) THEN
+			nStateA_ProbeX := 2;
+		END_IF
+
+	2:	//XMove mit TouchProbe
+		pXDrive^.M_Capture();
+		bTouchProbe := FALSE;
+		MEMSET(ADR(stActionData),0,SIZEOF(stActionData));
+		stActionData.eAction := E_Action.ACTION_MoveX;
+		stActionData.aParams[1] := E_MoveMode.MODE_AbsWithOffset;
+		IF bDirPositive THEN	//XMove Richtung StartPos
+			stActionData.aParams[2] := nStartPos;
+		ELSE  //XMove Richtung EndPos
+			stActionData.aParams[2] := nEndPos;
+		END_IF
+		stActionData.aParams[3] := nProbeSpeed;	//Speed
+		stActionData.aParams[4] := 1;	//Z-Kollision ignorieren
+		nProbeErrorId := pMzTool^.M_ExeAction(stActionData);		
+		nStateA_ProbeX := 3;
+		
+	3:	//Warte	bis MoveX fertig
+		IF NOT pMzTool^.M_GetActionBusy(E_Action.ACTION_MoveX) THEN
+			//Sensor darf jetzt nicht geschalten sein
+			IF NOT pTipCalibrator^.P_bXSensor THEN
+				nProbeErrorId := E_ErrorIdCmd.ERRORID_TipCalibSensor;
+				pXDrive^.M_StopCapture();
+				nStateA_ProbeX := 99;
+				RETURN;
+			END_IF
+			nProbeCount := nProbeCount  + 1;
+			IF pXDrive^.P_bCaptureOk THEN
+				bTouchProbe := TRUE;
+			END_IF
+			IF bProbeMissingTouch THEN	//es wird auf fehlendes Signal getesten
+				bProbePositiveOK := FALSE;
+				bProbeNegativeOK := FALSE;
+				IF bTouchProbe THEN	 //nicht erfolgreich
+					nStateA_ProbeX := 80;	//Fertig!!
+				ELSE
+					IF bSingleProbe THEN  //erfolgreich
+						bProbeSuccess := TRUE;
+						pXDrive^.M_StopCapture();
+						nStateA_ProbeX := 10;	//Fertig!!//TouchProbe zurücksetzen
+					ELSE
+						IF nProbeCount = 1 THEN
+							//Zweiter Move - TouchProbe nicht zurücksetzen
+							bDirPositive := NOT bDirPositive; //Richtung umkehren
+							nStateA_ProbeX := 2;  //XMove
+						ELSE
+							bProbeSuccess := TRUE;
+							pXDrive^.M_StopCapture();
+							nStateA_ProbeX := 10;	//Fertig!!//TouchProbe zurücksetzen
+						END_IF
+					END_IF
+				END_IF
+			ELSE	//es wird auf kommendes Signal getestet
+				IF bTouchProbe THEN	//Signal ist gekommen
+					IF bDirPositive THEN
+						rCapturedPos1 := pXDrive^.P_rCapturedPos;
+						stTempPoint.X := rCapturedPos1;
+						stTempPoint := pMzTool^.M_RawPosToRealPos(stTempPoint);
+						nEndPos := REAL_TO_DINT(stTempPoint.X - 1500);
+						bProbePositiveOK := TRUE;
+					ELSE
+						rCapturedPos2 := pXDrive^.P_rCapturedPos;
+						stTempPoint.X := rCapturedPos2;
+						stTempPoint := pMzTool^.M_RawPosToRealPos(stTempPoint);
+						nStartPos := REAL_TO_DINT(stTempPoint.X + 1500);
+						bProbeNegativeOK := TRUE;
+					END_IF
+					
+					IF bSingleProbe THEN //erfolgreich
+						bProbeSuccess := TRUE;
+						nStateA_ProbeX := 80;	//Fertig!!
+					ELSE //TwinProbe
+						IF nProbeCount = 1 THEN //war erster Move
+							//Zweiter Move erforderlich
+							bDirPositive := NOT bDirPositive; //Richtung umkehren
+							nStateA_ProbeX := 2;  //XMove
+						ELSE
+							bProbeSuccess := TRUE;
+							nStateA_ProbeX := 80;	//Fertig!!
+						END_IF
+					END_IF
+				ELSE //Signal ist nicht gekommen
+					IF bSingleProbe THEN //SingleProbe - nicht erfolgreich
+						pXDrive^.M_StopCapture();
+						nStateA_ProbeX := 10;	//Fertig!!//TouchProbe zurücksetzen
+					ELSE //TwinProbe
+						IF nProbeCount = 1 THEN //war erster Move
+							//Zweiter Move
+							bDirPositive := NOT bDirPositive; //Richtung umkehren
+							nStateA_ProbeX := 2;  //XMove
+						ELSE //war zweiter Move -> nicht erfolgreich
+							pXDrive^.M_StopCapture();
+							nStateA_ProbeX := 90;	//Fertig!!//TouchProbe zurücksetzen
+						END_IF
+					END_IF
+				END_IF
+			END_IF
+		END_IF
+		
+	70:	//Abbrechen
+		IF pMzTool^.M_GetActionBusy(E_Action.ACTION_MoveX) THEN
+			pMzTool^.M_CancelAction(E_Action.ACTION_MoveX);
+			pXDrive^.M_StopCapture();
+		ELSE
+			nStateA_ProbeX := 80;
+		END_IF
+		
+
+	10,90:	//TouchProbe zurücksetzen
+		IF pXDrive^.P_bCaptureStopped THEN
+			IF nStateA_ProbeX = 10 THEN
+				nStateA_ProbeX := 80;
+			ELSE
+				nStateA_ProbeX := 99;	
+			END_IF
+		END_IF
+END_CASE
+
+IF (nProbeErrorId > 0) AND (nStateA_ProbeX < 99) THEN
+	pXDrive^.M_StopCapture();
+	nStateA_ProbeX := 90;
+END_IF]]></ST>
+      </Implementation>
+    </Action>
+    <Action Name="A_ProbeY" Id="{e74d7ab3-24d1-4065-b4da-2089b388751f}">
+      <Implementation>
+        <ST><![CDATA[CASE nStateA_ProbeY OF
+	0:	
+		pYDrive := pMzTool^.P_pYDrive;
+		IF pYDrive = 0 THEN
+			nStateA_ProbeY := 99;
+			RETURN;
+		END_IF
+
+		bDirPositive := TRUE;
+		nProbeCount := 0;
+		nStateA_ProbeY := 1;
+		
+	1:	//YMove	
+		pYDrive^.M_Capture();
+		bProbeSuccess := FALSE;
+		bTouchProbe := FALSE;
+		MEMSET(ADR(stActionData),0,SIZEOF(stActionData));
+		stActionData.eAction := E_Action.ACTION_MoveY;
+		stActionData.aParams[1] := E_MoveMode.MODE_AbsWithOffset;
+		IF bDirPositive THEN	//XMove Richtung StartPos
+			stActionData.aParams[2] := nEndPos;
+		ELSE  //XMove Richtung EndPos
+			stActionData.aParams[2] := nStartPos;
+		END_IF
+		stActionData.aParams[3] := nProbeSpeed;	//Speed
+		stActionData.aParams[4] := 1;	//Z-Kollision ignorieren
+		nProbeErrorId := pMzTool^.M_ExeAction(stActionData);	//ErrorHandling am Ende	
+		nStateA_ProbeY := 2;
+		
+	2:	//Warte	bis MoveY fertig
+		IF NOT pMzTool^.M_GetActionBusy(E_Action.ACTION_MoveY) THEN
+			IF NOT pTipCalibrator^.P_bYSensor THEN
+				nProbeErrorId := E_ErrorIdCmd.ERRORID_TipCalibSensor;
+				pYDrive^.M_StopCapture();
+				nStateA_ProbeY := 99;
+				RETURN;
+			END_IF
+			
+			nProbeCount := nProbeCount  + 1;
+			IF pYDrive^.P_bCaptureOk THEN
+				bTouchProbe := TRUE;
+				pYDrive^.M_StopCapture();
+			END_IF
+							
+			//es wird auf kommendes Signal getestet
+			IF bTouchProbe THEN	//Signal ist gekommen
+				IF bDirPositive THEN
+					rCapturedPos1 := pYDrive^.P_rCapturedPos;
+					bProbePositiveOK := TRUE;
+				ELSE
+					rCapturedPos2 := pYDrive^.P_rCapturedPos;;
+					bProbeNegativeOK := TRUE;
+				END_IF
+				
+				IF nProbeCount = 1 THEN //war erster Move
+					//Zweiter Move erforderlich
+					bDirPositive := NOT bDirPositive; //Richtung umkehren
+					nStateA_ProbeY := 1;  //neuer YMove
+				ELSE
+					bProbeSuccess := TRUE;
+					nStateA_ProbeY := 80;	//Fertig!!
+				END_IF
+			ELSE
+				//Error (in Y muss in jedem Fall Probe positiv ausfallen)
+				pYDrive^.M_StopCapture();
+				nProbeErrorId := E_ErrorIdCmd.ERRORID_TipCalibProbeSensorY;
+				nStateA_ProbeY := 90;
+			END_IF
+		END_IF
+		
+	70:	//Abbrechen
+		IF pMzTool^.M_GetActionBusy(E_Action.ACTION_MoveY) THEN
+			pMzTool^.M_CancelAction(E_Action.ACTION_MoveY);
+			pYDrive^.M_StopCapture();
+		ELSE
+			nStateA_ProbeY := 80;
+		END_IF
+		
+
+	10,90:	//TouchProbe zurücksetzen
+		IF pYDrive^.P_bCaptureStopped THEN
+			IF nStateA_ProbeY = 10 THEN
+				nStateA_ProbeY := 80;
+			ELSE
+				nStateA_ProbeY := 99;	
+			END_IF
+		END_IF		
+END_CASE
+
+IF (nProbeErrorId > 0) AND (nStateA_ProbeY < 99) THEN
+	pYDrive^.M_StopCapture();
+	nStateA_ProbeY := 90;
+END_IF]]></ST>
+      </Implementation>
+    </Action>
+    <Method Name="M_Cancel" Id="{78ac456d-b7d1-4141-9f9d-c6ac9076dc0f}">
+      <Declaration><![CDATA[METHOD M_Cancel
+VAR_INPUT
+END_VAR
+]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[IF bExecute AND nState < 70 THEN
+	nState := 70;
+END_IF]]></ST>
+      </Implementation>
+    </Method>
+    <LineIds Name="FB_MeasTip">
+      <LineId Id="3" Count="13" />
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="FB_MeasTip.A_MeasureX">
+      <LineId Id="2" Count="36" />
+      <LineId Id="58" Count="0" />
+      <LineId Id="39" Count="18" />
+      <LineId Id="1" Count="0" />
+    </LineIds>
+    <LineIds Name="FB_MeasTip.A_MeasureY">
+      <LineId Id="2" Count="7" />
+      <LineId Id="59" Count="0" />
+      <LineId Id="11" Count="47" />
+      <LineId Id="1" Count="0" />
+    </LineIds>
+    <LineIds Name="FB_MeasTip.A_MeasureZ">
+      <LineId Id="2" Count="168" />
+      <LineId Id="236" Count="0" />
+      <LineId Id="171" Count="64" />
+      <LineId Id="1" Count="0" />
+    </LineIds>
+    <LineIds Name="FB_MeasTip.A_ProbeX">
+      <LineId Id="2" Count="157" />
+      <LineId Id="1" Count="0" />
+    </LineIds>
+    <LineIds Name="FB_MeasTip.A_ProbeY">
+      <LineId Id="2" Count="91" />
+      <LineId Id="1" Count="0" />
+    </LineIds>
+    <LineIds Name="FB_MeasTip.M_Cancel">
+      <LineId Id="3" Count="1" />
+      <LineId Id="2" Count="0" />
+    </LineIds>
+  </POU>
+</TcPlcObject>

@@ -1,0 +1,38 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<TcPlcObject Version="1.1.0.1" ProductVersion="3.1.4024.11">
+  <DUT Name="E_HardwareGrp" Id="{2a35057a-c527-47be-8c43-d0fe4ba2c908}">
+    <Declaration><![CDATA[TYPE E_HardwareGrp :
+(
+	Nothing 				:= 0,
+	AxisX					:= 1,
+	AxisY					:= 2,
+	MultiZBasis				:= 3,
+	AxisZ					:= 4,
+	Diluter					:= 5,
+	PneuChannel				:= 6,
+	Pump					:= 7,
+	PCV						:= 8,
+	MtpHeater				:= 9,
+	SubstHeater				:= 10,
+	ReactorHeater			:= 11,
+	ReactorDrive			:= 12,
+	BottleRack				:= 13,
+	IOExpander				:= 14,
+	TripleTrigger			:= 15,
+	PowderStation			:= 16,
+	InkStationSpinDrive		:= 17,
+	InkStationCoverDrive	:= 18,
+	TipCleaner				:= 19,
+	Interlock				:= 20,
+	StopButton				:= 21,
+	EmergencyButton			:= 22,
+	HighVoltSupply			:= 23,
+	TMCM1140Stepper			:= 24,
+	MultiPurpIO				:= 25,
+	NanotecPD				:= 26,
+	TMCM1140Stepper_Gen2	:= 27,
+	EL70xx					:= 28
+)UINT;
+END_TYPE]]></Declaration>
+  </DUT>
+</TcPlcObject>

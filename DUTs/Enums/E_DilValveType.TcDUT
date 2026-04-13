@@ -1,0 +1,14 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<TcPlcObject Version="1.1.0.1" ProductVersion="3.1.0.25">
+  <DUT Name="E_DilValveType" Id="{aa7a3025-d6c8-47cc-83d2-1da461b4b6ac}">
+    <Declaration><![CDATA[TYPE E_DilValveType :
+(
+	VALVETYPE_UNDEFINED := 0,
+	VALVETYPE_3Way := 1,
+	VALVETYPE_4Distribution := 10
+)USINT;
+END_TYPE
+]]></Declaration>
+    <ObjectProperties />
+  </DUT>
+</TcPlcObject>

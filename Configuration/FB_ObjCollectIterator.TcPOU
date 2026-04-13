@@ -1,0 +1,40 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<TcPlcObject Version="1.1.0.1" ProductVersion="3.1.4022.12">
+  <POU Name="FB_ObjCollectIterator" Id="{d9cb6f1a-c715-4c81-9454-8899f965b354}" SpecialFunc="None">
+    <Declaration><![CDATA[FUNCTION_BLOCK FB_ObjCollectIterator
+VAR_INPUT
+	pInitNode : POINTER TO FB_ObjCollectionNode;
+END_VAR
+VAR_OUTPUT
+	pNode : POINTER TO FB_ObjCollectionNode;
+END_VAR
+VAR
+END_VAR
+]]></Declaration>
+    <Implementation>
+      <ST><![CDATA[pNode := pInitNode;]]></ST>
+    </Implementation>
+    <Method Name="M_Increment" Id="{1d20ed23-7470-4aec-ab74-1a1cb0df0704}">
+      <Declaration><![CDATA[METHOD M_Increment
+VAR_INPUT
+END_VAR
+]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[IF pNode > 0 AND_THEN pNode^.pNext > 0 THEN
+	pNode := pNode^.pNext;
+ELSE
+	pNode := 0;
+END_IF]]></ST>
+      </Implementation>
+    </Method>
+    <LineIds Name="FB_ObjCollectIterator">
+      <LineId Id="9" Count="0" />
+    </LineIds>
+    <LineIds Name="FB_ObjCollectIterator.M_Increment">
+      <LineId Id="5" Count="0" />
+      <LineId Id="9" Count="0" />
+      <LineId Id="11" Count="1" />
+      <LineId Id="10" Count="0" />
+    </LineIds>
+  </POU>
+</TcPlcObject>

@@ -1,0 +1,2095 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<TcPlcObject Version="1.1.0.1" ProductVersion="3.1.4024.11">
+  <POU Name="FB_ObjectDirectory" Id="{d21e24d3-e574-403c-b3f5-9068019773ff}" SpecialFunc="None">
+    <Declaration><![CDATA[FUNCTION_BLOCK FB_ObjectDirectory
+
+VAR_OUTPUT
+	bIsInitialized			: BOOL;
+
+	//Anzahl der jeweiligen Objekttypen, welche ins Objektverzeichnis eingetragen sind (Objektzählervariablen)
+	nCntCamera				:UINT;
+	nCntCartDispenser		:UINT;
+	nCntCartDispStirrer		:UINT;
+	nCntCartHolder			:UINT;
+	nCntCustomUnitType1		:UINT;
+	nCntCustomUnitType2		:UINT;
+	nCntMultiCartHolder		:UINT;
+	nCntHybridDispenser		:UINT;
+	nCntDeloDot				:UINT;
+	nCntDiluter				:UINT;
+	nCntDiluter3Inputs		:UINT;
+	nCntDrayPad				:UINT;
+	nCntDummyTool			:UINT;
+	nCntExposure			:UINT;
+	nCntExtruder			:UINT;
+	nCntFlipTubeHandler		:UINT;
+	nCntFlipTubeRack		:UINT;
+	nCntGripper				:UINT;
+	nCntHighVoltTray		:UINT;
+	nCntInkStation			:UINT;
+	nCntLiquidReserve		:UINT;
+	nCntLuer				:UINT;
+	nCntMtpHolder			:UINT;
+	nCntMZHead				:UINT;
+	nCntNeedleRack			:UINT;
+	nCntPassivPip			:UINT;
+	nCntpHElectrode			:UINT;
+	nCntpHElectrodeCapRack	:UINT;
+	nCntPickPlacePip		:UINT;
+	nCntPiezoPip			:UINT;
+	nCntPortRack			:UINT;
+	nCntPowderPip			:UINT;
+	nCntPowderStation		:UINT;
+	nCntReactor				:UINT;
+	nCntSampleScan			:UINT;
+	nCntSeptumRack			:UINT;
+	nCntSeptumWaste			:UINT;
+	nCntSinglePiezoHolder	:UINT;
+	nCntStacker				:UINT;
+	nCntSolenoidPip			:UINT;
+	nCntStampMagazine		:UINT;
+	nCntStampSupport		:UINT;
+	nCntStroboscope			:UINT;
+	nCntSubstHolder			:UINT;
+	nCntSubstHolderUnistat	:UINT;
+	nCntTipCalibrator		:UINT;
+	nCntTipCleaner			:UINT;
+	nCntTipCleanerGen2		:UINT;
+	nCntTipRack				:UINT;
+	nCntTitrationTool		:UINT;
+	nCntTrayTransporter		:UINT;
+	nCntTriplePip			:UINT;
+	nCntTwinExtruder		:UINT;
+	nCntTwinPiezoHolder		:UINT;
+	nCntVacuumHandler		:UINT;
+	nCntVermesDisp			:UINT;
+	nCntVialRack			:UINT;
+	nCntWashStation			:UINT;
+	nCntWorkplate			:UINT;
+	nCntWorkplateCamera		:UINT;
+	nCntZLevelSensor		:UINT;
+	
+	//Anzahl der jeweiligeb Objecttypen, welche in InterfaceArrays eingetragen sind
+	nCntObject			: UINT;
+	
+	//Anzahl der aktuellen benutzen NotificationIds
+	nCntNotifiIds		: UINT;
+
+END_VAR
+
+VAR
+	fbIdPool 			: FB_IdPool;
+	a_pObjects 			: ARRAY[1..cMaxObjects] OF POINTER TO FB_Object;
+	objectList			: FB_ObjCollection(0);
+	deviceList			: FB_ObjCollection(0);	
+
+	//Für ObjectChange
+	fbList				: FB_LinkedListCtrl;
+	hList				: T_HLINKEDLIST;
+	nodes				: ARRAY [0..20] OF T_LinkedListEntry;
+	
+	//Notification MoveObject
+	stObjectHasMoved	: ST_ObjHasMoved;
+	
+	pCartridge			: POINTER TO FB_Cartridge;	
+	pFlipTube			: POINTER TO FB_FlipTube;	
+	pMtp				: POINTER TO FB_Mtp;
+	pNeedle				: POINTER TO FB_Needle;
+	pNozzle				: POINTER TO FB_Nozzle;
+	pPHElectrodeCap		: POINTER TO FB_pHElectrodeCap;		
+	pPoint				: POINTER TO FB_Point;
+	pPort				: POINTER TO FB_Port;
+	pSeptum				: POINTER TO FB_Septum;
+	pSlide				: POINTER TO FB_Slide;
+	pSpotArray			: POINTER TO FB_SpotArray;	
+	pSpotPattern		: POINTER TO FB_SpotPattern;		
+	pStamp				: POINTER TO FB_Stamp;
+	pTip				: POINTER TO FB_Tip;
+	pTray				: POINTER TO FB_TargetTray;
+	pVial				: POINTER TO FB_Vial;
+	pVialClosed			: POINTER TO FB_VialClosed;	
+	pWafer				: POINTER TO FB_Wafer;
+	pCleaningBrush		: POINTER TO FB_CleaningBrush;
+END_VAR
+
+
+]]></Declaration>
+    <Implementation>
+      <ST><![CDATA[]]></ST>
+    </Implementation>
+    <Method Name="M_CheckCuboidCollision" Id="{080984b8-a7ad-4f68-813d-b026b022c3db}">
+      <Declaration><![CDATA[METHOD M_CheckCuboidCollision : BOOL
+VAR_INPUT
+	Cuboid : REFERENCE TO FB_Cuboid;
+END_VAR
+
+VAR
+END_VAR
+]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[//Überprüft den übergebenen Quader darauf, dass er mit keinem Target auf der Workplate oder
+//mit einem Tool in HomePos kollidiert. Punkte werden dabei ausgeschlossen.
+//Das erste Problem besteht darin, dass ein Point in einem Target vertieft befinden kann (MTP)
+//oder z.B. ein Punkt, der vermessen wurde und sich dadurch unterhalb des Targets befindet
+//in diesem Fall muss genau dieses Target als Kollisionsobjekt ausgeschlossen werden
+//also das Target, auf dem sich der Punkt befindet. Wie sieht es mit einem Slide aus? Wenn dieses 
+//durch Vermessung etwas tiefer sitzt als sein Parent, dann macht das eigentlich nichts.
+
+//Alle Targets durchlaufen? Mit einem Durchlauf? was ist, wenn es tausende Points gibt?
+//afbWorkplate[1].]]></ST>
+      </Implementation>
+    </Method>
+    <Method Name="M_CreateObject" Id="{3ff92fb3-8f2d-432e-9c8f-5f85b42f8b0f}">
+      <Declaration><![CDATA[METHOD  M_CreateObject : ERRORID
+VAR_INPUT
+	nIndex			: INT;	//Index in der ObjCollection ("-1" -> wird am Ende eingefügt)
+	refCmdData		: REFERENCE TO ST_CmdData;
+END_VAR
+VAR_OUTPUT
+	nNotifyId		: DINT;
+END_VAR
+VAR
+	nObjectID		: UINT;
+	eObjectType 	: E_ObjectType;
+	nParentObjectId : UINT;
+	pParentObject	: POINTER TO FB_Object;
+	nParentSlotNr	: UINT;
+	nNewIndex		: UINT;
+END_VAR
+]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[//Methode zum Hinzufügen von Objecten ins Objektverzeichnis
+
+nObjectID := fbIdPool.M_GetId();
+IF nObjectID = 0 THEN
+	M_CreateObject := E_ErrorIdObjMgmt.ERRORID_CntObjectsExceeded;	//Rückgabe Error
+	RETURN;	
+END_IF
+
+eObjectType := refCmdData.aHeader[0];
+
+IF (nObjectID  > 0) AND (nObjectID <= cMaxObjects) THEN
+	IF a_pObjects[nObjectID] <> 0 THEN	//ObjectID schon vorhanden
+		M_CreateObject := E_ErrorIdObjMgmt.ERRORID_ObjectIDAlreadyExists;
+		RETURN;
+	END_IF
+ELSE
+	M_CreateObject := E_ErrorIdObjMgmt.ERRORID_CntObjectsExceeded;	//Rückgabe Error
+	RETURN;
+END_IF
+
+CASE eObjectType OF
+
+	E_ObjectType.OBJECTTYPE_Camera:	//Camera, Mikroskop, Scanner o.ä.
+		IF nCntCamera = cMaxCameras THEN	//maximale Anzahl des spez.Objecttypes erreicht, Object kann nicht angelegt werden
+			M_CreateObject := E_ErrorIdObjMgmt.ERRORID_CntCamerasExceeded;	//Rückgabe Error
+			RETURN;
+		ELSE
+			nCntCamera := nCntCamera + 1;
+			a_pObjects[nObjectID] := ADR(afbCamera[nCntCamera]);
+			afbCamera[nCntCamera].P_nObjectID := nObjectID;
+			nCntNotifiIds := nCntNotifiIds + 1;
+			afbCamera[nCntCamera].P_nNotifyId := nCntNotifiIds;
+			nNotifyId := nCntNotifiIds;
+ 		END_IF
+
+	E_ObjectType.OBJECTTYPE_Cartridge:	//Kartusche auf einem Rack
+		pCartridge := __NEW(FB_Cartridge);
+		pCartridge^.P_nObjectID := nObjectID;
+		a_pObjects[nObjectID] := pCartridge;	
+		
+	E_ObjectType.OBJECTTYPE_CartDispenser:
+		IF nCntCartDispenser = cMaxCartDisp THEN	//maximale Anzahl des spez.Objecttypes erreicht, Object kann nicht angelegt werden
+			M_CreateObject := E_ErrorIdObjMgmt.ERRORID_CntCartridgeDispExceeded; //Rückgabe Error
+			RETURN;
+		ELSE
+			nCntCartDispenser := nCntCartDispenser + 1;
+			a_pObjects[nObjectID] := ADR(afbCartDisp[nCntCartDispenser]);
+			afbCartDisp[nCntCartDispenser].P_nObjectID := nObjectID;
+			nCntNotifiIds := nCntNotifiIds + 1;
+			afbCartDisp[nCntCartDispenser].P_nNotifyId := nCntNotifiIds;
+			nNotifyId := nCntNotifiIds;
+ 		END_IF
+	E_ObjectType.OBJECTTYPE_CartDispStirrer:
+		IF nCntCartDispStirrer = cMaxCartDispStirrer THEN	//maximale Anzahl des spez.Objecttypes erreicht, Object kann nicht angelegt werden
+			M_CreateObject := E_ErrorIdObjMgmt.ERRORID_CntCartridgeDispStirrerExceeded; //Rückgabe Error
+			RETURN;
+		ELSE
+			nCntCartDispStirrer := nCntCartDispStirrer + 1;
+			a_pObjects[nObjectID] := ADR(afbCartDispStirrer[nCntCartDispStirrer]);
+			afbCartDispStirrer[nCntCartDispStirrer].P_nObjectID := nObjectID;
+			nCntNotifiIds := nCntNotifiIds + 1;
+			afbCartDispStirrer[nCntCartDispStirrer].P_nNotifyId := nCntNotifiIds;
+			nNotifyId := nCntNotifiIds;
+ 		END_IF
+E_ObjectType.OBJECTTYPE_CartHolder:
+		IF nCntCartHolder = cMaxCartHolder THEN	//maximale Anzahl des spez.Objecttypes erreicht, Object kann nicht angelegt werden
+			M_CreateObject := E_ErrorIdObjMgmt.ERRORID_CntCartridgeHolderExceeded;	//Rückgabe Error
+			RETURN;
+		ELSE
+			nCntCartHolder := nCntCartHolder + 1;
+			a_pObjects[nObjectID] := ADR(afbCartHolder[nCntCartHolder]);
+			afbCartHolder[nCntCartHolder].P_nObjectID := nObjectID;
+			nCntNotifiIds := nCntNotifiIds + 1;
+			afbCartHolder[nCntCartHolder].P_nNotifyId := nCntNotifiIds;
+			nNotifyId := nCntNotifiIds;
+ 		END_IF
+		
+	E_ObjectType.OBJECTTYPE_CleaningBrush:
+		pCleaningBrush := __NEW(FB_CleaningBrush);
+		pCleaningBrush^.P_nObjectID := nObjectID;
+		a_pObjects[nObjectID] := pCleaningBrush;	
+		
+	E_ObjectType.OBJECTTYPE_CustomUnitType1:
+		IF nCntCustomUnitType1 = cMaxCustomUnitTyp1 THEN //maximale Anzahl des spez.Objecttypes erreicht, Object kann nicht angelegt werden
+			M_CreateObject := E_ErrorIdObjMgmt.ERRORID_CntCustomUnitType1Exceeded; //Rückgabe Error
+			RETURN;
+		ELSE
+			nCntCustomUnitType1 := nCntCustomUnitType1 + 1;
+			a_pObjects[nObjectID] := ADR(afbCustomUnitType1[nCntCustomUnitType1]);
+			afbCustomUnitType1[nCntCustomUnitType1].P_nObjectID := nObjectID;
+			nCntNotifiIds := nCntNotifiIds + 1;
+			afbCustomUnitType1[nCntCustomUnitType1].P_nNotifyId := nCntNotifiIds;			
+			nNotifyId := nCntNotifiIds;
+		END_IF
+		
+	E_ObjectType.OBJECTTYPE_CustomUnitType2:
+		IF nCntCustomUnitType2 = cMaxCustomUnitTyp2 THEN //maximale Anzahl des spez.Objecttypes erreicht, Object kann nicht angelegt werden
+			M_CreateObject := E_ErrorIdObjMgmt.ERRORID_CntCustomUnitType2Exceeded; //Rückgabe Error
+			RETURN;
+		ELSE
+			nCntCustomUnitType2 := nCntCustomUnitType2 + 1;
+			a_pObjects[nObjectID] := ADR(afbCustomUnitType2[nCntCustomUnitType2]);
+			afbCustomUnitType2[nCntCustomUnitType2].P_nObjectID := nObjectID;
+			nCntNotifiIds := nCntNotifiIds + 1;
+			afbCustomUnitType2[nCntCustomUnitType2].P_nNotifyId := nCntNotifiIds;			
+			nNotifyId := nCntNotifiIds;
+		END_IF
+
+	E_ObjectType.OBJECTTYPE_MultiCartHolder:
+		IF nCntMultiCartHolder = cMaxMultiCartHolder THEN	//maximale Anzahl des spez.Objecttypes erreicht, Object kann nicht angelegt werden
+			M_CreateObject := E_ErrorIdObjMgmt.ERRORID_CntMultiCartridgeHolderExceeded;	//Rückgabe Error
+			RETURN;
+		ELSE
+			nCntMultiCartHolder := nCntMultiCartHolder + 1;
+			a_pObjects[nObjectID] := ADR(afbMultiCartHolder[nCntMultiCartHolder]);
+			afbMultiCartHolder[nCntMultiCartHolder].P_nObjectID := nObjectID;
+			nCntNotifiIds := nCntNotifiIds + 1;
+			afbMultiCartHolder[nCntMultiCartHolder].P_nNotifyId := nCntNotifiIds;
+			nNotifyId := nCntNotifiIds;
+		END_IF
+		
+	E_ObjectType.OBJECTTYPE_HybridDispenser:
+		IF nCntHybridDispenser = cMaxHybridDispenser THEN	//maximale Anzahl des spez.Objecttypes erreicht, Object kann nicht angelegt werden
+			M_CreateObject := E_ErrorIdObjMgmt.ERRORID_CntHybridDispenserExceeded;	//Rückgabe Error
+			RETURN;
+		ELSE
+			nCntHybridDispenser := nCntHybridDispenser + 1;
+			a_pObjects[nObjectID] := ADR(afbHybridDispenser[nCntHybridDispenser]);
+			afbHybridDispenser[nCntHybridDispenser].P_nObjectID := nObjectID;
+			nCntNotifiIds := nCntNotifiIds + 1;
+			afbHybridDispenser[nCntHybridDispenser].P_nNotifyId := nCntNotifiIds;
+			nNotifyId := nCntNotifiIds;
+		END_IF
+		
+	E_ObjectType.OBJECTTYPE_DeloDot:
+		IF nCntDeloDot = cMaxDeloDots THEN	//maximale Anzahl des spez.Objecttypes erreicht, Object kann nicht angelegt werden
+			M_CreateObject := E_ErrorIdObjMgmt.ERRORID_CntDeloDotsExceeded;	//Rückgabe Error
+			RETURN;
+		ELSE
+			nCntDeloDot := nCntDeloDot + 1;
+			a_pObjects[nObjectID] := ADR(afbDeloDot[nCntDeloDot]);
+			afbDeloDot[nCntDeloDot].P_nObjectID := nObjectID;
+			nCntNotifiIds := nCntNotifiIds + 1;
+			afbDeloDot[nCntDeloDot].P_nNotifyId := nCntNotifiIds;
+			nNotifyId := nCntNotifiIds;
+		END_IF
+
+	E_ObjectType.OBJECTTYPE_Diluter:
+		IF nCntDiluter = cMaxDiluters THEN	//maximale Anzahl des spez.Objecttypes erreicht, Object kann nicht angelegt werden
+			M_CreateObject := E_ErrorIdObjMgmt.ERRORID_CntDilutersExceeded;	//Rückgabe Error
+			RETURN;
+		ELSE
+			nCntDiluter := nCntDiluter + 1;
+			a_pObjects[nObjectID] := ADR(afbDiluter[nCntDiluter]);
+			afbDiluter[nCntDiluter].P_nObjectID := nObjectID;
+			nCntNotifiIds := nCntNotifiIds + 1;
+			afbDiluter[nCntDiluter].P_nNotifyId := nCntNotifiIds;
+			nNotifyId := nCntNotifiIds;
+		END_IF
+		
+	E_ObjectType.OBJECTTYPE_Diluter3Inputs:
+		IF nCntDiluter3Inputs = cMaxDiluters3Inputs THEN	//maximale Anzahl des spez.Objecttypes erreicht, Object kann nicht angelegt werden
+			M_CreateObject := E_ErrorIdObjMgmt.ERRORID_CntDilutersExceeded;	//Rückgabe Error
+			RETURN;
+		ELSE
+			nCntDiluter3Inputs := nCntDiluter3Inputs + 1;
+			a_pObjects[nObjectID] := ADR(afbDiluter3Inputs[nCntDiluter3Inputs]);
+			afbDiluter3Inputs[nCntDiluter3Inputs].P_nObjectID := nObjectID;
+			nCntNotifiIds := nCntNotifiIds + 1;
+			afbDiluter3Inputs[nCntDiluter3Inputs].P_nNotifyId := nCntNotifiIds;
+			nNotifyId := nCntNotifiIds;
+		END_IF
+		
+	E_ObjectType.OBJECTTYPE_DryPad:
+		IF nCntDrayPad = cMaxDrayPads THEN	//maximale Anzahl des spez.Objecttypes erreicht, Object kann nicht angelegt werden
+			M_CreateObject := E_ErrorIdObjMgmt.ERRORID_CntDrayPadsExceeded;	//Rückgabe Error
+			RETURN;
+		ELSE
+			nCntDrayPad := nCntDrayPad + 1;
+			a_pObjects[nObjectID] := ADR(afbDryPad[nCntDrayPad]);
+			afbDryPad[nCntDrayPad].P_nObjectID := nObjectID;
+			nCntNotifiIds := nCntNotifiIds + 1;
+			afbDryPad[nCntDrayPad].P_nNotifyId := nCntNotifiIds;
+			nNotifyId := nCntNotifiIds;
+		END_IF
+		
+	E_ObjectType.OBJECTTYPE_DummyTool:
+		IF nCntDummyTool = cMaxDummyTools THEN	//maximale Anzahl des spez.Objecttypes erreicht, Object kann nicht angelegt werden
+			M_CreateObject := E_ErrorIdObjMgmt.ERRORID_CntDummyToolExceeded;	//Rückgabe Error
+			RETURN;
+		ELSE
+			nCntDummyTool := nCntDummyTool + 1;
+			a_pObjects[nObjectID] := ADR(afbDummyTool[nCntDummyTool]);
+			afbDummyTool[nCntDummyTool].P_nObjectID := nObjectID;
+			nCntNotifiIds := nCntNotifiIds + 1;
+			afbDummyTool[nCntDummyTool].P_nNotifyId := nCntNotifiIds;
+			nNotifyId := nCntNotifiIds;
+ 		END_IF		
+		
+	E_ObjectType.OBJECTTYPE_Exposure:
+		IF nCntExposure = cMaxExposure THEN	//maximale Anzahl des spez.Objecttypes erreicht, Object kann nicht angelegt werden
+			M_CreateObject := E_ErrorIdObjMgmt.ERRORID_CntExposureExceeded;	//Rückgabe Error
+			RETURN;
+		ELSE
+			nCntExposure := nCntExposure + 1;
+			a_pObjects[nObjectID] := ADR(afbExposure[nCntExposure]);
+			afbExposure[nCntExposure].P_nObjectID := nObjectID;
+			nCntNotifiIds := nCntNotifiIds + 1;
+			afbExposure[nCntExposure].P_nNotifyId := nCntNotifiIds;
+			nNotifyId := nCntNotifiIds;
+		END_IF
+		
+	E_ObjectType.OBJECTTYPE_Extruder:
+		IF nCntExtruder = cMaxExtruder THEN	//maximale Anzahl des spez.Objecttypes erreicht, Object kann nicht angelegt werden
+			M_CreateObject := E_ErrorIdObjMgmt.ERRORID_CntExtruderExceeded;	//Rückgabe Error
+			RETURN;
+		ELSE
+			nCntExtruder := nCntExtruder + 1;
+			a_pObjects[nObjectID] := ADR(afbExtruder[nCntExtruder]);
+			afbExtruder[nCntExtruder].P_nObjectID := nObjectID;
+			nCntNotifiIds := nCntNotifiIds + 1;
+			afbExtruder[nCntExtruder].P_nNotifyId := nCntNotifiIds;
+			nNotifyId := nCntNotifiIds;
+		END_IF	
+		
+	E_ObjectType.OBJECTTYPE_FlipTube:
+			pFlipTube := __NEW(FB_FlipTube);
+			pFlipTube^.P_nObjectID := nObjectID;
+			a_pObjects[nObjectID] := pFlipTube;	
+		
+	E_ObjectType.OBJECTTYPE_FlipTubeHandler:	//FlipTubeHandler
+		IF nCntFlipTubeHandler = cMaxFlipTubeHandler THEN	//maximale Anzahl des spez.Objecttypes erreicht, Object kann nicht angelegt werden
+			M_CreateObject := E_ErrorIdObjMgmt.ERRORID_CntFlipTubePinExceeded;	//Rückgabe Error
+			RETURN;
+		ELSE
+			nCntFlipTubeHandler := nCntFlipTubeHandler + 1;
+			a_pObjects[nObjectID] := ADR(afbFlipTubeHandler[nCntFlipTubeHandler]);
+			afbFlipTubeHandler[nCntFlipTubeHandler].P_nObjectID := nObjectID;
+			nCntNotifiIds := nCntNotifiIds + 1;
+			afbFlipTubeHandler[nCntFlipTubeHandler].P_nNotifyId := nCntNotifiIds;
+			nNotifyId := nCntNotifiIds;
+		END_IF
+		
+	E_ObjectType.OBJECTTYPE_FlipTubeRack:
+		IF nCntFlipTubeRack = cMaxFlipTubeRack THEN	//maximale Anzahl des spez.Objecttypes erreicht, Object kann nicht angelegt werden
+			M_CreateObject := E_ErrorIdObjMgmt.ERRORID_CntFlipTubeRackExceeded;	//Rückgabe Error
+			RETURN;
+		ELSE
+			nCntFlipTubeRack := nCntFlipTubeRack + 1;
+			a_pObjects[nObjectID] := ADR(afbFlipTubeRack[nCntFlipTubeRack]);
+			afbFlipTubeRack[nCntFlipTubeRack].P_nObjectID := nObjectID;
+		END_IF
+		
+	E_ObjectType.OBJECTTYPE_Gripper:
+		IF nCntGripper = cMaxGripper THEN	//maximale Anzahl des spez.Objecttypes erreicht, Object kann nicht angelegt werden
+			M_CreateObject := E_ErrorIdObjMgmt.ERRORID_CntGripperExceeded;	//Rückgabe Error
+			RETURN;
+		ELSE
+			nCntGripper := nCntGripper + 1;
+			a_pObjects[nObjectID] := ADR(afbGripper[nCntGripper]);
+			afbGripper[nCntGripper].P_nObjectID := nObjectID;
+			nCntNotifiIds := nCntNotifiIds + 1;
+			afbGripper[nCntGripper].P_nNotifyId := nCntNotifiIds;
+			nNotifyId := nCntNotifiIds;
+		END_IF
+		
+	E_ObjectType.OBJECTTYPE_HighVoltTray:
+		IF nCntHighVoltTray = cMaxHighVoltTray THEN	//maximale Anzahl des spez.Objecttypes erreicht, Object kann nicht angelegt werden
+			M_CreateObject := E_ErrorIdObjMgmt.ERRORID_CntHighVoltTrayExceeded;	//Rückgabe Error
+			RETURN;
+		ELSE
+			nCntHighVoltTray := nCntHighVoltTray + 1;
+			a_pObjects[nObjectID] := ADR(afbHighVoltTray[nCntHighVoltTray]);
+			afbHighVoltTray[nCntHighVoltTray].P_nObjectID := nObjectID;
+			nCntNotifiIds := nCntNotifiIds + 1;
+			afbHighVoltTray[nCntHighVoltTray].P_nNotifyId := nCntNotifiIds;			
+			nNotifyId := nCntNotifiIds;
+		END_IF
+		
+	E_ObjectType.OBJECTTYPE_InkStation:
+		IF nCntInkStation = cMaxInkStations THEN	//maximale Anzahl des spez.Objecttypes erreicht, Object kann nicht angelegt werden
+			M_CreateObject := E_ErrorIdObjMgmt.ERRORID_CntInkStationsExceeded;	//Rückgabe Error
+			RETURN;
+		ELSE
+			nCntInkStation := nCntInkStation + 1;
+			a_pObjects[nObjectID] := ADR(afbInkStation[nCntInkStation]);
+			afbInkStation[nCntInkStation].P_nObjectID := nObjectID;
+			nCntNotifiIds := nCntNotifiIds + 1;
+			afbInkStation[nCntInkStation].P_nNotifyId := nCntNotifiIds;			
+			nNotifyId := nCntNotifiIds;
+		END_IF
+		
+	E_ObjectType.OBJECTTYPE_LiquidReserve:
+		IF nCntLiquidReserve = cMaxLiquidReserve THEN	//maximale Anzahl des spez.Objecttypes erreicht, Object kann nicht angelegt werden
+			M_CreateObject := E_ErrorIdObjMgmt.ERRORID_Cnt4LiquidReserveExceeded;	//Rückgabe Error
+			RETURN;
+		ELSE
+			nCntLiquidReserve := nCntLiquidReserve + 1;
+			a_pObjects[nObjectID] := ADR(afbLiquidReserve[nCntLiquidReserve]);
+			afbLiquidReserve[nCntLiquidReserve].P_nObjectID := nObjectID;
+			nCntNotifiIds := nCntNotifiIds + 1;
+			afbLiquidReserve[nCntLiquidReserve].P_nNotifyId := nCntNotifiIds;
+			nNotifyId := nCntNotifiIds;
+		END_IF
+		
+	E_ObjectType.OBJECTTYPE_Luer:
+		IF nCntLuer = cMaxLuer THEN	//maximale Anzahl des spez.Objecttypes erreicht, Object kann nicht angelegt werden
+			M_CreateObject := E_ErrorIdObjMgmt.ERRORID_CntLuerExceeded;	//Rückgabe Error
+			RETURN;
+		ELSE
+			nCntLuer := nCntLuer + 1;
+			a_pObjects[nObjectID] := ADR(afbLuer[nCntLuer]);
+			afbLuer[nCntLuer].P_nObjectID := nObjectID;
+			nCntNotifiIds := nCntNotifiIds + 1;
+			afbLuer[nCntLuer].P_nNotifyId := nCntNotifiIds;
+			nNotifyId := nCntNotifiIds;
+		END_IF
+		
+	E_ObjectType.OBJECTTYPE_Mtp:
+		pMtp := __NEW(FB_Mtp);
+		pMtp^.P_nObjectID := nObjectID;
+		a_pObjects[nObjectID] := pMtp;
+		
+	E_ObjectType.OBJECTTYPE_MtpHolder:		//MTP-Holder
+		IF nCntMtpHolder = cMaxMtpHolders THEN	//maximale Anzahl des spez.Objecttypes erreicht, Object kann nicht angelegt werden
+			M_CreateObject := E_ErrorIdObjMgmt.ERRORID_CntMtpHoldersExceeded;	//Rückgabe Error
+			RETURN;
+		ELSE
+			nCntMtpHolder := nCntMtpHolder + 1;
+			a_pObjects[nObjectID] := ADR(afbMtpHolder[nCntMtpHolder]);
+			afbMtpHolder[nCntMtpHolder].P_nObjectID := nObjectID;
+			nCntNotifiIds := nCntNotifiIds + 1;
+			afbMtpHolder[nCntMtpHolder].P_nNotifyId := nCntNotifiIds;
+			nNotifyId := nCntNotifiIds;
+		END_IF	
+		
+	E_ObjectType.OBJECTTYPE_MZHead:
+		IF nCntMZHead = cMaxMzHeads THEN	//maximale Anzahl des spez.Objecttypes erreicht, Object kann nicht angelegt werden
+			M_CreateObject := E_ErrorIdObjMgmt.ERRORID_CntMZHeadsExceeded;	//Rückgabe Error
+			RETURN;
+		ELSE
+			nCntMZHead := nCntMZHead + 1;
+			a_pObjects[nObjectID] := ADR(afbMzHead[nCntMZHead]);
+			afbMzHead[nCntMZHead].P_nObjectID := nObjectID;
+			nCntNotifiIds := nCntNotifiIds + 1;
+			afbMzHead[nCntMZHead].P_nNotifyId := nCntNotifiIds; 
+			nNotifyId := nCntNotifiIds; 
+		END_IF
+		
+	E_ObjectType.OBJECTTYPE_Needle:
+		pNeedle := __NEW(FB_Needle);
+		pNeedle^.P_nObjectID := nObjectID;
+		a_pObjects[nObjectID] := pNeedle;	
+		
+	E_ObjectType.OBJECTTYPE_NeedleRack:
+		IF nCntNeedleRack = cMaxNeedleRack THEN	//maximale Anzahl des spez.Objecttypes erreicht, Object kann nicht angelegt werden
+			M_CreateObject := E_ErrorIdObjMgmt.ERRORID_CntNeedleRackExceeded;	//Rückgabe Error
+			RETURN;
+		ELSE
+			nCntNeedleRack := nCntNeedleRack + 1;
+			a_pObjects[nObjectID] := ADR(afbNeedleRack[nCntNeedleRack]);
+			afbNeedleRack[nCntNeedleRack].P_nObjectID := nObjectID;
+		END_IF
+		
+	E_ObjectType.OBJECTTYPE_Nozzle:
+		pNozzle := __NEW(FB_Nozzle);
+		pNozzle^.P_nObjectID := nObjectID;
+		a_pObjects[nObjectID] := pNozzle;	
+	
+	E_ObjectType.OBJECTTYPE_TwinPiezoHolder:
+		IF nCntTwinPiezoHolder = cMaxTwinPiezoHolder THEN	//maximale Anzahl des spez.Objecttypes erreicht, Object kann nicht angelegt werden
+			M_CreateObject := E_ErrorIdObjMgmt.ERRORID_CntTwinPiezoHolderExceeded;	//Rückgabe Error
+			RETURN;
+		ELSE
+			nCntTwinPiezoHolder := nCntTwinPiezoHolder + 1;
+			a_pObjects[nObjectID] := ADR(afbTwinPiezoHolder[nCntTwinPiezoHolder]);
+			afbTwinPiezoHolder[nCntTwinPiezoHolder].P_nObjectID := nObjectID;
+			nCntNotifiIds := nCntNotifiIds + 1;
+			afbTwinPiezoHolder[nCntTwinPiezoHolder].P_nNotifyId := nCntNotifiIds;
+			nNotifyId := nCntNotifiIds;			
+		END_IF
+		
+	E_ObjectType.OBJECTTYPE_TwinExtruder:
+		IF nCntTwinExtruder = cMaxTwinExtruder THEN	//maximale Anzahl des spez.Objecttypes erreicht, Object kann nicht angelegt werden
+			M_CreateObject := E_ErrorIdObjMgmt.ERRORID_CntTwinExtruderExceeded;	//Rückgabe Error
+			RETURN;
+		ELSE
+			nCntTwinExtruder := nCntTwinExtruder + 1;
+			a_pObjects[nObjectID] := ADR(afbTwinExtruder[nCntTwinExtruder]);
+			afbTwinExtruder[nCntTwinExtruder].P_nObjectID := nObjectID;
+			nCntNotifiIds := nCntNotifiIds + 1;
+			afbTwinExtruder[nCntTwinExtruder].P_nNotifyId := nCntNotifiIds;
+			nNotifyId := nCntNotifiIds;			
+		END_IF		
+		
+	E_ObjectType.OBJECTTYPE_SinglePiezoHolder:
+		IF nCntSinglePiezoHolder = cMaxSinglePiezoHolder THEN	//maximale Anzahl des spez.Objecttypes erreicht, Object kann nicht angelegt werden
+			M_CreateObject := E_ErrorIdObjMgmt.ERRORID_CntSinglePiezoHolderExceeded;	//Rückgabe Error
+			RETURN;
+		ELSE
+			nCntSinglePiezoHolder := nCntSinglePiezoHolder + 1;
+			a_pObjects[nObjectID] := ADR(afbSinglePiezoHolder[nCntSinglePiezoHolder]);
+			afbSinglePiezoHolder[nCntSinglePiezoHolder].P_nObjectID := nObjectID;
+			nCntNotifiIds := nCntNotifiIds + 1;
+			afbSinglePiezoHolder[nCntSinglePiezoHolder].P_nNotifyId := nCntNotifiIds;
+			nNotifyId := nCntNotifiIds;			
+		END_IF
+		
+	E_ObjectType.OBJECTTYPE_PassivPip:
+		IF nCntPassivPip = cMaxPassivPips THEN	//maximale Anzahl des spez.Objecttypes erreicht, Object kann nicht angelegt werden
+			M_CreateObject := E_ErrorIdObjMgmt.ERRORID_CntPassivPipsExceeded;	//Rückgabe Error
+			RETURN;
+		ELSE
+			nCntPassivPip := nCntPassivPip + 1;
+			a_pObjects[nObjectID] := ADR(afbPassivPip[nCntPassivPip]);
+			afbPassivPip[nCntPassivPip].P_nObjectID := nObjectID;
+			nCntNotifiIds := nCntNotifiIds + 1;
+			afbPassivPip[nCntPassivPip].P_nNotifyId := nCntNotifiIds;
+			nNotifyId := nCntNotifiIds;	
+		END_IF
+		
+	E_ObjectType.OBJECTTYPE_pHElectrode:
+		IF nCntpHElectrode = cMaxpHElectrodes THEN	//maximale Anzahl des spez.Objecttypes erreicht, Object kann nicht angelegt werden
+			M_CreateObject := E_ErrorIdObjMgmt.ERRORID_CntpHElectrodesExceeded;	//Rückgabe Error
+			RETURN;
+		ELSE
+			nCntpHElectrode := nCntpHElectrode + 1;
+			a_pObjects[nObjectID] := ADR(afbpHElectrode[nCntpHElectrode]);
+			afbpHElectrode[nCntpHElectrode].P_nObjectID := nObjectID;
+			nCntNotifiIds := nCntNotifiIds + 1;
+			afbpHElectrode[nCntpHElectrode].P_nNotifyId := nCntNotifiIds;
+			nNotifyId := nCntNotifiIds;	
+		END_IF
+		
+	E_ObjectType.OBJECTTYPE_pHElectrodeCap:
+		pPHElectrodeCap := __NEW(FB_pHElectrodeCap);
+		pPHElectrodeCap^.P_nObjectID := nObjectID;
+		a_pObjects[nObjectID] := pPHElectrodeCap;		
+	
+	E_ObjectType.OBJECTTYPE_pHElectrodeCapRack:
+		IF nCntpHElectrodeCapRack = cMaxpHElectrodeCapRack THEN	//maximale Anzahl des spez.Objecttypes erreicht, Object kann nicht angelegt werden
+			M_CreateObject := E_ErrorIdObjMgmt.ERRORID_CntpHElectrodeCapRacksExceeded;	//Rückgabe Error
+			RETURN;
+		ELSE
+			nCntpHElectrodeCapRack := nCntpHElectrodeCapRack + 1;
+			a_pObjects[nObjectID] := ADR(afbpHElectrodeCapRack[nCntpHElectrodeCapRack]);
+			afbpHElectrodeCapRack[nCntpHElectrodeCapRack].P_nObjectID := nObjectID;
+		END_IF
+		
+	E_ObjectType.OBJECTTYPE_PickPlacePip:
+		IF nCntPickPlacePip = cMaxPickPlacePip THEN	//maximale Anzahl des spez.Objecttypes erreicht, Object kann nicht angelegt werden
+			M_CreateObject := E_ErrorIdObjMgmt.ERRORID_CntPickPlacePipExceeded;	//Rückgabe Error
+			RETURN;
+		ELSE
+			nCntPickPlacePip := nCntPickPlacePip + 1;
+			a_pObjects[nObjectID] := ADR(afbPickPlacePip[nCntPickPlacePip]);
+			afbPickPlacePip[nCntPickPlacePip].P_nObjectID := nObjectID;
+			nCntNotifiIds := nCntNotifiIds + 1;
+			afbPickPlacePip[nCntPickPlacePip].P_nNotifyId := nCntNotifiIds;
+			nNotifyId := nCntNotifiIds;
+		END_IF	
+		
+	E_ObjectType.OBJECTTYPE_PiezoPip:
+		IF nCntPiezoPip = cMaxPiezoPips THEN	//maximale Anzahl des spez.Objecttypes erreicht, Object kann nicht angelegt werden
+			M_CreateObject := E_ErrorIdObjMgmt.ERRORID_CntPiezoPipsExceeded;	//Rückgabe Error
+			RETURN;
+		ELSE
+			nCntPiezoPip := nCntPiezoPip + 1;
+			a_pObjects[nObjectID] := ADR(afbPiezoPip[nCntPiezoPip]);
+			afbPiezoPip[nCntPiezoPip].P_nObjectID := nObjectID;
+			nCntNotifiIds := nCntNotifiIds + 1;
+			afbPiezoPip[nCntPiezoPip].P_nNotifyId := nCntNotifiIds;
+			nNotifyId := nCntNotifiIds;
+		END_IF
+
+	E_ObjectType.OBJECTTYPE_Point:
+		pPoint := __NEW(FB_Point);
+		pPoint^.P_nObjectID := nObjectID;
+		a_pObjects[nObjectID] := pPoint;
+		
+	E_ObjectType.OBJECTTYPE_Port:
+		pPort := __NEW(FB_Port);
+		pPort^.P_nObjectID := nObjectID;
+		a_pObjects[nObjectID] := pPort;
+		
+	E_ObjectType.OBJECTTYPE_PortRack:
+		IF nCntPortRack = cMaxPortRack THEN	//maximale Anzahl des spez.Objecttypes erreicht, Object kann nicht angelegt werden
+			M_CreateObject := E_ErrorIdObjMgmt.ERRORID_CntPortRackExceeded;	//Rückgabe Error
+			RETURN;
+		ELSE
+			nCntPortRack := nCntPortRack + 1;
+			a_pObjects[nObjectID] := ADR(afbPortRack[nCntPortRack]);
+			afbPortRack[nCntPortRack].P_nObjectID := nObjectID;
+		END_IF			
+		
+	E_ObjectType.OBJECTTYPE_PowderPip: //Pulverpipette
+		IF nCntPowderPip = cMaxPowderPips THEN	//maximale Anzahl des spez.Objecttypes erreicht, Object kann nicht angelegt werden
+			M_CreateObject := E_ErrorIdObjMgmt.ERRORID_CntPowderPipsExceeded;	//Rückgabe Error
+			RETURN;
+		ELSE
+			nCntPowderPip := nCntPowderPip + 1;
+			a_pObjects[nObjectID] := ADR(afbPowderPip[nCntPowderPip]);
+			afbPowderPip[nCntPowderPip].P_nObjectID := nObjectID;
+			nCntNotifiIds := nCntNotifiIds + 1;
+			afbPowderPip[nCntPowderPip].P_nNotifyId := nCntNotifiIds;
+			nNotifyId := nCntNotifiIds;			
+		END_IF	
+		
+	E_ObjectType.OBJECTTYPE_PowderStation:
+		IF nCntPowderStation = cMaxPowderStations THEN	//maximale Anzahl des spez.Objecttypes erreicht, Object kann nicht angelegt werden
+			M_CreateObject := E_ErrorIdObjMgmt.ERRORID_CntPowderStationsExceeded;	//Rückgabe Error
+			RETURN;
+		ELSE
+			nCntPowderStation := nCntPowderStation + 1;
+			a_pObjects[nObjectID] := ADR(afbPowderStation[nCntPowderStation]);
+			afbPowderStation[nCntPowderStation].P_nObjectID := nObjectID;
+			nCntNotifiIds := nCntNotifiIds + 1;
+			afbPowderStation[nCntPowderStation].P_nNotifyId := nCntNotifiIds;
+			nNotifyId := nCntNotifiIds;
+		END_IF
+		
+	E_ObjectType.OBJECTTYPE_Reactor:
+		IF nCntReactor = cMaxReactors THEN	//maximale Anzahl des spez.Objecttypes erreicht, Object kann nicht angelegt werden
+			M_CreateObject := E_ErrorIdObjMgmt.ERRORID_CntReactorExceeded;	//Rückgabe Error
+			RETURN;
+		ELSE
+			nCntReactor := nCntReactor + 1;
+			a_pObjects[nObjectID] := ADR(afbReactor[nCntReactor]);
+			afbReactor[nCntReactor].P_nObjectID := nObjectID;
+			nCntNotifiIds := nCntNotifiIds + 1;
+			afbReactor[nCntReactor].P_nNotifyId := nCntNotifiIds;
+			nNotifyId := nCntNotifiIds;
+		END_IF
+			
+	E_ObjectType.OBJECTTYPE_Septum:
+		pSeptum := __NEW(FB_Septum);
+		pSeptum^.P_nObjectID := nObjectID;
+		a_pObjects[nObjectID] := pSeptum;	
+	
+	E_ObjectType.OBJECTTYPE_SeptumRack:
+		IF nCntSeptumRack = cMaxSeptumRack THEN	//maximale Anzahl des spez.Objecttypes erreicht, Object kann nicht angelegt werden
+			M_CreateObject := E_ErrorIdObjMgmt.ERRORID_CntSeptumRackExceeded;	//Rückgabe Error
+			RETURN;
+		ELSE
+			nCntSeptumRack := nCntSeptumRack + 1;
+			a_pObjects[nObjectID] := ADR(afbSeptumRack[nCntSeptumRack]);
+			afbSeptumRack[nCntSeptumRack].P_nObjectID := nObjectID;
+		END_IF			
+		
+	E_ObjectType.OBJECTTYPE_SeptumWaste:
+		IF nCntSeptumWaste = cMaxSeptumWaste THEN	//maximale Anzahl des spez.Objecttypes erreicht, Object kann nicht angelegt werden
+			M_CreateObject := E_ErrorIdObjMgmt.ERRORID_CntSeptumWasteExceeded;	//Rückgabe Error
+			RETURN;
+		ELSE
+			nCntSeptumWaste := nCntSeptumWaste + 1;
+			a_pObjects[nObjectID] := ADR(afbSeptumWaste[nCntSeptumWaste]);
+			afbSeptumWaste[nCntSeptumWaste].P_nObjectID := nObjectID;
+		END_IF		
+
+	E_ObjectType.OBJECTTYPE_Slide:
+		pSlide := __NEW(FB_Slide);
+		pSlide^.P_nObjectID := nObjectID;
+		a_pObjects[nObjectID] := pSlide;
+	
+	E_ObjectType.OBJECTTYPE_SpotArray:
+		pSpotArray := __NEW(FB_SpotArray);
+		pSpotArray^.P_nObjectID := nObjectID;
+		a_pObjects[nObjectID] := pSpotArray;	
+	
+	E_ObjectType.OBJECTTYPE_SpotPattern:
+		pSpotPattern := __NEW(FB_SpotPattern);
+		pSpotPattern^.P_nObjectID := nObjectID;
+		a_pObjects[nObjectID] := pSpotPattern;	
+	
+	E_ObjectType.OBJECTTYPE_Stamp:
+		pStamp := __NEW(FB_Stamp);
+		pStamp^.P_nObjectID := nObjectID;
+		a_pObjects[nObjectID] := pStamp;
+		
+	E_ObjectType.OBJECTTYPE_StampMagazine:
+		IF nCntStampMagazine = cMaxStampMagazines THEN	//maximale Anzahl des spez.Objecttypes erreicht, Object kann nicht angelegt werden
+			M_CreateObject := E_ErrorIdObjMgmt.ERRORID_CntStampHoldersExceeded;	//Rückgabe Error
+			RETURN;
+		ELSE
+			nCntStampMagazine := nCntStampMagazine + 1;
+			a_pObjects[nObjectID] := ADR(afbStampMagazine[nCntStampMagazine]);
+			afbStampMagazine[nCntStampMagazine].P_nObjectID := nObjectID;
+		END_IF
+
+	E_ObjectType.OBJECTTYPE_StampSupport:
+		IF nCntStampSupport = cMaxStampSupports THEN	//maximale Anzahl des spez.Objecttypes erreicht, Object kann nicht angelegt werden
+			M_CreateObject := E_ErrorIdObjMgmt.ERRORID_CntStampSupportsExceeded;	//Rückgabe Error
+			RETURN;
+		ELSE
+			nCntStampSupport := nCntStampSupport + 1;
+			a_pObjects[nObjectID] := ADR(afbStampSupport[nCntStampSupport]);
+			afbStampSupport[nCntStampSupport].P_nObjectID := nObjectID;
+			nCntNotifiIds := nCntNotifiIds + 1;
+			afbStampSupport[nCntStampSupport].P_nNotifyId := nCntNotifiIds;
+			nNotifyId := nCntNotifiIds;
+		END_IF
+	
+	E_ObjectType.OBJECTTYPE_Stroboscope:
+		IF nCntStroboscope = cMaxStroboscopes THEN	//maximale Anzahl des spez.Objecttypes erreicht, Object kann nicht angelegt werden
+			M_CreateObject := E_ErrorIdObjMgmt.ERRORID_CntStroboscopesExceeded;	//Rückgabe Error
+			RETURN;
+		ELSE
+			nCntStroboscope := nCntStroboscope + 1;
+			a_pObjects[nObjectID] := ADR(afbStroboscope[nCntStroboscope]);
+			afbStroboscope[nCntStroboscope].P_nObjectID := nObjectID;
+			nCntNotifiIds := nCntNotifiIds + 1;
+			afbStroboscope[nCntStroboscope].P_nNotifyId := nCntNotifiIds;
+			nNotifyId := nCntNotifiIds;	
+		END_IF
+		
+	E_ObjectType.OBJECTTYPE_Stacker:
+		IF nCntStacker = cMaxStacker THEN	//maximale Anzahl des spez.Objecttypes erreicht, Object kann nicht angelegt werden
+			M_CreateObject := E_ErrorIdObjMgmt.ERRORID_CntStackerExceeded;	//Rückgabe Error
+			RETURN;
+		ELSE
+			nCntStacker := nCntStacker + 1;
+			a_pObjects[nObjectID] := ADR(afbStacker[nCntStacker]);
+			afbStacker[nCntStacker].P_nObjectID := nObjectID;
+			nCntNotifiIds := nCntNotifiIds + 1;
+			afbStacker[nCntStacker].P_nNotifyId := nCntNotifiIds;
+			nNotifyId := nCntNotifiIds;	
+		END_IF
+		
+	E_ObjectType.OBJECTTYPE_SolenoidPip:
+		IF nCntSolenoidPip = cMaxSolenoidPip THEN	//maximale Anzahl des spez.Objecttypes erreicht, Object kann nicht angelegt werden
+			M_CreateObject := E_ErrorIdObjMgmt.ERRORID_CntSolenoidPipExceeded;	//Rückgabe Error
+			RETURN;
+		ELSE
+			nCntSolenoidPip := nCntSolenoidPip + 1;
+			a_pObjects[nObjectID] := ADR(afbSolenoidPip[nCntSolenoidPip]);
+			afbSolenoidPip[nCntSolenoidPip].P_nObjectID := nObjectID;
+			nCntNotifiIds := nCntNotifiIds + 1;
+			afbSolenoidPip[nCntSolenoidPip].P_nNotifyId := nCntNotifiIds;
+			nNotifyId := nCntNotifiIds;
+		END_IF	
+		
+	E_ObjectType.OBJECTTYPE_SubstHolder:
+		IF nCntSubstHolder = cMaxSubstHolders THEN	//maximale Anzahl des spez.Objecttypes erreicht, Object kann nicht angelegt werden
+			M_CreateObject := E_ErrorIdObjMgmt.ERRORID_CntSubstHoldersExceeded;	//Rückgabe Error
+			RETURN;
+		ELSE
+			nCntSubstHolder := nCntSubstHolder + 1;
+			a_pObjects[nObjectID] := ADR(afbSubstHolder[nCntSubstHolder]);
+			afbSubstHolder[nCntSubstHolder].P_nObjectID := nObjectID;
+			nCntNotifiIds := nCntNotifiIds + 1;
+			afbSubstHolder[nCntSubstHolder].P_nNotifyId := nCntNotifiIds;
+			nNotifyId := nCntNotifiIds;
+		END_IF
+		
+	E_ObjectType.OBJECTTYPE_SubstHolderUnistat:
+		{IF defined(Unistat)}
+		IF nCntSubstHolderUnistat = cMaxSubstHolderUnistat THEN	//maximale Anzahl des spez.Objecttypes erreicht, Object kann nicht angelegt werden
+			M_CreateObject := E_ErrorIdObjMgmt.ERRORID_CntSubstHoldersExceeded;	//Rückgabe Error
+			RETURN;
+		ELSE
+			nCntSubstHolderUnistat := nCntSubstHolderUnistat + 1;
+			a_pObjects[nObjectID] := ADR(afbSubstHolderUnistat[nCntSubstHolderUnistat]);
+			afbSubstHolderUnistat[nCntSubstHolderUnistat].P_nObjectID := nObjectID;
+			nCntNotifiIds := nCntNotifiIds + 1;
+			afbSubstHolderUnistat[nCntSubstHolderUnistat].P_nNotifyId := nCntNotifiIds;
+			nNotifyId := nCntNotifiIds;
+		END_IF
+		{ELSE}
+		M_CreateObject := E_ErrorIdObjMgmt.ERRORID_InvalidObjectType;
+		RETURN;
+		{END_IF}
+		
+	E_ObjectType.OBJECTTYPE_TargetTray:
+			pTray := __NEW(FB_TargetTray);
+			pTray^.P_nObjectID := nObjectID;
+			a_pObjects[nObjectID] := pTray;
+		
+	E_ObjectType.OBJECTTYPE_Tip:
+			pTip := __NEW(FB_Tip);
+			pTip^.P_nObjectID := nObjectID;
+			a_pObjects[nObjectID] := pTip;
+		
+	E_ObjectType.OBJECTTYPE_TipCalibrator:
+		IF nCntTipCalibrator = cMaxTipCalibrators THEN	//maximale Anzahl des spez.Objecttypes erreicht, Object kann nicht angelegt werden
+			M_CreateObject := E_ErrorIdObjMgmt.ERRORID_CntTipCalibratorExceeded;	//Rückgabe Error
+			RETURN;
+		ELSE
+			nCntTipCalibrator := nCntTipCalibrator + 1;
+			a_pObjects[nObjectID] := ADR(afbTipCalibrator[nCntTipCalibrator]);
+			afbTipCalibrator[nCntTipCalibrator].P_nObjectID := nObjectID;
+			nCntNotifiIds := nCntNotifiIds + 1;
+			afbTipCalibrator[nCntTipCalibrator].P_nNotifyId := nCntNotifiIds;
+			nNotifyId := nCntNotifiIds;
+		END_IF	
+		
+	E_ObjectType.OBJECTTYPE_TipCleaner:
+		IF nCntTipCleaner = cMaxTipCleaners THEN	//maximale Anzahl des spez.Objecttypes erreicht, Object kann nicht angelegt werden
+			M_CreateObject := E_ErrorIdObjMgmt.ERRORID_CntTipCleanerExceeded;	//Rückgabe Error
+			RETURN;
+		ELSE
+			nCntTipCleaner := nCntTipCleaner + 1;
+			a_pObjects[nObjectID] := ADR(afbTipCleaner[nCntTipCleaner]);
+			afbTipCleaner[nCntTipCleaner].P_nObjectID := nObjectID;
+			nCntNotifiIds := nCntNotifiIds + 1;
+			afbTipCleaner[nCntTipCleaner].P_nNotifyId := nCntNotifiIds;
+			nNotifyId := nCntNotifiIds;
+		END_IF
+		
+	E_ObjectType.OBJECTTYPE_TipCleanerGen2:
+		IF nCntTipCleanerGen2 = cMaxTipCleanerGen2 THEN	//maximale Anzahl des spez.Objecttypes erreicht, Object kann nicht angelegt werden
+			M_CreateObject := E_ErrorIdObjMgmt.ERRORID_CntTipCleanerExceeded;	//Rückgabe Error
+			RETURN;
+		ELSE
+			nCntTipCleanerGen2 := nCntTipCleanerGen2 + 1;
+			a_pObjects[nObjectID] := ADR(afbTipCleanerGen2[nCntTipCleanerGen2]);
+			afbTipCleanerGen2[nCntTipCleanerGen2].P_nObjectID := nObjectID;
+		END_IF
+		
+	E_ObjectType.OBJECTTYPE_TipRack:
+		IF nCntTipRack = cMaxTipRack THEN	//maximale Anzahl des spez.Objecttypes erreicht, Object kann nicht angelegt werden
+			M_CreateObject := E_ErrorIdObjMgmt.ERRORID_CntNeedleRackExceeded;	//Rückgabe Error
+			RETURN;
+		ELSE
+			nCntTipRack := nCntTipRack + 1;
+			a_pObjects[nObjectID] := ADR(afbTipRack[nCntTipRack]);
+			afbTipRack[nCntTipRack].P_nObjectID := nObjectID;
+		END_IF
+
+	E_ObjectType.OBJECTTYPE_TitrationTool:
+		IF nCntTitrationTool = cMaxTitrationTools THEN	//maximale Anzahl des spez.Objecttypes erreicht, Object kann nicht angelegt werden
+			M_CreateObject := E_ErrorIdObjMgmt.ERRORID_CntTitrationToolsExceeded;	//Rückgabe Error
+			RETURN;
+		ELSE
+			nCntTitrationTool := nCntTitrationTool + 1;
+			a_pObjects[nObjectID] := ADR(afbTitrationTool[nCntTitrationTool]);
+			afbTitrationTool[nCntTitrationTool].P_nObjectID := nObjectID;
+			nCntNotifiIds := nCntNotifiIds + 1;
+			afbTitrationTool[nCntTitrationTool].P_nNotifyId := nCntNotifiIds;
+			nNotifyId := nCntNotifiIds;
+ 		END_IF
+
+	E_ObjectType.OBJECTTYPE_TrayTransporter:
+		IF nCntTrayTransporter = cMaxTrayTransporter THEN	//maximale Anzahl des spez.Objecttypes erreicht, Object kann nicht angelegt werden
+			M_CreateObject := E_ErrorIdObjMgmt.ERRORID_CntTrayTransporterExceeded;	//Rückgabe Error
+			RETURN;
+		ELSE
+			nCntTrayTransporter := nCntTrayTransporter + 1;
+			a_pObjects[nObjectID] := ADR(afbTrayTransporter[nCntTrayTransporter]);
+			afbTrayTransporter[nCntTrayTransporter].P_nObjectID := nObjectID;
+			nCntNotifiIds := nCntNotifiIds + 1;
+			afbTrayTransporter[nCntTrayTransporter].P_nNotifyId := nCntNotifiIds;
+			nNotifyId := nCntNotifiIds;
+		END_IF
+	
+	E_ObjectType.OBJECTTYPE_TriplePip:
+		IF nCntTriplePip = cMaxTriplePip THEN	//maximale Anzahl des spez.Objecttypes erreicht, Object kann nicht angelegt werden
+			M_CreateObject := E_ErrorIdObjMgmt.ERRORID_CntTriplePipExceeded;	//Rückgabe Error
+			RETURN;
+		ELSE
+			nCntTriplePip := nCntTriplePip + 1;
+			a_pObjects[nObjectID] := ADR(afbTriplePip[nCntTriplePip]);
+			afbTriplePip[nCntTriplePip].P_nObjectID := nObjectID;
+			nCntNotifiIds := nCntNotifiIds + 1;
+			afbTriplePip[nCntTriplePip].P_nNotifyId := nCntNotifiIds;
+			nNotifyId := nCntNotifiIds;
+		END_IF
+		
+	E_ObjectType.OBJECTTYPE_VacuumHandler:
+		IF nCntVacuumHandler = cMaxVacuumHandler THEN	//maximale Anzahl des spez.Objecttypes erreicht, Object kann nicht angelegt werden
+			M_CreateObject := E_ErrorIdObjMgmt.ERRORID_CntVacuumHandlerExceeded;	//Rückgabe Error
+			RETURN;
+		ELSE
+			nCntVacuumHandler := nCntVacuumHandler + 1;
+			a_pObjects[nObjectID] := ADR(afbVacuumHandler[nCntVacuumHandler]);
+			afbVacuumHandler[nCntVacuumHandler].P_nObjectID := nObjectID;
+			nCntNotifiIds := nCntNotifiIds + 1;
+			afbVacuumHandler[nCntVacuumHandler].P_nNotifyId := nCntNotifiIds;
+			nNotifyId := nCntNotifiIds;
+		END_IF		
+		
+	E_ObjectType.OBJECTTYPE_VermesDisp:
+		IF nCntVermesDisp = cMaxVermesDisp THEN	//maximale Anzahl des spez.Objecttypes erreicht, Object kann nicht angelegt werden
+			M_CreateObject := E_ErrorIdObjMgmt.ERRORID_CntVermesDispExceeded;	//Rückgabe Error
+			RETURN;
+		ELSE
+			nCntVermesDisp := nCntVermesDisp + 1;
+			a_pObjects[nObjectID] := ADR(afbVermesDisp[nCntVermesDisp]);
+			afbVermesDisp[nCntVermesDisp].P_nObjectID := nObjectID;
+			nCntNotifiIds := nCntNotifiIds + 1;
+			afbVermesDisp[nCntVermesDisp].P_nNotifyId := nCntNotifiIds;
+			nNotifyId := nCntNotifiIds;
+ 		END_IF
+
+	E_ObjectType.OBJECTTYPE_Vial:
+			pVial := __NEW(FB_Vial);
+			pVial^.P_nObjectID := nObjectID;
+			a_pObjects[nObjectID] := pVial;	
+		
+	E_ObjectType.OBJECTTYPE_VialClosed:
+			pVialClosed := __NEW(FB_VialClosed);
+			pVialClosed^.P_nObjectID := nObjectID;
+			a_pObjects[nObjectID] := pVialClosed;	
+		
+	E_ObjectType.OBJECTTYPE_VialRack:
+		IF nCntVialRack = cMaxVialRack THEN	//maximale Anzahl des spez.Objecttypes erreicht, Object kann nicht angelegt werden
+			M_CreateObject := E_ErrorIdObjMgmt.ERRORID_CntVialRackExceeded;	//Rückgabe Error
+			RETURN;
+		ELSE
+			nCntVialRack := nCntVialRack + 1;
+			a_pObjects[nObjectID] := ADR(afbVialRack[nCntVialRack]);
+			afbVialRack[nCntVialRack].P_nObjectID := nObjectID;
+		END_IF
+		
+	E_ObjectType.OBJECTTYPE_VialRackClosed:
+		IF nCntVialRack = cMaxVialRack THEN	//maximale Anzahl des spez.Objecttypes erreicht, Object kann nicht angelegt werden
+			M_CreateObject := E_ErrorIdObjMgmt.ERRORID_CntVialRackExceeded;	//Rückgabe Error
+			RETURN;
+		ELSE
+			nCntVialRack := nCntVialRack + 1;
+			a_pObjects[nObjectID] := ADR(afbVialRack[nCntVialRack]);
+			afbVialRack[nCntVialRack].P_nObjectID := nObjectID;
+			afbVialRack[nCntVialRack].M_OverrideObjectType();
+		END_IF		
+		
+	E_ObjectType.OBJECTTYPE_Wafer:
+		pWafer := __NEW(FB_Wafer);
+		pWafer^.P_nObjectID := nObjectID;
+		a_pObjects[nObjectID] := pWafer;
+		
+	E_ObjectType.OBJECTTYPE_WashStation:
+		IF nCntWashStation = cMaxWashStations THEN	//maximale Anzahl des spez.Objecttypes erreicht, Object kann nicht angelegt werden
+			M_CreateObject := E_ErrorIdObjMgmt.ERRORID_CntWashStationsExceeded;	//Rückgabe Error
+			RETURN;
+		ELSE
+			nCntWashStation := nCntWashStation + 1;
+			a_pObjects[nObjectID] := ADR(afbWashStation[nCntWashStation]);
+			afbWashStation[nCntWashStation].P_nObjectID := nObjectID;
+			nCntNotifiIds := nCntNotifiIds + 1;
+			afbWashStation[nCntWashStation].P_nNotifyId := nCntNotifiIds;
+			nNotifyId := nCntNotifiIds;
+		END_IF
+		
+	E_ObjectType.OBJECTTYPE_Workplate:
+		IF nCntWorkplate = cMaxWorkplates THEN	//maximale Anzahl des spez.Objecttypes erreicht, Object kann nicht angelegt werden
+			M_CreateObject := E_ErrorIdObjMgmt.ERRORID_CntWorkplatesExceeded;	//Rückgabe Error
+			RETURN;
+		ELSE
+			nCntWorkplate := nCntWorkplate + 1;
+			a_pObjects[nObjectID] := ADR(afbWorkplate[nCntWorkplate]);
+			afbWorkplate[nCntWorkplate].P_nObjectID := nObjectID;
+		END_IF
+		
+	E_ObjectType.OBJECTTYPE_WorkplateCamera:
+		IF nCntWorkplateCamera = cMaxWorkplateCameras THEN	//maximale Anzahl des spez.Objecttypes erreicht, Object kann nicht angelegt werden
+			M_CreateObject := E_ErrorIdObjMgmt.ERRORID_CntWorkplateCameraExceeded;	//Rückgabe Error
+			RETURN;
+		ELSE
+			nCntWorkplateCamera := nCntWorkplateCamera + 1;
+			a_pObjects[nObjectID] := ADR(afbWorkplateCamera[nCntWorkplateCamera]);
+			afbWorkplateCamera[nCntWorkplateCamera].P_nObjectID := nObjectID;
+			nCntNotifiIds := nCntNotifiIds + 1;
+			afbWorkplateCamera[nCntWorkplateCamera].P_nNotifyId := nCntNotifiIds;
+			nNotifyId := nCntNotifiIds;	
+		END_IF		
+		
+	E_ObjectType.OBJECTTYPE_ZSensor:
+		IF nCntZLevelSensor = cMaxZLevelSensors THEN	//maximale Anzahl des spez.Objecttypes erreicht, Object kann nicht angelegt werden
+			M_CreateObject := E_ErrorIdObjMgmt.ERRORID_CntZLevelSensorsExceeded;	//Rückgabe Error
+			RETURN;
+		ELSE
+			nCntZLevelSensor := nCntZLevelSensor + 1;
+			a_pObjects[nObjectID] := ADR(afbZLevelSensor[nCntZLevelSensor]);
+			afbZLevelSensor[nCntZLevelSensor].P_nObjectID := nObjectID;
+			nCntNotifiIds := nCntNotifiIds + 1;
+			afbZLevelSensor[nCntZLevelSensor].P_nNotifyId := nCntNotifiIds;
+			nNotifyId := nCntNotifiIds;
+ 		END_IF
+ELSE
+	M_CreateObject := E_ErrorIdObjMgmt.ERRORID_InvalidObjectType;
+	RETURN;
+END_CASE
+nCntObject := nCntObject + 1;
+
+//ParentObject ermitteln aus data[0]
+nParentObjectId := DINT_TO_UINT(refCmdData.n32Data[0]);
+IF nParentObjectId = 0 THEN	//Soll kein Parent erhalten, nur für Diluter, Workplate und Head zulässig
+	IF a_pObjects[nObjectID]^.P_eObjectType = E_ObjectType.OBJECTTYPE_Diluter OR
+			a_pObjects[nObjectID]^.P_eObjectType = E_ObjectType.OBJECTTYPE_Diluter3Inputs OR
+				a_pObjects[nObjectID]^.P_eObjectType = E_ObjectType.OBJECTTYPE_Workplate OR
+					a_pObjects[nObjectID]^.P_eObjectType = E_ObjectType.OBJECTTYPE_MZHead OR
+					a_pObjects[nObjectID]^.P_eObjectType = E_ObjectType.OBJECTTYPE_Stacker THEN
+					
+		a_pObjects[nObjectID]^.P_pObjCollectNode := objectList.M_AddNewNode(a_pObjects[nObjectID],nIndex);
+	ELSE
+		//Objekttyp muss zwingend an ein Parent
+		M_CreateObject := E_ErrorIdObjMgmt.ERRORID_ObjectMustHaveAParent;
+	END_IF
+ELSIF nParentObjectId > 0 AND nParentObjectId <= cMaxObjects THEN
+	pParentObject := a_pObjects[nParentObjectId];
+	IF pParentObject > 0 THEN
+		nParentSlotNr := DINT_TO_UINT(refCmdData.n32Data[1]);
+		M_CreateObject := pParentObject^.M_AddChild(a_pObjects[nObjectID],nParentSlotNr,nIndex);
+	ELSE
+		M_CreateObject := E_ErrorIdObjMgmt.ERRORID_InvalidParentObject;
+	END_IF
+ELSE
+	M_CreateObject := E_ErrorIdObjMgmt.ERRORID_InvalidParentObject;
+END_IF
+
+IF M_CreateObject > 0 THEN
+	M_DeleteObject(nObjectID);
+ELSE
+	M_CreateObject := a_pObjects[nObjectID]^.M_SetAllProps(refCmdData);
+	IF M_CreateObject > 0 THEN
+		M_DeleteObject(nObjectID);
+	ELSE
+		refCmdData.aHeader[0] := nObjectID;	//zum Zurücklesen für den GUI-Kernel
+		IF a_pObjects[nObjectID]^.M_bIsGroup(E_ObjectGroup.OBJECTGROUP_Device) THEN
+			deviceList.M_AddNewNode(a_pObjects[nObjectID],nIndex);
+		END_IF
+		
+		IF a_pObjects[nObjectID]^.M_bIsGroup(E_ObjectGroup.OBJECTGROUP_MzTool) THEN
+			fbConfiguration.M_Deactivate();
+		END_IF
+	END_IF
+END_IF]]></ST>
+      </Implementation>
+    </Method>
+    <Method Name="M_CustomUnitType2_Error" Id="{c02d379a-2255-4f73-b426-6e584fe2c516}">
+      <Declaration><![CDATA[METHOD M_CustomUnitType2_Error : BOOL
+VAR_INPUT
+END_VAR
+
+VAR
+	i : UINT;
+END_VAR]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[FOR i := 1 TO nCntCustomUnitType2 DO
+	 IF afbCustomUnitType2[i].P_bError THEN
+		 M_CustomUnitType2_Error := TRUE;
+	 END_IF
+END_FOR]]></ST>
+      </Implementation>
+    </Method>
+    <Method Name="M_DeleteAllObj" Id="{be98f4e2-5ea6-44a3-b9c7-4ebe056082b6}">
+      <Declaration><![CDATA[METHOD M_DeleteAllObj : E_ErrorIdObjMgmt
+VAR_INPUT
+END_VAR
+VAR
+	i		: UINT;
+	iter 	: FB_ObjCollectIteratorDeep;
+	pObject : POINTER TO FB_Object;
+	id 		: UINT;
+END_VAR]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[//Methode zum kompletten Löschen des Objektverzeichnisses
+
+//Objektzählervariablen zurücksetzen
+nCntCamera := 0;
+nCntCartDispenser := 0;
+nCntCartDispStirrer := 0;
+nCntCartHolder := 0;
+nCntCustomUnitType1 := 0;
+nCntCustomUnitType2 := 0;
+nCntMultiCartHolder := 0;
+nCntHybridDispenser := 0;
+nCntDeloDot := 0;	
+nCntDiluter := 0;
+nCntDiluter3Inputs := 0;
+nCntDrayPad := 0;
+nCntDummyTool := 0;
+nCntExposure := 0;		
+nCntFlipTubeHandler	:= 0;			
+nCntFlipTubeRack := 0;
+nCntGripper := 0;
+nCntHighVoltTray := 0;		
+nCntInkStation := 0;		
+nCntLiquidReserve := 0;			
+nCntLuer := 0; 	
+nCntMtpHolder := 0;		
+nCntMZHead := 0;	
+nCntNeedleRack := 0;		
+nCntNotifiIds := 0;		
+nCntObject := 0;
+nCntTwinExtruder := 0;	
+nCntTwinPiezoHolder	:= 0;	
+nCntPassivPip := 0;
+nCntpHElectrode	:= 0;
+nCntpHElectrodeCapRack := 0;
+nCntPickPlacePip := 0;
+nCntPiezoPip := 0;		
+nCntPortRack := 0;		
+nCntPowderPip := 0;		
+nCntPowderStation := 0;			
+nCntReactor := 0;	
+nCntSampleScan := 0;		
+nCntSeptumRack := 0;		
+nCntSeptumWaste	:= 0;
+nCntSinglePiezoHolder := 0;	
+nCntStacker := 0;	
+nCntSolenoidPip := 0;
+nCntExtruder := 0;
+nCntStampMagazine := 0;			
+nCntStampSupport := 0;			
+nCntStroboscope := 0;		
+nCntSubstHolder := 0;
+nCntSubstHolderUnistat := 0;
+nCntTipCalibrator := 0;			
+nCntTipCleaner := 0;
+nCntTipCleanerGen2 := 0;
+nCntTipRack := 0;
+nCntTitrationTool := 0;
+nCntTrayTransporter := 0;
+nCntTriplePip := 0;		
+nCntVacuumHandler := 0;
+nCntVermesDisp := 0;			
+nCntVialRack := 0;		
+nCntWashStation	:= 0;		
+nCntWorkplate := 0;
+nCntWorkplateCamera := 0;
+nCntZLevelSensor := 0;			
+
+objectList.M_GetIterator(iter);
+WHILE iter.pNode > 0 AND_THEN iter.pNode^.P_pObject > 0 DO
+	pObject := iter.pNode^.P_pObject;
+	id := pObject^.P_nObjectID;
+	a_pObjects[id] := 0;
+	pObject^.M_ClearAllProps(TRUE);
+	CASE pObject^.P_eObjectType OF
+		E_ObjectType.OBJECTTYPE_Cartridge:
+			pCartridge := pObject;
+			__DELETE(pCartridge);
+		E_ObjectType.OBJECTTYPE_FlipTube:
+			pFlipTube := pObject;
+			__DELETE(pFlipTube);
+		E_ObjectType.OBJECTTYPE_Mtp:
+			pMtp := pObject;
+			__DELETE(pMtp);
+		E_ObjectType.OBJECTTYPE_Needle:
+			pNeedle := pObject;
+			__DELETE(pNeedle);
+		E_ObjectType.OBJECTTYPE_Nozzle:
+			pNozzle := pObject;
+			__DELETE(pNozzle);		
+		E_ObjectType.OBJECTTYPE_pHElectrodeCap:
+			pPHElectrodeCap := pObject;
+			__DELETE(pPHElectrodeCap);
+		E_ObjectType.OBJECTTYPE_Point:
+			pPoint := pObject;
+			__DELETE(pPoint);
+		E_ObjectType.OBJECTTYPE_Port:
+			pPort := pObject;
+			__DELETE(pPort);
+		E_ObjectType.OBJECTTYPE_Septum:
+			pSeptum := pObject;
+			__DELETE(pSeptum);
+		E_ObjectType.OBJECTTYPE_Slide:
+			pSlide := pObject;
+			__DELETE(pSlide);
+		E_ObjectType.OBJECTTYPE_SpotArray:
+			pSpotArray := pObject;
+			__DELETE(pSpotArray);
+		E_ObjectType.OBJECTTYPE_SpotPattern:
+			pSpotPattern := pObject;
+			__DELETE(pSpotPattern);
+		E_ObjectType.OBJECTTYPE_Stamp:
+			pStamp := pObject;
+			__DELETE(pStamp);
+		E_ObjectType.OBJECTTYPE_Tip:
+			pTip := pObject;
+			__DELETE(pTip);
+		E_ObjectType.OBJECTTYPE_TargetTray:
+			pTray := pObject;
+			__DELETE(pTray);
+		E_ObjectType.OBJECTTYPE_Vial:
+			pVial := pObject;
+			__DELETE(pVial);
+		E_ObjectType.OBJECTTYPE_VialClosed:
+			pVialClosed := pObject;
+			__DELETE(pVialClosed);
+		E_ObjectType.OBJECTTYPE_Wafer:
+			pWafer := pObject;
+			__DELETE(pWafer);	
+	END_CASE
+	iter.M_Increment();
+END_WHILE
+
+objectList.M_Clear();
+fbIdPool.M_Reset();
+deviceList.M_Clear();
+
+fbConfiguration.M_Deactivate();
+
+FOR i := 1 TO cMaxMzHeads BY 1 DO
+	aFbMultiZRef[i].M_DelConfig();
+END_FOR]]></ST>
+      </Implementation>
+    </Method>
+    <Method Name="M_DeleteObject" Id="{6958beb4-24fe-4972-a29b-b7d1f90c4555}">
+      <Declaration><![CDATA[METHOD M_DeleteObject : E_ErrorIdObjMgmt
+VAR_INPUT
+	nObjectID		: UINT;
+END_VAR
+VAR
+	pDeviceNode	: POINTER TO FB_ObjCollectionNode;
+	iter : FB_ObjCollectIterator;
+END_VAR]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[//Existiert das Objekt ?
+IF nObjectID > 0 AND nObjectID <= cMaxObjects THEN
+	IF a_pObjects[nObjectId] > 0 THEN
+		//Es können nur Objekte ohne Childs gelöscht werden
+		IF NOT a_pObjects[nObjectId]^.P_bHasChilds THEN
+			IF a_pObjects[nObjectId]^.M_bIsGroup(E_ObjectGroup.OBJECTGROUP_Device) THEN
+				deviceList.M_GetIterator(iter);
+				WHILE iter.pNode > 0 DO
+					IF iter.pNode^.P_pObject = a_pObjects[nObjectId] THEN
+						deviceList.M_ClearNode(iter.pNode);
+						EXIT;
+					END_IF
+					iter.M_Increment();
+				END_WHILE
+			END_IF
+		
+			IF a_pObjects[nObjectId]^.P_nNotifyId > 0 THEN
+				nCntNotifiIds := nCntNotifiIds - 1;
+			END_IF
+		
+			IF a_pObjects[nObjectId]^.P_pParentObject > 0 THEN
+				a_pObjects[nObjectId]^.P_pParentObject^.M_RemoveChild(a_pObjects[nObjectId]);
+			ELSE
+				IF a_pObjects[nObjectId]^.P_pObjCollectNode > 0 THEN
+					a_pObjects[nObjectId]^.P_pObjCollectNode^.P_pOwnerColl^.M_ClearNode(a_pObjects[nObjectId]^.P_pObjCollectNode);
+				END_IF
+			END_IF
+			
+			IF a_pObjects[nObjectId]^.M_bIsGroup(E_ObjectGroup.OBJECTGROUP_MzTool) THEN
+				fbConfiguration.M_Deactivate();
+			END_IF
+ 			
+			a_pObjects[nObjectId]^.M_ClearAllProps(FALSE);
+		
+			nCntObject := nCntObject - 1;
+			
+			CASE a_pObjects[nObjectId]^.P_eObjectType OF
+				E_ObjectType.OBJECTTYPE_MZHead:
+					nCntMZHead := nCntMZHead - 1;
+				E_ObjectType.OBJECTTYPE_PiezoPip:
+					nCntPiezoPip := nCntPiezoPip - 1;
+				E_ObjectType.OBJECTTYPE_PassivPip:
+					nCntPassivPip := nCntPassivPip - 1;
+				E_ObjectType.OBJECTTYPE_pHElectrode:
+					nCntpHElectrode := nCntpHElectrode - 1;
+				E_ObjectType.OBJECTTYPE_pHElectrodeCap:
+					pPHElectrodeCap := a_pObjects[nObjectId];
+					__DELETE(pPHElectrodeCap);
+				E_ObjectType.OBJECTTYPE_pHElectrodeCapRack:
+					nCntpHElectrodeCapRack := nCntpHElectrodeCapRack - 1;
+				E_ObjectType.OBJECTTYPE_PowderPip:
+					nCntPowderPip := nCntPowderPip - 1;
+				E_ObjectType.OBJECTTYPE_MultiCartHolder:
+					nCntMultiCartHolder := nCntMultiCartHolder - 1;
+				E_ObjectType.OBJECTTYPE_HybridDispenser:
+					nCntHybridDispenser := nCntHybridDispenser - 1;
+				E_ObjectType.OBJECTTYPE_CartDispenser:
+					nCntCartDispenser := nCntCartDispenser - 1;
+				E_ObjectType.OBJECTTYPE_CartDispStirrer:
+					nCntCartDispStirrer := nCntCartDispStirrer - 1;
+				E_ObjectType.OBJECTTYPE_CartHolder:
+					nCntCartHolder := nCntCartHolder - 1;
+				E_ObjectType.OBJECTTYPE_Camera:
+					nCntCamera := nCntCamera - 1;
+				E_ObjectType.OBJECTTYPE_ZSensor:
+					nCntZLevelSensor := nCntZLevelSensor - 1;
+				E_ObjectType.OBJECTTYPE_StampSupport:
+					nCntStampSupport := nCntStampSupport - 1;
+				E_ObjectType.OBJECTTYPE_Luer:
+					nCntLuer := nCntLuer - 1;
+				E_ObjectType.OBJECTTYPE_TrayTransporter:
+					nCntTrayTransporter := nCntTrayTransporter - 1;
+				E_ObjectType.OBJECTTYPE_TriplePip:
+					nCntTriplePip := nCntTriplePip - 1;
+				E_ObjectType.OBJECTTYPE_VacuumHandler:
+					nCntVacuumHandler := nCntVacuumHandler - 1;
+				E_ObjectType.OBJECTTYPE_Workplate:
+					nCntWorkplate := nCntWorkplate - 1;
+				E_ObjectType.OBJECTTYPE_TipCleaner:
+					nCntTipCleaner := nCntTipCleaner - 1;
+				E_ObjectType.OBJECTTYPE_TipCleanerGen2:
+					nCntTipCleanerGen2 := nCntTipCleanerGen2 - 1;
+				E_ObjectType.OBJECTTYPE_TipCalibrator:
+					nCntTipCalibrator := nCntTipCalibrator - 1;
+				E_ObjectType.OBJECTTYPE_TitrationTool:
+					nCntTitrationTool := nCntTitrationTool - 1;
+				E_ObjectType.OBJECTTYPE_WashStation:
+					nCntWashStation := nCntWashStation - 1;
+				E_ObjectType.OBJECTTYPE_LiquidReserve:
+					nCntLiquidReserve := nCntLiquidReserve - 1;
+				E_ObjectType.OBJECTTYPE_DryPad:
+					nCntDrayPad := nCntDrayPad - 1;
+				E_ObjectType.OBJECTTYPE_Stroboscope:
+					nCntStroboscope := nCntStroboscope - 1;
+				E_ObjectType.OBJECTTYPE_MtpHolder:
+					nCntMtpHolder := nCntMtpHolder - 1;
+				E_ObjectType.OBJECTTYPE_SubstHolder:
+					nCntSubstHolder := nCntSubstHolder - 1;
+				E_ObjectType.OBJECTTYPE_SubstHolderUnistat:
+					nCntSubstHolderUnistat := nCntSubstHolderUnistat - 1;
+				E_ObjectType.OBJECTTYPE_StampMagazine:
+					nCntStampMagazine := nCntStampMagazine - 1;
+				E_ObjectType.OBJECTTYPE_InkStation:
+					nCntInkStation := nCntInkStation - 1;
+				E_ObjectType.OBJECTTYPE_PowderStation:
+					nCntPowderStation := nCntPowderStation - 1;
+				E_ObjectType.OBJECTTYPE_Reactor:
+					nCntReactor := nCntReactor - 1;
+				E_ObjectType.OBJECTTYPE_TargetTray:
+					pTray := a_pObjects[nObjectId];
+					__DELETE(pTray);
+				E_ObjectType.OBJECTTYPE_SpotArray:
+					pSpotArray := a_pObjects[nObjectId];
+					__DELETE(pSpotArray);
+				E_ObjectType.OBJECTTYPE_Mtp:
+					pMtp := a_pObjects[nObjectId];
+					__DELETE(pMtp);
+				E_ObjectType.OBJECTTYPE_Slide:
+					pSlide := a_pObjects[nObjectId];
+					__DELETE(pSlide);
+				E_ObjectType.OBJECTTYPE_Wafer:
+					pWafer := a_pObjects[nObjectId];
+					__DELETE(pWafer);					
+				E_ObjectType.OBJECTTYPE_Point:
+					pPoint := a_pObjects[nObjectId];
+					__DELETE(pPoint);
+				E_ObjectType.OBJECTTYPE_Diluter:
+					fbConfiguration.M_Deactivate();
+					nCntDiluter := nCntDiluter - 1;
+				E_ObjectType.OBJECTTYPE_Diluter3Inputs:
+					fbConfiguration.M_Deactivate();
+					nCntDiluter3Inputs := nCntDiluter3Inputs - 1;
+				E_ObjectType.OBJECTTYPE_SpotPattern:
+					pSpotPattern := a_pObjects[nObjectId];
+					__DELETE(pSpotPattern);
+				E_ObjectType.OBJECTTYPE_DeloDot:
+					nCntDeloDot := nCntDeloDot - 1;
+				E_ObjectType.OBJECTTYPE_Exposure:
+					nCntExposure := nCntExposure - 1;
+				E_ObjectType.OBJECTTYPE_Stamp:
+					pStamp := a_pObjects[nObjectId];
+					__DELETE(pStamp);
+				E_ObjectType.OBJECTTYPE_Needle:
+					pNeedle := a_pObjects[nObjectId];
+					__DELETE(pNeedle);
+				E_ObjectType.OBJECTTYPE_Tip:
+					pTip := a_pObjects[nObjectId];
+					__DELETE(pTip);
+				E_ObjectType.OBJECTTYPE_Vial:
+					pVial := a_pObjects[nObjectId];
+					__DELETE(pVial);
+				E_ObjectType.OBJECTTYPE_VialClosed:
+					pVialClosed := a_pObjects[nObjectId];
+					__DELETE(pVialClosed);
+				E_ObjectType.OBJECTTYPE_Septum:
+					pSeptum := a_pObjects[nObjectId];
+					__DELETE(pSeptum);
+				E_ObjectType.OBJECTTYPE_Cartridge:
+					pCartridge := a_pObjects[nObjectId];
+					__DELETE(pCartridge);
+				E_ObjectType.OBJECTTYPE_Port:
+					pPort := a_pObjects[nObjectId];
+					__DELETE(pPort);
+				E_ObjectType.OBJECTTYPE_FlipTube:
+					pFlipTube := a_pObjects[nObjectId];
+					__DELETE(pFlipTube);
+				E_ObjectType.OBJECTTYPE_SeptumWaste:
+					nCntSeptumWaste := nCntSeptumWaste - 1;
+				E_ObjectType.OBJECTTYPE_NeedleRack:
+					nCntNeedleRack := nCntNeedleRack - 1;
+				E_ObjectType.OBJECTTYPE_TipRack:
+					nCntTipRack := nCntTipRack - 1;
+				E_ObjectType.OBJECTTYPE_FlipTubeRack:
+					nCntFlipTubeRack := nCntFlipTubeRack - 1;
+				E_ObjectType.OBJECTTYPE_SeptumRack:
+					nCntSeptumRack := nCntSeptumRack - 1;
+				E_ObjectType.OBJECTTYPE_VialRack:
+					nCntVialRack := nCntVialRack - 1;
+				E_ObjectType.OBJECTTYPE_PortRack:
+					nCntPortRack := nCntPortRack - 1;
+				E_ObjectType.OBJECTTYPE_Nozzle:
+					fbConfiguration.M_Deactivate();
+					pNozzle := a_pObjects[nObjectId];
+					__DELETE(pNozzle);
+				E_ObjectType.OBJECTTYPE_SinglePiezoHolder:
+					nCntSinglePiezoHolder := nCntSinglePiezoHolder - 1;
+				E_ObjectType.OBJECTTYPE_TwinPiezoHolder:
+					nCntTwinPiezoHolder := nCntTwinPiezoHolder - 1;
+				E_ObjectType.OBJECTTYPE_HighVoltTray:
+					nCntHighVoltTray := nCntHighVoltTray - 1;
+				E_ObjectType.OBJECTTYPE_SolenoidPip:
+					nCntSolenoidPip := nCntSolenoidPip - 1;
+				E_ObjectType.OBJECTTYPE_Extruder:
+					nCntExtruder := nCntExtruder - 1;
+				E_ObjectType.OBJECTTYPE_TwinExtruder:
+					nCntTwinExtruder := nCntTwinExtruder - 1;
+				E_ObjectType.OBJECTTYPE_VermesDisp:
+					nCntVermesDisp := nCntVermesDisp - 1;
+				E_ObjectType.OBJECTTYPE_WorkplateCamera:
+					nCntWorkplateCamera := nCntWorkplateCamera - 1;
+				E_ObjectType.OBJECTTYPE_DummyTool:
+					nCntDummyTool := nCntDummyTool - 1;
+				E_ObjectType.OBJECTTYPE_CustomUnitType1:
+					nCntCustomUnitType1 := nCntCustomUnitType1 - 1;
+				E_ObjectType.OBJECTTYPE_CustomUnitType2:
+					nCntCustomUnitType2 := nCntCustomUnitType2 - 1;
+				E_ObjectType.OBJECTTYPE_Gripper:
+					nCntGripper := nCntGripper - 1;
+				E_ObjectType.OBJECTTYPE_PickPlacePip:
+					nCntPickPlacePip := nCntPickPlacePip - 1;
+				E_ObjectType.OBJECTTYPE_Stacker:
+					nCntStacker := nCntStacker - 1;
+			END_CASE
+			a_pObjects[nObjectId] := 0;
+			//ObjectID wieder freigeben
+			fbIdPool.M_ReleaseId(nObjectId);
+		ELSE
+			M_DeleteObject := E_ErrorIdObjMgmt.ERRORID_ObjectHasChilds;
+		END_IF
+	ELSE
+		M_DeleteObject := E_ErrorIdObjMgmt.ERRORID_InvalidObjectId;
+	END_IF
+END_IF]]></ST>
+      </Implementation>
+    </Method>
+    <Method Name="M_GetChangedObjId" Id="{27335885-d38a-4b5f-a255-a76626d7cfd3}">
+      <Declaration><![CDATA[METHOD M_GetChangedObjId : UINT
+VAR_INPUT
+END_VAR
+]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[IF hList.nCount > 0 THEN
+	fbList.A_GetTail(hList:= hList);
+	{IF hasvalue (RegisterSize, '32')}
+	M_GetChangedObjId := UDINT_TO_UINT(fbList.getValue);
+	{ELSE}
+	M_GetChangedObjId := ULINT_TO_UINT(fbList.getValue);
+	{END_IF}
+	fbList.A_RemoveTailValue(hList:= hList);
+END_IF]]></ST>
+      </Implementation>
+    </Method>
+    <Method Name="M_GetCoHead" Id="{e1836cd9-3959-43b5-802c-cd26497e48e2}">
+      <Declaration><![CDATA[METHOD M_GetCoHead : POINTER TO FB_MzHead
+VAR_INPUT
+	pMzHead : POINTER TO FB_MzHead;
+END_VAR
+
+VAR
+	i : UINT;
+END_VAR]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[FOR i:= 1 TO nCntMZHead BY 1 DO
+	IF ADR(afbMzHead[i]) <> pMzHead THEN
+		IF afbMzHead[i].P_eObjectType = E_ObjectType.OBJECTTYPE_MZHead THEN
+			IF afbMzHead[i].P_pXDrive = pMzHead^.P_pXDrive THEN
+				M_GetCoHead := ADR(afbMzHead[i]);
+			END_IF
+		END_IF
+	END_IF
+END_FOR]]></ST>
+      </Implementation>
+    </Method>
+    <Method Name="M_GetConfigCheckSum" Id="{38268fea-9da5-4910-a5a4-8e7797912e8f}">
+      <Declaration><![CDATA[METHOD M_GetConfigCheckSum : UINT
+VAR_INPUT
+END_VAR
+
+VAR
+	nObjectCounter 	: UINT;
+	wPrevious 		: WORD := 16#FFFF;
+	iter			: FB_ObjCollectIteratorDeep;
+	nLevel			: UINT;
+	nObjType		: UINT;
+	nNoOfProps		: UINT;
+	nParentSlotNr	: UINT;
+END_VAR
+]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[objectList.M_GetIterator(iter);
+WHILE iter.pNode > 0 AND_THEN iter.pNode^.P_pObject > 0 DO
+	
+	nParentSlotNr := iter.pNode^.P_pObject^.P_nParentSlotNr;
+	wPrevious := F_DATA_TO_CRC16_CCITT(ADR(nParentSlotNr),SIZEOF(nParentSlotNr),wPrevious);
+
+	nLevel := iter.pNode^.M_GetLevel(0);
+	wPrevious := F_DATA_TO_CRC16_CCITT(ADR(nLevel),SIZEOF(nLevel),wPrevious); 
+
+	nObjType := iter.pNode^.P_pObject^.P_eObjectType;
+	wPrevious := F_DATA_TO_CRC16_CCITT(ADR(nObjType),SIZEOF(nObjType),wPrevious);
+
+	nNoOfProps := iter.pNode^.P_pObject^.P_nNoOfProps;
+	wPrevious := F_DATA_TO_CRC16_CCITT(ADR(nNoOfProps),SIZEOF(nNoOfProps),wPrevious);
+
+	iter.M_Increment();
+END_WHILE
+M_GetConfigCheckSum := WORD_TO_UINT(wPrevious);]]></ST>
+      </Implementation>
+    </Method>
+    <Method Name="M_GetDevice" Id="{a386ae1b-c49a-40d3-8532-254716a94494}">
+      <Declaration><![CDATA[METHOD M_GetDevice : I_Device
+VAR_INPUT
+	nObjectId : UINT;
+END_VAR
+
+VAR
+	pActiveTarget : POINTER TO FB_ActiveTarget;
+	pMzToolBase	: POINTER TO FB_MzBase;
+	pDiluter : POINTER TO FB_Diluter; 
+END_VAR]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[IF M_ObjIsDevice(nObjectId) THEN
+	M_GetDevice := a_pObjects[nObjectId]^.M_GetDevice();
+END_IF]]></ST>
+      </Implementation>
+    </Method>
+    <Method Name="M_GetObjIdFromGCodeTargetNr" Id="{f7232608-8ebd-495b-a170-99af1330cbf7}">
+      <Declaration><![CDATA[METHOD M_GetObjIdFromGCodeTargetNr : UINT
+VAR_INPUT
+	nTargetNr : UINT;
+END_VAR
+]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[]]></ST>
+      </Implementation>
+    </Method>
+    <Method Name="M_GetObjIdStream" Id="{def79fe2-5491-4f76-bfe3-70310890afea}">
+      <Declaration><![CDATA[METHOD M_GetObjIdStream : ERRORID
+VAR_INPUT
+	aData : REFERENCE TO ARRAY[0..999] OF UINT;
+END_VAR
+
+VAR
+	iter : FB_ObjCollectIteratorDeep;
+	i : UINT;
+END_VAR]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[objectList.M_GetIterator(iter);
+WHILE iter.pNode > 0 AND_THEN iter.pNode^.P_pObject > 0 DO
+	IF i > 999 THEN
+		M_GetObjIdStream := 333;
+		RETURN;	
+	END_IF
+	aData[i] := iter.pNode^.P_pObject^.P_nObjectID;
+	i := i + 1;
+	iter.M_Increment();
+END_WHILE]]></ST>
+      </Implementation>
+    </Method>
+    <Method Name="M_GetObjPointer" Id="{b5329de4-237e-4fa9-bacc-30f11f30be0c}">
+      <Declaration><![CDATA[METHOD M_GetObjPointer : POINTER TO FB_Object
+VAR_INPUT
+	nObjectId : UINT;
+END_VAR
+]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[IF nObjectId > 0 AND nObjectId <= cMaxObjects THEN
+	IF a_pObjects[nObjectId]^.P_nObjectID = nObjectId THEN
+		M_GetObjPointer := a_pObjects[nObjectId];
+	END_IF
+END_IF]]></ST>
+      </Implementation>
+    </Method>
+    <Method Name="M_GetObjType" Id="{50cc8d72-465c-4985-9c94-d3e1106fdf09}">
+      <Declaration><![CDATA[METHOD M_GetObjType : E_ObjectType
+VAR_INPUT
+	ObjectId	: UINT;
+END_VAR
+]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[IF ObjectId > 0 AND ObjectId <= cMaxObjects AND_THEN a_pObjects[ObjectId] > 0 THEN
+	M_GetObjType := a_pObjects[ObjectId]^.P_eObjectType;
+ELSE
+	M_GetObjType := E_ObjectType.OBJECTTYPE_UNDEFINED;
+END_IF]]></ST>
+      </Implementation>
+    </Method>
+    <Method Name="M_GetTipCleaner" Id="{3f8e62ca-1561-4019-9157-8102bf56b9c6}">
+      <Declaration><![CDATA[METHOD M_GetTipCleaner : POINTER TO FB_TargetBase
+VAR_INPUT
+END_VAR
+]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[//Es wird davon ausgegangen, dass es nur einen TipCleaner in einer Konfiguration gibt.
+IF afbTipCleaner[1].P_nObjectID > 0 THEN
+	M_GetTipCleaner := ADR(afbTipCleaner[1]);
+ELSIF afbTipCleanerGen2[1].P_nObjectID > 0 THEN
+	M_GetTipCleaner := ADR(afbTipCleanerGen2[1]);
+END_IF]]></ST>
+      </Implementation>
+    </Method>
+    <Method Name="M_GetTopHead" Id="{8f555573-9add-4fd4-ad29-d3205bcad007}">
+      <Declaration><![CDATA[METHOD M_GetTopHead : POINTER TO FB_MzHead
+
+VAR
+	i : UINT;
+END_VAR]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[FOR i:= 1 TO nCntMZHead BY 1 DO
+	IF afbMzHead[i].P_bIsTopHead THEN
+		M_GetTopHead := ADR(afbMzHead[i]);
+		RETURN;
+	END_IF
+END_FOR]]></ST>
+      </Implementation>
+    </Method>
+    <Method Name="M_Init" Id="{338d61cc-3595-4e91-8a99-1b63bd6ba69a}">
+      <Declaration><![CDATA[METHOD M_Init : BOOL
+VAR_INPUT
+END_VAR
+
+VAR
+	i	: UINT;	//allg. Zählveriable
+END_VAR
+]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[fbIdPool.M_Reset();
+
+F_CreateLinkedListHnd( ADR( nodes ), SIZEOF( nodes ), hList );
+
+bIsInitialized := TRUE;]]></ST>
+      </Implementation>
+    </Method>
+    <Method Name="M_MoveObject" Id="{2bca388a-ceae-4fd2-9159-839ab2ac382c}">
+      <Declaration><![CDATA[METHOD M_MoveObject : ERRORID
+VAR_INPUT
+	pObject : POINTER TO FB_Object;
+	pDestObject : POINTER TO FB_Object;
+	nDestSlotNr	: UINT;
+END_VAR
+
+VAR
+	pSlot : POINTER TO FB_Slot;
+END_VAR]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[//Verschiebt ein Objekt zu einem neuen Objekt oder zu einem anderen Slot.
+IF pObject > 0 THEN
+	IF pObject^.P_pParentObject > 0 AND_THEN pDestObject > 0 THEN
+		IF nDestSlotNr > 0 THEN
+			pSlot := pDestObject^.M_GetSlot(nDestSlotNr);
+			IF pSlot > 0 THEN
+				IF pSlot^.P_pChild > 0 THEN
+					M_MoveObject := E_ErrorIdObjMgmt.ERRORID_DestinationSlotNotFree;
+					RETURN;
+				END_IF
+			ELSE
+				M_MoveObject := E_ErrorIdObjMgmt.ERRORID_InvalidDestinationSlot;
+				RETURN;
+			END_IF
+		END_IF
+		M_MoveObject := pObject^.P_pParentObject^.M_RemoveChild(pObject);
+		IF M_MoveObject = 0 THEN
+			M_MoveObject := pDestObject^.M_AddChild(pObject,nDestSlotNr,-1);
+			//M_SetObjChange(pObject^.P_nObjectID);
+			stObjectHasMoved.ObjectId := pObject^.P_nObjectID;
+			stObjectHasMoved.DestObjId := pDestObject^.P_nObjectID;
+			stObjectHasMoved.DestSlotNr := nDestSlotNr;
+			stObjectHasMoved.ChangeCounter := stObjectHasMoved.ChangeCounter + 1;
+		END_IF
+	ELSE
+		M_MoveObject := E_ErrorIdObjMgmt.ERRORID_InvalidObject;
+	END_IF
+ELSE
+	M_MoveObject := E_ErrorIdObjMgmt.ERRORID_InvalidObject;
+END_IF]]></ST>
+      </Implementation>
+    </Method>
+    <Method Name="M_ObjIsArray" Id="{af1a1a5d-6db0-48f9-9108-e4896b8c5c61}">
+      <Declaration><![CDATA[METHOD M_ObjIsArray : BOOL
+VAR_INPUT
+	nObjectId	: UINT;
+END_VAR
+]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[IF nObjectId > 0 AND nObjectId <= cMaxObjects THEN
+	IF (a_pObjects[nObjectId]^.P_eObjectGroup AND E_ObjectGroup.OBJECTGROUP_Array) = E_ObjectGroup.OBJECTGROUP_Array THEN
+		M_ObjIsArray := TRUE;
+	END_IF
+END_IF]]></ST>
+      </Implementation>
+    </Method>
+    <Method Name="M_ObjIsDevice" Id="{083b79eb-5dc3-4e82-895c-45202af6fec6}">
+      <Declaration><![CDATA[METHOD M_ObjIsDevice : BOOL
+VAR_INPUT
+	nObjectId	: UINT;
+END_VAR
+]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[IF nObjectId > 0 AND nObjectId <= cMaxObjects THEN
+	IF a_pObjects[nObjectId]^.M_bIsGroup(E_ObjectGroup.OBJECTGROUP_Device) THEN
+		M_ObjIsDevice := TRUE;
+	END_IF
+END_IF]]></ST>
+      </Implementation>
+    </Method>
+    <Method Name="M_ObjIsGCodeTool" Id="{ad01f5df-47c9-4b90-a442-7ee17d098dfd}">
+      <Declaration><![CDATA[METHOD M_ObjIsGCodeTool : BOOL
+VAR_INPUT
+	nObjectId	: UINT;
+END_VAR
+]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[IF nObjectId > 0 AND nObjectId <= cMaxObjects THEN
+	IF (a_pObjects[nObjectId]^.P_eObjectGroup AND E_ObjectGroup.OBJECTGROUP_GCodeTool) = E_ObjectGroup.OBJECTGROUP_GCodeTool THEN
+		M_ObjIsGCodeTool := TRUE;
+	END_IF
+END_IF]]></ST>
+      </Implementation>
+    </Method>
+    <Method Name="M_ObjIsMzTool" Id="{92d282bc-adc9-4f36-bcba-cb95e3bfb49b}">
+      <Declaration><![CDATA[METHOD M_ObjIsMzTool : BOOL
+VAR_INPUT
+	nObjectId	: UINT;
+END_VAR
+]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[IF nObjectId > 0 AND nObjectId <= cMaxObjects THEN
+	IF (a_pObjects[nObjectId]^.P_eObjectGroup AND E_ObjectGroup.OBJECTGROUP_MzTool) = E_ObjectGroup.OBJECTGROUP_MzTool THEN
+		M_ObjIsMzTool := TRUE;
+	END_IF
+END_IF]]></ST>
+      </Implementation>
+    </Method>
+    <Method Name="M_ObjIsPiece" Id="{9ce5e80e-f603-430e-9ced-9959892b4acc}">
+      <Declaration><![CDATA[METHOD M_ObjIsPiece : BOOL
+VAR_INPUT
+	nObjectId	: UINT;
+END_VAR
+]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[IF nObjectId > 0 AND nObjectId <= cMaxObjects THEN
+	IF (a_pObjects[nObjectId]^.P_eObjectGroup AND E_ObjectGroup.OBJECTGROUP_Piece) = E_ObjectGroup.OBJECTGROUP_Piece THEN
+		M_ObjIsPiece := TRUE;
+	END_IF
+END_IF]]></ST>
+      </Implementation>
+    </Method>
+    <Method Name="M_ObjIsRack" Id="{7eefe4fa-0cfa-4365-ad65-514b5b2ae061}">
+      <Declaration><![CDATA[METHOD M_ObjIsRack : BOOL
+VAR_INPUT
+	nObjectId	: UINT;
+END_VAR
+]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[IF nObjectId > 0 AND nObjectId <= cMaxObjects THEN
+	IF (a_pObjects[nObjectId]^.P_eObjectGroup AND E_ObjectGroup.OBJECTGROUP_Rack) = E_ObjectGroup.OBJECTGROUP_Rack THEN
+		M_ObjIsRack := TRUE;
+	END_IF
+END_IF]]></ST>
+      </Implementation>
+    </Method>
+    <Method Name="M_ObjIsTarget" Id="{6d1cf8b7-333d-4495-bbb3-0e2b35c7cb22}">
+      <Declaration><![CDATA[METHOD M_ObjIsTarget : BOOL
+VAR_INPUT
+	nObjectId	: UINT;
+END_VAR
+]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[IF nObjectId > 0 AND nObjectId <= cMaxObjects THEN
+	IF (a_pObjects[nObjectId]^.P_eObjectGroup AND E_ObjectGroup.OBJECTGROUP_Target) = E_ObjectGroup.OBJECTGROUP_Target THEN
+		M_ObjIsTarget := TRUE;
+	END_IF
+END_IF]]></ST>
+      </Implementation>
+    </Method>
+    <Method Name="M_RemoveObjChange" Id="{79614ad8-3893-4bcc-a6c4-0beab649fa92}">
+      <Declaration><![CDATA[METHOD M_RemoveObjChange
+VAR_INPUT
+	nObjectId : UINT;
+END_VAR
+
+VAR
+	getPosPtr : POINTER TO T_LinkedListEntry;
+END_VAR
+]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[fbList.A_FindNext(hList:= hList, putPosPtr:= 0, putValue:= UINT_TO_UDINT(nObjectId), getPosPtr=> getPosPtr);
+IF fbList.bOk THEN //Eintrag vorhanden
+	fbList.A_RemoveValueAtPosPtr(hList:= hList, putPosPtr := getPosPtr);
+END_IF]]></ST>
+      </Implementation>
+    </Method>
+    <Method Name="M_ResetCustomUnitType2" Id="{63d1f18f-37f9-4a1d-a242-d80a587f1cf6}">
+      <Declaration><![CDATA[METHOD M_ResetCustomUnitType2
+VAR_INPUT
+END_VAR
+
+VAR
+	i : UINT;
+END_VAR
+]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[FOR i := 1 TO nCntCustomUnitType2 DO
+	 IF afbCustomUnitType2[i].P_bError THEN
+		 afbCustomUnitType2[i].M_Reset();
+	 END_IF
+END_FOR]]></ST>
+      </Implementation>
+    </Method>
+    <Method Name="M_SetObjChange" Id="{50b26a62-d0ed-4393-b2b5-0940555eb488}">
+      <Declaration><![CDATA[METHOD M_SetObjChange
+VAR_INPUT
+	nObjectId : UINT;
+END_VAR
+
+VAR
+	putValue : UDINT;
+END_VAR]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[putValue := UINT_TO_UDINT(nObjectId);
+//Checken, ob schon eingetragen
+fbList.A_FindNext(hList:= hList, putPosPtr:= 0, putValue:= putValue);
+IF NOT fbList.bOk THEN //Eintrag noch nicht vorhanden
+	fbList.A_AddHeadValue(hList:= hList, putValue:= putValue);	
+	nObjPropChangeCnt := nObjPropChangeCnt + 1;
+END_IF]]></ST>
+      </Implementation>
+    </Method>
+    <Method Name="M_SetParent" Id="{74dc9f67-02ee-4199-94de-c6d7df227b37}">
+      <Declaration><![CDATA[METHOD M_SetParent : ERRORID
+VAR_INPUT
+END_VAR
+]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[]]></ST>
+      </Implementation>
+    </Method>
+    <Property Name="P_pDeviceCollection" Id="{0e53e6f6-311e-43f9-b510-846f42088707}">
+      <Declaration><![CDATA[PROPERTY P_pDeviceCollection : POINTER TO FB_ObjCollection]]></Declaration>
+      <Get Name="Get" Id="{bb9a7eb1-90c0-408d-8089-b78222b1e90a}">
+        <Declaration><![CDATA[VAR
+END_VAR
+]]></Declaration>
+        <Implementation>
+          <ST><![CDATA[P_pDeviceCollection := ADR(deviceList);]]></ST>
+        </Implementation>
+      </Get>
+    </Property>
+    <Property Name="P_pObjectCollection" Id="{65911904-a8c3-4563-8d43-3f916ef5da49}">
+      <Declaration><![CDATA[PROPERTY P_pObjectCollection : POINTER TO FB_ObjCollection]]></Declaration>
+      <Get Name="Get" Id="{3ae4e609-191a-481b-bcd1-0cd1d60ff1ec}">
+        <Declaration><![CDATA[VAR
+END_VAR
+]]></Declaration>
+        <Implementation>
+          <ST><![CDATA[P_pObjectCollection := ADR(objectList);]]></ST>
+        </Implementation>
+      </Get>
+    </Property>
+    <LineIds Name="FB_ObjectDirectory">
+      <LineId Id="112" Count="0" />
+    </LineIds>
+    <LineIds Name="FB_ObjectDirectory.M_CheckCuboidCollision">
+      <LineId Id="6" Count="0" />
+      <LineId Id="16" Count="0" />
+      <LineId Id="8" Count="2" />
+      <LineId Id="17" Count="0" />
+      <LineId Id="19" Count="2" />
+      <LineId Id="5" Count="0" />
+    </LineIds>
+    <LineIds Name="FB_ObjectDirectory.M_CreateObject">
+      <LineId Id="10462" Count="93" />
+      <LineId Id="11350" Count="0" />
+      <LineId Id="11338" Count="11" />
+      <LineId Id="10556" Count="144" />
+      <LineId Id="11367" Count="2" />
+      <LineId Id="11374" Count="1" />
+      <LineId Id="11372" Count="1" />
+      <LineId Id="11376" Count="1" />
+      <LineId Id="11399" Count="2" />
+      <LineId Id="11371" Count="0" />
+      <LineId Id="10701" Count="182" />
+      <LineId Id="11450" Count="0" />
+      <LineId Id="11452" Count="11" />
+      <LineId Id="10884" Count="12" />
+      <LineId Id="11449" Count="0" />
+      <LineId Id="10898" Count="138" />
+      <LineId Id="11480" Count="0" />
+      <LineId Id="11482" Count="11" />
+      <LineId Id="11037" Count="112" />
+      <LineId Id="11419" Count="12" />
+      <LineId Id="11150" Count="136" />
+      <LineId Id="11495" Count="0" />
+      <LineId Id="11287" Count="33" />
+      <LineId Id="3142" Count="0" />
+    </LineIds>
+    <LineIds Name="FB_ObjectDirectory.M_CustomUnitType2_Error">
+      <LineId Id="6" Count="0" />
+      <LineId Id="11" Count="0" />
+      <LineId Id="14" Count="1" />
+      <LineId Id="12" Count="0" />
+    </LineIds>
+    <LineIds Name="FB_ObjectDirectory.M_DeleteAllObj">
+      <LineId Id="773" Count="7" />
+      <LineId Id="916" Count="0" />
+      <LineId Id="781" Count="9" />
+      <LineId Id="925" Count="0" />
+      <LineId Id="791" Count="13" />
+      <LineId Id="943" Count="0" />
+      <LineId Id="805" Count="8" />
+      <LineId Id="952" Count="0" />
+      <LineId Id="814" Count="11" />
+      <LineId Id="934" Count="0" />
+      <LineId Id="826" Count="81" />
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="FB_ObjectDirectory.M_DeleteObject">
+      <LineId Id="902" Count="69" />
+      <LineId Id="1142" Count="1" />
+      <LineId Id="972" Count="131" />
+      <LineId Id="1122" Count="1" />
+      <LineId Id="1132" Count="1" />
+      <LineId Id="1151" Count="0" />
+      <LineId Id="1153" Count="0" />
+      <LineId Id="1161" Count="1" />
+      <LineId Id="1104" Count="9" />
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="FB_ObjectDirectory.M_GetChangedObjId">
+      <LineId Id="10" Count="7" />
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="FB_ObjectDirectory.M_GetCoHead">
+      <LineId Id="3" Count="7" />
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="FB_ObjectDirectory.M_GetConfigCheckSum">
+      <LineId Id="127" Count="16" />
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="FB_ObjectDirectory.M_GetDevice">
+      <LineId Id="14" Count="1" />
+      <LineId Id="5" Count="0" />
+    </LineIds>
+    <LineIds Name="FB_ObjectDirectory.M_GetObjIdFromGCodeTargetNr">
+      <LineId Id="5" Count="0" />
+    </LineIds>
+    <LineIds Name="FB_ObjectDirectory.M_GetObjIdStream">
+      <LineId Id="10" Count="0" />
+      <LineId Id="16" Count="1" />
+      <LineId Id="20" Count="0" />
+      <LineId Id="19" Count="0" />
+      <LineId Id="11" Count="0" />
+      <LineId Id="13" Count="0" />
+      <LineId Id="15" Count="0" />
+      <LineId Id="12" Count="0" />
+      <LineId Id="5" Count="0" />
+    </LineIds>
+    <LineIds Name="FB_ObjectDirectory.M_GetObjPointer">
+      <LineId Id="3" Count="3" />
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="FB_ObjectDirectory.M_GetObjType">
+      <LineId Id="11" Count="3" />
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="FB_ObjectDirectory.M_GetTipCleaner">
+      <LineId Id="5" Count="2" />
+      <LineId Id="9" Count="1" />
+      <LineId Id="8" Count="0" />
+    </LineIds>
+    <LineIds Name="FB_ObjectDirectory.M_GetTopHead">
+      <LineId Id="3" Count="0" />
+      <LineId Id="6" Count="1" />
+      <LineId Id="19" Count="0" />
+      <LineId Id="8" Count="0" />
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="FB_ObjectDirectory.M_Init">
+      <LineId Id="23" Count="3" />
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="FB_ObjectDirectory.M_MoveObject">
+      <LineId Id="112" Count="28" />
+      <LineId Id="5" Count="0" />
+    </LineIds>
+    <LineIds Name="FB_ObjectDirectory.M_ObjIsArray">
+      <LineId Id="3" Count="3" />
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="FB_ObjectDirectory.M_ObjIsDevice">
+      <LineId Id="11" Count="3" />
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="FB_ObjectDirectory.M_ObjIsGCodeTool">
+      <LineId Id="3" Count="3" />
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="FB_ObjectDirectory.M_ObjIsMzTool">
+      <LineId Id="3" Count="3" />
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="FB_ObjectDirectory.M_ObjIsPiece">
+      <LineId Id="3" Count="3" />
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="FB_ObjectDirectory.M_ObjIsRack">
+      <LineId Id="3" Count="3" />
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="FB_ObjectDirectory.M_ObjIsTarget">
+      <LineId Id="11" Count="3" />
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="FB_ObjectDirectory.M_RemoveObjChange">
+      <LineId Id="3" Count="2" />
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="FB_ObjectDirectory.M_ResetCustomUnitType2">
+      <LineId Id="10" Count="3" />
+      <LineId Id="5" Count="0" />
+    </LineIds>
+    <LineIds Name="FB_ObjectDirectory.M_SetObjChange">
+      <LineId Id="3" Count="5" />
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="FB_ObjectDirectory.M_SetParent">
+      <LineId Id="5" Count="0" />
+    </LineIds>
+    <LineIds Name="FB_ObjectDirectory.P_pDeviceCollection.Get">
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="FB_ObjectDirectory.P_pObjectCollection.Get">
+      <LineId Id="2" Count="0" />
+    </LineIds>
+  </POU>
+</TcPlcObject>

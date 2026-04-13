@@ -1,0 +1,14 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<TcPlcObject Version="1.1.0.1" ProductVersion="3.1.4020.12">
+  <DUT Name="E_CrashAvoidanceMode" Id="{54b4096d-7f9a-461f-92e7-8166a5811b62}">
+    <Declaration><![CDATA[{attribute 'qualified_only'}
+TYPE E_CrashAvoidanceMode :
+(
+	MoveAllFree := 0,	//Es werden alle Tools bis zur FreeHeight freigefahren
+	MoveNoneFree := 1,	//Es erfolgt keine Überprüfung (sollte nur intern in ComplexActions genutzt werden)
+	MoveUnusedFree := 2	//Es werden alle anderen Tools freigefahren, beim benutzten Tool werden die Targets im Verfahrbereich gecheckt
+)USINT;
+END_TYPE
+]]></Declaration>
+  </DUT>
+</TcPlcObject>

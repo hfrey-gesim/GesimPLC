@@ -1,0 +1,22 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<TcPlcObject Version="1.1.0.1" ProductVersion="3.1.4022.10">
+  <DUT Name="E_InteractMessageType" Id="{819405f5-f3b4-4b93-8bbb-cff41df222e3}">
+    <Declaration><![CDATA[TYPE E_InteractMessageType :
+(
+	INTERACTMES_NONE := 0,
+	INTERACTMES_StartObjRecog := 1,
+	INTERACTMES_ObjRecogResult := 2,
+	INTERACTMES_StartTeaching := 3,
+	INTERACTMES_TeachingFinished := 4,
+	INTERACTMES_MountZSensor := 5,
+	INTERACTMES_UnmountZSensor := 6,
+	INTERACTMES_Pause := 7,
+	INTERACTMES_Continue := 8,
+	INTERACTMES_Assume := 9,
+	INTERACTMES_WaitForUser := 10,
+	INTERACTMES_Cancel := 999
+)UINT;
+END_TYPE
+]]></Declaration>
+  </DUT>
+</TcPlcObject>

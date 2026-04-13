@@ -1,0 +1,14 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<TcPlcObject Version="1.1.0.1" ProductVersion="3.1.4024.11">
+  <DUT Name="E_ErrorIdDS402" Id="{825f8859-abe9-4a6d-a4b4-2574a8177eac}">
+    <Declaration><![CDATA[TYPE E_ErrorIdDS402 :
+(
+	ERRORID_NoError							:= 0,
+	ERRORID_NotReadyToSwitchOn				:= 42600,
+	ERRORID_OperationNotEnabled				:= 42601,
+	ERRORID_HomingInterruptedOrNotReached	:= 42602,
+	ERRORID_FaultState						:= 42603
+)UINT;
+END_TYPE]]></Declaration>
+  </DUT>
+</TcPlcObject>

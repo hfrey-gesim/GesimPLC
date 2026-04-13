@@ -1,0 +1,30 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<TcPlcObject Version="1.1.0.1" ProductVersion="3.1.4022.7">
+  <DUT Name="E_ErrorIdDiluter" Id="{4da3c230-01ef-4a4a-b3fe-a2d21b2156dd}">
+    <Declaration><![CDATA[TYPE E_ErrorIdDiluter :
+(
+	ERRORID_NoError					:= 0,
+	ERRORID_ComTimeout				:= 41216,	//Kommunikationstimeout
+	ERRORID_ReceiveDataError		:= 41217,	//Error beim Empfangen
+	ERRORID_CecksumError			:= 41218,	//Error in der Antwort-Checksumme
+	ERRORID_InitError				:= 41219,	//Error beim Initialisieren
+	ERRORID_InvalidCommand			:= 41220,	//Fehlerhaftes Kommando übergeben
+	ERRORID_InvalidOperand			:= 41221,	//Fehlerhafter Parameter übergeben
+	ERRORID_InvalidCommandSeq		:= 41222,	//Fehlerhafte Kommandostruktur
+	ERRORID_EepromFailure			:= 41223,	//Error im EEPROM
+	ERRORID_NotIniialized			:= 41224, 	//Diluter nicht initialisiert
+	ERRORID_PlungerOverload			:= 41225,	//Kolben ist blockiert
+	ERRORID_ValveOverload			:= 41226,	//Ventil ist blockiert
+	ERRORID_PlungerMoveNotAllowed	:= 41227,	//Kolben-Move nicht erlaubt
+	ERRORID_CommandOverflow			:= 41228,	//Aktionskommando gesendet, bevor vorheriges abgearbeitet
+	ERRORID_InvalidValveParam		:= 41229,	//Fehlerhafter Parameter für Ventilverstellung
+	ERRORID_InvalidSyringe			:= 41230,	//Falsche Spritzgröße konfiguriert
+	ERRORID_SpeedToSmall			:= 41231,	//Minimale Pumpgeschwindigkeit unterschritten
+	ERRORID_SpeedExeeded			:= 41232,	//Maximale Pumpgeschwindigkeit überschritten
+	ERRORID_InvalidPlungerPos		:= 41233,	//Kolbenposition ungültig
+	ERRORID_InvalidValveType		:= 41234	//
+)UINT;
+END_TYPE
+]]></Declaration>
+  </DUT>
+</TcPlcObject>

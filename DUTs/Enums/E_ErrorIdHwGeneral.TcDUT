@@ -1,0 +1,46 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<TcPlcObject Version="1.1.0.1" ProductVersion="3.1.4024.11">
+  <DUT Name="E_ErrorIdHwGeneral" Id="{67817ade-3c11-4bf6-9dbb-852f447b3003}">
+    <Declaration><![CDATA[TYPE E_ErrorIdHwGeneral :
+(
+	ERRORID_NoError						:= 0,
+	ERRORID_DriveNotHomed				:= 42100,
+	ERRORID_InvalidPosition				:= 42101,
+	ERRORID_InvalidSpeed				:= 42102,
+	ERRORID_Timeout						:= 42103,
+	ERRORID_InvalidHwRef				:= 42104,
+	ERRORID_HomingFailed				:= 42105,
+	ERRORID_PosOutsideToleranceWindow	:= 42106,
+	ERRORID_TargetPosNotReached			:= 42107,
+	ERRORID_UndefinedDriveError			:= 42108,
+	ERRORID_HardwareNotEnabled			:= 42109,
+	ERRORID_GenericError				:= 42110,
+	ERRORID_MotorCurrentExceeded		:= 42111,
+	ERRORID_InvalidInputVoltage			:= 42112,
+	ERRORID_ControllerTemperature		:= 42113,
+	ERRORID_InterlockError				:= 42114,
+	ERRORID_SoftwareReset				:= 42115,
+	ERRORID_InternalSoftwareError		:= 42116,
+	ERRORID_InvalidRatedCurrent			:= 42117,
+	ERRORID_BallastResistorOverloaded	:= 42118,
+	ERRORID_MotorBlocked				:= 42119,
+	ERRORID_InternalError				:= 42120,
+	ERRORID_Sensor1Fault				:= 42121,
+	ERRORID_Sensor2Fault				:= 42122,
+	ERRORID_SensorNFault				:= 42123,
+	ERRORID_MemoryError					:= 42124,
+	ERRORID_FieldbusMonitoring			:= 42125,
+	ERRORID_CANopenError				:= 42126,
+	ERRORID_SpeedMonitoring				:= 42127,
+	ERRORID_FollowingError				:= 42128,
+	ERRORID_LimitSwitchExceeded			:= 42129,
+	ERRORID_DriveIsInErrorState			:= 42130,
+	ERRORID_DriveIsStillBusy			:= 42131,
+	ERRORID_LockingFailed				:= 42132,
+	ERRORID_UnlockingFailed				:= 42133
+	
+	
+)UINT;
+END_TYPE]]></Declaration>
+  </DUT>
+</TcPlcObject>

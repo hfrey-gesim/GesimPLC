@@ -1,0 +1,17 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<TcPlcObject Version="1.1.0.1" ProductVersion="3.1.0.25">
+  <DUT Name="E_MoveMode" Id="{9ad4bd3f-c165-40d5-aae0-682dada820e5}">
+    <Declaration><![CDATA[TYPE E_MoveMode :
+(
+	MODE_Relative 				:= 0,
+	MODE_AbsWithOffset			:= 1,
+	MODE_AbsNoneOffset 			:= 2,
+	MODE_Free					:= 3,	//nur für Z-Ache
+	MODE_Home					:= 4,	//nur für Z-Ache
+	MODE_Measure				:= 5	//nur für Z-Achse mit ZLevelSensor
+)USINT;
+END_TYPE
+]]></Declaration>
+    <ObjectProperties />
+  </DUT>
+</TcPlcObject>

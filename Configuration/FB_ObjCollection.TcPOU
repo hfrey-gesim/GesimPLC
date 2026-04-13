@@ -1,0 +1,357 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<TcPlcObject Version="1.1.0.1" ProductVersion="3.1.4022.18">
+  <POU Name="FB_ObjCollection" Id="{31126b3a-95ee-4a85-82be-ae4a4209827c}" SpecialFunc="None">
+    <Declaration><![CDATA[FUNCTION_BLOCK FB_ObjCollection
+VAR_INPUT
+END_VAR
+VAR_OUTPUT
+	nCount : UINT;
+	pOwnerNode : POINTER TO FB_ObjCollectionNode;	//kann auch 0 sein wenn es die BasisCollection ist
+END_VAR
+VAR
+	pHead : POINTER TO FB_ObjCollectionNode;
+	pTail : POINTER TO FB_ObjCollectionNode;
+END_VAR
+]]></Declaration>
+    <Implementation>
+      <ST><![CDATA[//Soll es möglich sein, einen Node zu löschen, der nicht leer ist?
+//Da sollte aber beachtet werden, dass es wenn es während einer Iteration gemacht wird, der Iterator eventuell nicht
+//mehr gültig ist!
+//für die richtige Anwendung soll es ja dann so sein, dass es ein flache Liste mit Devices gibt, die permanet ausgeführt
+//werden. Es muss zwischen ObjectDirectory und dieser flachen Liste eine Verbindung geben, so dass wenn ein oder mehrere Nodes
+//gelöscht werden, die Liste auch mit angepasst wird.]]></ST>
+    </Implementation>
+    <Method Name="FB_init" Id="{c84e548c-4930-4cd7-a58d-6332e248c2cc}">
+      <Declaration><![CDATA[METHOD FB_init : BOOL
+VAR_INPUT
+	bInitRetains : BOOL; // if TRUE, the retain variables are initialized (warm start / cold start)
+	bInCopyCode : BOOL;  // if TRUE, the instance afterwards gets moved into the copy code (online change)
+	pOwnerNode : POINTER TO FB_ObjCollectionNode;
+END_VAR
+]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[THIS^.pOwnerNode := pOwnerNode;]]></ST>
+      </Implementation>
+    </Method>
+    <Method Name="M_AddExistNode" Id="{55be7e0f-7f2a-44e2-a441-aa4b2963f587}">
+      <Declaration><![CDATA[METHOD M_AddExistNode
+VAR_INPUT
+	pNode : POINTER TO FB_ObjCollectionNode;
+END_VAR
+
+VAR
+	
+END_VAR]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[IF pHead = 0 THEN
+	pHead := pTail := pNode;
+ELSE
+	pNode^.pPrev := pTail; 
+	pTail^.pNext := pNode;
+	pTail := pNode;	
+END_IF
+pNode^.P_pOwnerColl := THIS;
+nCount := nCount + 1;]]></ST>
+      </Implementation>
+    </Method>
+    <Method Name="M_AddNewNode" Id="{3cf8fb2a-d050-4997-97c5-2a055128f99b}">
+      <Declaration><![CDATA[METHOD M_AddNewNode : POINTER TO FB_ObjCollectionNode
+VAR_INPUT
+	pObject : POINTER TO FB_Object;
+	nIndex : INT;
+END_VAR
+
+VAR
+	pNew : POINTER TO FB_ObjCollectionNode;
+	iter : FB_ObjCollectIterator;
+	i : INT;
+END_VAR]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[pNew := __NEW(FB_ObjCollectionNode(pOwnerColl:= THIS));
+pNew^.P_pObject := pObject;
+IF pHead = 0 THEN
+	pHead := pTail := pNew;
+ELSE
+	//In Abhängigkeit vom Index an entsprechender Stelle einfügen oder ans Ende stellen
+	IF nIndex < 0 OR INT_TO_UINT(nIndex) >= nCount THEN //am Ende anfügen
+		pNew^.pPrev := pTail;
+		pTail^.pNext := pNew;
+		pTail := pNew;	
+	ELSIF nIndex = 0 THEN //am Anfang einfügen
+		pNew^.pNext := pHead;
+		pHead^.pPrev := pNew;
+		pHead := pNew;
+	ELSE //vor das Element stellen, dass diesen Index jetzt hat
+		//wenn es das Element nicht gibt, dann nichts machen
+		//zuerst Element mit entsprechendem Index suchen
+		M_GetIterator(iter);
+		iter.M_Increment();
+		WHILE iter.pNode > 0 DO
+			i := i + 1; //beim ersten Durchlauf ist i = 1;
+			//und man befindet sich hier bereits beim zweiten Node
+			IF i = nIndex THEN
+				//vor dem Node einfügen
+				pNew^.pPrev := iter.pNode^.pPrev;
+				pNew^.pPrev^.pNext := pNew;
+				pNew^.pNext := iter.pNode;
+				iter.pNode^.pPrev := pNew; 
+				EXIT;
+			END_IF
+			iter.M_Increment();
+		END_WHILE
+	END_IF
+END_IF
+nCount := nCount + 1;
+M_AddNewNode := pNew;]]></ST>
+      </Implementation>
+    </Method>
+    <Method Name="M_Clear" Id="{3936f80b-9c37-46df-bd0c-1673a12709b7}">
+      <Declaration><![CDATA[METHOD M_Clear
+VAR_INPUT
+END_VAR
+
+VAR
+	iter : FB_ObjCollectIterator;
+	pNode : POINTER TO FB_ObjCollectionNode;		
+END_VAR]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[//alle Nodes und deren Childs löschen!
+//das geht nur rekursiv
+M_GetIterator(Iterator:= iter);
+WHILE iter.pNode > 0 DO
+	iter.pNode^.nodes.M_Clear();
+	pNode := iter.pNode;
+	iter.M_Increment();
+	__DELETE(pNode);
+	nCount := nCount - 1;
+END_WHILE
+pHead := 0;
+pTail := 0;]]></ST>
+      </Implementation>
+    </Method>
+    <Method Name="M_ClearNode" Id="{577870f4-4d21-4880-b9b8-806be1d1bd0d}">
+      <Declaration><![CDATA[METHOD M_ClearNode
+VAR_INPUT
+	pNode : POINTER TO FB_ObjCollectionNode;
+END_VAR
+
+VAR
+	iter : FB_ObjCollectIterator;
+END_VAR
+]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[IF pNode > 0 AND_THEN pNode^.nodes.nCount = 0 THEN
+	M_GetIterator(iter);
+	WHILE iter.pNode > 0 DO
+		IF pNode = iter.pNode THEN
+			IF pNode = pHead THEN
+				pHead := pHead^.pNext;
+				IF pHead > 0 THEN
+					pHead^.pPrev := 0;
+				ELSE
+					pTail := 0;
+				END_IF
+			ELSIF pNode = pTail THEN
+				pTail := pTail^.pPrev;
+				pTail^.pNext := 0;	
+			ELSE
+				pNode^.pPrev^.pNext := pNode^.pNext;
+				pNode^.pNext^.pPrev := pNode^.pPrev;
+			END_IF
+			nCount := nCount - 1;
+			__DELETE(pNode);
+			EXIT;
+		END_IF
+		iter.M_Increment();
+	END_WHILE
+END_IF]]></ST>
+      </Implementation>
+    </Method>
+    <Method Name="M_FindNode" Id="{31af7b8d-0506-4935-9f8a-8bcef7c3f4e4}">
+      <Declaration><![CDATA[METHOD M_FindNode : POINTER TO FB_ObjCollectionNode
+VAR_INPUT
+	pNode : POINTER TO FB_ObjCollectionNode;
+END_VAR
+
+VAR
+	iter : FB_ObjCollectIteratorDeep;
+END_VAR]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[//Knoten in diesem und den unteren Bäumen suchen
+IF pNode > 0 THEN
+	M_GetIterator(Iterator:= iter);
+	WHILE iter.pNode > 0 DO
+		IF iter.pNode = pNode THEN
+			M_FindNode := iter.pNode;
+			RETURN; 	
+		END_IF
+		iter.M_Increment();
+	END_WHILE
+END_IF]]></ST>
+      </Implementation>
+    </Method>
+    <Method Name="M_GetIterator" Id="{2fca88b4-e179-4f5e-8c69-8b5f6df92fb5}">
+      <Declaration><![CDATA[METHOD M_GetIterator
+VAR_IN_OUT
+	Iterator : FB_ObjCollectIterator;
+END_VAR
+]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[Iterator(pInitNode := pHead);]]></ST>
+      </Implementation>
+    </Method>
+    <Method Name="M_RemoveNode" Id="{69474f8f-8937-4863-840f-5e3260e6356a}">
+      <Declaration><![CDATA[METHOD M_RemoveNode
+VAR_INPUT
+	pNode : POINTER TO FB_ObjCollectionNode;
+END_VAR
+
+VAR
+	iter : FB_ObjCollectIterator;
+END_VAR
+]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[//Bei dieser Methode wird der Node nur auf der Collection entnommen aber nicht gelöscht.
+//Wird nur genutzt, wenn sich die Position eines Nodes im Object-Tree ändert (ExchangePiece)
+IF pNode > 0 AND_THEN pNode^.nodes.nCount = 0 THEN
+	M_GetIterator(iter);
+	WHILE iter.pNode > 0 DO
+		IF pNode = iter.pNode THEN
+			IF pNode = pHead THEN
+				pHead := pHead^.pNext;
+				IF pHead > 0 THEN
+					pHead^.pPrev := 0;	
+				END_IF
+			ELSIF pNode = pTail THEN
+				pTail := pTail^.pPrev;
+				IF pTail > 0 THEN
+					pTail^.pNext := 0;	
+				END_IF
+			ELSE
+				pNode^.pPrev^.pNext := pNode^.pNext;
+				pNode^.pNext^.pPrev := pNode^.pPrev;
+			END_IF
+			pNode^.P_pOwnerColl := 0;
+			nCount := nCount - 1;
+			EXIT;
+		END_IF
+		iter.M_Increment();
+	END_WHILE
+END_IF]]></ST>
+      </Implementation>
+    </Method>
+    <LineIds Name="FB_ObjCollection">
+      <LineId Id="23" Count="0" />
+      <LineId Id="26" Count="4" />
+    </LineIds>
+    <LineIds Name="FB_ObjCollection.FB_init">
+      <LineId Id="7" Count="0" />
+    </LineIds>
+    <LineIds Name="FB_ObjCollection.M_AddExistNode">
+      <LineId Id="61" Count="5" />
+      <LineId Id="68" Count="0" />
+      <LineId Id="67" Count="0" />
+      <LineId Id="35" Count="0" />
+    </LineIds>
+    <LineIds Name="FB_ObjCollection.M_AddNewNode">
+      <LineId Id="58" Count="0" />
+      <LineId Id="60" Count="2" />
+      <LineId Id="77" Count="2" />
+      <LineId Id="83" Count="1" />
+      <LineId Id="81" Count="0" />
+      <LineId Id="109" Count="0" />
+      <LineId Id="112" Count="0" />
+      <LineId Id="110" Count="0" />
+      <LineId Id="114" Count="0" />
+      <LineId Id="88" Count="1" />
+      <LineId Id="91" Count="0" />
+      <LineId Id="98" Count="0" />
+      <LineId Id="93" Count="1" />
+      <LineId Id="100" Count="2" />
+      <LineId Id="104" Count="0" />
+      <LineId Id="115" Count="0" />
+      <LineId Id="106" Count="0" />
+      <LineId Id="108" Count="0" />
+      <LineId Id="107" Count="0" />
+      <LineId Id="105" Count="0" />
+      <LineId Id="99" Count="0" />
+      <LineId Id="97" Count="0" />
+      <LineId Id="85" Count="0" />
+      <LineId Id="63" Count="0" />
+      <LineId Id="67" Count="1" />
+      <LineId Id="35" Count="0" />
+    </LineIds>
+    <LineIds Name="FB_ObjCollection.M_Clear">
+      <LineId Id="5" Count="1" />
+      <LineId Id="8" Count="0" />
+      <LineId Id="13" Count="0" />
+      <LineId Id="19" Count="0" />
+      <LineId Id="32" Count="1" />
+      <LineId Id="20" Count="0" />
+      <LineId Id="28" Count="0" />
+      <LineId Id="15" Count="0" />
+      <LineId Id="34" Count="1" />
+    </LineIds>
+    <LineIds Name="FB_ObjCollection.M_ClearNode">
+      <LineId Id="16" Count="0" />
+      <LineId Id="35" Count="0" />
+      <LineId Id="37" Count="0" />
+      <LineId Id="39" Count="0" />
+      <LineId Id="41" Count="0" />
+      <LineId Id="79" Count="1" />
+      <LineId Id="94" Count="1" />
+      <LineId Id="81" Count="0" />
+      <LineId Id="44" Count="0" />
+      <LineId Id="46" Count="0" />
+      <LineId Id="82" Count="0" />
+      <LineId Id="84" Count="0" />
+      <LineId Id="48" Count="1" />
+      <LineId Id="52" Count="0" />
+      <LineId Id="45" Count="0" />
+      <LineId Id="53" Count="1" />
+      <LineId Id="43" Count="0" />
+      <LineId Id="85" Count="0" />
+      <LineId Id="42" Count="0" />
+      <LineId Id="40" Count="0" />
+      <LineId Id="18" Count="0" />
+    </LineIds>
+    <LineIds Name="FB_ObjCollection.M_FindNode">
+      <LineId Id="5" Count="0" />
+      <LineId Id="11" Count="1" />
+      <LineId Id="17" Count="1" />
+      <LineId Id="20" Count="0" />
+      <LineId Id="22" Count="0" />
+      <LineId Id="21" Count="0" />
+      <LineId Id="23" Count="0" />
+      <LineId Id="19" Count="0" />
+      <LineId Id="13" Count="0" />
+    </LineIds>
+    <LineIds Name="FB_ObjCollection.M_GetIterator">
+      <LineId Id="5" Count="0" />
+    </LineIds>
+    <LineIds Name="FB_ObjCollection.M_RemoveNode">
+      <LineId Id="80" Count="0" />
+      <LineId Id="79" Count="0" />
+      <LineId Id="16" Count="0" />
+      <LineId Id="35" Count="0" />
+      <LineId Id="37" Count="0" />
+      <LineId Id="39" Count="0" />
+      <LineId Id="41" Count="0" />
+      <LineId Id="82" Count="0" />
+      <LineId Id="84" Count="1" />
+      <LineId Id="83" Count="0" />
+      <LineId Id="46" Count="0" />
+      <LineId Id="86" Count="2" />
+      <LineId Id="47" Count="2" />
+      <LineId Id="52" Count="0" />
+      <LineId Id="81" Count="0" />
+      <LineId Id="45" Count="0" />
+      <LineId Id="53" Count="0" />
+      <LineId Id="43" Count="0" />
+      <LineId Id="89" Count="0" />
+      <LineId Id="42" Count="0" />
+      <LineId Id="40" Count="0" />
+      <LineId Id="18" Count="0" />
+    </LineIds>
+  </POU>
+</TcPlcObject>

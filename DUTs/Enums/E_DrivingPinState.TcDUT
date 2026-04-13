@@ -1,0 +1,14 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<TcPlcObject Version="1.1.0.1" ProductVersion="3.1.4024.11">
+  <DUT Name="E_DrivingPinState" Id="{4f6f490d-6be7-4f19-9e9b-4c6325a6ab07}">
+    <Declaration><![CDATA[{attribute 'qualified_only'}
+TYPE E_DrivingPinState :
+(
+	UNDEFINED := 0,
+	Horizontal,
+	Vertical
+)USINT;
+END_TYPE
+]]></Declaration>
+  </DUT>
+</TcPlcObject>

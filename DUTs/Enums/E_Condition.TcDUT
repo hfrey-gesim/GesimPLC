@@ -1,0 +1,17 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<TcPlcObject Version="1.1.0.1" ProductVersion="3.1.4020.12">
+  <DUT Name="E_Condition" Id="{8fd91017-34b6-4da4-a33e-3660630b27e2}">
+    <Declaration><![CDATA[TYPE E_Condition :
+(
+	CONDITION_Nothing := 0,
+	CONDITION_PreStepReady,
+	CONDITION_SpecStepReady,
+	CONDITION_ProcessVarGEQ,
+	CONDITION_ProcessVarLEQ,
+	CONDITION_UserInput,
+	CONDITION_StepResult
+)USINT;
+END_TYPE
+]]></Declaration>
+  </DUT>
+</TcPlcObject>

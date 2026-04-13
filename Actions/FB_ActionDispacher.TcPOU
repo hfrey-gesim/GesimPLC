@@ -1,0 +1,934 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<TcPlcObject Version="1.1.0.1" ProductVersion="3.1.4022.10">
+  <POU Name="FB_ActionDispacher" Id="{44cb7943-4bb6-46be-9a3f-aa631c711168}" SpecialFunc="None">
+    <Declaration><![CDATA[FUNCTION_BLOCK FB_ActionDispacher
+VAR_INPUT
+END_VAR
+VAR_OUTPUT
+	eCurrentState 	: E_MachineState := E_MachineState.MACHINESTATE_Idle;
+	stActionStatus : ST_ActionStatus;
+END_VAR
+VAR
+	bFbInit					: BOOL := TRUE;
+	bResetFlag				: BOOL := TRUE;
+
+	//Die aktuelle Action kann eine BasicAction oder eine ComplexAction sein
+	//BasicActions werden immer in den Devices aufgerufen
+	//ComplexActions werden immer im "fbComplexAction" aufgerufen
+	//BasicAction beginnen ab 50 (UINT)
+	//ComplexActions beginnen ab 100 (UINT)
+	stAcionList			: ST_ActionList;
+	fbActionList		: FB_ActionList;
+	nDeviceId					: UINT;
+	bError						: BOOL;
+	bAllResetDone				: BOOL;
+	nErrorId					: ERRORID;
+	stError						: ST_Error;
+	i							: UINT;
+	nActionId					: UINT;
+	fbDelayAction				: FB_DelayAction;
+	
+	aMoveActionTable			: ARRAY[50..130] OF BOOL;
+	
+	bPauseRequestIntern			: BOOL;	//Flag für Sequence
+	bLastActionResult			: BOOL;
+	nLastActionResult			: DINT;	//wird nur von ausgewählten ComplexActions zurückgegeben
+	
+	//Verkettete List ActionInfo
+	dataPool		: ARRAY[0..20] OF ST_ActionStatus;
+	nodes			: ARRAY[0..9] OF T_LinkedListEntry;
+	fbList 			: FB_LinkedListCtrl;
+	hList 			: T_HLINKEDLIST;
+	pPosPtr			: POINTER TO T_LinkedListEntry;
+	pActionStatus	: POINTER TO ST_ActionStatus := 0;
+	
+	//Verkettete Liste aktive Sequencen
+	aSequPtrNodes	: ARRAY[0..9] OF T_LinkedListEntry;
+	fbActSequList	: FB_LinkedListCtrl;
+	hActSequList	: T_HLINKEDLIST;
+	pSequence		: POINTER TO FB_Sequence;
+	
+	ppHElectrode	: POINTER TO FB_pHElectrode;
+	
+END_VAR
+]]></Declaration>
+    <Implementation>
+      <ST><![CDATA[IF bFbInit THEN
+	bFbInit := FALSE;
+	fbActionList.A_Reset();
+	F_CreateLinkedListHnd(ADR(nodes), SIZEOF(nodes), hList);
+	F_CreateLinkedListHnd(ADR(aSequPtrNodes), SIZEOF(aSequPtrNodes), hActSequList);
+	A_InitMoveActionTable();
+END_IF
+
+
+CASE eCurrentState OF
+	E_MachineState.MACHINESTATE_Active:
+		
+		fbDelayAction();
+		
+		//aktive Sequenzen durchlaufen
+		//am Ende beginnen
+		fbActSequList.A_GetTail(hList:= hActSequList,getPosPtr=>pPosPtr,getValue=>pSequence);
+		IF fbActSequList.bOk THEN
+			pSequence^();
+			REPEAT
+				fbActSequList.A_GetPrev(hList:= hActSequList,putPosPtr:= pPosPtr,getPosPtr=>pPosPtr,getValue=>pSequence);
+				IF fbActSequList.bOk THEN
+					pSequence^();
+				END_IF
+			UNTIL NOT fbActSequList.bOk
+			END_REPEAT
+		END_IF
+		
+		fbActionList(bSearchFromTail := TRUE);	//vom Ende beginnen
+		REPEAT
+			fbActionList.A_GetNext();
+			IF fbActionList.bOk THEN
+				IF fbActionList.getValue.eAction = E_Action.ACTION_Delay THEN	//Delay
+					IF fbDelayAction.M_GetRestTime(UINT_TO_USINT(fbActionList.getValue.stActionData.nObject)) = T#0S THEN
+						//in nObject steht die TimerNr
+						fbDelayAction.M_ReleaseTimer(UINT_TO_USINT(fbActionList.getValue.stActionData.nObject));
+						fbActionList.getValuePtr^.eActionStatus := E_ActionStatus.ACTIONSTATUS_Idle;
+					END_IF				
+				ELSIF fbActionList.getValue.eAction = E_Action.ACTION_RunGCode THEN //GCode
+					IF GCode.eGCodeState = E_GCodeState.GCodeState_Idle THEN
+						fbActionList.getValuePtr^.eActionStatus := E_ActionStatus.ACTIONSTATUS_Idle;
+					ELSIF GCode.eGCodeState = E_GCodeState.GCodeState_Running THEN
+						fbActionList.getValuePtr^.eActionStatus := E_ActionStatus.ACTIONSTATUS_Active;
+					ELSIF GCode.eGCodeState = E_GCodeState.GCodeState_Pause THEN
+						fbActionList.getValuePtr^.eActionStatus := E_ActionStatus.ACTIONSTATUS_Pause;
+					ELSIF GCode.eGCodeState = E_GCodeState.GCodeState_Error THEN
+						fbActionList.getValuePtr^.eActionStatus := E_ActionStatus.ACTIONSTATUS_Error;
+						bError := TRUE;
+						eCurrentState := E_MachineState.MACHINESTATE_Cancel;
+					END_IF
+				ELSIF fbActionList.getValue.eAction = E_Action.ACTION_ShiftGCodeZPos THEN //GCode
+					fbActionList.getValuePtr^.eActionStatus := E_ActionStatus.ACTIONSTATUS_Idle;
+				ELSIF fbActionList.getValue.eAction = E_Action.ACTION_RunSequence THEN //Sequence
+					IF (fbActionList.getValue.pSequence^.eCurrentState = E_SequenceState.State_Ready OR
+						fbActionList.getValue.pSequence^.eCurrentState = E_SequenceState.State_Canceled) THEN
+						fbActionList.getValuePtr^.eActionStatus := E_ActionStatus.ACTIONSTATUS_Idle;
+						//Sequence aus aktiver Liste löschen
+						fbActSequList.A_FindNext(hList:= hActSequList, putPosPtr:= 0, putValue:= fbActionList.getValue.pSequence, getPosPtr=>pPosPtr);
+						IF fbActSequList.bOk THEN
+							fbActSequList.A_RemoveValueAtPosPtr(hList:= hActSequList, putPosPtr:= pPosPtr);
+						END_IF
+					ELSIF fbActionList.getValue.pSequence^.eCurrentState = E_SequenceState.State_PauseRequest THEN
+						fbActionList.getValuePtr^.eActionStatus := E_ActionStatus.ACTIONSTATUS_PauseRequest;
+						M_AddActionInfo(fbActionList.getValuePtr);
+					ELSIF fbActionList.getValue.pSequence^.eCurrentState = E_SequenceState.State_Pause THEN
+						fbActionList.getValuePtr^.eActionStatus := E_ActionStatus.ACTIONSTATUS_Pause;
+						M_AddActionInfo(fbActionList.getValuePtr);
+					ELSIF fbActionList.getValue.pSequence^.eCurrentState = E_SequenceState.State_Active THEN
+						
+						IF fbActionList.getValuePtr^.eActionStatus <> E_ActionStatus.ACTIONSTATUS_Active THEN
+							fbActionList.getValuePtr^.eActionStatus := E_ActionStatus.ACTIONSTATUS_Active;
+							M_AddActionInfo(fbActionList.getValuePtr);	
+						END_IF
+						
+					ELSIF fbActionList.getValue.pSequence^.eCurrentState = E_SequenceState.State_Error THEN
+						fbActionList.getValuePtr^.eActionStatus := E_ActionStatus.ACTIONSTATUS_Error;
+						bError := TRUE;
+						eCurrentState := E_MachineState.MACHINESTATE_Cancel;
+					END_IF
+				ELSIF fbActionList.getValue.eAction >= 50 AND fbActionList.getValue.eAction < 100 THEN	//BasicAction
+					IF NOT fbActionList.getValue.iDevice.P_bBusy THEN	//bei diesem Device keine Action mehr aktiv
+						IF fbActionList.getValue.iDevice.P_bError THEN
+							stError := fbActionList.getValue.iDevice.P_stError;
+							fbActionList.getValuePtr^.nErrorId := stError.ErrorId;
+							fbActionList.getValuePtr^.eActionStatus := E_ActionStatus.ACTIONSTATUS_Error;
+							bError := TRUE;
+							eCurrentState := E_MachineState.MACHINESTATE_Cancel;
+						ELSE
+							IF fbActionList.getValue.eAction = E_Action.ACTION_MeasurepH THEN
+								ppHElectrode := fbActionList.getValue.iDevice.P_pObject;
+								bLastActionResult := TRUE;
+								nLastActionResult := ppHElectrode^.P_nCurrentpHValue;
+							END_IF
+							fbActionList.getValuePtr^.eActionStatus := E_ActionStatus.ACTIONSTATUS_Idle;
+						END_IF
+					ELSE //mindestens eine Action bei diesem Device aktiv
+						//Action ready?
+						IF NOT fbActionList.getValue.iDevice.M_GetActionBusy(eAction:= fbActionList.getValue.eAction) THEN	//Action ready
+							IF fbActionList.getValue.eAction = E_Action.ACTION_MeasurepH THEN
+								ppHElectrode := fbActionList.getValue.iDevice.P_pObject;
+								bLastActionResult := TRUE;
+								nLastActionResult := ppHElectrode^.P_nCurrentpHValue;
+							END_IF
+							fbActionList.getValuePtr^.eActionStatus := E_ActionStatus.ACTIONSTATUS_Idle;
+						END_IF
+					END_IF
+				ELSIF fbActionList.getValue.eAction >= 100 THEN	//ComplexAction
+					IF NOT fbComplexAction.bBusy THEN
+						bPauseRequestIntern := fbComplexAction.P_bPauseRequestIntern;
+						fbComplexAction.P_bPauseRequestIntern := FALSE;
+						IF fbComplexAction.bError THEN
+							fbActionList.getValuePtr^.eActionStatus := E_ActionStatus.ACTIONSTATUS_Error;
+							bError := TRUE;
+							eCurrentState := E_MachineState.MACHINESTATE_Cancel;
+						ELSE
+							IF fbComplexAction.P_bLastActionResult THEN
+								bLastActionResult := TRUE;
+								nLastActionResult := fbComplexAction.P_nLastActionResult;
+								fbComplexAction.P_bLastActionResult := FALSE;
+							END_IF
+							fbActionList.getValuePtr^.eActionStatus := E_ActionStatus.ACTIONSTATUS_Idle;
+						END_IF
+					ELSIF fbComplexAction.eCurrentState = E_MachineState.MACHINESTATE_PauseRequest THEN
+						fbActionList.getValuePtr^.eActionStatus := E_ActionStatus.ACTIONSTATUS_PauseRequest;
+					ELSIF fbComplexAction.eCurrentState = E_MachineState.MACHINESTATE_Pause THEN
+						fbActionList.getValuePtr^.eActionStatus := E_ActionStatus.ACTIONSTATUS_Pause;
+					ELSIF fbComplexAction.eCurrentState = E_MachineState.MACHINESTATE_Active THEN
+						fbActionList.getValuePtr^.eActionStatus := E_ActionStatus.ACTIONSTATUS_Active;
+					END_IF
+				END_IF
+				
+				//Falls sich Status der Action in Error oder Idle geändert hat, dann Status melden und aus ActionList entfernen
+				IF fbActionList.getValuePtr^.eActionStatus = E_ActionStatus.ACTIONSTATUS_Idle OR
+					fbActionList.getValuePtr^.eActionStatus = E_ActionStatus.ACTIONSTATUS_Error THEN
+					M_AddActionInfo(fbActionList.getValuePtr);
+					fbActionList.A_Remove(); //Action aus ActionList entfernen
+				END_IF
+			END_IF
+		UNTIL NOT fbActionList.bOk
+		END_REPEAT
+		
+		//Wechsel in Idle, nur wenn State noch Active
+		IF fbActionList.nCount = 0 AND eCurrentState = E_MachineState.MACHINESTATE_Active THEN
+			eCurrentState := E_MachineState.MACHINESTATE_Idle;
+		END_IF
+
+	E_MachineState.MACHINESTATE_Cancel:
+		eCurrentState := E_MachineState.MACHINESTATE_Canceled;
+		//Delay abbrechen
+		fbDelayAction.M_ReleaseTimer(UINT_TO_USINT(fbActionList.getValue.stActionData.nObject));
+		//GCode abbrechen
+		IF GCode.bBusy THEN
+			eCurrentState := E_MachineState.MACHINESTATE_Cancel;
+			GCode.M_Stop();
+		END_IF
+		IF GCode.bError THEN
+			bError := TRUE;
+		END_IF
+		
+		//Sequencen stoppen, falls vorhanden
+		fbActSequList.A_GetTail(hList:= hActSequList,getPosPtr=>pPosPtr, getValue=>pSequence);
+		IF fbActSequList.bOk THEN
+			pSequence^.M_Stop();
+			pSequence^();
+			IF pSequence^.eCurrentState = E_SequenceState.State_Cancel THEN
+				eCurrentState := E_MachineState.MACHINESTATE_Cancel;
+			ELSE
+				fbActSequList.A_RemoveValueAtPosPtr(hList:= hActSequList, putPosPtr:= pPosPtr, getPosPtr=>pPosPtr);
+			END_IF			
+			REPEAT
+				fbActSequList.A_GetPrev(hList:= hActSequList, putPosPtr:= pPosPtr, getPosPtr=>pPosPtr, getValue=>pSequence);
+				IF fbActSequList.bOk THEN
+					pSequence^.M_Stop();
+					pSequence^();
+					IF pSequence^.eCurrentState = E_SequenceState.State_Cancel THEN
+						eCurrentState := E_MachineState.MACHINESTATE_Cancel;
+					ELSE
+						fbActSequList.A_RemoveValueAtPosPtr(hList:= hActSequList, putPosPtr:= pPosPtr, getPosPtr=>pPosPtr);
+					END_IF
+				END_IF
+			UNTIL NOT fbActSequList.bOk
+			END_REPEAT
+		END_IF
+	
+		//ComplexActions abbrechen
+		IF fbComplexAction.bBusy THEN
+			eCurrentState := E_MachineState.MACHINESTATE_Cancel;
+			fbComplexAction.M_Stop();	
+		END_IF
+		IF fbComplexAction.bError THEN
+			bError := TRUE;
+		END_IF
+	 
+		//Bei allen Devices, die Busy sind, die Stop-Methode aufrufen
+		IF fbObjectDirectory.nCntDevice > 0 THEN
+			FOR i:= 1 TO fbObjectDirectory.nCntDevice BY 1 DO
+				IF aI_Device[i].P_bBusy THEN	//Devices die noch Busy sind, die Stop-Methode aufrufen 
+					aI_Device[i].M_Stop();
+					eCurrentState := E_MachineState.MACHINESTATE_Cancel;
+				END_IF;
+				IF aI_Device[i].P_bError THEN
+					bError := TRUE;
+				END_IF
+			END_FOR
+		END_IF
+		
+		IF bError THEN
+			eCurrentState := E_MachineState.MACHINESTATE_Error;
+		END_IF
+		
+	E_MachineState.MACHINESTATE_Canceled:
+		IF bError THEN
+			eCurrentState := E_MachineState.MACHINESTATE_Error;
+		ELSE
+			fbActionList.A_Reset();
+			eCurrentState := E_MachineState.MACHINESTATE_Idle;
+		END_IF
+	
+	E_MachineState.MACHINESTATE_Reset:
+		//Alle Devices, welche in ErrorState sind, zurücksetzen
+		//Durch den Aufruf der Reset-Methode wird das bBusy gesetzt und wenn diese wieder false, dann auf erneuten Fehler anfragen
+		bError := FALSE;
+		
+		IF bResetFlag THEN	//Die ResetMethode bei den Devices, die in Error sind 1x aufrufen
+			bResetFlag := FALSE;
+			FOR i := 1 TO fbObjectDirectory.nCntDevice BY 1 DO
+				IF aI_Device[i].P_bError THEN
+					aI_Device[i].M_Reset();
+				ELSIF aI_Device[i].P_bBusy THEN
+					aI_Device[i].M_Stop();
+				END_IF
+			END_FOR
+			
+			IF fbComplexAction.bError THEN	//Die ResetMethode von fbComplexAction 1x aufrufen 
+				fbComplexAction.M_Reset();	
+			END_IF
+			
+			IF GCode.bError THEN
+				GCode.M_Reset();
+			END_IF
+			
+			fbActSequList.A_GetTail(hList:= hActSequList,getPosPtr=>pPosPtr,getValue=>pSequence);
+			IF fbActSequList.bOk THEN
+				pSequence^.M_Reset();
+				REPEAT
+					fbActSequList.A_GetPrev(hList:= hActSequList,putPosPtr:= pPosPtr,getPosPtr=>pPosPtr, getValue=>pSequence);
+					IF fbActSequList.bOk THEN
+						pSequence^.M_Reset();
+					END_IF
+				UNTIL NOT fbActSequList.bOk
+				END_REPEAT
+			END_IF
+			//ResetLinkedList
+			F_CreateLinkedListHnd(ADR(aSequPtrNodes), SIZEOF(aSequPtrNodes), hActSequList);
+		END_IF
+
+		bAllResetDone := TRUE;
+		
+		FOR i := 1 TO fbObjectDirectory.nCntDevice BY 1 DO
+			IF NOT aI_Device[i].P_bBusy THEN
+				IF aI_Device[i].P_bError THEN
+					bError := TRUE;
+				END_IF
+			ELSE
+				bAllResetDone := FALSE;
+			END_IF
+		END_FOR
+		
+		IF NOT fbComplexAction.bBusy THEN
+			IF fbComplexAction.bError THEN
+				bError := TRUE;
+			END_IF
+		ELSE
+			bAllResetDone := FALSE;
+		END_IF
+		
+		IF bAllResetDone THEN
+			bResetFlag := TRUE;
+			IF bError THEN
+				eCurrentState := E_MachineState.MACHINESTATE_Error;
+			ELSE
+				eCurrentState := E_MachineState.MACHINESTATE_Idle;
+				fbActionList.A_Reset();
+				fbDelayAction.M_RelaseAll();
+			END_IF
+		END_IF
+END_CASE
+
+//ActionStatus!!!
+IF hList.nCount > 0 THEN
+	fbList.A_GetTail(hList:= hList, getPosPtr=> pPosPtr, getValue=> pActionStatus);
+	IF fbList.bOk THEN
+		stActionStatus := pActionStatus^;
+		fbList.A_RemoveValueAtPosPtr(hList:= hList, putPosPtr:= pPosPtr);
+	END_IF
+END_IF]]></ST>
+    </Implementation>
+    <Action Name="A_InitMoveActionTable" Id="{057b9fb8-62fa-41c9-b64c-abad83e22df0}">
+      <Implementation>
+        <ST><![CDATA[aMoveActionTable[50] := TRUE;	//Init Devices
+aMoveActionTable[58] := TRUE;	//Jog
+aMoveActionTable[59] := TRUE;	//MoveX
+aMoveActionTable[60] := TRUE;	//MoveY
+aMoveActionTable[61] := TRUE;	//MoveXY
+aMoveActionTable[62] := TRUE;	//MoveZ
+aMoveActionTable[100] := TRUE;	//MoveToTarget
+aMoveActionTable[101] := TRUE;	//Measure
+aMoveActionTable[102] := TRUE;	//OpenCloseFlipTube
+aMoveActionTable[103] := TRUE;	//RunGCode
+aMoveActionTable[109] := TRUE;	//ExcangePiece
+aMoveActionTable[110] := TRUE;	//StampDemolding
+aMoveActionTable[111] := TRUE;	//StampInking
+aMoveActionTable[112] := TRUE;	//CleanTip
+aMoveActionTable[113] := TRUE;	//DryPip
+aMoveActionTable[114] := TRUE;	//WashTool
+aMoveActionTable[115] := TRUE;	//TestPiezo
+aMoveActionTable[116] := TRUE;	//TeachTarget
+aMoveActionTable[117] := TRUE;	//GetPipSample
+aMoveActionTable[118] := TRUE;	//CalibrateZSensor
+aMoveActionTable[119] := TRUE;	//TeachTool
+aMoveActionTable[120] := TRUE;	//InsertTool
+aMoveActionTable[121] := TRUE;	//DockTool
+aMoveActionTable[124] := TRUE;	//ActionOnArray]]></ST>
+      </Implementation>
+    </Action>
+    <Property Name="P_bLastActionResult" Id="{07d16f34-3e42-41be-92d2-79ccea36a6ed}">
+      <Declaration><![CDATA[PROPERTY P_bLastActionResult : BOOL]]></Declaration>
+      <Set Name="Set" Id="{60e967d5-9f0b-4162-93e0-94c53621a6ec}">
+        <Declaration><![CDATA[VAR
+END_VAR
+]]></Declaration>
+        <Implementation>
+          <ST><![CDATA[bLastActionResult := P_bLastActionResult;
+fbComplexAction.P_bLastActionResult := bLastActionResult;]]></ST>
+        </Implementation>
+      </Set>
+      <Get Name="Get" Id="{767e99d3-2eb4-4327-adb8-c3e8e7a30067}">
+        <Declaration><![CDATA[VAR
+END_VAR
+]]></Declaration>
+        <Implementation>
+          <ST><![CDATA[P_bLastActionResult := bLastActionResult;]]></ST>
+        </Implementation>
+      </Get>
+    </Property>
+    <Method Name="M_StopAction" Id="{76644acf-d3e4-48dd-9302-c4e04998c476}">
+      <Declaration><![CDATA[METHOD M_StopAction : ERRORID
+VAR_INPUT
+	nActionId : UINT;
+END_VAR
+]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[fbActionList(bSearchFromTail := TRUE);	//vom Ende beginnen
+REPEAT
+	fbActionList.A_GetNext();
+	IF fbActionList.bOk THEN	//Eintrag gefunden
+		//nActionId vergleichen
+		IF nActionId = 	fbActionList.getValuePtr^.nActionId THEN
+			IF fbActionList.getValuePtr^.eAction = E_Action.ACTION_RunSequence THEN
+				fbActionList.getValuePtr^.pSequence^.M_Stop();
+			ELSIF fbActionList.getValuePtr^.eAction = E_Action.ACTION_RunGCode THEN
+				IF NOT GCode.P_bNciAvailable THEN
+					M_StopAction := E_ErrorIdGCode.ERRORID_NciModuleNotAvailable;
+					RETURN;
+				END_IF	
+				//Nur ausführbar, wenn GCode-Modul in Pause oder Running
+				//wird nicht in ActionList eingetragen
+				IF GCode.eGCodeState <> E_GCodeState.GCodeState_Idle THEN
+					GCode.M_Stop();
+				ELSE
+					M_StopAction := E_ErrorIdGCode.ERRORID_InvalidNciState;
+				END_IF
+			ELSIF fbActionList.getValuePtr^.eAction >= 50 AND 	fbActionList.getValuePtr^.eAction < 100 THEN
+				fbActionList.getValuePtr^.iDevice.M_CancelAction(fbActionList.getValuePtr^.eAction);
+			ELSIF fbActionList.getValuePtr^.eAction >= 100 THEN
+				fbComplexAction.M_StopAction(fbActionList.getValuePtr^.eAction);
+			END_IF
+		END_IF
+	END_IF	
+UNTIL NOT fbActionList.bOk
+END_REPEAT]]></ST>
+      </Implementation>
+    </Method>
+    <Method Name="M_ExeAction" Id="{76a1d07c-c74f-4d0d-a763-d11b74ac82a8}">
+      <Declaration><![CDATA[METHOD M_ExeAction : ERRORID
+VAR_INPUT
+	refActionData	: REFERENCE TO ST_ActionData;
+	bExtern			: BOOL;
+END_VAR
+VAR_OUTPUT
+	nActionId		: UINT;
+END_VAR
+
+VAR
+	nObjectId			: UINT;
+	iDevice				: I_Device;
+	sGCodeFileNumber	: STRING;
+END_VAR]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[//Actions werden nur in Idle, Active und Ready entgegengenommen
+//erfolgreich angenommene Actions liefern eine Id zurück, welche die Action eindeutig identifiziert
+//anhand dieser Id kann über die Methode "M_GetActionStatus(nActionId)" festgestellt werden, ob Action fertig
+IF NOT ((eCurrentState = E_MachineState.MACHINESTATE_Idle) OR (eCurrentState = E_MachineState.MACHINESTATE_Active)) THEN
+	M_ExeAction := E_ErrorIdCmd.ERRORID_InvalidState;
+	RETURN;
+END_IF
+
+iDevice := 0;
+stAcionList.pSequence := 0;
+
+//Unterscheidung zwischen GCode-Control-Actions, BasicActions, ComplexActions und DelayAction
+
+//Erste Unterscheidung zwischen ControlActions, BasicActions und ComplexActions
+IF refActionData.eAction > 0 AND refActionData.eAction < 50 THEN //ControlActions
+	CASE refActionData.eAction OF
+		E_Action.ACTION_Delay:
+			refActionData.nObject := fbDelayAction.M_StartTimer(DINT_TO_TIME(refActionData.aParams[1]));
+			IF refActionData.nObject = 0 THEN
+				//in nObject steht die TimerNr
+				M_ExeAction := E_ErrorIdCmd.ERRORID_NoFreeTimerAvailable;
+				RETURN;
+			END_IF
+		E_Action.ACTION_GoToStep:
+			RETURN;
+		E_Action.ACTION_RunGCode:
+			IF NOT GCode.P_bNciAvailable THEN
+				M_ExeAction := E_ErrorIdGCode.ERRORID_NciModuleNotAvailable;
+				RETURN;	
+			END_IF	
+			//Nur ausführbar, wenn GCode-Modul noch nicht läuft
+			IF GCode.eGCodeState = E_GCodeState.GCodeState_Idle THEN
+				//Startnullpunkt setzen
+				M_ExeAction := GCode.M_SetStartZeroPoint(refActionData.nTarget,
+										DINT_TO_USINT(refActionData.aParams[1]),
+										DINT_TO_UINT(refActionData.aParams[2]),
+										DINT_TO_UINT(refActionData.aParams[3]),
+										refActionData.aParams[4],
+										DINT_TO_UINT(refActionData.aParams[6]),
+										DINT_TO_REAL(refActionData.aParams[7]));
+				IF M_ExeAction > 0 THEN
+					RETURN;
+				END_IF
+				//übergebene SequenceIds checken
+				FOR i := 8 TO 12 BY 1 DO
+					IF refActionData.aParams[i] > 0 THEN
+						IF fbSequenceList.M_Get(DINT_TO_UDINT(refActionData.aParams[i])) = 0 THEN
+							M_ExeAction := E_ErrorIdCmd.ERRORID_SequenceNotExists;
+							RETURN;
+						END_IF
+					END_IF
+				END_FOR
+				GCode.M_SetSequenceIds(ADR(refActionData.aParams[8]));
+				
+				sGCodeFileNumber := DINT_TO_STRING(refActionData.aParams[5]);
+				GCode.M_Start(sGCodeFileNumber);
+			ELSE
+				M_ExeAction := E_ErrorIdGCode.ERRORID_InvalidNciState;
+				RETURN;
+			END_IF
+		E_Action.ACTION_ShiftGCodeZPos:
+			IF NOT GCode.P_bNciAvailable THEN
+				M_ExeAction := E_ErrorIdGCode.ERRORID_NciModuleNotAvailable;
+				RETURN;	
+			END_IF	
+			GCode.M_ShiftZPos(DINT_TO_REAL(refActionData.aParams[1]));
+		
+		E_Action.ACTION_RunSequence:
+			pSequence := fbSequenceList.M_Get(DINT_TO_UDINT(refActionData.aParams[1]));
+			IF pSequence > 0 THEN
+				//Sequence muss im Idle sein
+				M_ExeAction := pSequence^.M_CheckForStart();
+				IF M_ExeAction > 0 THEN
+					RETURN;
+				ELSE
+					fbActSequList.A_AddHeadValue(hList:= hActSequList, putValue:= pSequence);
+					IF fbActSequList.bOk THEN
+						pSequence^.M_Start();
+						stAcionList.pSequence := pSequence;
+					ELSE
+						M_ExeAction := E_ErrorIdCmd.ERRORID_ActiveSequencesExeeded;
+					END_IF
+				END_IF
+			ELSE
+				//Sequence mit angegebener Id nicht vorhanden
+				M_ExeAction := E_ErrorIdCmd.ERRORID_SequenceNotExists;
+				RETURN;							
+			END_IF
+	END_CASE
+
+ELSIF refActionData.eAction >= 50 AND refActionData.eAction < 100 THEN //BasicActions
+	//Nur ausführbar, wenn GCode-Modul MoveActions nicht sperrt
+	IF GCode.P_bMoveActionsLocked AND aMoveActionTable[refActionData.eAction] THEN
+		//Action nicht ausführbar, da von GCodeModul gesperrt
+		M_ExeAction := E_ErrorIdCmd.ERRORID_ActionLocked;
+		RETURN;
+	END_IF
+	
+	nObjectId := refActionData.nObject;
+	//Gültiges Device?
+	IF NOT fbObjectDirectory.M_ObjIsDevice(nObjectId) THEN
+		M_ExeAction := E_ErrorIdObjMgmt.ERRORID_IsNoDevice;	//Error: Object ist kein Device
+		RETURN;
+	END_IF
+	iDevice := fbObjectDirectory.M_GetDevice(nObjectId);
+	M_ExeAction := iDevice.M_ExeAction(refActionData);	//Action an Device ausführen
+	IF 	M_ExeAction > 0 THEN
+		RETURN;
+	END_IF
+ELSE //ComplexActions
+	//Nur ausführbar, wenn GCode-Modul MoveActions nicht sperrt
+	IF GCode.P_bMoveActionsLocked AND aMoveActionTable[refActionData.eAction] THEN
+		M_ExeAction := E_ErrorIdCmd.ERRORID_ActionLocked;
+		RETURN;
+	END_IF
+	
+	M_ExeAction := fbComplexAction.M_ExeAction(refActionData);	//ComplexeAction ausführen
+	IF 	M_ExeAction > 0 THEN
+		RETURN;
+	END_IF
+END_IF
+
+//Action in fbActionList eintragen
+stAcionList.eAction := refActionData.eAction;
+stAcionList.iDevice := iDevice;
+stAcionList.stActionData := refActionData;
+stAcionList.eActionStatus := E_ActionStatus.ACTIONSTATUS_Active;
+stAcionList.nErrorId := 0;
+stAcionList.bExtern := bExtern;
+
+fbActionList.A_Add(putValue := stAcionList);
+
+IF fbActionList.bOk THEN
+	eCurrentState := E_MachineState.MACHINESTATE_Active;
+	THIS^.nActionId := THIS^.nActionId + 1;
+	nActionId := THIS^.nActionId;
+	fbActionList.getValuePtr^.nActionId := THIS^.nActionId;
+	M_AddActionInfo(fbActionList.getValuePtr);	
+ELSE
+	M_ExeAction := ERRORID_ToMuchActionsInActionDispacher;
+END_IF]]></ST>
+      </Implementation>
+    </Method>
+    <Method Name="M_GetActionInfoArray" Id="{84c3a2aa-0113-47df-bfbd-330d979e1860}">
+      <Declaration><![CDATA[METHOD M_GetActionInfoArray
+VAR_INPUT
+	pActiveActionArray : POINTER TO ARRAY[0..0] OF ST_ActionStatus;
+END_VAR
+
+VAR
+	pPosPtr 		: POINTER TO T_LinkedListEntry;
+	pActionStatus	: POINTER TO ST_ActionStatus := 0;
+	i : USINT;
+	nSize : UINT;
+END_VAR]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[MEMSET(pActiveActionArray,0,80);
+fbActionList(bSearchFromTail := TRUE);	//vom Ende beginnen
+REPEAT
+	fbActionList.A_GetNext();
+	IF fbActionList.bOk THEN
+		IF fbActionList.getValue.bExtern THEN
+			pActiveActionArray^[i].nActionId := fbActionList.getValue.nActionId;
+			pActiveActionArray^[i].eAction := fbActionList.getValue.eAction;
+			pActiveActionArray^[i].eStatus := fbActionList.getValue.eActionStatus;
+			pActiveActionArray^[i].nObjectId := fbActionList.getValue.stActionData.nObject;
+			//MultiChannelActions
+			{warning 'Aspirate und Dispense kommen noch hinzu'}
+			IF fbActionList.getValue.eAction = E_Action.ACTION_SetPressure OR fbActionList.getValue.eAction = E_Action.ACTION_SwitchPressure THEN
+				pActiveActionArray^[i].nChannel := DINT_TO_USINT(fbActionList.getValue.stActionData.aParams[1]);
+			END_IF
+			i := i + 1;
+		END_IF
+	END_IF
+UNTIL (NOT fbActionList.bOk) OR i = 9 
+END_REPEAT]]></ST>
+      </Implementation>
+    </Method>
+    <Method Name="M_Cancel" Id="{8d39314b-872c-4b8a-8df7-010b136129d5}">
+      <Declaration><![CDATA[METHOD M_Cancel : ERRORID
+VAR_INPUT
+END_VAR
+VAR
+END_VAR]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[IF eCurrentState = E_MachineState.MACHINESTATE_Active THEN	//auf Cancel-Kommando braucht nur im Actice-State reagiert werden
+	eCurrentState := E_MachineState.MACHINESTATE_Cancel;
+END_IF]]></ST>
+      </Implementation>
+    </Method>
+    <Method Name="M_PauseAction" Id="{94739b9b-1800-4f26-acf5-c3f73a6959d1}">
+      <Declaration><![CDATA[METHOD M_PauseAction : ERRORID
+VAR_INPUT
+	nActionId		: UINT;
+END_VAR
+
+]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[fbActionList(bSearchFromTail := TRUE);	//vom Ende beginnen
+REPEAT
+	fbActionList.A_GetNext();
+	IF fbActionList.bOk THEN	//Eintrag gefunden
+		//nActionId vergleichen
+		IF nActionId = fbActionList.getValuePtr^.nActionId THEN //Action wurde gefunden
+			IF fbActionList.getValuePtr^.eActionStatus = E_ActionStatus.ACTIONSTATUS_Active THEN
+				IF fbActionList.getValuePtr^.eAction = E_Action.ACTION_RunGCode THEN
+					GCode.M_Pause();
+				ELSIF fbActionList.getValuePtr^.eAction = E_Action.ACTION_RunSequence THEN
+					fbActionList.getValuePtr^.pSequence^.M_Pause();
+				ELSIF fbActionList.getValuePtr^.eAction = E_Action.ACTION_DispenseTest THEN
+					fbComplexAction.M_Pause();
+				END_IF
+			END_IF
+			RETURN;
+		END_IF
+	END_IF	
+UNTIL NOT fbActionList.bOk
+END_REPEAT]]></ST>
+      </Implementation>
+    </Method>
+    <Method Name="M_GetActionStatus" Id="{9bf3ac47-4fe9-4247-b8b9-961dadbb9ee3}">
+      <Declaration><![CDATA[METHOD M_GetActionStatus : E_ActionStatus
+VAR_INPUT
+	nActionId	: UINT;
+END_VAR
+]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[fbActionList(bSearchFromTail := TRUE);	//vom Ende beginnen
+REPEAT
+	fbActionList.A_GetNext();
+	IF fbActionList.bOk THEN	//Eintrag gefunden
+		//nActionId vergleichen
+		IF nActionId = 	fbActionList.getValuePtr^.nActionId THEN
+			M_GetActionStatus := fbActionList.getValuePtr^.eActionStatus;
+			RETURN;
+		END_IF
+	END_IF	
+UNTIL NOT fbActionList.bOk
+END_REPEAT
+M_GetActionStatus := E_ActionStatus.ACTIONSTATUS_Ready;]]></ST>
+      </Implementation>
+    </Method>
+    <Property Name="P_nActiveActions" Id="{a0753a35-e9d5-499a-b470-f94e91c2e510}">
+      <Declaration><![CDATA[PROPERTY P_nActiveActions : UDINT]]></Declaration>
+      <Get Name="Get" Id="{3cc02b5d-5129-4806-b076-91c0350f6463}">
+        <Declaration><![CDATA[VAR
+END_VAR
+]]></Declaration>
+        <Implementation>
+          <ST><![CDATA[P_nActiveActions := fbActionList.nCount; 
+]]></ST>
+        </Implementation>
+      </Get>
+    </Property>
+    <Method Name="M_Reset" Id="{abd15674-6225-498a-8691-13daf0f9fb2e}">
+      <Declaration><![CDATA[METHOD M_Reset
+VAR_INPUT
+END_VAR
+]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[IF eCurrentState = E_MachineState.MACHINESTATE_Error THEN
+	eCurrentState := E_MachineState.MACHINESTATE_Reset;
+ELSIF eCurrentState = E_MachineState.MACHINESTATE_Canceled THEN
+	eCurrentState := E_MachineState.MACHINESTATE_Idle;
+END_IF;]]></ST>
+      </Implementation>
+    </Method>
+    <Method Name="M_AddActionInfo" Id="{ad738cf1-f3b2-45cc-bf6d-668058a5dc68}">
+      <Declaration><![CDATA[METHOD PRIVATE M_AddActionInfo
+VAR_INPUT
+	refAcionList : POINTER TO ST_ActionList;
+END_VAR
+
+VAR
+	nIndex	: PVOID;
+END_VAR]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[IF refAcionList^.bExtern THEN
+	//Neues Element zur Liste hinzufügen
+	fbList.A_AddHeadValue(hList:= hList, putValue := 16#00000000, getPosPtr=> pPosPtr);
+	IF fbList.bOk THEN
+		fbList.A_GetIndexAtPosPtr(hList:= hList, putPosPtr:= pPosPtr, getValue =>nIndex);
+		IF fbList.bOk THEN
+			dataPool[nIndex].nActionId := refAcionList^.nActionId;
+			dataPool[nIndex].eAction := refAcionList^.eAction;
+			dataPool[nIndex].eStatus := refAcionList^.eActionStatus;
+			dataPool[nIndex].nObjectId := refAcionList^.stActionData.nObject;	
+			{warning 'Aspirate und Dispense kommen noch hinzu'}
+			//MultiChannelActions
+			IF dataPool[nIndex].eAction = E_Action.ACTION_SetPressure OR dataPool[nIndex].eAction = E_Action.ACTION_SwitchPressure THEN
+				dataPool[nIndex].nChannel := DINT_TO_USINT(refAcionList^.stActionData.aParams[1]);
+			END_IF
+			
+			fbList.A_SetValueAtPosPtr(hList:= hList, putPosPtr:= pPosPtr, putValue := ADR(dataPool[nIndex]));
+		END_IF
+	END_IF
+END_IF]]></ST>
+      </Implementation>
+    </Method>
+    <Property Name="P_bPauseRequestIntern" Id="{b25a8cfa-0b7d-4587-920a-96cfea6adbcd}">
+      <Declaration><![CDATA[PROPERTY P_bPauseRequestIntern : BOOL]]></Declaration>
+      <Get Name="Get" Id="{07520f08-ca32-4ebe-a8b4-db0e49add9bb}">
+        <Declaration><![CDATA[VAR
+END_VAR
+]]></Declaration>
+        <Implementation>
+          <ST><![CDATA[P_bPauseRequestIntern := bPauseRequestIntern;]]></ST>
+        </Implementation>
+      </Get>
+      <Set Name="Set" Id="{b7d2c01e-279f-45ff-9814-25ef1a81a8e1}">
+        <Declaration><![CDATA[VAR
+END_VAR
+]]></Declaration>
+        <Implementation>
+          <ST><![CDATA[bPauseRequestIntern := P_bPauseRequestIntern;
+fbComplexAction.P_bPauseRequestIntern := bPauseRequestIntern;]]></ST>
+        </Implementation>
+      </Set>
+    </Property>
+    <Method Name="M_ContinueAction" Id="{b838627f-67d7-4472-bb6f-2d9d0efa70e4}">
+      <Declaration><![CDATA[METHOD M_ContinueAction : ERRORID
+VAR_INPUT
+	nActionId		: UINT;
+END_VAR]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[fbActionList(bSearchFromTail := TRUE);	//vom Ende beginnen
+REPEAT
+	fbActionList.A_GetNext();
+	IF fbActionList.bOk THEN	//Eintrag gefunden
+		//nActionId vergleichen
+		IF nActionId = fbActionList.getValuePtr^.nActionId THEN //Action wurde gefunden
+			IF fbActionList.getValuePtr^.eActionStatus = E_ActionStatus.ACTIONSTATUS_Pause THEN
+				IF fbActionList.getValuePtr^.eAction = E_Action.ACTION_RunGCode THEN
+					GCode.M_Continue();
+				ELSIF fbActionList.getValuePtr^.eAction = E_Action.ACTION_RunSequence THEN
+					fbActionList.getValuePtr^.pSequence^.M_Continue();
+				ELSIF fbActionList.getValuePtr^.eAction = E_Action.ACTION_DispenseTest THEN
+					fbComplexAction.M_Continue();
+				END_IF
+				RETURN;
+			END_IF
+		END_IF
+	END_IF	
+UNTIL NOT fbActionList.bOk
+END_REPEAT]]></ST>
+      </Implementation>
+    </Method>
+    <Property Name="P_nLastActionResult" Id="{cbaa9de4-b777-451f-89e8-72eb01babeb2}">
+      <Declaration><![CDATA[PROPERTY P_nLastActionResult : DINT]]></Declaration>
+      <Get Name="Get" Id="{97fc98a6-495f-4848-b670-4a9c7b13dfc7}">
+        <Declaration><![CDATA[VAR
+END_VAR
+]]></Declaration>
+        <Implementation>
+          <ST><![CDATA[P_nLastActionResult := nLastActionResult;]]></ST>
+        </Implementation>
+      </Get>
+      <Set Name="Set" Id="{f32876d0-4dfc-4389-9164-121e87d7c66e}">
+        <Declaration><![CDATA[VAR
+END_VAR
+]]></Declaration>
+        <Implementation>
+          <ST><![CDATA[nLastActionResult := P_nLastActionResult;]]></ST>
+        </Implementation>
+      </Set>
+    </Property>
+    <LineIds Name="FB_ActionDispacher">
+      <LineId Id="1029" Count="294" />
+      <LineId Id="352" Count="0" />
+    </LineIds>
+    <LineIds Name="FB_ActionDispacher.A_InitMoveActionTable">
+      <LineId Id="2" Count="22" />
+      <LineId Id="1" Count="0" />
+    </LineIds>
+    <LineIds Name="FB_ActionDispacher.P_bLastActionResult.Set">
+      <LineId Id="3" Count="0" />
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="FB_ActionDispacher.P_bLastActionResult.Get">
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="FB_ActionDispacher.M_StopAction">
+      <LineId Id="3" Count="27" />
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="FB_ActionDispacher.M_ExeAction">
+      <LineId Id="3" Count="21" />
+      <LineId Id="176" Count="1" />
+      <LineId Id="25" Count="42" />
+      <LineId Id="205" Count="0" />
+      <LineId Id="209" Count="1" />
+      <LineId Id="217" Count="3" />
+      <LineId Id="226" Count="2" />
+      <LineId Id="232" Count="1" />
+      <LineId Id="231" Count="0" />
+      <LineId Id="229" Count="0" />
+      <LineId Id="221" Count="0" />
+      <LineId Id="224" Count="0" />
+      <LineId Id="213" Count="3" />
+      <LineId Id="206" Count="0" />
+      <LineId Id="110" Count="38" />
+      <LineId Id="191" Count="0" />
+      <LineId Id="149" Count="8" />
+      <LineId Id="159" Count="0" />
+      <LineId Id="161" Count="1" />
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="FB_ActionDispacher.M_GetActionInfoArray">
+      <LineId Id="64" Count="0" />
+      <LineId Id="41" Count="1" />
+      <LineId Id="45" Count="1" />
+      <LineId Id="51" Count="1" />
+      <LineId Id="54" Count="1" />
+      <LineId Id="57" Count="0" />
+      <LineId Id="62" Count="0" />
+      <LineId Id="59" Count="2" />
+      <LineId Id="63" Count="0" />
+      <LineId Id="50" Count="0" />
+      <LineId Id="47" Count="0" />
+      <LineId Id="43" Count="1" />
+      <LineId Id="5" Count="0" />
+    </LineIds>
+    <LineIds Name="FB_ActionDispacher.M_Cancel">
+      <LineId Id="3" Count="1" />
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="FB_ActionDispacher.M_PauseAction">
+      <LineId Id="3" Count="10" />
+      <LineId Id="25" Count="1" />
+      <LineId Id="14" Count="5" />
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="FB_ActionDispacher.M_GetActionStatus">
+      <LineId Id="3" Count="5" />
+      <LineId Id="14" Count="5" />
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="FB_ActionDispacher.P_nActiveActions.Get">
+      <LineId Id="3" Count="0" />
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="FB_ActionDispacher.M_Reset">
+      <LineId Id="3" Count="3" />
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="FB_ActionDispacher.M_AddActionInfo">
+      <LineId Id="37" Count="0" />
+      <LineId Id="3" Count="6" />
+      <LineId Id="21" Count="0" />
+      <LineId Id="23" Count="0" />
+      <LineId Id="29" Count="0" />
+      <LineId Id="24" Count="0" />
+      <LineId Id="26" Count="1" />
+      <LineId Id="25" Count="0" />
+      <LineId Id="10" Count="2" />
+      <LineId Id="38" Count="0" />
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="FB_ActionDispacher.P_bPauseRequestIntern.Get">
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="FB_ActionDispacher.P_bPauseRequestIntern.Set">
+      <LineId Id="3" Count="0" />
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="FB_ActionDispacher.M_ContinueAction">
+      <LineId Id="3" Count="9" />
+      <LineId Id="23" Count="0" />
+      <LineId Id="27" Count="1" />
+      <LineId Id="14" Count="5" />
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="FB_ActionDispacher.P_nLastActionResult.Get">
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="FB_ActionDispacher.P_nLastActionResult.Set">
+      <LineId Id="2" Count="0" />
+    </LineIds>
+  </POU>
+</TcPlcObject>

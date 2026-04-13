@@ -1,0 +1,15 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<TcPlcObject Version="1.1.0.1" ProductVersion="3.1.4024.11">
+  <DUT Name="E_StackerRotPosition" Id="{0ddf8828-0c83-4223-971d-355fc8db3047}">
+    <Declaration><![CDATA[{attribute 'qualified_only'}
+TYPE E_StackerRotPosition :
+(
+	UNDEFINED,
+	LoadingPosition,
+	TransferPositionPrinter1,
+	TransferPositionPrinter2
+)USINT;
+END_TYPE
+]]></Declaration>
+  </DUT>
+</TcPlcObject>

@@ -1,0 +1,431 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<TcPlcObject Version="1.1.0.1" ProductVersion="3.1.4024.5">
+  <POU Name="FB_MoveToTarget" Id="{da24ea00-29e7-4073-8e13-4fd7c0055be0}" SpecialFunc="None">
+    <Declaration><![CDATA[FUNCTION_BLOCK FB_MoveToTarget
+VAR_INPUT
+	bExecute 	: BOOL;
+	bStop		: BOOL;
+END_VAR
+VAR_OUTPUT
+	bBusy		: BOOL;
+	bError		: BOOL;
+	nErrorId	: ERRORID;
+END_VAR
+VAR
+	nState 		: USINT;
+	pParamsChecked : BOOL;
+	
+	pMzTool				: POINTER TO FB_MzBase;
+	pTwinPiezoHolder	: POINTER TO FB_TwinPiezoHolder;
+	pTarget				: POINTER TO FB_TargetBase;
+	pHighestTarget		: POINTER TO FB_TargetBase;
+	pMtp				: POINTER TO FB_Mtp;
+	pCustomUnitType1	: POINTER TO FB_CustomUnitType1;
+	
+	stPosition			: ST_3DPoint;
+	stCurrentPosition	: ST_3DPoint;
+	rectangle			: FB_Rectangle;
+	bSuppressMoveFree	: BOOL;
+	pCoHead				: POINTER TO FB_MzHead;
+	
+	eTargetRef			: E_TargetRef;
+	nCol				: UINT;
+	nRow				: UINT;
+	nArrayNr			: USINT;
+	nSpeedX				: DINT;
+	nSpeedY				: DINT;
+	nSpeedZ				: DINT;
+	stOffset			: ST_3DPoint;
+	nZLevel				: USINT;
+	stActionData		: ST_ActionData;
+END_VAR]]></Declaration>
+    <Implementation>
+      <ST><![CDATA[IF bExecute THEN
+	IF nState = 0 THEN
+		IF NOT pParamsChecked THEN
+			nErrorId := 222;
+			nState := 99;
+		ELSE
+			bBusy := TRUE;
+			nState := 1;
+		END_IF
+	ELSE
+		IF pMzTool^.P_bError THEN
+			nErrorId := pMzTool^.P_nErrorId;
+			nState := 99;
+		END_IF
+	END_IF
+	
+	//wenn TwinPiezoHolder, dann freifahren und einschwenken
+	//wenn Pipette und deren Parent ein TwinPiezoHolder dann freifahren und ausschwenken
+	IF nState = 1 THEN
+		stCurrentPosition := pMzTool^.P_stCurrentPosTotal;
+		bSuppressMoveFree := FALSE;
+		IF pMzTool^.P_eObjectType = E_ObjectType.OBJECTTYPE_MZHead THEN
+			nState := 6;	//gleich zum Freifahren
+		ELSIF pMzTool^.P_eObjectType = E_ObjectType.OBJECTTYPE_TwinPiezoHolder THEN
+			pTwinPiezoHolder := pMzTool;
+			IF pTwinPiezoHolder^.P_eCurrentSwivelState = E_SwivelState.Swiveled THEN
+				nState := 3;
+			ELSE	//einschwenken			
+				stActionData.eAction := E_Action.ACTION_Swivel;
+				stActionData.aParams[1] := 1;
+				nErrorId := pTwinPiezoHolder^.M_ExeAction(stActionData);
+				IF nErrorId > 0 THEN
+					nState := 99;
+				ELSE
+					nState := 2;
+				END_IF
+			END_IF
+		ELSIF pMzTool^.P_eObjectType = E_ObjectType.OBJECTTYPE_PiezoPip AND pMzTool^.P_pParentMzTool^.P_eObjectType = E_ObjectType.OBJECTTYPE_TwinPiezoHolder THEN
+			pTwinPiezoHolder := pMzTool^.P_pParentMzTool;
+			IF pTwinPiezoHolder^.P_eCurrentSwivelState = E_SwivelState.Original THEN
+				nState := 3;
+			ELSE	//ausschwenken	
+				stActionData.eAction := E_Action.ACTION_Swivel;
+				stActionData.aParams[1] := 0;
+				nErrorId := pTwinPiezoHolder^.M_ExeAction(stActionData);
+				IF nErrorId > 0 THEN
+					nState := 99;
+				ELSE
+					nState := 2;
+				END_IF
+			END_IF
+		ELSE
+			nState := 3;
+		END_IF
+	ELSIF nState = 2 THEN
+		IF NOT pTwinPiezoHolder^.M_GetActionBusy(E_Action.ACTION_Swivel) THEN
+			IF pTwinPiezoHolder^.P_bError THEN
+				nErrorId := pTwinPiezoHolder^.P_nErrorId;
+				nState := 99;
+			ELSE
+				nState := 3;
+			END_IF
+		END_IF
+	END_IF
+	
+	//Falls ZielposZ höher als Freepos, dann vorher in Z auf Zielpos fahren
+	//Das sollte auch geschehen, wenn Tool selber nicht freifahren muss.
+	//Deshalb diese Überprüfung vorher erledigen
+	IF nState = 3 THEN
+		IF bStop THEN
+			nState := 80;
+		ELSE
+			IF (pMzTool^.P_pMzHead^.P_bIsTopHead) AND
+				(stPosition.Z > pTarget^.P_pWorkplate^.P_rCollHeight) AND
+				stPosition.Z > stCurrentPosition.Z THEN
+				nState := 4; //MoveZ
+			ELSE
+				nState := 6; //Entscheidung, wer Freifahrt übernimmt
+			END_IF
+		END_IF
+	END_IF
+	
+	//Begin MoveZ
+	IF nState = 4 THEN
+		MEMSET(ADR(stActionData),0,SIZEOF(stActionData));
+		stActionData.eAction := E_Action.ACTION_MoveZ;
+		stActionData.aParams[1] := E_MoveMode.MODE_AbsWithOffset;
+		stActionData.aParams[2] := REAL_TO_DINT(stPosition.Z);
+		stActionData.aParams[3] := -1;
+		nErrorId := pMzTool^.M_ExeAction(stActionData);
+		IF nErrorId > 0 THEN
+			nState := 99;
+		ELSE
+			nState := 5;
+		END_IF
+	ELSIF nState = 5 THEN
+		IF bStop THEN
+			pMzTool^.M_CancelAction(E_Action.ACTION_MoveZ);
+			nState := 79;
+		ELSE
+			IF NOT pMzTool^.M_GetActionBusy(E_Action.ACTION_MoveZ) THEN
+				nState := 6; //Entscheidung, wer Freifahrt übernimmt
+			END_IF
+		END_IF		
+	END_IF
+	//End MoveZ
+	
+	//Entscheidung, ob Freifahren hier oder durch MoveXY des Tools übernommen wird.
+	IF nState = 6 THEN
+		IF pTarget^.P_eObjectType = E_ObjectType.OBJECTTYPE_SpotArray THEN
+			stCurrentPosition := pMzTool^.P_stCurrentPosTotal;
+			//Überprüfen, ob Tool schon über diesem Target steht
+			rectangle.M_Clear();
+			rectangle.X1 := stCurrentPosition.X - 10;
+			rectangle.X2 := stCurrentPosition.X + 10;
+			rectangle.Y1 := stCurrentPosition.Y - 10;
+			rectangle.Y2 := stCurrentPosition.Y + 10;
+			IF F_RectIntersectRect(rectangle,pTarget^.P_fbAbsRect) THEN
+				bSuppressMoveFree := TRUE;
+				nState := 7;
+			ELSE
+				nState := 9;
+			END_IF
+		ELSE
+			nState := 9;
+		END_IF			
+	END_IF
+	
+	//Begin MoveFree
+	IF nState = 7 THEN
+		nState := 9;
+		IF NOT pMzTool^.P_pMzHead^.P_bCollFree THEN
+			nState := 8;
+			pMzTool^.P_pMzHead^.M_MoveFree(pMzTool);
+		END_IF
+		pCoHead := pMzTool^.P_pMzHead^.P_pCoHead;
+		IF pCoHead > 0 AND_THEN NOT pCoHead^.P_bCollFree THEN
+			nState := 8;
+			pCoHead^.M_MoveFree(0);
+		END_IF		
+	ELSIF nState = 8 THEN
+		nState := 9;
+		IF pMzTool^.P_pMzHead^.M_GetActionBusy(E_Action.ACTION_MoveZ) THEN
+			nState := 8;
+		END_IF
+		IF pCoHead > 0 AND_THEN pCoHead^.M_GetActionBusy(E_Action.ACTION_MoveZ) THEN
+			nState := 8;
+		END_IF
+	END_IF
+	//End MoveFree
+	
+	//Begin MoveXY
+	IF nState = 9 THEN
+		IF bStop THEN
+			nState := 80;
+		ELSE
+			nState := 10;
+			stActionData.eAction := E_Action.ACTION_MoveXY;
+			stActionData.aParams[1] := E_MoveMode.MODE_AbsWithOffset;
+			stActionData.aParams[2] := REAL_TO_DINT(stPosition.X);
+			stActionData.aParams[3] := REAL_TO_DINT(stPosition.Y);
+			stActionData.aParams[4] := nSpeedX;
+			stActionData.aParams[5] := nSpeedY;
+			stActionData.aParams[7] := 0; //nicht synchron
+			IF bSuppressMoveFree THEN
+				stActionData.aParams[6] := E_CrashAvoidanceMode.MoveNoneFree;
+			ELSE
+				stActionData.aParams[6] := E_CrashAvoidanceMode.MoveAllFree;
+			END_IF
+			
+			nErrorId := pMzTool^.M_ExeAction(stActionData);
+			IF nErrorId > 0 THEN
+				nState := 99;
+			END_IF			
+		END_IF		
+	ELSIF nState = 10 THEN
+		IF bStop THEN
+			pMzTool^.M_CancelAction(E_Action.ACTION_MoveXY);
+			nState := 79;
+		ELSE
+			IF NOT pMzTool^.M_GetActionBusy(E_Action.ACTION_MoveXY) THEN
+				IF pMzTool^.P_eObjectType = E_ObjectType.OBJECTTYPE_MZHead  OR pMzTool^.P_bCanceled THEN
+					nState := 80;
+				ELSE	//MoveZ
+					nState := 11;
+				END_IF
+			END_IF
+		END_IF		
+	END_IF
+	//End MoveXY
+	
+	//Begin MoveZ
+	IF nState = 11 THEN
+		IF nSpeedZ > 0 OR nSpeedZ = -1 THEN
+			MEMSET(ADR(stActionData),0,SIZEOF(stActionData));
+			stActionData.eAction := E_Action.ACTION_MoveZ;
+			stActionData.aParams[1] := E_MoveMode.MODE_AbsWithOffset;
+			stActionData.aParams[2] := REAL_TO_DINT(stPosition.Z);
+			stActionData.aParams[3] := nSpeedZ;
+			stActionData.aParams[4] := 5; //CollFreeAreaXMinus
+			stActionData.aParams[5] := 5; //CollFreeAreaXPlus
+			stActionData.aParams[6] := 5; //CollFreeAreaYMinus
+			stActionData.aParams[7] := 5; //CollFreeAreaYPlus
+			nErrorId := pMzTool^.M_ExeAction(stActionData);
+			IF nErrorId > 0 THEN
+				nState := 99;
+			ELSE
+				nState := 12;
+			END_IF
+		ELSE
+			nState := 80;
+		END_IF		
+	ELSIF nState = 12 THEN
+		IF bStop THEN
+			pMzTool^.M_CancelAction(E_Action.ACTION_MoveZ);
+			nState := 79;
+		ELSE
+			IF NOT pMzTool^.M_GetActionBusy(E_Action.ACTION_MoveZ) THEN
+				nState := 80;
+			END_IF			
+		END_IF		
+	END_IF
+	//End MoveZ
+	
+	IF nState = 79 THEN
+		IF NOT (pMzTool^.M_GetActionBusy(E_Action.ACTION_MoveZ) OR pMzTool^.M_GetActionBusy(E_Action.ACTION_MoveXY)) THEN
+			nState := 80;
+		END_IF
+	END_IF
+	
+		
+	IF nState >= 80 THEN
+		bBusy := FALSE;
+		IF nState = 99 THEN
+			bError := TRUE;	
+		END_IF
+	END_IF
+	
+ELSE
+	pParamsChecked := FALSE;
+	nState := 0;
+	bError := FALSE;
+	bStop := FALSE;
+	bBusy := FALSE;
+END_IF]]></ST>
+    </Implementation>
+    <Method Name="M_SetAndCheckParams" Id="{83ca0282-1720-4189-b6bf-8bd61d2483b0}">
+      <Declaration><![CDATA[METHOD M_SetAndCheckParams : ERRORID
+VAR_INPUT
+	refActionData : REFERENCE TO ST_ActionData;
+END_VAR
+
+VAR
+	i : UINT;
+	//stPieceDimension : ST_3DDimension;
+	rect : FB_Rectangle;
+	//rToolRadius : REAL;
+	stAbsPos : ST_3DPoint;
+	bRiskOfCrash : BOOL;
+END_VAR]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[IF bBusy THEN
+	M_SetAndCheckParams := E_ErrorIdCmd.ERRORID_ComplexActionActive;  //Error
+	RETURN;
+END_IF
+
+eTargetRef := DINT_TO_USINT(refActionData.aParams[1]);
+nCol := DINT_TO_UINT(refActionData.aParams[2]);
+nRow := DINT_TO_UINT(refActionData.aParams[3]);
+nArrayNr := DINT_TO_USINT(refActionData.aParams[4]);
+nSpeedX := refActionData.aParams[5];
+nSpeedY := refActionData.aParams[6];
+nSpeedZ := refActionData.aParams[7];
+stOffset.X := DINT_TO_REAL(refActionData.aParams[8]);
+stOffset.Y := DINT_TO_REAL(refActionData.aParams[9]);
+stOffset.Z := DINT_TO_REAL(refActionData.aParams[10]);
+nZLevel := DINT_TO_USINT(refActionData.aParams[11]);
+
+IF NOT fbObjectDirectory.M_ObjIsMzTool(refActionData.nObject) THEN //Object gültiges MzTool?
+	M_SetAndCheckParams := E_ErrorIdCmd.ERRORID_UnsuitableObject;  //Error
+	RETURN;
+END_IF
+pMzTool := fbObjectDirectory.M_GetObjPointer(refActionData.nObject);
+
+IF NOT fbObjectDirectory.M_ObjIsTarget(refActionData.nTarget) THEN //Gültiges Target?
+	M_SetAndCheckParams := E_ErrorIdCmd.ERRORID_UnsuitableTarget;  //Error
+	RETURN;
+END_IF
+pTarget := fbObjectDirectory.M_GetObjPointer(refActionData.nTarget);
+
+//MzTool bereit für MoveToTarget?
+M_SetAndCheckParams := pMzTool^.M_CheckAction(refActionData,0); 
+IF  M_SetAndCheckParams > 0 THEN
+	RETURN;
+END_IF
+
+//Target bereit für Action?
+M_SetAndCheckParams := pTarget^.M_CheckAction(refActionData,0);
+IF  M_SetAndCheckParams > 0 THEN
+	RETURN;
+END_IF
+
+//absolute Position aus Target holen
+stPosition := pTarget^.M_GetAbsPos(pChildPos:= 0, eTargetRef:= eTargetRef, 
+									nParam1:= nCol,
+									nParam2:= nRow,
+									nParam3:= nArrayNr,
+									nZLevel:= nZLevel, nErrorId=> nErrorId);									
+									
+IF nErrorId > 0 THEN
+	M_SetAndCheckParams := nErrorId;
+	RETURN;
+END_IF
+//Offset addieren
+stPosition := F_Add3DPoints(stPosition, stOffset);
+
+//Check Speed
+//Falls SpeedX oder SpeedY "0" sind dann Z auch auf "0" setzen
+IF nSpeedX = 0 OR nSpeedY = 0 THEN
+	nSpeedZ := 0;
+END_IF	
+
+//Position auf Limits checken
+//Targetposition X auf Limits checken
+IF nSpeedX <> 0 THEN
+	IF NOT pMzTool^.M_CheckMoveLimit(sAxis:= 'X', eMoveMode:= E_MoveMode.MODE_AbsWithOffset,rMovePosition:= stPosition.X) THEN
+		M_SetAndCheckParams := E_ErrorIdCmd.ERRORID_TargetPosOutOfRangeX;
+		RETURN;
+	END_IF
+END_IF
+//Targetposition Y auf Limits checken
+IF nSpeedY <> 0 THEN
+	IF NOT pMzTool^.M_CheckMoveLimit(sAxis:= 'Y', eMoveMode:= E_MoveMode.MODE_AbsWithOffset,rMovePosition:= stPosition.Y) THEN
+		M_SetAndCheckParams := E_ErrorIdCmd.ERRORID_TargetPosOutOfRangeY;
+		RETURN;
+	END_IF
+END_IF
+//Targetposition Z auf Limits checken
+IF nSpeedZ <> 0 THEN
+	IF NOT pMzTool^.M_CheckMoveLimit(sAxis:= 'Z', eMoveMode:= E_MoveMode.MODE_AbsWithOffset,rMovePosition:= stPosition.Z) THEN
+		M_SetAndCheckParams := E_ErrorIdCmd.ERRORID_TargetPosOutOfRangeZ;
+		RETURN;
+	END_IF
+	//Das hier ist ein Provisorium!!
+	IF pMzTool^.P_pMzHead^.P_bIsTopHead THEN
+		FOR i:= 1 TO cMaxCustomUnitTyp1 BY 1 DO
+			IF afbCustomUnitType1[i].P_nObjectID > 0 THEN
+				stAbsPos := afbCustomUnitType1[i].P_stAbsPosCenter;
+				IF stPosition.Z < stAbsPos.Z THEN
+					(*IF pMzTool^.P_pPiece > 0 THEN
+						stPieceDimension := pMzTool^.P_pPiece^.P_stDimension;
+						rToolRadius := stPieceDimension.Width / 2.0;
+					ELSE
+						rToolRadius := 2000.0;
+					END_IF*)
+					rect.X1 := stPosition.X - pMzTool^.P_rToolRadius;
+					rect.X2 := stPosition.X + pMzTool^.P_rToolRadius;
+					rect.Y1 := stPosition.Y - pMzTool^.P_rToolRadius;
+					rect.Y2 := stPosition.Y + pMzTool^.P_rToolRadius;
+					//Zuerst checken, ob das Target selber in dem Bereich
+					IF F_RectIntersectRect(rect,afbCustomUnitType1[i].P_fbAbsRect) THEN
+						bRiskOfCrash := TRUE;
+						IF afbCustomUnitType1[i].M_GetRectIsInnerSlot(rect) THEN
+							bRiskOfCrash := FALSE;
+							EXIT;
+						END_IF
+					END_IF
+				END_IF
+			END_IF
+		END_FOR
+	END_IF
+	IF bRiskOfCrash THEN
+		M_SetAndCheckParams := E_ErrorIdCmd.ERRORID_MoveZRiskOfCrash;
+		RETURN;
+	END_IF
+END_IF
+pParamsChecked := TRUE;]]></ST>
+      </Implementation>
+    </Method>
+    <LineIds Name="FB_MoveToTarget">
+      <LineId Id="1041" Count="243" />
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="FB_MoveToTarget.M_SetAndCheckParams">
+      <LineId Id="244" Count="114" />
+      <LineId Id="2" Count="0" />
+    </LineIds>
+  </POU>
+</TcPlcObject>
