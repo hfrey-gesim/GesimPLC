@@ -1,0 +1,438 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<TcPlcObject Version="1.1.0.1" ProductVersion="3.1.4024.11">
+  <POU Name="FB_OM_Auto" Id="{adf07d5c-a5bb-495a-8692-a20e10b85633}" SpecialFunc="None">
+    <Declaration><![CDATA[FUNCTION_BLOCK FB_OM_Auto
+VAR_INPUT
+END_VAR
+VAR_OUTPUT
+	eCurrentState 		: E_MachineState := E_MachineState.MACHINESTATE_Idle;
+END_VAR
+VAR
+	pSequence		: POINTER TO FB_Sequence;	
+
+	bError			: BOOL;
+	stError			: ST_Error;
+	i				: UINT;
+	eLastState		: E_MachineState := E_MachineState.MACHINESTATE_Idle;
+	
+	nActionId		: UINT;
+	
+	nStateA_Reset : USINT;
+	timeout : TON;
+	
+	nActActionsInPause : UDINT;
+	
+END_VAR]]></Declaration>
+    <Implementation>
+      <ST><![CDATA[//Wenn der ActionDispacher in Error geht, dann alles abbrechen und in Error gehen
+IF eCurrentState <> E_MachineState.MACHINESTATE_Reset THEN
+	IF ActionDispacher.eCurrentState = E_MachineState.MACHINESTATE_Error THEN
+		eCurrentState := E_MachineState.MACHINESTATE_Error;
+		RETURN;
+	END_IF
+END_IF
+
+CASE eCurrentState OF
+	E_MachineState.MACHINESTATE_Idle:
+		A_FillPCV();
+		MEMSET(ADR(stInteractRequest),0,SIZEOF(stInteractRequest));
+		MEMSET(ADR(stInterResponse),0,SIZEOF(stInterResponse));
+		//Auf Fehler der Hardware reagieren und eventuelle CustomUnitType2 reagieren
+		IF PerformHardware.bError OR fbObjectDirectory.M_CustomUnitType2_Error() THEN
+			eCurrentState := E_MachineState.MACHINESTATE_Error;
+		END_IF
+		
+	E_MachineState.MACHINESTATE_Running:
+		//In diesem State wird solange gewartet, wie die SequenceAction fertig ist
+		A_FillPCV();
+		eLastState := E_MachineState.MACHINESTATE_Running;
+		IF pSequence^.eCurrentState = E_SequenceState.State_Ready THEN
+			eCurrentState := E_MachineState.MACHINESTATE_Ready;
+		ELSIF pSequence^.eCurrentState = E_SequenceState.State_Canceled THEN
+			eCurrentState := E_MachineState.MACHINESTATE_Ready;
+		ELSIF pSequence^.eCurrentState = E_SequenceState.State_Pause THEN
+			eCurrentState := E_MachineState.MACHINESTATE_Pause;
+		ELSIF pSequence^.eCurrentState = E_SequenceState.State_Error THEN
+			eCurrentState := E_MachineState.MACHINESTATE_Error;
+		END_IF
+		
+		IF fbObjectDirectory.M_CustomUnitType2_Error() THEN
+			ActionDispacher.M_StopAll();
+			eCurrentState := E_MachineState.MACHINESTATE_Error;
+		END_IF
+		
+		
+	E_MachineState.MACHINESTATE_PauseRequest:
+		IF pSequence^.eCurrentState = E_SequenceState.State_Pause THEN
+			eCurrentState := E_MachineState.MACHINESTATE_Pause;
+		ELSIF pSequence^.eCurrentState = E_SequenceState.State_Canceled THEN
+			eCurrentState := E_MachineState.MACHINESTATE_Idle;
+		END_IF
+		
+	E_MachineState.MACHINESTATE_Pause:
+		A_FillPCV();
+		//Aus diesem State kann in den ManualOverride gewechsel werden
+		IF pSequence^.eCurrentState = E_SequenceState.State_Active THEN
+			eCurrentState := E_MachineState.MACHINESTATE_Running;
+		ELSIF pSequence^.eCurrentState = E_SequenceState.State_Canceled THEN
+			eCurrentState := E_MachineState.MACHINESTATE_Idle;	
+		ELSIF pSequence^.eCurrentState = E_SequenceState.State_Error THEN
+			eCurrentState := E_MachineState.MACHINESTATE_Error;
+		END_IF
+	
+	E_MachineState.MACHINESTATE_Active:
+		A_FillPCV();
+		IF eLastState = E_MachineState.MACHINESTATE_Idle THEN
+			eCurrentState := ActionDispacher.eCurrentState;
+		ELSIF eLastState = E_MachineState.MACHINESTATE_Pause THEN
+			IF ActionDispacher.eCurrentState = E_MachineState.MACHINESTATE_Error THEN
+				eCurrentState := E_MachineState.MACHINESTATE_Error;
+			ELSE
+				IF ActionDispacher.P_nActiveActions <= nActActionsInPause THEN //RunSequence bleibt aktiv
+					eCurrentState := E_MachineState.MACHINESTATE_Pause;
+				END_IF
+			END_IF
+		END_IF
+		
+		IF fbObjectDirectory.M_CustomUnitType2_Error() THEN
+			ActionDispacher.M_StopAll();
+			eCurrentState := E_MachineState.MACHINESTATE_Error;
+		END_IF
+		
+		//In diesem Mode werden manuelle Actions ausgeführt
+		//es sollte immer nur eine möglich sein
+		//Hier besteht das Problem, dass einen in Pause gestellte Action, den ActionDispacher aktiv hält?
+		//Testen!! Ja, so ist es
+		//Am besten, man macht das über die ActionId und fragt diese ab, ob sie fertig ist
+		
+		(*IF fbActionDispacher.M_GetActionStatus(nActionId) = E_ActionStatus.ACTIONSTATUS_Ready THEN //Action fertig
+			eCurrentState := E_MachineState.MACHINESTATE_Ready;
+		END_IF*)
+	
+	E_MachineState.MACHINESTATE_Cancel:
+				
+	eCurrentState := ActionDispacher.eCurrentState;
+	
+	E_MachineState.MACHINESTATE_Canceled:
+		eCurrentState := ActionDispacher.eCurrentState;
+		
+	E_MachineState.MACHINESTATE_Ready:
+		//In diesem State wird der Head freigefahren
+		IF eLastState = E_MachineState.MACHINESTATE_Running THEN
+			eCurrentState := E_MachineState.MACHINESTATE_Idle;
+			FOR i:= 1 TO UINT_TO_USINT(fbObjectDirectory.nCntMZHead) BY 1 DO
+				IF afbMzHead[i].M_GetActionBusy(E_Action.ACTION_MoveZ) THEN
+					eCurrentState := E_MachineState.MACHINESTATE_Ready;
+				END_IF
+			END_FOR
+		ELSIF eLastState = E_MachineState.MACHINESTATE_Pause THEN
+			eCurrentState := E_MachineState.MACHINESTATE_Pause;
+		ELSIF eLastState = E_MachineState.MACHINESTATE_Idle THEN
+			eCurrentState := E_MachineState.MACHINESTATE_Idle;	
+		END_IF
+
+	E_MachineState.MACHINESTATE_Reset:
+		A_Reset();
+	E_MachineState.MACHINESTATE_Error:
+		//Do nothing
+END_CASE]]></ST>
+    </Implementation>
+    <Action Name="A_FillPCV" Id="{52d46d5b-68dd-4fdf-8f92-adb14e2c184b}">
+      <Implementation>
+        <ST><![CDATA[IF (fbObjectDirectory.nCntPiezoPip > 0) OR (fbObjectDirectory.nCntSolenoidPip > 0) THEN
+	fbPCV.M_Fill();
+	IF fbPCV.bError THEN
+		stError.HardwareGrp := E_HardwareGrp.PCV;
+		stError.HardwareNr := 1;
+		stError.MachineMode := E_MachineMode.MACHINEMODE_Manu;
+		stError.POU := 1;
+		stError.POUAction := E_POUACT.POUACT_UNDEFIEND;
+		stError.ErrorId := fbPCV.nErrorId;
+		fbErrorList.A_Add(putValue := stError);
+		ActionDispacher.M_StopAll();
+		eCurrentState := E_MachineState.MACHINESTATE_Error;
+		RETURN;
+	END_IF
+END_IF]]></ST>
+      </Implementation>
+    </Action>
+    <Action Name="A_Reset" Id="{fc65ed5d-d16a-4420-a658-a7c4d0a2a872}">
+      <Implementation>
+        <ST><![CDATA[IF nStateA_Reset = 0 THEN
+	timeout(IN:= FALSE);
+	//ActionDispacher zurücksetzen (Hier werden auch die Devices zurückgesetzt
+	ActionDispacher.M_Reset();
+	//Hardware zurücksetzen
+	PerformHardware.A_ResetError();
+	//PCV zurücksetzen
+	fbPCV.M_Reset();
+	
+	IF pSequence > 0 THEN
+		pSequence^.M_Reset();	
+	END_IF
+		
+	nStateA_Reset := 1;
+ELSIF nStateA_Reset = 1 THEN
+	nStateA_Reset := 2;
+	timeout(IN:= TRUE, PT:=T#20S);
+	//Warten, bis alles zurückgesetzt
+	IF ActionDispacher.eCurrentState <> E_MachineState.MACHINESTATE_Idle THEN
+		nStateA_Reset := 1; 		
+	END_IF
+	IF PerformHardware.bError THEN
+		PerformHardware.A_ResetError();
+		nStateA_Reset := 1;
+	END_IF
+	IF timeout.Q THEN
+		eCurrentState := E_MachineState.MACHINESTATE_Error;
+		nStateA_Reset := 0;
+	END_IF
+ELSIF nStateA_Reset = 2 THEN
+	//Reset CustomUnitType2 (kann möglicherweise noch in Error stehen, weil evtl. ActionDispacher nicht in Error war)
+	//Dadurch werden Objekte diesen Typs nicht durch den AD zurückgesetzt.
+	fbObjectDirectory.M_ResetCustomUnitType2();
+	
+	//Checken, ob MzBase komplett resettet wurde -> Aktivierung der KOnfiguration erforderlich
+	FOR i:= 1 TO fbObjectDirectory.nCntMZHead BY 1 DO
+		IF aFbMultiZRef[i].P_bMzBaseRestarted THEN
+			fbConfiguration.M_Deactivate();
+		END_IF
+	END_FOR
+	
+	IF fbConfiguration.P_bActivated THEN
+		bError := FALSE;
+		eLastState := E_MachineState.MACHINESTATE_Idle;
+		eCurrentState := E_MachineState.MACHINESTATE_Idle;
+		nStateA_Reset := 0;
+	ELSE
+		nStateA_Reset := 3;
+	END_IF
+ELSIF nStateA_Reset = 3 THEN //Konfiguration wieder aktivieren
+	fbConfiguration.A_Activate(bExecute:= TRUE);
+	IF NOT fbConfiguration.bBusy THEN
+		IF fbConfiguration.bError THEN
+			eCurrentState := E_MachineState.MACHINESTATE_Error;
+			fbErrorList.M_Add(stError);
+		ELSE
+			bError := FALSE;
+			eLastState := E_MachineState.MACHINESTATE_Idle;
+			eCurrentState := E_MachineState.MACHINESTATE_Idle;
+		END_IF
+		nStateA_Reset := 0;
+		fbConfiguration.A_Activate(bExecute:= FALSE);
+	END_IF
+END_IF]]></ST>
+      </Implementation>
+    </Action>
+    <Method Name="M_Cancel" Id="{e1833911-70c2-42a3-abc5-9b87f66a1b85}">
+      <Declaration><![CDATA[METHOD M_Cancel : ERRORID
+VAR_INPUT
+END_VAR
+]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[IF 	eCurrentState =  E_MachineState.MACHINESTATE_Running OR
+	eCurrentState =  E_MachineState.MACHINESTATE_PauseRequest OR
+	eCurrentState =  E_MachineState.MACHINESTATE_Active OR
+	eCurrentState =  E_MachineState.MACHINESTATE_Pause THEN
+	ActionDispacher.M_StopAll();
+	eCurrentState := E_MachineState.MACHINESTATE_Cancel;
+END_IF]]></ST>
+      </Implementation>
+    </Method>
+    <Method Name="M_ContinueAction" Id="{d59c268a-4b56-4a86-a502-90e2074f7bcb}">
+      <Declaration><![CDATA[METHOD M_ContinueAction : ERRORID
+VAR_INPUT
+	nActionId	: UINT;
+END_VAR
+]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[IF eCurrentState = E_MachineState.MACHINESTATE_Pause THEN
+	M_ContinueAction := ActionDispacher.M_ContinueAction(nActionId);
+END_IF]]></ST>
+      </Implementation>
+    </Method>
+    <Method Name="M_ExeAction" Id="{6c6f42ae-79db-4ba2-a013-17e8c2123caa}">
+      <Declaration><![CDATA[METHOD M_ExeAction : ERRORID
+VAR_INPUT
+	refActionData	: REFERENCE TO ST_ActionData;
+END_VAR
+
+VAR_OUTPUT
+	nActionId		: UINT;
+END_VAR
+
+VAR
+	nErrorId		: ERRORID;
+END_VAR]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[CASE eCurrentState OF
+	E_MachineState.MACHINESTATE_Idle:
+		//folgende Actions können aus diesem heraus ausgeführt werden
+		//-Programm löschen
+		//-Programmschritt hochladen
+		//-Condition hochladen
+		//-Programm starten
+		//-diverse Action ausführen (z.b. Druck,Temperatur ändern usw)
+		//-Sequence starten
+		nErrorId := ActionDispacher.M_ExeAction(refActionData:= refActionData,bExtern:= TRUE, nActionId=> nActionId);
+		IF nErrorId > 0 THEN
+			M_ExeAction := nErrorId;
+			RETURN;
+		ELSE
+			eLastState := E_MachineState.MACHINESTATE_Idle;
+			IF refActionData.eAction = E_Action.ACTION_RunSequence THEN
+				pSequence := fbSequenceList.M_Get(DINT_TO_UDINT(refActionData.aParams[1]));
+				eCurrentState := E_MachineState.MACHINESTATE_Running;
+			ELSE
+				eCurrentState := E_MachineState.MACHINESTATE_Active;
+				ActionDispacher.P_bPauseRequestIntern := FALSE;
+				ActionDispacher.P_bLastActionResult := FALSE;
+			END_IF
+		END_IF
+		
+	E_MachineState.MACHINESTATE_Active:
+		//In disem State lässt sich keine Sequence starten
+		IF refActionData.eAction = E_Action.ACTION_RunSequence THEN
+			M_ExeAction := E_ErrorIdCmd.ERRORID_InvalidState;
+			RETURN;
+		END_IF
+		nErrorId := ActionDispacher.M_ExeAction(refActionData:= refActionData,bExtern:= TRUE, nActionId=> nActionId);
+		//-diverse Action ausführen (z.b. Druck,Temperatur ändern usw)
+	E_MachineState.MACHINESTATE_Pause:
+		//In Pause können im Grunde alle Actions außer RunGCode usw. ausgeführt werden
+		//allerdings darf, während eine Action aktiv ist, kein Continue erfolgen
+		(*CASE refActionData.eAction OF
+			
+		END_CASE
+			E_Action.ACTION_Cooling, E_Action.ACTION_Heating, E_Action.ACTION_InkOpClCover, E_Action.ACTION_InkSpin,
+			E_Action.ACTION_MoveZ, E_Action.ACTION_ReactorOpCl, E_Action.ACTION_SetPressure, E_Action.ACTION_SetVoltage,
+			E_Action.ACTION_SwitchLight, E_Action.ACTION_SwitchPressure, E_Action.ACTION_SwitchVoltage, E_Action.ACTION_CleanTip:
+			
+			nErrorId := fbActionDispacher.M_ExeAction(refActionData:= refActionData,bInfo:= TRUE, nActionId=> nActionId);
+		ELSE
+			M_ExeAction := E_ErrorIdCmd.ERRORID_InvalidState;
+			RETURN;
+		END_CASE*)
+		IF refActionData.eAction > 50 THEN
+			
+			M_ExeAction := ActionDispacher.M_ExeAction(refActionData:= refActionData,bExtern:= TRUE, nActionId=> nActionId);
+			IF 	M_ExeAction = 0 THEN
+				eLastState := E_MachineState.MACHINESTATE_Pause;
+				eCurrentState := E_MachineState.MACHINESTATE_Active;
+				nActActionsInPause := ActionDispacher.P_nActiveActions - 1;	
+			END_IF
+		ELSE
+			M_ExeAction := E_ErrorIdCmd.ERRORID_InvalidState;
+			RETURN;
+		END_IF
+
+	E_MachineState.MACHINESTATE_Running:
+		IF refActionData.eAction = E_Action.ACTION_SetPressure OR refActionData.eAction = E_Action.ACTION_DispenseDrops THEN
+			nErrorId := ActionDispacher.M_ExeAction(refActionData:= refActionData,bExtern:= TRUE, nActionId=> nActionId);
+		ELSE
+			M_ExeAction := E_ErrorIdCmd.ERRORID_InvalidState;
+			RETURN;
+		END_IF
+ELSE
+	//Actions verschiedene Fehlermeldung zurückgeben!!!!
+	M_ExeAction := E_ErrorIdCmd.ERRORID_InvalidState;
+	RETURN;	
+END_CASE]]></ST>
+      </Implementation>
+    </Method>
+    <Method Name="M_PauseAction" Id="{a0454b22-fc63-4b88-b6da-3c28ec050496}">
+      <Declaration><![CDATA[METHOD M_PauseAction : ERRORID
+VAR_INPUT
+	nActionId	: UINT;
+END_VAR
+]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[IF eCurrentState = E_MachineState.MACHINESTATE_Running THEN
+	eLastState := E_MachineState.MACHINESTATE_Running;
+	ActionDispacher.M_PauseAction(nActionId);
+	eCurrentState := E_MachineState.MACHINESTATE_PauseRequest;
+ELSIF eCurrentState = E_MachineState.MACHINESTATE_Active THEN
+	eLastState := E_MachineState.MACHINESTATE_Active;
+	ActionDispacher.M_PauseAction(nActionId);
+ELSE
+	M_PauseAction := E_ErrorIdCmd.ERRORID_InvalidState;
+END_IF]]></ST>
+      </Implementation>
+    </Method>
+    <Method Name="M_ResetError" Id="{c772a514-dde0-4533-8fec-9c7744b65026}">
+      <Declaration><![CDATA[METHOD M_ResetError
+VAR_INPUT
+END_VAR
+]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[IF eCurrentState = E_MachineState.MACHINESTATE_Error THEN
+	eCurrentState := E_MachineState.MACHINESTATE_Reset;
+END_IF]]></ST>
+      </Implementation>
+    </Method>
+    <Method Name="M_StopAction" Id="{c1e35174-d3ad-4ad2-8cb1-be0b8e1e2b12}">
+      <Declaration><![CDATA[METHOD M_StopAction : ERRORID
+VAR_INPUT
+	nActionId	: UINT;
+END_VAR
+]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[M_StopAction := ActionDispacher.M_StopAction(nActionId);]]></ST>
+      </Implementation>
+    </Method>
+    <LineIds Name="FB_OM_Auto">
+      <LineId Id="195" Count="12" />
+      <LineId Id="335" Count="3" />
+      <LineId Id="211" Count="2" />
+      <LineId Id="311" Count="0" />
+      <LineId Id="214" Count="9" />
+      <LineId Id="339" Count="0" />
+      <LineId Id="341" Count="3" />
+      <LineId Id="340" Count="0" />
+      <LineId Id="224" Count="8" />
+      <LineId Id="312" Count="0" />
+      <LineId Id="233" Count="9" />
+      <LineId Id="313" Count="0" />
+      <LineId Id="243" Count="10" />
+      <LineId Id="345" Count="0" />
+      <LineId Id="347" Count="3" />
+      <LineId Id="346" Count="0" />
+      <LineId Id="254" Count="35" />
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="FB_OM_Auto.A_FillPCV">
+      <LineId Id="16" Count="13" />
+      <LineId Id="1" Count="0" />
+    </LineIds>
+    <LineIds Name="FB_OM_Auto.A_Reset">
+      <LineId Id="121" Count="29" />
+      <LineId Id="181" Count="2" />
+      <LineId Id="180" Count="0" />
+      <LineId Id="151" Count="28" />
+      <LineId Id="1" Count="0" />
+    </LineIds>
+    <LineIds Name="FB_OM_Auto.M_Cancel">
+      <LineId Id="15" Count="5" />
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="FB_OM_Auto.M_ContinueAction">
+      <LineId Id="9" Count="1" />
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="FB_OM_Auto.M_ExeAction">
+      <LineId Id="133" Count="71" />
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="FB_OM_Auto.M_PauseAction">
+      <LineId Id="16" Count="8" />
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="FB_OM_Auto.M_ResetError">
+      <LineId Id="3" Count="1" />
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="FB_OM_Auto.M_StopAction">
+      <LineId Id="2" Count="0" />
+    </LineIds>
+  </POU>
+</TcPlcObject>

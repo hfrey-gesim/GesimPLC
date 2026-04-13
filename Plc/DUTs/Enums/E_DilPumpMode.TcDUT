@@ -1,0 +1,13 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<TcPlcObject Version="1.1.0.1" ProductVersion="3.1.0.25">
+  <DUT Name="E_DilPumpMode" Id="{7edb7f26-f51f-4d78-b991-89fa288ab2fc}">
+    <Declaration><![CDATA[TYPE E_DilPumpMode :
+(
+	MODE_Suck := 0,
+	MODE_Press := 1
+)USINT;
+END_TYPE
+]]></Declaration>
+    <ObjectProperties />
+  </DUT>
+</TcPlcObject>

@@ -1,0 +1,269 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<TcPlcObject Version="1.1.0.1" ProductVersion="3.1.4020.12">
+  <POU Name="FB_ZM_Jog" Id="{b4c2f472-66e9-4e28-96f0-c104139810ee}" SpecialFunc="None">
+    <Declaration><![CDATA[FUNCTION_BLOCK FB_ZM_Jog
+VAR_INPUT
+	bJogForward		: BOOL;
+	bJogBackwards	: BOOL;
+	bClock			: BOOL;
+	bInching		: BOOL;	//Betriebsart Incremental, es wird um die relative Position bewegt
+	pfbZAxisRef		: POINTER TO FB_ZAxisRef;
+	rSpeed			: REAL;	//Geschwindigkeit
+	rDistance		: REAL;	//relative Distanz, um die in der Betriebsart Incremental verfahren wird
+END_VAR
+
+VAR_OUTPUT
+	bBusy			: BOOL;
+	bError			: BOOL;
+	nErrorID		: ERRORID;
+END_VAR
+
+VAR
+	rTrig1			: R_TRIG;
+	fTrig1			: F_TRIG;
+	_bClock			: BOOL;
+	timeOut			: TON;		//für Betriebsart "Standard" , wenn in dieser Zeitspanne keine neue Flanke kommt, dann Stop
+								//verhindert, dass bei einer Unterbrechung der Kommunikation, die Achse unkontrolliert bis an das jeweilige Ende fährt
+
+	bCurrDirForw		: BOOL;		
+	bCurrDirBackw		: BOOL;		
+	nState				: USINT;
+	timeOutErr			: TON;
+	rTargetPosition		: REAL;
+	nStopReason			: USINT;	//1:regulär 2:timeout clock 3:Richtungswechsel
+	nCountStopDirChange : USINT;
+END_VAR]]></Declaration>
+    <Implementation>
+      <ST><![CDATA[IF pfbZAxisRef = 0 THEN
+	nErrorId := E_ErrorIdMultiZ.ERRORID_InvalidZChannel;
+	bError := TRUE;
+	nState := 99;	//go in errorstate		
+	RETURN;	
+END_IF
+
+//Wird Achse momentan von anderem Movebaustein genutzt?
+IF (pfbZAxisRef^.pCurrentFb > 0) AND (pfbZAxisRef^.pCurrentFb <> THIS) THEN //wird von anderem FB genutzt
+	RETURN;
+END_IF
+
+
+pfbZAxisRef^.stStatus.bIsMoving := TRUE;
+
+bBusy := TRUE;
+fTrig1(CLK:= bJogForward OR bJogBackwards);	//negative Flanke von bJogForward bzw bJogBackwards stoppt
+timeOut();	//in der Betriebsart "Standard" muss innerhalb einer gewissen Zeitspanne eine erneute positive Flanke am Eingang kommen, sonst "STOP"
+
+IF pfbZAxisRef^.stInput.nStatus.3 THEN	//Error im Antrieb
+	pfbZAxisRef^.stStatus.bError := TRUE;
+	bBusy := FALSE;
+	pfbZAxisRef^.stOutput.nMode := 0;
+	pfbZAxisRef^.stOutput.nCtrl := 0;
+	nErrorID := F_MultiZError_TO_ErrorId(pfbZAxisRef^.stInput.nError);
+	timeOut(IN:= FALSE);
+	bError := TRUE;
+	bCurrDirForw := FALSE;
+	bCurrDirBackw := FALSE;
+	nState := 99;
+END_IF
+
+IF timeOutErr.Q THEN
+	timeOutErr(IN:= FALSE);
+	pfbZAxisRef^.stOutput.nMode := 0;
+	pfbZAxisRef^.stOutput.nCtrl := 0;
+	CASE nState OF
+		2:	//Timeout wait for setpointacknowledge
+			nErrorId := E_ErrorIdMultiZ.ERRORID_ToWaitSetPointAck;
+		3: //Timeout wait for targetreached
+			nErrorId := E_ErrorIdMultiZ.ERRORID_ToWaitTrgtReached;
+		6: //Timeout wait for stop
+			nErrorId := E_ErrorIdMultiZ.ERRORID_ToWaitStop;
+	ELSE
+		nErrorId := E_ErrorIdMultiZ.ERRORID_UnknownError;			
+	END_CASE
+	pfbZAxisRef^.stOutput.nMode := 0;
+	pfbZAxisRef^.stOutput.nCtrl := 0;
+	bCurrDirForw := FALSE;
+	bCurrDirBackw := FALSE;
+	bBusy := FALSE;
+	bError := TRUE;
+	nState := 99;	//go in errorstate
+	RETURN;
+END_IF
+
+IF NOT bInching AND (bJogForward OR bJogBackwards) THEN	//Betriebsart "Continous"
+	IF bClock <> _bClock THEN	//Clock, welcher innerhalb des Timeouts toggeln muss
+		rTrig1(CLK:= TRUE);
+		_bClock := bClock;
+		timeOut(IN:= FALSE);
+		timeOut(IN:= TRUE, PT:= T#550MS);		
+		//wenn gerade in Move und Richtungsumkehr, dann vorher stoppen
+		IF bCurrDirForw AND bJogBackwards THEN	//Richtungsumkehr, stoppen
+			nStopReason := 3;
+			nState := 5;
+		ELSIF bCurrDirBackw AND bJogForward THEN	//Richtungsumkehr, stoppen
+			nStopReason := 3;
+			nState := 5;
+		ELSE
+			//Aktuelle Richtung setzen
+			IF bJogForward THEN
+				bCurrDirForw := TRUE;
+				bCurrDirBackw := FALSE;
+			ELSIF bJogBackwards THEN
+				bCurrDirForw := FALSE;
+				bCurrDirBackw := TRUE;
+			END_IF			
+		END_IF
+	ELSE
+		IF timeOut.Q THEN	//TiomeOut -> Stoppen
+			timeOut(IN:= FALSE);
+			nStopReason := 2;
+			nstate := 5;	//Stoppen
+		END_IF
+	END_IF
+END_IF
+
+IF fTrig1.Q AND nState > 0  THEN
+	timeOut(IN:= FALSE);
+	nStopReason := 1;
+	nstate := 5;	//Stoppen
+END_IF
+
+CASE nState OF
+	0:	IF rTrig1.Q THEN
+			timeOut(IN:= TRUE, PT:= T#500MS);	//in dieser Zeitzspanne muss eine erneute Flanke kommen, sonst "STOP"
+		END_IF
+		pfbZAxisRef^.pCurrentFb := THIS; 
+		//Geschwindigkeit setzen
+		pfbZAxisRef^.stOutput.nVelo := REAL_TO_DINT(rSpeed);
+		//Betriebsart Positionsmodus setzen
+		pfbZAxisRef^.stOutput.nMode := 1;
+		pfbZAxisRef^.stOutput.nCtrl.2 := TRUE; //Relativ
+
+		IF bJogForward THEN //nach oben
+			rTargetPosition := pfbZAxisRef^.P_rCurrentPos + rDistance;
+			IF rTargetPosition > pfbZAxisRef^.P_rMaxPos THEN
+				//Distance anpassen
+				rDistance := pfbZAxisRef^.P_rMaxPos - pfbZAxisRef^.P_rCurrentPos;
+			END_IF
+		ELSE //nach unten
+			rTargetPosition := pfbZAxisRef^.P_rCurrentPos - rDistance;
+			IF rTargetPosition < pfbZAxisRef^.P_rMinPos THEN
+				//Distance anpassen
+				rDistance := pfbZAxisRef^.P_rMinPos - pfbZAxisRef^.P_rCurrentPos;
+			ELSE
+				rDistance := rDistance * -1.0;
+			END_IF
+		END_IF
+
+		pfbZAxisRef^.P_rRelTargetPos := rDistance;
+		
+		//Zielposition in Abhängigkeit von Betriebart setzen
+		IF NOT bInching THEN	//Betriebsart "Standard" (Continous)
+			IF bJogForward THEN //nach oben
+				bCurrDirForw := TRUE;
+				bCurrDirBackw := FALSE;
+			ELSIF bJogBackwards THEN
+				bCurrDirForw := FALSE;
+				bCurrDirBackw := TRUE;
+			END_IF
+		END_IF
+		
+		//Workaround, da FB zweimal im Zyklus aufgerufen wird und Ctrl und Pos im geichen Zyklus auf den CAN-Bus geht
+		nState := 10;
+		
+	1:	//Fahrauftrag starten
+		pfbZAxisRef^.stOutput.nCtrl.0 := TRUE;
+		nState := 2;
+		
+	10:	nState := 1;
+
+	2:	//SetpointAcknowledge?
+		//Hier könnte es zu einem TimeoutSetpointACK kommen, wenn durch FB_ZMStop Stop das StatusBit nicht kommt
+		IF pfbZAxisRef^.stInput.nStatus.1 THEN
+			pfbZAxisRef^.stOutput.nCtrl.0 := FALSE;	//Fahrauftrag zuücksetzen
+			nState := 3;
+			timeOutErr(IN:= FALSE);
+		ELSE
+			timeOutErr(IN:= TRUE, PT:= T#500MS);
+		END_IF
+		
+	3:	//TargetReached?
+		IF pfbZAxisRef^.stInput.nStatus.0 THEN
+			rTrig1(CLK:= FALSE);
+			_bClock := FALSE;
+			nState := 0;	//aktuelle Postion holen
+			bBusy := FALSE;
+		END_IF
+		
+	5:	//Stoppen
+		pfbZAxisRef^.stOutput.nCtrl.1 := TRUE;	//Stopbit setzen
+		pfbZAxisRef^.stOutput.nCtrl.0 := FALSE;	//Fahrauftrag zurücksetzen
+		timeOutErr(IN:= FALSE);
+ 		bCurrDirForw := FALSE;
+		bCurrDirBackw := FALSE;		
+		nState := 6;
+		
+	6:	//Stopbit gesetzt?
+		IF pfbZAxisRef^.stInput.nStatus.2 THEN
+			timeOutErr(IN:= FALSE);
+			pfbZAxisRef^.stOutput.nCtrl.1 := FALSE;	//Stopbit zurücksetzen	
+			
+			pfbZAxisRef^.stOutput.nMode := 0;
+				//aus welchem Grund wurde gestoppt?
+			IF nStopReason = 1 THEN	//regulär gestoppt
+				nState := 0;	//Aktuelle Position holen
+				bBusy := FALSE;
+			ELSIF nStopReason = 2 THEN //Stop durch timeout
+				nState := 0;	//Aktuelle Position holen
+				bBusy := FALSE;
+			ELSIF nStopReason = 3 THEN //Stop durch Richtungswechsel
+				_bClock := NOT _bClock;
+				nCountStopDirChange := nCountStopDirChange + 1;
+				nState := 0;
+			END_IF
+		ELSE
+			timeOutErr(IN:= TRUE, PT:= T#1000MS);
+		END_IF
+END_CASE
+
+IF NOT bBusy THEN
+	IF pfbZAxisRef^.pCurrentFb = THIS THEN
+		pfbZAxisRef^.pCurrentFb := 0;
+		pfbZAxisRef^.stStatus.bIsMoving := FALSE;	
+	END_IF	
+END_IF]]></ST>
+    </Implementation>
+    <Method Name="M_Reset" Id="{d458d456-cb3a-48c2-a26a-ef0170e72fa4}">
+      <Declaration><![CDATA[METHOD M_Reset
+VAR_INPUT
+END_VAR
+]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[timeOut(IN:= FALSE);
+timeOutErr(IN:= FALSE);
+rTrig1(CLK:= FALSE);
+fTrig1(CLK:= FALSE);
+_bClock := FALSE;
+bError := FALSE;
+nErrorID := 0;
+nState := 0;
+IF pfbZAxisRef^.pCurrentFb = THIS THEN
+	pfbZAxisRef^.pCurrentFb := 0;
+	pfbZAxisRef^.stStatus.bIsMoving := FALSE;	
+END_IF]]></ST>
+      </Implementation>
+    </Method>
+    <LineIds Name="FB_ZM_Jog">
+      <LineId Id="3" Count="132" />
+      <LineId Id="261" Count="0" />
+      <LineId Id="136" Count="4" />
+      <LineId Id="228" Count="1" />
+      <LineId Id="141" Count="55" />
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="FB_ZM_Jog.M_Reset">
+      <LineId Id="3" Count="10" />
+      <LineId Id="2" Count="0" />
+    </LineIds>
+  </POU>
+</TcPlcObject>

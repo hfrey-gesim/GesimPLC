@@ -1,0 +1,154 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<TcPlcObject Version="1.1.0.1" ProductVersion="3.1.4022.18">
+  <POU Name="FB_MzHeaterControl" Id="{1b520585-bf5a-4829-9daa-f1cc23c8e08b}" SpecialFunc="None">
+    <Declaration><![CDATA[FUNCTION_BLOCK FB_MzHeaterControl
+VAR_INPUT
+	bExecute 		: BOOL;
+	nTempZone1		: UINT;		//Solltemperatur Heizzone 1
+	nTempZone2		: UINT;		//Solltemperatur Heizzone 2
+	nTempZone3		: UINT;		//Solltemperatur Heizzone 3
+	bHeatingOn		: BOOL;		//Ein/Aus
+END_VAR
+VAR_OUTPUT
+	bBusy : BOOL;
+	bError : BOOL;
+	nErrorId : ERRORID;	
+END_VAR
+VAR_IN_OUT
+	pFbHeaterRef : POINTER TO FB_MZHeaterRef;
+END_VAR
+VAR
+	fbSdoWrite		: FB_SDO_WRITE;
+	fbSdoRead		: FB_SDO_Read;
+	nState 			: USINT;
+	nStateNext		: USINT;
+END_VAR
+]]></Declaration>
+    <Implementation>
+      <ST><![CDATA[IF pFbHeaterRef = 0 THEN
+	RETURN;
+END_IF
+
+IF bExecute THEN
+	IF nState = 0 THEN //Solltemperatur Zone 1 senden
+		bBusy := TRUE;
+		IF NOT bHeatingOn THEN	//keine Temperaturen senden
+			nState := 3;
+		ELSE
+			pFbHeaterRef^.P_nTemp1Setpoint := nTempZone1;
+			fbSdoWrite.nIndex := cTempSetPoint.nIndex;
+			fbSdoWrite.nSubIndex := pFbHeaterRef^.nChannel;
+			fbSdoWrite.nDataLength := cTempSetPoint.nLength;
+			fbSdoWrite.nData := UINT_TO_DINT(nTempZone1);
+			nState := 10;
+			IF pFbHeaterRef^.pMultiZRef^.P_bLegacy THEN	//Heizzone2 und 3 nur bei Firmware ab V1.10.xx
+				nStateNext := 3;
+			ELSE
+				nStateNext := 1;
+			END_IF
+		END_IF
+	END_IF
+	
+	IF nState = 1 THEN //Solltemperatur Zone 2 senden
+		fbSdoWrite.nIndex := cTempSetPoint2.nIndex;
+		fbSdoWrite.nSubIndex := pFbHeaterRef^.nChannel;
+		fbSdoWrite.nDataLength := cTempSetPoint2.nLength;
+		fbSdoWrite.nData := UINT_TO_DINT(nTempZone2);
+		nState := 10;
+		nStateNext := 2;
+	END_IF
+
+	IF nState = 2 THEN //Solltemperatur Zone 3 senden
+		fbSdoWrite.nIndex := cTempSetPoint3.nIndex;
+		fbSdoWrite.nSubIndex := pFbHeaterRef^.nChannel;
+		fbSdoWrite.nDataLength := cTempSetPoint3.nLength;
+		fbSdoWrite.nData := UINT_TO_DINT(nTempZone3);
+		nState := 10;
+		nStateNext := 3;
+	END_IF
+	
+	IF nState = 3 THEN //On/Off senden
+		fbSdoWrite.nIndex := cHeatingOn.nIndex;
+		fbSdoWrite.nSubIndex := pFbHeaterRef^.nChannel;
+		fbSdoWrite.nDataLength := cHeatingOn.nLength;
+		fbSdoWrite.nData := BOOL_TO_DINT(bHeatingOn);
+		nState := 10;
+		IF pFbHeaterRef^.P_bHeaterDetected THEN
+			nStateNext := 80;
+		ELSE
+			nStateNext := 20;
+		END_IF
+		
+	END_IF
+	
+	IF nState = 10 THEN
+		fbSdoWrite(sADSNetID:= pFbHeaterRef^.pMultiZRef^.P_sAdsNetId, nPortNr:= pFbHeaterRef^.pMultiZRef^.P_nAdsPort, bExecute:= TRUE);		
+		IF NOT fbSdoWrite.bBusy THEN
+			IF fbSdoWrite.bError THEN
+				bError := TRUE;
+				bBusy := FALSE;
+				nErrorId := fbSdoWrite.nAdsErrorId;
+				nState := 99;
+			ELSE
+				nState := nStateNext;
+				IF nState = 80 THEN
+					bBusy := FALSE;
+				END_IF
+			END_IF
+			fbSdoWrite(bExecute:= FALSE);
+		END_IF
+	ELSIF nState = 20 THEN //Das HeaterExist wird nur ausgelesen, wenn es nicht vorher schon in A_PrepareAxis im FB_MultiZRef erfolgt ist.
+		//Dieser Fall tritt ein, wenn der Heizer später erst angesteckt wurde (Kartuschen-Halter und Piezo-Pipetten)
+		fbSdoRead(sADSNetID:= pFbHeaterRef^.pMultiZRef^.P_sAdsNetId, nPortNr:= pFbHeaterRef^.pMultiZRef^.P_nAdsPort, nIndex:= cHeaterExist.nIndex, 
+					nSubIndex:= pFbHeaterRef^.nChannel,	nDataLength:= cHeaterExist.nLength, bExecute:= TRUE);
+		IF NOT fbSdoRead.bBusy THEN
+			IF fbSdoRead.bError THEN
+				bError := TRUE;
+				bBusy := FALSE;
+				nErrorId := fbSdoRead.nAdsErrorId;
+				nState := 99;
+			ELSE
+				pFbHeaterRef^.P_bHeaterDetected := DINT_TO_BOOL(fbSdoRead.nData);
+				nState := 80;
+				bBusy := FALSE;
+			END_IF
+			fbSdoRead(bExecute:= FALSE);
+		END_IF
+	END_IF
+ELSE
+	nState := 0;
+	bError := FALSE;
+	nErrorId := 0;
+END_IF]]></ST>
+    </Implementation>
+    <LineIds Name="FB_MzHeaterControl">
+      <LineId Id="3" Count="4" />
+      <LineId Id="9" Count="4" />
+      <LineId Id="176" Count="0" />
+      <LineId Id="14" Count="9" />
+      <LineId Id="25" Count="10" />
+      <LineId Id="88" Count="8" />
+      <LineId Id="36" Count="5" />
+      <LineId Id="121" Count="1" />
+      <LineId Id="124" Count="1" />
+      <LineId Id="123" Count="0" />
+      <LineId Id="42" Count="13" />
+      <LineId Id="120" Count="0" />
+      <LineId Id="57" Count="3" />
+      <LineId Id="118" Count="0" />
+      <LineId Id="153" Count="0" />
+      <LineId Id="119" Count="0" />
+      <LineId Id="130" Count="0" />
+      <LineId Id="139" Count="1" />
+      <LineId Id="145" Count="4" />
+      <LineId Id="152" Count="0" />
+      <LineId Id="144" Count="0" />
+      <LineId Id="150" Count="0" />
+      <LineId Id="143" Count="0" />
+      <LineId Id="151" Count="0" />
+      <LineId Id="141" Count="0" />
+      <LineId Id="61" Count="5" />
+      <LineId Id="2" Count="0" />
+    </LineIds>
+  </POU>
+</TcPlcObject>

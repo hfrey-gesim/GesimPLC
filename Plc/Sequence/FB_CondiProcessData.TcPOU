@@ -1,0 +1,118 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<TcPlcObject Version="1.1.0.1" ProductVersion="3.1.4020.12">
+  <POU Name="FB_CondiProcessData" Id="{a418028f-76f1-4526-9fcf-5615a079b25c}" SpecialFunc="None">
+    <Declaration><![CDATA[{attribute 'enable_dynamic_creation'}
+FUNCTION_BLOCK FB_CondiProcessData EXTENDS FB_CondiBase
+VAR_INPUT
+END_VAR
+VAR_OUTPUT
+END_VAR
+VAR
+	eProcDataType : E_ProcDataType;
+	iDevice		  : I_Device;
+	nCompareValue : DINT;
+END_VAR]]></Declaration>
+    <Implementation>
+      <ST><![CDATA[]]></ST>
+    </Implementation>
+    <Property Name="P_iDevice" Id="{17c9344d-65ed-42af-879a-8056ac38deb4}">
+      <Declaration><![CDATA[PROPERTY P_iDevice : I_Device]]></Declaration>
+      <Set Name="Set" Id="{d9c349cc-3ee8-4722-a001-d912904bd897}">
+        <Declaration><![CDATA[VAR
+END_VAR
+]]></Declaration>
+        <Implementation>
+          <ST><![CDATA[iDevice := P_iDevice;]]></ST>
+        </Implementation>
+      </Set>
+    </Property>
+    <Property Name="P_nValue" Id="{69406c7e-ac21-44af-aaab-d84058927e8e}">
+      <Declaration><![CDATA[PROPERTY P_nValue : DINT]]></Declaration>
+      <Set Name="Set" Id="{0909f1df-5a11-4466-be3b-510c83544562}">
+        <Declaration><![CDATA[VAR
+END_VAR
+]]></Declaration>
+        <Implementation>
+          <ST><![CDATA[nCompareValue := P_nValue;]]></ST>
+        </Implementation>
+      </Set>
+    </Property>
+    <Method Name="M_Check" Id="{da3bef8f-d630-4fb7-9dd2-08df075fc31f}">
+      <Declaration><![CDATA[METHOD M_Check : BYTE
+VAR_INPUT
+	nPreResult : BYTE;
+END_VAR
+
+VAR
+	bResult			: BOOL;
+	nCurrentValue	: DINT;
+END_VAR]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[nCurrentValue := iDevice.M_GetProcData(eProcDataType);
+
+IF eCondition = E_Condition.CONDITION_ProcessVarLEQ THEN
+	IF nCurrentValue <= nCompareValue THEN
+		bResult := TRUE;
+	END_IF
+ELSIF eCondition = E_Condition.CONDITION_ProcessVarGEQ THEN
+	IF nCurrentValue >= nCompareValue THEN
+		bResult := TRUE;
+	END_IF	
+END_IF
+
+//es wird nur Bit0 entsprechend verknüpft
+//Bit1 steht für "Cancel" und wird derzeit nur FB_CondiStepResult verküpft
+IF eCondiOperator = E_LogicOperator.LOGIC_OP_AND THEN
+	nPreResult.0 := nPreResult.0 AND bResult;
+ELSIF eCondiOperator = E_LogicOperator.LOGIC_OP_OR THEN
+	nPreResult.0 := nPreResult.0 OR bResult;
+END_IF
+
+IF pNextCondi > 0 THEN
+	M_Check := pNextCondi^.M_Check(nPreResult);
+ELSE
+	M_Check  := nPreResult;
+END_IF]]></ST>
+      </Implementation>
+    </Method>
+    <Property Name="P_eProcDataType" Id="{f9d3619e-fee1-4fc7-ad5d-31ea4d71b27a}">
+      <Declaration><![CDATA[PROPERTY P_eProcDataType : E_ProcDataType]]></Declaration>
+      <Set Name="Set" Id="{f9fb3684-c982-4499-a9c7-e6260ba8fe4a}">
+        <Declaration><![CDATA[VAR
+END_VAR
+]]></Declaration>
+        <Implementation>
+          <ST><![CDATA[eProcDataType := P_eProcDataType;]]></ST>
+        </Implementation>
+      </Set>
+    </Property>
+    <LineIds Name="FB_CondiProcessData">
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="FB_CondiProcessData.P_iDevice.Set">
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="FB_CondiProcessData.P_nValue.Set">
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="FB_CondiProcessData.M_Check">
+      <LineId Id="3" Count="3" />
+      <LineId Id="28" Count="0" />
+      <LineId Id="8" Count="2" />
+      <LineId Id="29" Count="0" />
+      <LineId Id="12" Count="1" />
+      <LineId Id="36" Count="1" />
+      <LineId Id="14" Count="0" />
+      <LineId Id="30" Count="0" />
+      <LineId Id="34" Count="0" />
+      <LineId Id="17" Count="0" />
+      <LineId Id="35" Count="0" />
+      <LineId Id="39" Count="0" />
+      <LineId Id="41" Count="4" />
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="FB_CondiProcessData.P_eProcDataType.Set">
+      <LineId Id="2" Count="0" />
+    </LineIds>
+  </POU>
+</TcPlcObject>

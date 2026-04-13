@@ -1,0 +1,14 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<TcPlcObject Version="1.1.0.1" ProductVersion="3.1.4022.18">
+  <DUT Name="E_MzHeaterType" Id="{adc18bf8-0b39-42e7-bb87-57adcbfb8708}">
+    <Declaration><![CDATA[TYPE E_MzHeaterType :
+(
+	Nothing,
+	SingleHeater,	//MB
+	TwinHeater,		//HT-Heater
+	HeaterCooler	//Heizer und Kühler
+);
+END_TYPE
+]]></Declaration>
+  </DUT>
+</TcPlcObject>

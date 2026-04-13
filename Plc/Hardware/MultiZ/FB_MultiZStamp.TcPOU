@@ -1,0 +1,554 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<TcPlcObject Version="1.1.0.1" ProductVersion="3.1.4020.6">
+  <POU Name="FB_MultiZStamp" Id="{9bb17bd3-b9d6-4995-b522-db32cd6dc4ab}" SpecialFunc="None">
+    <Declaration><![CDATA[FUNCTION_BLOCK FB_MultiZStamp
+VAR_INPUT
+END_VAR
+VAR_OUTPUT
+	bBusy : BOOL;
+	bError : BOOL;
+	nErrorId : ERRORID;
+END_VAR
+VAR
+	bSendUnlockOffset : BOOL;
+	bSendUnlockOffsetFlag : BOOL := TRUE;
+	nUnlockOffset : DINT;
+	
+	bSwitchLight : BOOL;
+	bSwitchLightFlag : BOOL := TRUE;
+	bLight : BOOL;
+
+	fbSdoWrite	: FB_SDO_WRITE;
+
+	bInit : BOOL;
+	bLockUnlock : BOOL;
+	bAdjust : BOOL;
+	
+	tmrTimeout : TON;
+	nCycleCounter : USINT;
+	nStateAction : USINT;
+	nStateActionNext : USINT;
+	bActionFlag : BOOL := TRUE;
+END_VAR
+
+VAR_IN_OUT
+	pFbMultiZ : POINTER TO FB_MultiZRef;
+END_VAR]]></Declaration>
+    <Implementation>
+      <ST><![CDATA[IF bSendUnlockOffset THEN
+	IF bSendUnlockOffsetFlag XOR fbSdoWrite.bBusy THEN
+		bSendUnlockOffsetFlag := FALSE;
+		fbSdoWrite(sADSNetID:= pFbMultiZ^.P_sAdsNetId, nPortNr:= pFbMultiZ^.P_nAdsPort,
+					nIndex:= cuCPUnlockOffset.nIndex, nSubIndex:= cuCPUnlockOffset.nSubIndex, 
+					nDataLength:= cuCPUnlockOffset.nLength, nData:= pFbMultiZ^.stStampSupport.nUnlockOffset, bExecute:= TRUE);
+	END_IF
+	
+	IF NOT fbSdoWrite.bBusy THEN
+		IF fbSdoWrite.bError THEN
+			bError := TRUE;
+			nErrorId := fbSdoWrite.nAdsErrorId;
+		ELSE
+			nUnlockOffset := pFbMultiZ^.stStampSupport.nUnlockOffset;
+		END_IF
+		fbSdoWrite(bExecute:= FALSE);
+		bSendUnlockOffsetFlag := TRUE;
+		bSendUnlockOffset := FALSE;
+	END_IF
+END_IF
+
+IF bSwitchLight THEN
+	IF bSwitchLightFlag XOR fbSdoWrite.bBusy THEN
+		bSwitchLightFlag := FALSE;
+		fbSdoWrite(sADSNetID:= pFbMultiZ^.P_sAdsNetId, nPortNr:= pFbMultiZ^.P_nAdsPort,
+					nIndex:= cuCPLight.nIndex, nSubIndex:= cuCPLight.nSubIndex, 
+					nDataLength:= cuCPLight.nLength, nData:= BOOL_TO_DINT(pFbMultiZ^.stStampSupport.bLight), bExecute:= TRUE);
+	END_IF
+	
+	IF NOT fbSdoWrite.bBusy THEN
+		IF fbSdoWrite.bError THEN
+			bError := TRUE;
+			nErrorId := fbSdoWrite.nAdsErrorId;
+		ELSE
+			bLight := pFbMultiZ^.stStampSupport.bLight;
+		END_IF
+		fbSdoWrite(bExecute:= FALSE);
+		bSwitchLightFlag := TRUE;
+		bSwitchLight := FALSE;
+	END_IF	
+END_IF
+
+IF bInit THEN
+	A_Init();
+	IF nStateAction >= 80 THEN
+		IF nStateAction >= 99 THEN
+			bError := TRUE;			
+		END_IF
+		nStateAction := 0;
+		bInit := FALSE;
+	END_IF
+END_IF
+
+IF bLockUnlock THEN
+	A_LockUnlock();
+	IF nStateAction >= 80 THEN
+		IF nStateAction >= 99 THEN
+			bError := TRUE;			
+		END_IF
+		nStateAction := 0;
+		bLockUnlock := FALSE;
+	END_IF	
+END_IF
+
+IF bAdjust THEN
+	A_Adjust();
+	IF nStateAction >= 80 THEN
+		IF nStateAction >= 99 THEN
+			bError := TRUE;			
+		END_IF
+		nStateAction := 0;
+		bAdjust := FALSE;
+	END_IF	
+END_IF
+
+IF NOT (bInit OR bLockUnlock OR bAdjust) THEN 
+	bBusy := FALSE;
+END_IF]]></ST>
+    </Implementation>
+    <Property Name="P_nUnlockOffset" Id="{0d8c8de5-8926-45b2-8d59-3ffc5fc33cd3}">
+      <Declaration><![CDATA[PROPERTY P_nUnlockOffset : DINT]]></Declaration>
+      <Set Name="Set" Id="{e13c58aa-9d38-477f-b1da-135ee951e1e8}">
+        <Declaration><![CDATA[VAR
+END_VAR
+]]></Declaration>
+        <Implementation>
+          <ST><![CDATA[IF pFbMultiZ > 0 THEN
+	IF pFbMultiZ^.stStampSupport.nUnlockOffset <> P_nUnlockOffset THEN
+		pFbMultiZ^.stStampSupport.nUnlockOffset := P_nUnlockOffset;
+		bSendUnlockOffset := TRUE;
+	END_IF
+END_IF]]></ST>
+        </Implementation>
+      </Set>
+      <Get Name="Get" Id="{e3b5808d-8158-48bd-b7cf-a77087b644fa}">
+        <Declaration><![CDATA[VAR
+END_VAR
+]]></Declaration>
+        <Implementation>
+          <ST><![CDATA[IF pFbMultiZ > 0 THEN
+	P_nUnlockOffset := nUnlockOffset;
+END_IF]]></ST>
+        </Implementation>
+      </Get>
+    </Property>
+    <Property Name="P_bStampInSupport" Id="{1bdcd320-fdee-4389-981e-6e5419197e37}">
+      <Declaration><![CDATA[PROPERTY P_bStampInSupport : BOOL]]></Declaration>
+      <Get Name="Get" Id="{e17eacac-a7e7-4589-be41-0c821715ce3c}">
+        <Declaration><![CDATA[VAR
+END_VAR
+]]></Declaration>
+        <Implementation>
+          <ST><![CDATA[P_bStampInSupport := pFbMultiZ^.stStampSupport.bStampInSupport;]]></ST>
+        </Implementation>
+      </Get>
+    </Property>
+    <Property Name="P_bLight" Id="{3676cfcb-d11b-4c6b-a2b6-be18455d9a25}">
+      <Declaration><![CDATA[PROPERTY P_bLight : BOOL]]></Declaration>
+      <Get Name="Get" Id="{1c7a492b-1ffc-44a8-9677-5ea5f4105a08}">
+        <Declaration><![CDATA[VAR
+END_VAR
+]]></Declaration>
+        <Implementation>
+          <ST><![CDATA[P_bLight := bLight;]]></ST>
+        </Implementation>
+      </Get>
+      <Set Name="Set" Id="{28df59ea-9d90-49f8-8b9a-3c5ae1a6b1d2}">
+        <Declaration><![CDATA[VAR
+END_VAR
+]]></Declaration>
+        <Implementation>
+          <ST><![CDATA[IF pFbMultiZ > 0 THEN
+	IF pFbMultiZ^.stStampSupport.bLight <> P_bLight THEN
+		pFbMultiZ^.stStampSupport.bLight := P_bLight;
+		bSwitchLight := TRUE;
+	END_IF
+END_IF]]></ST>
+        </Implementation>
+      </Set>
+    </Property>
+    <Action Name="A_Adjust" Id="{3b479517-2ca9-4af7-a380-6f923710e0f5}">
+      <Implementation>
+        <ST><![CDATA[CASE nStateAction OF
+	0:	//Mode auf "2" setzen
+		IF bActionFlag XOR fbSdoWrite.bBusy THEN
+			fbSdoWrite.nIndex := cuCPMode.nIndex;
+			fbSdoWrite.nSubIndex := cuCPMode.nSubIndex;
+			fbSdoWrite.nDataLength := cuCPMode.nLength;
+			fbSdoWrite.nData := 2;			
+			nStateAction := 50;
+			nStateActionNext := 1;
+		END_IF
+		
+	1:	//Ctrl auf "0" setzen
+		IF bActionFlag XOR fbSdoWrite.bBusy THEN
+			fbSdoWrite.nIndex := cuCPCtrl.nIndex;
+			fbSdoWrite.nSubIndex := cuCPCtrl.nSubIndex;
+			fbSdoWrite.nDataLength := cuCPCtrl.nLength;
+			fbSdoWrite.nData := 0;			
+			nStateAction := 50;
+			nStateActionNext := 2;
+		END_IF
+		
+	2:	//Winkel senden (Value wird in M_Adjust() geschrieben
+		IF bActionFlag XOR fbSdoWrite.bBusy THEN
+			fbSdoWrite.nIndex := cuCPAngleSetpoint.nIndex;
+			fbSdoWrite.nSubIndex := cuCPAngleSetpoint.nSubIndex;
+			fbSdoWrite.nDataLength := cuCPAngleSetpoint.nLength;
+			fbSdoWrite.nData := INT_TO_DINT(pFbMultiZ^.stStampSupport.nAngleSetpoint);			
+			nStateAction := 50;
+			nStateActionNext := 3;
+		END_IF
+		
+	3:	//Ctrl auf "1" setzen
+		IF bActionFlag XOR fbSdoWrite.bBusy THEN
+			fbSdoWrite.nIndex := cuCPCtrl.nIndex;
+			fbSdoWrite.nSubIndex := cuCPCtrl.nSubIndex;
+			fbSdoWrite.nDataLength := cuCPCtrl.nLength;
+			fbSdoWrite.nData := 1;			
+			nStateAction := 50;
+			nStateActionNext := 4;
+			nCycleCounter := 0;
+		END_IF
+		
+	4:	nCycleCounter := nCycleCounter + 1;
+		IF nCycleCounter = 5 THEN
+			nStateAction := 5;
+		END_IF
+
+	5:	//Ctrl auf "0" setzen
+		IF bActionFlag XOR fbSdoWrite.bBusy THEN
+			fbSdoWrite.nIndex := cuCPCtrl.nIndex;
+			fbSdoWrite.nSubIndex := cuCPCtrl.nSubIndex;
+			fbSdoWrite.nDataLength := cuCPCtrl.nLength;
+			fbSdoWrite.nData := 0;				
+			nStateAction := 50;
+			nStateActionNext := 6;
+		END_IF		
+		
+ 	6:	//Warten bis eingestellter Winkel erreicht
+		tmrTimeout(IN:= TRUE, PT:=T#5S);
+		IF pFbMultiZ^.stStampSupport.bAngleReached THEN
+			tmrTimeout(IN:= FALSE);
+			nStateAction := 80;
+		END_IF
+		
+		IF tmrTimeout.Q THEN
+			tmrTimeout(IN:= FALSE);
+			bError := TRUE;
+			nErrorId := E_ErrorIdCmd.ERRORID_TimeOut;
+			nStateAction := 99;
+		END_IF
+END_CASE
+
+IF nStateAction = 50 THEN
+	IF bActionFlag XOR fbSdoWrite.bBusy THEN
+		bActionFlag := FALSE;
+		fbSdoWrite(sADSNetID:= pFbMultiZ^.P_sAdsNetId, nPortNr:= pFbMultiZ^.P_nAdsPort, bExecute:= TRUE);
+	END_IF
+	
+	IF NOT fbSdoWrite.bBusy THEN
+		IF fbSdoWrite.bError THEN
+			bError := TRUE;
+			nErrorId := fbSdoWrite.nAdsErrorId;
+			nStateAction := 99;
+		ELSE
+			nStateAction := nStateActionNext;
+		END_IF
+		fbSdoWrite(bExecute:= FALSE);
+		bActionFlag := TRUE;
+	END_IF
+END_IF
+
+IF nStateAction = 70 THEN
+	fbSdoWrite(bExecute:= FALSE);
+	bActionFlag := TRUE;
+	tmrTimeout(IN:= FALSE);
+	nStateAction := 80;
+END_IF]]></ST>
+      </Implementation>
+    </Action>
+    <Action Name="A_LockUnlock" Id="{4a21f1c0-bd41-41f5-8fa5-3735493fdd75}">
+      <Implementation>
+        <ST><![CDATA[CASE nStateAction OF
+	0:	//Mode auf "1" setzen
+		IF bActionFlag XOR fbSdoWrite.bBusy THEN
+			//pFbMultiZ^.stStampSupport.nMode := 1;
+			fbSdoWrite.nIndex := cuCPMode.nIndex;
+			fbSdoWrite.nSubIndex := cuCPMode.nSubIndex;
+			fbSdoWrite.nDataLength := cuCPMode.nLength;
+			fbSdoWrite.nData := 1;
+			nStateAction := 50;
+			nStateActionNext := 1;
+		END_IF
+		
+	1:	//Ctrl auf "0" setzen
+		IF bActionFlag XOR fbSdoWrite.bBusy THEN
+			//pFbMultiZ^.stStampSupport.bCtrl := 0;
+			//fbSendSdoVar.eSdoVariType := E_MzSdoVariType.VARITYPE_uCPCtrl;
+			fbSdoWrite.nIndex := cuCPCtrl.nIndex;
+			fbSdoWrite.nSubIndex := cuCPCtrl.nSubIndex;
+			fbSdoWrite.nDataLength := cuCPCtrl.nLength;
+			fbSdoWrite.nData := 0;
+			nStateAction := 50;
+			nStateActionNext := 2;
+		END_IF
+		
+	2:	//Lock senden (Value wird in M_LokcUnLock() geschrieben
+		IF bActionFlag XOR fbSdoWrite.bBusy THEN
+			//fbSendSdoVar.eSdoVariType := E_MzSdoVariType.VARITYPE_uCPLock;
+			fbSdoWrite.nIndex := cuCPLock.nIndex;
+			fbSdoWrite.nSubIndex := cuCPLock.nSubIndex;
+			fbSdoWrite.nDataLength := cuCPLock.nLength;
+			fbSdoWrite.nData := BOOL_TO_DINT(pFbMultiZ^.stStampSupport.bLock);
+			nStateAction := 50;
+			nStateActionNext := 3;
+		END_IF
+		
+	3:	//Ctrl auf "1" setzen
+		IF bActionFlag XOR fbSdoWrite.bBusy THEN
+			//pFbMultiZ^.stStampSupport.bCtrl := 1;
+			//fbSendSdoVar.eSdoVariType := E_MzSdoVariType.VARITYPE_uCPCtrl;
+			fbSdoWrite.nIndex := cuCPCtrl.nIndex;
+			fbSdoWrite.nSubIndex := cuCPCtrl.nSubIndex;
+			fbSdoWrite.nDataLength := cuCPCtrl.nLength;
+			fbSdoWrite.nData := 1;			
+			nStateAction := 50;
+			nStateActionNext := 4;
+		END_IF		
+		
+	4:	//Timer (wozu das?)
+		tmrTimeout(IN:= TRUE, PT:=T#1S);
+		IF tmrTimeout.Q THEN
+			tmrTimeout(IN:= FALSE);
+			nStateAction := 5;
+		END_IF
+		
+	5:	//Ctrl auf "0" setzen
+		IF bActionFlag XOR fbSdoWrite.bBusy THEN
+			//pFbMultiZ^.stStampSupport.bCtrl := 0;
+			//fbSendSdoVar.eSdoVariType := E_MzSdoVariType.VARITYPE_uCPCtrl;
+			fbSdoWrite.nIndex := cuCPCtrl.nIndex;
+			fbSdoWrite.nSubIndex := cuCPCtrl.nSubIndex;
+			fbSdoWrite.nDataLength := cuCPCtrl.nLength;
+			fbSdoWrite.nData := 0;			
+			nStateAction := 50;
+			nStateActionNext := 6;
+		END_IF
+
+ 	6:	//Warten, bis LockState erreicht
+		tmrTimeout(IN:= TRUE, PT:=T#5S);
+		IF pFbMultiZ^.stStampSupport.bLocked = pFbMultiZ^.stStampSupport.bLock THEN
+			tmrTimeout(IN:= FALSE);
+			nStateAction := 80;
+		END_IF
+		
+		IF tmrTimeout.Q THEN
+			tmrTimeout(IN:= FALSE);
+			bError := TRUE;
+			nErrorId := E_ErrorIdCmd.ERRORID_TimeOut;
+			nStateAction := 99;
+		END_IF
+END_CASE
+
+IF nStateAction = 50 THEN
+	IF bActionFlag XOR fbSdoWrite.bBusy THEN
+		bActionFlag := FALSE;
+		fbSdoWrite(sADSNetID:= pFbMultiZ^.P_sAdsNetId, nPortNr:= pFbMultiZ^.P_nAdsPort, bExecute:= TRUE);
+	END_IF
+	
+	IF NOT fbSdoWrite.bBusy THEN
+		IF fbSdoWrite.bError THEN
+			bError := TRUE;
+			nErrorId := fbSdoWrite.nAdsErrorId;
+			nStateAction := 99;
+		ELSE
+			nStateAction := nStateActionNext;
+		END_IF
+		fbSdoWrite(bExecute:= FALSE);
+		bActionFlag := TRUE;
+	END_IF
+END_IF
+
+IF nStateAction = 70 THEN
+	tmrTimeout(IN:= FALSE);
+	fbSdoWrite(bExecute:= FALSE);
+	bActionFlag := TRUE;
+	nStateAction := 80;
+END_IF]]></ST>
+      </Implementation>
+    </Action>
+    <Method Name="M_LockUnLock" Id="{4b23493c-a040-46ea-b335-1de43024d6d6}">
+      <Declaration><![CDATA[METHOD M_LockUnLock : ERRORID
+VAR_INPUT
+	bLock : BOOL;
+END_VAR
+]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[IF pFbMultiZ^.stStampSupport.bLocked = bLock THEN
+	RETURN;
+ELSE
+	IF NOT bBusy THEN
+		pFbMultiZ^.stStampSupport.bLock := bLock;
+		bBusy := TRUE;
+		bLockUnlock := TRUE;
+	END_IF
+END_IF]]></ST>
+      </Implementation>
+    </Method>
+    <Method Name="M_Adjust" Id="{6812f79c-9d1f-4aa4-8fd6-941c08c427d4}">
+      <Declaration><![CDATA[METHOD M_Adjust : ERRORID
+VAR_INPUT
+	nAngle : INT;
+END_VAR
+]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[IF pFbMultiZ^.stStampSupport.nAngleSetpoint = nAngle THEN
+	RETURN;
+ELSE
+	IF NOT bBusy THEN
+		pFbMultiZ^.stStampSupport.nAngleSetpoint := nAngle;
+		bBusy := TRUE;
+		bAdjust := TRUE;
+	END_IF
+END_IF]]></ST>
+      </Implementation>
+    </Method>
+    <Method Name="M_Init" Id="{b2ef3ed8-ce9c-440b-9f7d-9af36b93591e}">
+      <Declaration><![CDATA[METHOD M_Init : ERRORID
+VAR_INPUT
+END_VAR
+]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[IF NOT bInit THEN
+	bInit := TRUE;
+	bBusy := TRUE;
+END_IF]]></ST>
+      </Implementation>
+    </Method>
+    <Action Name="A_Init" Id="{d89626ed-8409-426b-831e-0714e217c27c}">
+      <Implementation>
+        <ST><![CDATA[CASE nStateAction OF
+	0:	//Mode auf "6" setzen
+		IF bActionFlag XOR fbSdoWrite.bBusy THEN
+			fbSdoWrite.nIndex := cuCPMode.nIndex;
+			fbSdoWrite.nSubIndex := cuCPMode.nSubIndex;
+			fbSdoWrite.nDataLength := cuCPMode.nLength;
+			fbSdoWrite.nData := 6; //OperationsMode
+			nStateAction := 50;
+			nStateActionNext := 1;
+		END_IF	
+		
+	1:	//Ctrl auf "0" setzen
+		IF bActionFlag XOR fbSdoWrite.bBusy THEN
+			fbSdoWrite.nIndex := cuCPCtrl.nIndex;
+			fbSdoWrite.nSubIndex := cuCPCtrl.nSubIndex;
+			fbSdoWrite.nDataLength := cuCPCtrl.nLength;
+			fbSdoWrite.nData := 0;
+			nStateAction := 50;
+			nStateActionNext := 2;
+		END_IF		
+		
+	2:	//Ctrl auf "1" setzen
+		IF bActionFlag XOR fbSdoWrite.bBusy THEN
+			fbSdoWrite.nIndex := cuCPCtrl.nIndex;
+			fbSdoWrite.nSubIndex := cuCPCtrl.nSubIndex;
+			fbSdoWrite.nDataLength := cuCPCtrl.nLength;
+			fbSdoWrite.nData := 1;
+			nStateAction := 50;
+			nStateActionNext := 3;
+		END_IF			
+		
+	3:	//Angle auf "0" setzen
+		IF bActionFlag XOR fbSdoWrite.bBusy THEN
+			fbSdoWrite.nIndex := cuCPAngleSetpoint.nIndex;
+			fbSdoWrite.nSubIndex := cuCPAngleSetpoint.nSubIndex;
+			fbSdoWrite.nDataLength := cuCPAngleSetpoint.nLength;
+			fbSdoWrite.nData := 0;			
+			nStateAction := 50;
+			nStateActionNext := 4;
+		END_IF	
+		
+	4:	//Warten bis Init ready
+		tmrTimeout(IN:= TRUE, PT:=T#10S);
+		IF tmrTimeout.Q THEN
+			nStateAction := 99;
+			nErrorId := E_ErrorIdCmd.ERRORID_TimeOut;
+			tmrTimeout(IN:= FALSE);
+		END_IF
+		IF pFbMultiZ^.stStampSupport.bInitLockOk AND pFbMultiZ^.stStampSupport.bInitSpinOk THEN
+			tmrTimeout(IN:= FALSE);
+			nStateAction := 80;
+		END_IF
+
+END_CASE
+
+IF nStateAction = 50 THEN
+	IF bActionFlag XOR fbSdoWrite.bBusy THEN
+		bActionFlag := FALSE;
+		fbSdoWrite(sADSNetID:= pFbMultiZ^.P_sAdsNetId, nPortNr:= pFbMultiZ^.P_nAdsPort, bExecute:= TRUE);
+	END_IF
+	
+	IF NOT fbSdoWrite.bBusy THEN
+		IF fbSdoWrite.bError THEN
+			bError := TRUE;
+			nErrorId := fbSdoWrite.nAdsErrorId;
+			nStateAction := 99;
+		ELSE
+			nStateAction := nStateActionNext;
+		END_IF
+		fbSdoWrite(bExecute:= FALSE);
+		bActionFlag := TRUE;
+	END_IF
+END_IF
+
+IF nStateAction = 70 THEN
+	tmrTimeout(IN:= FALSE);
+	fbSdoWrite(bExecute:= FALSE);
+	bActionFlag := TRUE;
+	nStateAction := 80;
+END_IF]]></ST>
+      </Implementation>
+    </Action>
+    <Method Name="M_Reset" Id="{dad5f37f-8865-4d18-ba2e-591c25f22744}">
+      <Declaration><![CDATA[METHOD M_Reset
+VAR_INPUT
+END_VAR
+]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[bError := FALSE;
+nErrorId := 0;]]></ST>
+      </Implementation>
+    </Method>
+    <Method Name="M_Stop" Id="{e9432dfe-374f-4c87-9af7-5279deb49405}">
+      <Declaration><![CDATA[METHOD M_Stop
+VAR_INPUT
+END_VAR
+]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[IF bBusy THEN
+	nStateAction := 70;
+END_IF]]></ST>
+      </Implementation>
+    </Method>
+    <Property Name="P_bStampInMagazine" Id="{f807ad07-3c6d-45fb-ac26-d8ee1ba8c77c}">
+      <Declaration><![CDATA[PROPERTY P_bStampInMagazine : BOOL]]></Declaration>
+      <Get Name="Get" Id="{8dfdd9d7-5d3f-4206-b650-cfe759f9aff6}">
+        <Declaration><![CDATA[VAR
+END_VAR
+]]></Declaration>
+        <Implementation>
+          <ST><![CDATA[P_bStampInMagazine := pFbMultiZ^.stStampSupport.bStampInMagazine;]]></ST>
+        </Implementation>
+      </Get>
+    </Property>
+  </POU>
+</TcPlcObject>

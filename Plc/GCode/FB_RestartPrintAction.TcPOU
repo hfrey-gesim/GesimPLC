@@ -1,0 +1,127 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<TcPlcObject Version="1.1.0.1" ProductVersion="3.1.4024.9">
+  <POU Name="FB_RestartPrintAction" Id="{d7009d06-1e1d-48d6-9af5-05affadafe56}" SpecialFunc="None">
+    <Declaration><![CDATA[FUNCTION_BLOCK FB_RestartPrintAction
+VAR_INPUT
+	bExecute	: BOOL;
+END_VAR
+VAR_OUTPUT
+	bBusy		: BOOL;
+	bError		: BOOL;
+	nErrorId	: ERRORID;	
+END_VAR
+VAR_IN_OUT
+	stGCodeRef	: ST_GCodeRef;
+END_VAR
+VAR
+	nState		: USINT;
+	stAction	: ST_ActionData;
+	stError		: ST_Error;
+	timer		: TON;
+	pTool		: POINTER TO ST_GCodeTool;
+END_VAR
+]]></Declaration>
+    <Implementation>
+      <ST><![CDATA[IF bExecute THEN
+	CASE nState OF
+		0:
+			bBusy := TRUE;
+			MEMSET(ADR(stAction),0,SIZEOF(stAction));
+			IF stGCodeRef.pCurrentTool = 0 THEN
+				nErrorId := E_ErrorIdGCode.ERRORID_NoSelectedTool;
+				bBusy := FALSE;
+				bError := FALSE;
+			ELSE
+				pTool := ADR(stGCodeRef.aToolTable[stGCodeRef.sNciToPlc.Tool]);
+				CASE stGCodeRef.pCurrentTool^.P_eObjectType OF
+					E_ObjectType.OBJECTTYPE_CartDispenser,
+					E_ObjectType.OBJECTTYPE_CartDispStirrer:
+						stAction.eAction := E_Action.ACTION_SwitchPressure;
+						IF pTool^.bIsInAction1 THEN
+							stAction.aParams[1] := 1; //On
+							nErrorId := stGCodeRef.pCurrentTool^.M_ExeAction(stAction);
+							IF nErrorId > 0 THEN
+								nState := 99;
+							END_IF
+						END_IF
+					E_ObjectType.OBJECTTYPE_MultiCartHolder:
+						stAction.eAction := E_Action.ACTION_SwitchPressure;
+						stAction.aParams[1].0 := pTool^.bIsInAction1;
+						stAction.aParams[1].1 := pTool^.bIsInAction2;
+						stAction.aParams[1].2 := pTool^.bIsInAction3; 
+						nErrorId := stGCodeRef.pCurrentTool^.M_ExeAction(stAction);
+						IF nErrorId > 0 THEN
+							nState := 99;
+						END_IF
+					E_ObjectType.OBJECTTYPE_Exposure:
+						stAction.eAction := E_Action.ACTION_Expose;
+					E_ObjectType.OBJECTTYPE_DeloDot:
+						stAction.eAction := E_Action.ACTION_DispenseDrops;
+					E_ObjectType.OBJECTTYPE_PiezoPip:
+						stAction.eAction := E_Action.ACTION_DispenseDrops;
+						stAction.aParams[1] := 0; //Restart macht nur Sinn bei Dauerdispensen
+						stAction.aParams[2] := 1;
+						nErrorId := stGCodeRef.pCurrentTool^.M_ExeAction(stAction);
+						IF nErrorId > 0 THEN
+							nState := 99;
+						END_IF
+					E_ObjectType.OBJECTTYPE_PassivPip,
+					E_ObjectType.OBJECTTYPE_Luer:
+						nErrorId := stGCodeRef.pCurrentTool^.M_StartUniDispense(0, 0); //beide Parameter auf 0 weil Restart, somit wird der alte Flow verwendet
+						IF nErrorId > 0 THEN
+							nState := 99;
+						END_IF
+					E_ObjectType.OBJECTTYPE_Extruder:
+						stAction.eAction := E_Action.ACTION_Extrude;
+						stAction.aParams[1] := 0;
+						stAction.aParams[2] := 1;
+						nErrorId := stGCodeRef.pCurrentTool^.M_ExeAction(stAction);
+						IF nErrorId > 0 THEN
+							nState := 99;
+						END_IF
+					E_ObjectType.OBJECTTYPE_HybridDispenser:
+						stAction.eAction := E_Action.ACTION_BasicDispense;
+						stAction.aParams[1] := 1;
+						nErrorId := stGCodeRef.pCurrentTool^.M_ExeAction(stAction);
+						IF nErrorId > 0 THEN
+							nState := 99;
+						END_IF
+				END_CASE
+			END_IF
+			IF pTool^.tDelayStart > T#0S THEN
+				timer(IN:= TRUE, PT:= pTool^.tDelayStart);
+				nState := 1;
+			ELSE
+				nState := 80;
+				bBusy := FALSE;
+			END_IF
+			
+		1:	//Warten auf Timer
+			timer();
+			IF timer.Q THEN
+				bBusy := FALSE;
+			END_IF
+	END_CASE
+	
+	IF nState = 99 THEN
+		bBusy := FALSE;
+		bError := TRUE;
+	END_IF
+ELSE
+	bBusy := FALSE;
+	bError := FALSE;
+	nErrorId := 0;
+	nState := 0;
+	timer(IN:=FALSE);
+END_IF]]></ST>
+    </Implementation>
+    <LineIds Name="FB_RestartPrintAction">
+      <LineId Id="244" Count="36" />
+      <LineId Id="350" Count="6" />
+      <LineId Id="369" Count="0" />
+      <LineId Id="363" Count="3" />
+      <LineId Id="281" Count="41" />
+      <LineId Id="2" Count="0" />
+    </LineIds>
+  </POU>
+</TcPlcObject>

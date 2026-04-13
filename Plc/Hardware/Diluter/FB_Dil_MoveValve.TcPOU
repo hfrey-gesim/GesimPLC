@@ -1,0 +1,111 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<TcPlcObject Version="1.1.0.1" ProductVersion="3.1.4022.10">
+  <POU Name="FB_Dil_MoveValve" Id="{ce13a8fb-da20-49b0-b5a8-8064cb5cd95b}" SpecialFunc="None">
+    <Declaration><![CDATA[FUNCTION_BLOCK FB_Dil_MoveValve
+VAR_INPUT
+	bExecute	: BOOL;
+	nValvePos	: SINT;
+END_VAR
+VAR_OUTPUT
+	bBusy		: BOOL;
+	bError		: BOOL;
+	nErrorId	: ERRORID;
+	
+END_VAR
+VAR
+	nState		: USINT;
+	sValvePos	: STRING[2];
+	sString		: STRING;
+	bStatus		: BOOL;
+	nCurrentPos	: SINT;
+END_VAR
+VAR_IN_OUT
+	pDilRef		: POINTER TO FB_HwRefDiluter;
+	DilSendCmd 	: FB_Dil_SendCmd;
+END_VAR
+]]></Declaration>
+    <Implementation>
+      <ST><![CDATA[IF pDilRef = 0 THEN
+	bError := TRUE;
+	RETURN;
+END_IF
+
+IF bExecute THEN
+	IF nState = 0 THEN	//Command senden
+		sValvePos := F_GetValveCode(nValvePos,pDilRef^.nActValvePos,pDilRef^.eValveType);
+		IF sValvePos = '' THEN
+			bError := TRUE;
+			nErrorId := E_ErrorIdDiluter.ERRORID_InvalidValveParam;
+			RETURN;
+		END_IF
+		sString := CONCAT(USINT_TO_STRING(pDilRef^.nChannel),sValvePos);	//Ventilposition
+		sString := CONCAT(sString,'R');							//Execute-Zeichen		
+		bBusy := TRUE;
+		DilSendCmd(bExecute:= TRUE, bExpectReply:= TRUE, sSendData:= sString);
+		
+		IF NOT DilSendCmd.bBusy THEN
+			IF DilSendCmd.bError THEN
+				bError := TRUE;
+				nErrorId := DilSendCmd.nErrorId;
+				bBusy := FALSE;
+			ELSE
+				nState := 1;
+			END_IF
+			DilSendCmd(bExecute:= FALSE);
+		END_IF
+	ELSE //MoveValve fertig? (Durch Abfrage der Valve-Pos)
+		DilSendCmd(bExecute:= TRUE, bExpectReply:= TRUE, sSendData:= CONCAT(USINT_TO_STRING(pDilRef^.nChannel),'?6'));
+		
+		IF NOT DilSendCmd.bBusy THEN
+			IF DilSendCmd.bError THEN
+				bError := TRUE;
+				nErrorId := DilSendCmd.nErrorId;
+			ELSE
+				IF DilSendCmd.bStatus THEN
+					IF DilSendCmd.bDataIsNumeric THEN
+						nCurrentPos := STRING_TO_SINT(DilSendCmd.sReceiveData);
+					ELSE
+						sString := F_ToUCase(DilSendCmd.sReceiveData);
+						IF sString = 'I' THEN
+							nCurrentPos := 1;
+						ELSIF sString = 'O' THEN
+							nCurrentPos := 2;
+						ELSIF sString = 'B' THEN
+							nCurrentPos := 3;
+						ELSIF sString = 'E' THEN
+							nCurrentPos := 4;
+						END_IF
+					END_IF
+					pDilRef^.nActValvePos := nCurrentPos;				
+					bBusy := FALSE;
+				END_IF
+			END_IF
+			DilSendCmd(bExecute:= FALSE);
+		END_IF
+	END_IF
+ELSE
+	IF bBusy THEN //DilSendCmd moch zu Ende führen
+		DilSendCmd();
+		IF NOT DilSendCmd.bBusy THEN
+			IF DilSendCmd.bError THEN
+				bError := TRUE;
+				nErrorId := DilSendCmd.nErrorId;
+			END_IF
+			DilSendCmd(bExecute:= FALSE);
+			bBusy := FALSE;
+			nState := 0;
+		END_IF
+	ELSE
+		nState := 0;
+		bBusy := FALSE;
+		bError := FALSE;
+		nErrorId := 0;		
+	END_IF
+END_IF]]></ST>
+    </Implementation>
+    <LineIds Name="FB_Dil_MoveValve">
+      <LineId Id="3" Count="75" />
+      <LineId Id="2" Count="0" />
+    </LineIds>
+  </POU>
+</TcPlcObject>

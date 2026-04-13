@@ -1,0 +1,424 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<TcPlcObject Version="1.1.0.1" ProductVersion="3.1.4024.11">
+  <POU Name="FB_WorkplateCamera" Id="{31c580a2-8a50-4893-b259-6bf43e554c79}" SpecialFunc="None">
+    <Declaration><![CDATA[FUNCTION_BLOCK FB_WorkplateCamera EXTENDS FB_ActiveTarget
+VAR_INPUT
+END_VAR
+VAR
+	nNoOfSpecPoints 		: USINT;
+	stFocusPoint			: ST_3DPoint;
+	
+	bTakePicture			: BOOL;
+	nStateA_TakePicture		: USINT;
+	tDelayTakePicture		: TIME;
+	timerTakePicture		: TON;
+	nRequestArg1			: DINT;
+	nRequestArg2			: DINT;
+END_VAR
+]]></Declaration>
+    <Implementation>
+      <ST><![CDATA[IF eCurrentState = E_MachineState.MACHINESTATE_Active THEN
+	IF bTakePicture THEN
+		A_TakePicture();
+		IF nStateA_TakePicture = 80 THEN
+			nStateA_TakePicture := 0;
+			bTakePicture := FALSE;
+			eCurrentState := E_MachineState.MACHINESTATE_Idle;
+		END_IF
+	END_IF	
+END_IF
+
+//Prozessdaten aktualisieren
+stProcessData.nObjId := nObjectID;
+stProcessData.n32Data[0] := BOOL_TO_DINT(bIsInit);
+stProcessData.n32Data[1] := eCurrentState;
+stProcessData.n32Data[2] := stError.ErrorId;
+aObjProcData[nNotifyId] := stProcessData;]]></ST>
+    </Implementation>
+    <Action Name="A_TakePicture" Id="{4cd78186-3a8f-407e-ae54-48efcab77a75}">
+      <Implementation>
+        <ST><![CDATA[IF nStateA_TakePicture = 0 THEN //Timer starten
+	timerTakePicture(IN:= TRUE, PT:= tDelayTakePicture);
+	IF timerTakePicture.Q THEN
+		timerTakePicture(IN:= FALSE);
+		stInterResponse.eInteractMessageType := E_InteractMessageType.INTERACTMES_NONE;
+		stInteractRequest.eInteractMessageType := E_InteractMessageType.INTERACTMES_WaitForUser;
+		stInteractRequest.nObjectId := nObjectID;
+		stInteractRequest.nArg1 := nRequestArg1;
+		stInteractRequest.nArg2 := nRequestArg2;
+		nStateA_TakePicture := 1;
+	END_IF
+ELSIF nStateA_TakePicture = 1 THEN //Auf InteractResponse warten
+	IF stInterResponse.eInteractMessageType = E_InteractMessageType.INTERACTMES_Continue OR 
+							stInterResponse.eInteractMessageType = E_InteractMessageType.INTERACTMES_Cancel THEN
+		stInteractRequest.eInteractMessageType := E_InteractMessageType.INTERACTMES_NONE;
+		nStateA_TakePicture := 80;
+	END_IF
+ELSIF nStateA_TakePicture = 70 THEN //Abbrechen
+	timerTakePicture(IN:= FALSE);
+	stInteractRequest.eInteractMessageType := E_InteractMessageType.INTERACTMES_NONE;
+	nStateA_TakePicture := 80;
+END_IF]]></ST>
+      </Implementation>
+    </Action>
+    <Method Name="FB_init" Id="{71bdf13f-8bb8-4ace-a0ef-07ac7709ea88}">
+      <Declaration><![CDATA[METHOD FB_init : BOOL
+VAR_INPUT
+	bInitRetains : BOOL; // if TRUE, the retain variables are initialized (warm start / cold start)
+	bInCopyCode : BOOL;  // if TRUE, the instance afterwards gets moved into the copy code (online change)
+END_VAR
+]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[eObjectType := E_ObjectType.OBJECTTYPE_WorkplateCamera;
+eObjectGroup := E_ObjectGroup.OBJECTGROUP_Target OR E_ObjectGroup.OBJECTGROUP_Device;]]></ST>
+      </Implementation>
+    </Method>
+    <Method Name="M_ApplyPos" Id="{0262156e-ed55-4aea-9160-f5e4b0b4714a}">
+      <Declaration><![CDATA[METHOD M_ApplyPos : ERRORID
+VAR_INPUT
+	eTargetRef 		: E_TargetRef;
+	nPointSlotNr	: UINT;
+	stPos 			: ST_3DPoint;
+	bXPos			: BOOL;
+	bYPos			: BOOL;
+	bZPos			: BOOL;	
+END_VAR
+
+VAR
+	stAbsPos		: ST_3DPoint;
+END_VAR]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[IF eTargetRef = E_TargetRef.TARGETREF_SpecPoint THEN
+	IF nPointSlotNr = 1 THEN
+		stAbsPos := P_stAbsPosLB;
+		IF bXPos THEN
+			stFocusPoint.X := stPos.X - stAbsPos.X;	
+		END_IF
+		IF bYPos THEN
+			stFocusPoint.Y := stPos.Y - stAbsPos.Y;	
+		END_IF
+		IF bZPos THEN
+			stFocusPoint.Z := stPos.Z - stAbsPos.Z;	
+		END_IF
+	ELSE
+		M_ApplyPos := E_ErrorIdCmd.ERRORID_InvalidTargetPointNr;
+	END_IF
+ELSE
+	M_ApplyPos := SUPER^.M_ApplyPos(eTargetRef, nPointSlotNr, stPos, bXPos, bYPos, bZPos);
+END_IF
+
+
+
+]]></ST>
+      </Implementation>
+    </Method>
+    <Method Name="M_CancelAction" Id="{b50154b7-3ec9-4b93-9210-2a37ed6c7a0a}">
+      <Declaration><![CDATA[METHOD M_CancelAction
+VAR_INPUT
+	eAction : E_Action;
+END_VAR
+]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[]]></ST>
+      </Implementation>
+    </Method>
+    <Method Name="M_CheckAction" Id="{edf6e1cc-e94c-4fcf-8443-1842af3cf332}">
+      <Declaration><![CDATA[METHOD M_CheckAction : ERRORID
+VAR_INPUT
+	refActionData 	: REFERENCE TO ST_ActionData;
+	pCorrelObject	: POINTER TO FB_Object;
+END_VAR
+]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[IF refActionData.eAction = E_Action.ACTION_TeachTarget THEN
+	IF NOT DINT_TO_UINT(refActionData.aParams[1]) = E_TargetRef.TARGETREF_SpecPoint AND refActionData.aParams[2] = 1 THEN
+		M_CheckAction := E_ErrorIdCmd.ERRORID_InvalidTargetPointRef;
+	END_IF
+END_IF]]></ST>
+      </Implementation>
+    </Method>
+    <Method Name="M_CheckProcDataType" Id="{daf2f518-308c-4ef3-abb9-a60a00c64553}">
+      <Declaration><![CDATA[METHOD M_CheckProcDataType : BOOL
+VAR_INPUT
+	eProcDataType : E_ProcDataType;
+END_VAR
+]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[]]></ST>
+      </Implementation>
+    </Method>
+    <Method Name="M_ExeAction" Id="{33d8e02b-cde4-4548-992f-6c3130a5069a}">
+      <Declaration><![CDATA[METHOD M_ExeAction : ERRORID
+VAR_INPUT
+	refActionData : REFERENCE TO ST_ActionData;	
+END_VAR
+]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[IF refActionData.eAction = E_Action.ACTION_Init THEN
+	bIsInit := TRUE;
+ELSIF refActionData.eAction = E_Action.ACTION_TakePicture THEN
+	IF NOT bTakePicture THEN
+		tDelayTakePicture := DINT_TO_TIME(refActionData.aParams[1]);
+		nRequestArg1 := refActionData.aParams[2];
+		nRequestArg2 := refActionData.aParams[3];
+		bTakePicture := TRUE;
+		eCurrentState := E_MachineState.MACHINESTATE_Active;
+		bBusy := TRUE;
+	END_IF
+ELSE
+	M_ExeAction := E_ErrorIdCmd.ERRORID_InvalidAction;
+END_IF]]></ST>
+      </Implementation>
+    </Method>
+    <Method Name="M_GetAbsPos" Id="{34c2e2f8-9f53-46ea-b79a-10e85ccc2ac0}">
+      <Declaration><![CDATA[METHOD M_GetAbsPos : ST_3DPoint
+VAR_INPUT
+	pChildPos	: POINTER TO ST_3DPoint;
+	eTargetRef 	: E_TargetRef;
+	nParam1		: UINT;
+ 	nParam2		: UINT;
+	nParam3		: USINT;
+	nZLevel		: USINT;
+END_VAR
+VAR_OUTPUT
+	nErrorId 	: ERRORID;
+	lrAngle		: LREAL;
+END_VAR
+VAR
+	stLocPosLB : ST_3DPoint;
+END_VAR
+]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[IF eTargetRef = E_TargetRef.TARGETREF_SpecPoint THEN
+	IF nParam1 = 1 THEN	//FocusPoint
+		stLocPosLB := P_stRelPosLB;
+		stLocPosLB := F_Add3DPoints(stLocPosLB,stFocusPoint);
+		M_GetAbsPos := pParentTarget^.M_GetAbsPos(pChildPos := ADR(stLocPosLB), eTargetRef:= E_TargetRef.TARGETREF_LeftBottom,
+													nParam1:= 0,
+													nParam2:= 0, nParam3:= 0,nZLevel:= 0,
+													lrAngle => lrAngle, nErrorId=> nErrorId);		
+	ELSE
+		nErrorId := E_ErrorIdCmd.ERRORID_InvalidTargetPointNr;
+	END_IF
+ELSE
+	M_GetAbsPos := SUPER^.M_GetAbsPos(pChildPos := pChildPos, eTargetRef:= eTargetRef,
+													nParam1:= nParam1,
+													nParam2:= nParam2, nParam3:= nParam3, nZLevel:= nZLevel,
+													lrAngle => lrAngle, nErrorId=> nErrorId);	
+END_IF]]></ST>
+      </Implementation>
+    </Method>
+    <Method Name="M_GetActionBusy" Id="{d4396f31-2e7f-454f-8bd6-f01873c97006}">
+      <Declaration><![CDATA[METHOD M_GetActionBusy : BOOL
+VAR_INPUT
+	eAction : E_Action;
+END_VAR
+]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[IF eAction = E_Action.ACTION_TakePicture AND bTakePicture THEN
+	M_GetActionBusy := TRUE;
+END_IF]]></ST>
+      </Implementation>
+    </Method>
+    <Method Name="M_GetAllProps" Id="{96c90acb-6776-42c5-bcd5-91a9cda98fad}">
+      <Declaration><![CDATA[METHOD M_GetAllProps : ERRORID
+VAR_INPUT
+	refCmdData : REFERENCE TO  ST_CmdData;
+END_VAR
+
+VAR
+END_VAR]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[SUPER^.M_GetAllProps(refCmdData); 
+
+nCurrentPropIndex := nCurrentPropIndex + 1;
+refCmdData.n32Data[nCurrentPropIndex] := nNoOfSpecPoints;
+nCurrentPropIndex := nCurrentPropIndex + 1;
+refCmdData.n32Data[nCurrentPropIndex] := REAL_TO_DINT(stFocusPoint.X);
+nCurrentPropIndex := nCurrentPropIndex + 1;
+refCmdData.n32Data[nCurrentPropIndex] := REAL_TO_DINT(stFocusPoint.Y);
+nCurrentPropIndex := nCurrentPropIndex + 1;
+refCmdData.n32Data[nCurrentPropIndex] := REAL_TO_DINT(stFocusPoint.Z);]]></ST>
+      </Implementation>
+    </Method>
+    <Method Name="M_GetProcData" Id="{6f2009f6-43a8-41ba-bb14-75c82b04ac84}">
+      <Declaration><![CDATA[METHOD M_GetProcData : DINT
+VAR_INPUT
+	eProcDataType : E_ProcDataType;
+END_VAR
+]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[]]></ST>
+      </Implementation>
+    </Method>
+    <Method Name="M_Reset" Id="{a29203bb-97dc-414b-9295-eb3fb1fcdadc}">
+      <Declaration><![CDATA[METHOD M_Reset
+]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[
+]]></ST>
+      </Implementation>
+    </Method>
+    <Method Name="M_SetAllProps" Id="{ce0cd1c9-ca85-48de-bcc0-9be1e9b55cd8}">
+      <Declaration><![CDATA[METHOD M_SetAllProps : ERRORID
+VAR_INPUT
+	refCmdData : REFERENCE TO  ST_CmdData;
+END_VAR
+
+VAR
+	pData	: POINTER TO ARRAY[1..16] OF USINT;
+END_VAR]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[M_SetAllProps := SUPER^.M_SetAllProps(refCmdData);
+
+IF M_SetAllProps > 0 THEN
+	RETURN;
+END_IF
+
+nCurrentPropIndex := nCurrentPropIndex + 1;
+nSpecPropIndex := nCurrentPropIndex;
+nNoOfSpecPoints := DINT_TO_USINT(refCmdData.n32Data[nCurrentPropIndex]);
+nCurrentPropIndex := nCurrentPropIndex + 1;
+stFocusPoint.X := DINT_TO_REAL(refCmdData.n32Data[nCurrentPropIndex]);
+nCurrentPropIndex := nCurrentPropIndex + 1; 
+stFocusPoint.Y := DINT_TO_REAL(refCmdData.n32Data[nCurrentPropIndex]);
+nCurrentPropIndex := nCurrentPropIndex + 1;
+stFocusPoint.Z := DINT_TO_REAL(refCmdData.n32Data[nCurrentPropIndex]);
+nNoOfProps := nCurrentPropIndex + 1;]]></ST>
+      </Implementation>
+    </Method>
+    <Method Name="M_SetSingleProp" Id="{c34a5a4a-7ef9-4646-8e4a-023e9343517f}">
+      <Declaration><![CDATA[METHOD M_SetSingleProp : ERRORID
+VAR_INPUT
+	refCmdData : REFERENCE TO  ST_CmdData;
+END_VAR
+VAR
+	pSource			: POINTER TO ARRAY[1..4] OF USINT;
+	pDestination	: POINTER TO ARRAY[1..4] OF USINT;
+END_VAR
+]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[IF nSpecPropIndex = refCmdData.aHeader[1] THEN
+	M_SetSingleProp := E_ErrorIdCmd.ERRORID_InvalidProperty;//Anzahl SpecPoints darf nicht verändert werden
+ELSIF (nSpecPropIndex + 1) = refCmdData.aHeader[1] THEN
+	stFocusPoint.X := DINT_TO_REAL(refCmdData.n32Data[0]);	
+ELSIF (nSpecPropIndex + 2) = refCmdData.aHeader[1] THEN
+	stFocusPoint.Y := DINT_TO_REAL(refCmdData.n32Data[0]);
+ELSIF (nSpecPropIndex + 3) = refCmdData.aHeader[1] THEN
+	stFocusPoint.Z := DINT_TO_REAL(refCmdData.n32Data[0]);
+ELSE
+	M_SetSingleProp := SUPER^.M_SetSingleProp(refCmdData);
+END_IF]]></ST>
+      </Implementation>
+    </Method>
+    <Method Name="M_Stop" Id="{76628b6f-fba2-4dac-9a0b-5a5fb6a5ecee}">
+      <Declaration><![CDATA[METHOD M_Stop : ERRORID
+VAR_INPUT
+END_VAR
+]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[]]></ST>
+      </Implementation>
+    </Method>
+    <LineIds Name="FB_WorkplateCamera">
+      <LineId Id="285" Count="8" />
+      <LineId Id="280" Count="0" />
+      <LineId Id="284" Count="0" />
+      <LineId Id="258" Count="4" />
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="FB_WorkplateCamera.A_TakePicture">
+      <LineId Id="1" Count="0" />
+      <LineId Id="8" Count="0" />
+      <LineId Id="12" Count="0" />
+      <LineId Id="14" Count="0" />
+      <LineId Id="18" Count="0" />
+      <LineId Id="17" Count="0" />
+      <LineId Id="34" Count="0" />
+      <LineId Id="26" Count="0" />
+      <LineId Id="28" Count="0" />
+      <LineId Id="16" Count="0" />
+      <LineId Id="15" Count="0" />
+      <LineId Id="7" Count="0" />
+      <LineId Id="19" Count="1" />
+      <LineId Id="32" Count="0" />
+      <LineId Id="22" Count="0" />
+      <LineId Id="21" Count="0" />
+      <LineId Id="29" Count="1" />
+      <LineId Id="33" Count="0" />
+      <LineId Id="31" Count="0" />
+      <LineId Id="3" Count="0" />
+    </LineIds>
+    <LineIds Name="FB_WorkplateCamera.FB_init">
+      <LineId Id="7" Count="1" />
+    </LineIds>
+    <LineIds Name="FB_WorkplateCamera.M_ApplyPos">
+      <LineId Id="3" Count="20" />
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="FB_WorkplateCamera.M_CancelAction">
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="FB_WorkplateCamera.M_CheckAction">
+      <LineId Id="3" Count="3" />
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="FB_WorkplateCamera.M_CheckProcDataType">
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="FB_WorkplateCamera.M_ExeAction">
+      <LineId Id="24" Count="1" />
+      <LineId Id="30" Count="0" />
+      <LineId Id="36" Count="0" />
+      <LineId Id="39" Count="3" />
+      <LineId Id="44" Count="0" />
+      <LineId Id="46" Count="0" />
+      <LineId Id="38" Count="0" />
+      <LineId Id="31" Count="0" />
+      <LineId Id="34" Count="0" />
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="FB_WorkplateCamera.M_GetAbsPos">
+      <LineId Id="18" Count="0" />
+      <LineId Id="21" Count="0" />
+      <LineId Id="26" Count="0" />
+      <LineId Id="30" Count="0" />
+      <LineId Id="34" Count="2" />
+      <LineId Id="31" Count="0" />
+      <LineId Id="28" Count="1" />
+      <LineId Id="27" Count="0" />
+      <LineId Id="19" Count="0" />
+      <LineId Id="23" Count="2" />
+      <LineId Id="22" Count="0" />
+      <LineId Id="20" Count="0" />
+    </LineIds>
+    <LineIds Name="FB_WorkplateCamera.M_GetActionBusy">
+      <LineId Id="2" Count="0" />
+      <LineId Id="7" Count="1" />
+    </LineIds>
+    <LineIds Name="FB_WorkplateCamera.M_GetAllProps">
+      <LineId Id="3" Count="8" />
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="FB_WorkplateCamera.M_GetProcData">
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="FB_WorkplateCamera.M_Reset">
+      <LineId Id="3" Count="0" />
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="FB_WorkplateCamera.M_SetAllProps">
+      <LineId Id="3" Count="13" />
+      <LineId Id="48" Count="0" />
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="FB_WorkplateCamera.M_SetSingleProp">
+      <LineId Id="3" Count="7" />
+      <LineId Id="38" Count="1" />
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="FB_WorkplateCamera.M_Stop">
+      <LineId Id="2" Count="0" />
+    </LineIds>
+  </POU>
+</TcPlcObject>

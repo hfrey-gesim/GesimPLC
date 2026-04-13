@@ -1,0 +1,74 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<TcPlcObject Version="1.1.0.1" ProductVersion="3.1.4024.5">
+  <POU Name="FB_Dil_Stop" Id="{8b58b5f4-3dc6-44b8-aeda-8f1064bc6db9}" SpecialFunc="None">
+    <Declaration><![CDATA[FUNCTION_BLOCK FB_Dil_Stop
+VAR_INPUT
+	bExecute	: BOOL;
+	pDilRef1	: POINTER TO FB_HwRefDiluter;
+	pDilRef2	: POINTER TO FB_HwRefDiluter;
+END_VAR
+VAR_OUTPUT
+	bBusy		: BOOL;
+	bError		: BOOL;
+	nErrorId	: ERRORID;
+END_VAR
+VAR
+	rTrig 		  : R_TRIG;
+	sChannel	: STRING[1];
+	bExpectReply : BOOL;
+	nChannel1	: USINT;
+	nChannel2	: USINT;
+END_VAR
+VAR_IN_OUT
+	DilSendCmd 	: FB_Dil_SendCmd;
+END_VAR
+]]></Declaration>
+    <Implementation>
+      <ST><![CDATA[rTrig(CLK:= bExecute);
+IF rTrig.Q THEN
+	IF pDilRef1 = 0 THEN
+		bError := TRUE;
+		RETURN;	
+	ELSE
+		nChannel1 := pDilRef1^.nChannel;
+		IF pDilRef2 > 0 THEN
+			nChannel2 := pDilRef2^.nChannel;
+		ELSE
+			nChannel2 := 0;
+		END_IF
+	END_IF
+	sChannel := F_GetChannelCodeTwin(nChannel1,nChannel2);
+	IF ASC(sChannel) >= 16#31 AND ASC(sChannel) <= 16#39 THEN	//Inhalt numerisch -> genau ein Kanal
+		bExpectReply := TRUE; //Antwort vom Diluter wird erwartet
+	ELSE
+		bExpectReply := FALSE; //keine Antwort vom Diluter möglich
+	END_IF
+END_IF
+
+IF bExecute THEN
+	bBusy := TRUE;
+	DilSendCmd(bExecute:= TRUE, bExpectReply:= bExpectReply, sSendData:= CONCAT(sChannel,'T'));
+	
+	IF NOT DilSendCmd.bBusy THEN
+		IF DilSendCmd.bError THEN
+			bError := TRUE;
+			nErrorId := DilSendCmd.nErrorId;
+		END_IF
+		DilSendCmd(bExecute:= FALSE);
+		bBusy := FALSE;
+	END_IF	
+ELSE
+	DilSendCmd(bExecute:= FALSE);
+	bBusy := FALSE;
+	bError := FALSE;
+	nErrorId := 0;
+	pDilRef1 := 0;
+	pDilRef2 := 0;
+END_IF]]></ST>
+    </Implementation>
+    <LineIds Name="FB_Dil_Stop">
+      <LineId Id="65" Count="39" />
+      <LineId Id="2" Count="0" />
+    </LineIds>
+  </POU>
+</TcPlcObject>

@@ -1,0 +1,626 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<TcPlcObject Version="1.1.0.1">
+  <POU Name="FB_Exposure" Id="{d4cf191c-19da-495d-9749-042559373242}" SpecialFunc="None">
+    <Declaration><![CDATA[FUNCTION_BLOCK FB_Exposure EXTENDS FB_GCodeTool
+VAR_INPUT
+END_VAR
+VAR_OUTPUT
+	
+END_VAR
+VAR
+	//Reference zu TripleTrigger
+	pTripleTrigRef : POINTER TO FB_HwRefTripleTrigger;
+
+	//Specproperties
+	rWorkingDistance		: REAL;
+	bInvertWorkingDistance 	: BOOL;
+	eTriggerType			: E_TriggerOutput;
+	nTriggerBehavior		: USINT;
+	nTriggerChannel			: USINT;
+	
+	//****************************************Aktionvariablen****************************************************
+	stActionDataSpec	: ST_ActionData;
+	
+	//Action: "InitTool"
+	bInitTool			: BOOL;
+	nStateA_InitTool	: USINT;
+	
+	//Action: "Expose"
+	bExpose				: BOOL;
+	nStateA_Expose		: USINT;
+	nBrightness			: UINT;
+	bExposeStart		: BOOL;
+	timer				: TON;
+	bSecondCycle		: BOOL;
+	nCycleCnt			: USINT;
+END_VAR
+]]></Declaration>
+    <Implementation>
+      <ST><![CDATA[IF eCurrentState = E_MachineState.MACHINESTATE_Active THEN
+	IF bInitTool THEN
+		A_InitTool();
+		IF nStateA_InitTool >= 80 THEN
+			IF nStateA_InitTool >= 99 THEN
+				bError := TRUE;		
+			END_IF
+			bInitTool := FALSE;
+			nStateA_InitTool := 0;
+			M_RemoveListEntry(nSearchValue:= E_Action.ACTION_Init);
+		END_IF		
+	END_IF
+
+	IF bExpose THEN
+		A_Expose();
+		IF nStateA_Expose >= 80 THEN
+			IF nStateA_Expose >= 99 THEN
+				bError := TRUE;	
+			END_IF
+			bExpose := FALSE;
+			nStateA_Expose := 0;
+			M_RemoveListEntry(nSearchValue:= E_Action.ACTION_Expose);
+		END_IF
+	END_IF
+END_IF
+
+//FB_MzTool aufrufen
+SUPER^();
+
+//Prozessdaten aktualisieren
+CASE eTriggerType OF
+	E_TriggerOutput.PlcOutput:
+		stProcessData.n32Data[7] := BOOL_TO_DINT(fbPlcTriggerOut.M_GetState(nTriggerChannel));
+	E_TriggerOutput.MultiZOutput:
+		stProcessData.n32Data[7] := BOOL_TO_DINT(fbMultiZDigiOut.M_GetState(nTriggerChannel));
+	E_TriggerOutput.MultiZPWM:
+		stProcessData.n32Data[7] := BOOL_TO_DINT(fbMultiZPWM.M_GetState(nTriggerChannel));
+	E_TriggerOutput.TripleTriggerModul:
+		stProcessData.n32Data[7] := BOOL_TO_DINT(pTripleTrigRef^.M_GetState(nTriggerChannel));
+END_CASE
+
+aObjProcData[nNotifyId] := stProcessData;]]></ST>
+    </Implementation>
+    <Action Name="A_Expose" Id="{73deeb9f-157e-41eb-975a-c1fa35c2ba6c}">
+      <Implementation>
+        <ST><![CDATA[CASE nStateA_Expose OF
+	0:	
+		CASE eTriggerType OF
+			E_TriggerOutput.PlcOutput:
+				fbPlcTriggerOut.M_On(nTriggerChannel); //muss in jedem Zylus neu aufgerufen werden (aus Sicherheitsgründen)
+			E_TriggerOutput.MultiZOutput:
+				fbMultiZDigiOut.M_On(nTriggerChannel); //muss in jedem Zylus neu aufgerufen werden (aus Sicherheitsgründen)
+			E_TriggerOutput.MultiZPWM:
+				fbMultiZPWM.M_On(nTriggerChannel,1000); //muss in jedem Zylus neu aufgerufen werden (aus Sicherheitsgründen) (100% Tastverhältnis)
+			E_TriggerOutput.TripleTriggerModul:
+				pTripleTrigRef^.M_SetAmplitudePercent(nTriggerChannel,nBrightness);//Helligkeit
+				pTripleTrigRef^.M_SetPulse(nTriggerChannel,65535); //Dauersignal
+				pTripleTrigRef^.M_TriggerOn(nTriggerChannel,0);
+		END_CASE	
+
+		//Timer starten
+		IF timer.PT > T#0S THEN
+			timer(IN:=TRUE);
+		END_IF
+		bSecondCycle := FALSE;
+		nCycleCnt := 0;
+		nStateA_Expose := 1;
+		
+	1:	//Warten, bis Zeit abgelaufen oder TriggerState  = FALSE
+		timer();
+		IF timer.Q THEN
+			timer(IN:= FALSE);
+			CASE eTriggerType OF
+				E_TriggerOutput.PlcOutput:
+					fbPlcTriggerOut.M_Off(nTriggerChannel);
+				E_TriggerOutput.MultiZOutput:
+					fbMultiZDigiOut.M_Off(nTriggerChannel);
+				E_TriggerOutput.MultiZPWM:
+					fbMultiZPWM.M_Off(nTriggerChannel);
+				E_TriggerOutput.TripleTriggerModul:
+					pTripleTrigRef^.M_TriggerOff(nTriggerChannel);
+			END_CASE
+		END_IF
+		
+		CASE eTriggerType OF
+			E_TriggerOutput.PlcOutput:
+				IF NOT fbPlcTriggerOut.M_GetState(nTriggerChannel) THEN
+					nStateA_Expose := 2;
+				ELSE
+					fbPlcTriggerOut.M_On(nTriggerChannel);
+				END_IF
+			E_TriggerOutput.MultiZOutput:
+				IF NOT fbMultiZDigiOut.M_GetState(nTriggerChannel) THEN
+					nStateA_Expose := 80;
+				ELSE
+					fbMultiZDigiOut.M_On(nTriggerChannel);
+				END_IF
+			E_TriggerOutput.MultiZPWM:
+				IF NOT fbMultiZPWM.M_GetState(nTriggerChannel) THEN
+					nStateA_Expose := 80;
+				ELSE
+					fbMultiZPWM.M_On(nTriggerChannel, 1000);
+				END_IF
+			E_TriggerOutput.TripleTriggerModul:
+				nCycleCnt := nCycleCnt + 1;
+				IF nCycleCnt = 2 THEN
+					IF NOT pTripleTrigRef^.M_GetState(nTriggerChannel) THEN
+						timer(IN:= FALSE);
+						pTripleTrigRef^.M_TriggerOff(nTriggerChannel);
+						nStateA_Expose := 2;
+					END_IF
+				END_IF
+		END_CASE
+
+	2:	//Delay bis ready (Blendenschaltzeit) (für Omnicure)
+		timer(IN:=TRUE,PT:=T#500MS);
+		IF timer.Q THEN
+			timer(IN:=FALSE);
+			nStateA_Expose := 80;
+		END_IF
+		
+	70:	//Abbrechen
+		timer(IN:= FALSE);
+		CASE eTriggerType OF
+			E_TriggerOutput.PlcOutput:
+				fbPlcTriggerOut.M_Off(nTriggerChannel);
+			E_TriggerOutput.MultiZOutput:
+				fbMultiZDigiOut.M_Off(nTriggerChannel);
+			E_TriggerOutput.MultiZPWM:
+				fbMultiZPWM.M_Off(nTriggerChannel);
+			E_TriggerOutput.TripleTriggerModul:
+				pTripleTrigRef^.M_TriggerOff(nTriggerChannel);
+		END_CASE
+		nStateA_Expose := 80;
+END_CASE]]></ST>
+      </Implementation>
+    </Action>
+    <Action Name="A_InitTool" Id="{0bfd7c26-f530-4641-914c-c2691558eaa2}">
+      <Implementation>
+        <ST><![CDATA[nStateA_InitTool := 80;]]></ST>
+      </Implementation>
+    </Action>
+    <Action Name="A_Reset" Id="{0c366367-4c23-4779-9247-d4e85a2601dd}">
+      <Implementation>
+        <ST><![CDATA[//Ist noch eine Aktion aktiv?
+IF nStateA_ResetSpec = 0 THEN 
+	IF bExpose THEN
+		bExpose := FALSE;
+		nStateA_Expose := 0;
+	END_IF
+	
+	nStateA_ResetSpec := 80;
+END_IF
+
+SUPER^.A_Reset();]]></ST>
+      </Implementation>
+    </Action>
+    <Action Name="A_Stop" Id="{6fd51f40-95ff-4b0f-bd87-1dbc566dbd51}">
+      <Implementation>
+        <ST><![CDATA[IF nStateA_Stop = 0 THEN
+
+	IF bExpose AND nStateA_Expose < 70 THEN
+		nStateA_Expose := 70;
+	END_IF
+	
+	nStateA_Stop := 1;
+END_IF
+
+SUPER^.A_Stop();
+
+]]></ST>
+      </Implementation>
+    </Action>
+    <Method Name="FB_init" Id="{ca75a161-b714-4faf-a7cd-59d7bc459dd8}">
+      <Declaration><![CDATA[METHOD FB_init : BOOL
+VAR_INPUT
+	bInitRetains : BOOL; // if TRUE, the retain variables are initialized (warm start / cold start)
+	bInCopyCode : BOOL;  // if TRUE, the instance afterwards gets moved into the copy code (online change)
+END_VAR
+]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[eObjectType := E_ObjectType.OBJECTTYPE_Exposure;
+eObjectGroup := E_ObjectGroup.OBJECTGROUP_MzTool OR E_ObjectGroup.OBJECTGROUP_Device;]]></ST>
+      </Implementation>
+    </Method>
+    <Method Name="M_AddChild" Id="{3188231f-cc78-466f-b1cc-ef24b053999d}">
+      <Declaration><![CDATA[METHOD M_AddChild : ERRORID
+VAR_INPUT
+	pObject : POINTER TO FB_Object;
+	nSlotNr	: UINT;
+	nIndex 	: INT;
+END_VAR
+]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[//Der Exoser kann folgende Objekt-Typen aufnehmen
+//Camera, Exposure
+IF pObject > 0 THEN
+	IF pObject^.P_eObjectType = E_ObjectType.OBJECTTYPE_Camera OR
+		pObject^.P_eObjectType = E_ObjectType.OBJECTTYPE_DummyTool OR
+		pObject^.P_eObjectType = E_ObjectType.OBJECTTYPE_Exposure THEN
+		
+		M_AddChild := SUPER^.M_AddChild(pObject,nSlotNr,nIndex);
+	ELSE
+		M_AddChild := E_ErrorIdObjMgmt.ERRORID_InvalidParentObject;
+	END_IF
+ELSE
+	M_AddChild := E_ErrorIdObjMgmt.ERRORID_InvalidParentObject;
+END_IF]]></ST>
+      </Implementation>
+    </Method>
+    <Method Name="M_CancelAction" Id="{e3232433-e06f-43e4-9d57-bee733c42919}">
+      <Declaration><![CDATA[METHOD M_CancelAction
+VAR_INPUT
+	eAction : E_Action;
+END_VAR
+]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[IF eAction = E_Action.ACTION_Expose THEN
+	IF bExpose AND nStateA_Expose < 70 THEN
+		nStateA_Expose := 70;
+	END_IF
+ELSE
+	SUPER^.M_CancelAction(eAction);
+END_IF]]></ST>
+      </Implementation>
+    </Method>
+    <Method Name="M_CheckAction" Id="{5eab8849-4d20-496f-8430-cac0928d6dbb}">
+      <Declaration><![CDATA[METHOD M_CheckAction : ERRORID
+VAR_INPUT
+	refActionData 	: REFERENCE TO ST_ActionData;
+	pCorrelObject	: POINTER TO FB_Object;
+END_VAR]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[CASE refActionData.eAction OF
+	E_Action.ACTION_Expose: //BasicAction für ActionOnArray
+ELSE
+	M_CheckAction := SUPER^.M_CheckAction(refActionData, pCorrelObject);
+END_CASE]]></ST>
+      </Implementation>
+    </Method>
+    <Method Name="M_CheckProps" Id="{570ec9e0-9c38-4164-bc68-7c69148c643f}">
+      <Declaration><![CDATA[METHOD M_CheckProps : ERRORID
+VAR_INPUT
+END_VAR
+]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[M_CheckProps := SUPER^.M_CheckProps();
+IF M_CheckProps > 0 THEN
+	RETURN;
+END_IF
+
+IF eTriggerType = E_TriggerOutput.TripleTriggerModul AND pTripleTrigRef = 0 THEN
+	M_CheckProps := E_ErrorIdObjMgmt.ERRORID_InvalidHardwareRef;
+END_IF]]></ST>
+      </Implementation>
+    </Method>
+    <Method Name="M_ExeAction" Id="{673fcdb0-5780-4305-80b8-24b503bdd895}">
+      <Declaration><![CDATA[METHOD M_ExeAction : ERRORID
+VAR_INPUT
+	refActionData : REFERENCE TO ST_ActionData;	
+END_VAR]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[IF NOT (eCurrentState = E_MachineState.MACHINESTATE_Idle OR
+	eCurrentState = E_MachineState.MACHINESTATE_Active OR
+	eCurrentState = E_MachineState.MACHINESTATE_Ready) THEN
+	M_ExeAction := E_ErrorIdCmd.ERRORID_InvalidState;
+	RETURN;
+END_IF
+
+CASE refActionData.eAction OF
+	
+	E_Action.ACTION_Init:
+		IF NOT bInitAxis AND NOT bInitTool THEN
+			bInitAxis := TRUE;
+			bInitTool := TRUE;
+			fbList.A_AddHeadValue( hList := hList, putValue := E_Action.ACTION_Init);	//InitAxis
+			fbList.A_AddHeadValue( hList := hList, putValue := E_Action.ACTION_Init);	//InitTool
+		ELSE
+			RETURN;
+		END_IF
+		
+	E_Action.ACTION_Expose:
+		bExposeStart := DINT_TO_BOOL(refActionData.aParams[1]);
+		IF NOT bExpose AND bExposeStart THEN
+			nBrightness := DINT_TO_UINT(refActionData.aParams[2]);
+			timer.PT := DINT_TO_TIME(refActionData.aParams[3]);
+			fbList.A_AddHeadValue( hList := hList, putValue := E_Action.ACTION_Expose);
+			bExpose := TRUE;
+		ELSIF NOT bExposeStart THEN
+			CASE eTriggerType OF
+				E_TriggerOutput.PlcOutput:
+					fbPlcTriggerOut.M_Off(nTriggerChannel);
+				E_TriggerOutput.TripleTriggerModul:
+					pTripleTrigRef^.M_TriggerOff(nTriggerChannel);
+				E_TriggerOutput.MultiZOutput:
+					fbMultiZDigiOut.M_Off(nTriggerChannel);
+				E_TriggerOutput.MultiZPWM:
+					fbMultiZPWM.M_Off(nTriggerChannel);
+			END_CASE
+		ELSE
+			RETURN;	
+		END_IF
+	ELSE
+		M_ExeAction := SUPER^.M_ExeAction(refActionData);
+		RETURN;
+END_CASE
+bBusy := TRUE;
+eCurrentState := E_MachineState.MACHINESTATE_Active;]]></ST>
+      </Implementation>
+    </Method>
+    <Method Name="M_GetAllProps" Id="{4d938501-7e6c-4939-9700-b35f6cfb7be3}">
+      <Declaration><![CDATA[METHOD M_GetAllProps : ERRORID
+VAR_INPUT
+	refCmdData : REFERENCE TO  ST_CmdData;
+END_VAR
+]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[SUPER^.M_GetAllProps(refCmdData);
+nCurrentPropIndex := nCurrentPropIndex + 1;
+refCmdData.n32Data[nCurrentPropIndex] := REAL_TO_DINT(rWorkingDistance);
+nCurrentPropIndex := nCurrentPropIndex + 1;
+refCmdData.n32Data[nCurrentPropIndex] := BOOL_TO_DINT(bInvertWorkingDistance);
+nCurrentPropIndex := nCurrentPropIndex + 1;
+refCmdData.n32Data[nCurrentPropIndex] := eTriggerType;
+nCurrentPropIndex := nCurrentPropIndex + 1;
+refCmdData.n32Data[nCurrentPropIndex] := nTriggerBehavior;
+nCurrentPropIndex := nCurrentPropIndex + 1;
+refCmdData.n32Data[nCurrentPropIndex] := nTriggerChannel;]]></ST>
+      </Implementation>
+    </Method>
+    <Method Name="M_SetAllProps" Id="{ea1bf3d6-2ddc-4755-9e0c-d2b367db86d8}">
+      <Declaration><![CDATA[METHOD M_SetAllProps : ERRORID
+VAR_INPUT
+	refCmdData : REFERENCE TO  ST_CmdData;
+END_VAR
+]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[M_SetAllProps := SUPER^.M_SetAllProps(refCmdData);
+
+IF M_SetAllProps > 0 THEN
+	RETURN;
+END_IF
+
+//WorkingDistance
+nCurrentPropIndex := nCurrentPropIndex + 1;
+nSpecPropIndex := nCurrentPropIndex;
+rWorkingDistance := DINT_TO_REAL(refCmdData.n32Data[nCurrentPropIndex]);
+nCurrentPropIndex := nCurrentPropIndex + 1;
+bInvertWorkingDistance := DINT_TO_BOOL(refCmdData.n32Data[nCurrentPropIndex]);
+
+//TriggerType
+nCurrentPropIndex := nCurrentPropIndex + 1;
+eTriggerType := DINT_TO_USINT(refCmdData.n32Data[nCurrentPropIndex]);
+pTripleTrigRef := 0;
+
+//TriggerBehavior
+nCurrentPropIndex := nCurrentPropIndex + 1;
+nTriggerBehavior := DINT_TO_USINT(refCmdData.n32Data[nCurrentPropIndex]);
+IF NOT (nTriggerBehavior >= 0 AND nTriggerBehavior <= 1) THEN
+	M_SetAllProps := E_ErrorIdObjMgmt.ERRORID_InvalidTriggerChannel;
+	RETURN;
+END_IF
+
+//TriggerChannel
+nCurrentPropIndex := nCurrentPropIndex + 1;
+nTriggerChannel := DINT_TO_USINT(refCmdData.n32Data[nCurrentPropIndex]);
+
+CASE eTriggerType OF
+	E_TriggerOutput.PlcOutput,
+	E_TriggerOutput.MultiZOutput:
+		IF NOT (nTriggerChannel >= 1 AND nTriggerChannel <= 3) THEN
+			M_SetAllProps := E_ErrorIdObjMgmt.ERRORID_InvalidTriggerChannel;
+			RETURN;
+		END_IF
+	E_TriggerOutput.MultiZPWM:
+		IF NOT (nTriggerChannel >= 1 AND nTriggerChannel <= 2) THEN
+			M_SetAllProps := E_ErrorIdObjMgmt.ERRORID_InvalidTriggerChannel;
+			RETURN;
+		END_IF	
+	E_TriggerOutput.TripleTriggerModul:
+		{IF defined (variable:aFbTripleTriggerRef)}
+		IF NOT (nTriggerChannel >= 1 AND nTriggerChannel <= 3) THEN
+			M_SetAllProps := E_ErrorIdObjMgmt.ERRORID_InvalidTriggerChannel;
+		END_IF
+		pTripleTrigRef := ADR(aFbTripleTriggerRef[1]);
+		{ELSE}
+		M_SetAllProps := E_ErrorIdObjMgmt.ERRORID_InvalidHardwareRef;
+		RETURN;
+		{END_IF}	
+END_CASE
+
+nNoOfProps := nCurrentPropIndex + 1;]]></ST>
+      </Implementation>
+    </Method>
+    <Method Name="M_SetSingleProp" Id="{bad509f5-6bcd-4c08-a54e-680ee5a9a7f8}">
+      <Declaration><![CDATA[METHOD M_SetSingleProp : ERRORID
+VAR_INPUT
+	refCmdData : REFERENCE TO  ST_CmdData;
+END_VAR
+
+VAR
+	nTriggerChannel : USINT;
+END_VAR]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[IF nSpecPropIndex = refCmdData.aHeader[1] THEN
+	rWorkingDistance := DINT_TO_REAL(refCmdData.n32Data[0]);
+ELSIF nSpecPropIndex + 1 = refCmdData.aHeader[1] THEN
+	bInvertWorkingDistance := DINT_TO_BOOL(refCmdData.n32Data[0]);
+ELSIF nSpecPropIndex + 4 = refCmdData.aHeader[1] THEN
+	nTriggerChannel := DINT_TO_USINT(refCmdData.n32Data[0]);
+	IF eTriggerType = E_TriggerOutput.MultiZPWM THEN
+		IF NOT (nTriggerChannel >= 1 AND nTriggerChannel <= 2) THEN
+			M_SetSingleProp := E_ErrorIdObjMgmt.ERRORID_InvalidTriggerChannel;
+			RETURN;
+		END_IF
+		THIS^.nTriggerChannel := nTriggerChannel;
+	ELSE
+		IF NOT (nTriggerChannel >= 1 AND nTriggerChannel <= 3) THEN
+			M_SetSingleProp := E_ErrorIdObjMgmt.ERRORID_InvalidTriggerChannel;
+			RETURN;
+		END_IF
+		THIS^.nTriggerChannel := nTriggerChannel;
+	END_IF
+ELSE
+	M_SetSingleProp := SUPER^.M_SetSingleProp(refCmdData);
+END_IF]]></ST>
+      </Implementation>
+    </Method>
+    <Property Name="P_stAbsPosTotal" Id="{8ed0bbc0-d893-4f15-8a56-68530d06ba4b}">
+      <Declaration><![CDATA[PROPERTY P_stAbsPosTotal : ST_3DPoint]]></Declaration>
+      <Get Name="Get" Id="{9007ad60-8f90-46e3-b2d7-9a29cb267555}">
+        <Declaration><![CDATA[VAR
+	stPosTemp : ST_3DPoint;
+END_VAR
+]]></Declaration>
+        <Implementation>
+          <ST><![CDATA[stPosTemp := SUPER^.P_stAbsPosPhys;
+IF bInvertWorkingDistance THEN
+	stPosTemp.Z := stPosTemp.Z + rWorkingDistance;
+ELSE
+	stPosTemp.Z := stPosTemp.Z - rWorkingDistance;
+END_IF
+P_stAbsPosTotal := stPosTemp;]]></ST>
+        </Implementation>
+      </Get>
+    </Property>
+    <Property Name="P_stCurrentPosTotal" Id="{4bebf535-eacb-4c90-9e68-38693c3ce1a2}">
+      <Declaration><![CDATA[PROPERTY P_stCurrentPosTotal : ST_3DPoint]]></Declaration>
+      <Get Name="Get" Id="{5f69cf91-dca8-4108-8159-4849ccbd96f3}">
+        <Declaration><![CDATA[VAR
+	stPosTemp : ST_3DPoint;
+END_VAR]]></Declaration>
+        <Implementation>
+          <ST><![CDATA[stPosTemp := P_stCurrentPosPhys;
+IF bInvertWorkingDistance THEN
+	stPosTemp.Z := stPosTemp.Z + rWorkingDistance;
+ELSE
+	stPosTemp.Z := stPosTemp.Z - rWorkingDistance;
+END_IF
+P_stCurrentPosTotal := stPosTemp;
+
+]]></ST>
+        </Implementation>
+      </Get>
+    </Property>
+    <LineIds Name="FB_Exposure">
+      <LineId Id="263" Count="29" />
+      <LineId Id="367" Count="1" />
+      <LineId Id="373" Count="0" />
+      <LineId Id="370" Count="0" />
+      <LineId Id="374" Count="0" />
+      <LineId Id="371" Count="0" />
+      <LineId Id="375" Count="0" />
+      <LineId Id="372" Count="0" />
+      <LineId Id="376" Count="0" />
+      <LineId Id="369" Count="0" />
+      <LineId Id="299" Count="1" />
+    </LineIds>
+    <LineIds Name="FB_Exposure.A_Expose">
+      <LineId Id="310" Count="88" />
+      <LineId Id="1" Count="0" />
+    </LineIds>
+    <LineIds Name="FB_Exposure.A_InitTool">
+      <LineId Id="1" Count="0" />
+    </LineIds>
+    <LineIds Name="FB_Exposure.A_Reset">
+      <LineId Id="2" Count="9" />
+      <LineId Id="1" Count="0" />
+    </LineIds>
+    <LineIds Name="FB_Exposure.A_Stop">
+      <LineId Id="11" Count="10" />
+      <LineId Id="1" Count="0" />
+    </LineIds>
+    <LineIds Name="FB_Exposure.FB_init">
+      <LineId Id="7" Count="1" />
+    </LineIds>
+    <LineIds Name="FB_Exposure.M_AddChild">
+      <LineId Id="3" Count="12" />
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="FB_Exposure.M_CancelAction">
+      <LineId Id="3" Count="5" />
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="FB_Exposure.M_CheckAction">
+      <LineId Id="24" Count="0" />
+      <LineId Id="30" Count="0" />
+      <LineId Id="28" Count="0" />
+      <LineId Id="31" Count="0" />
+      <LineId Id="29" Count="0" />
+    </LineIds>
+    <LineIds Name="FB_Exposure.M_CheckProps">
+      <LineId Id="12" Count="3" />
+      <LineId Id="3" Count="1" />
+      <LineId Id="7" Count="0" />
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="FB_Exposure.M_ExeAction">
+      <LineId Id="3" Count="10" />
+      <LineId Id="15" Count="15" />
+      <LineId Id="65" Count="0" />
+      <LineId Id="69" Count="0" />
+      <LineId Id="72" Count="5" />
+      <LineId Id="71" Count="0" />
+      <LineId Id="70" Count="0" />
+      <LineId Id="45" Count="1" />
+      <LineId Id="36" Count="5" />
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="FB_Exposure.M_GetAllProps">
+      <LineId Id="3" Count="2" />
+      <LineId Id="15" Count="1" />
+      <LineId Id="6" Count="4" />
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="FB_Exposure.M_SetAllProps">
+      <LineId Id="3" Count="9" />
+      <LineId Id="56" Count="1" />
+      <LineId Id="55" Count="0" />
+      <LineId Id="14" Count="2" />
+      <LineId Id="90" Count="0" />
+      <LineId Id="103" Count="0" />
+      <LineId Id="105" Count="5" />
+      <LineId Id="104" Count="0" />
+      <LineId Id="112" Count="3" />
+      <LineId Id="141" Count="0" />
+      <LineId Id="93" Count="1" />
+      <LineId Id="99" Count="0" />
+      <LineId Id="135" Count="2" />
+      <LineId Id="100" Count="1" />
+      <LineId Id="138" Count="2" />
+      <LineId Id="127" Count="1" />
+      <LineId Id="130" Count="0" />
+      <LineId Id="142" Count="3" />
+      <LineId Id="132" Count="2" />
+      <LineId Id="129" Count="0" />
+      <LineId Id="95" Count="0" />
+      <LineId Id="92" Count="0" />
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="FB_Exposure.M_SetSingleProp">
+      <LineId Id="3" Count="1" />
+      <LineId Id="12" Count="0" />
+      <LineId Id="11" Count="0" />
+      <LineId Id="17" Count="0" />
+      <LineId Id="19" Count="0" />
+      <LineId Id="61" Count="0" />
+      <LineId Id="67" Count="4" />
+      <LineId Id="64" Count="0" />
+      <LineId Id="72" Count="4" />
+      <LineId Id="63" Count="0" />
+      <LineId Id="5" Count="1" />
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="FB_Exposure.P_stAbsPosTotal.Get">
+      <LineId Id="3" Count="0" />
+      <LineId Id="8" Count="3" />
+      <LineId Id="4" Count="0" />
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="FB_Exposure.P_stCurrentPosTotal.Get">
+      <LineId Id="3" Count="0" />
+      <LineId Id="9" Count="3" />
+      <LineId Id="4" Count="2" />
+      <LineId Id="2" Count="0" />
+    </LineIds>
+  </POU>
+</TcPlcObject>

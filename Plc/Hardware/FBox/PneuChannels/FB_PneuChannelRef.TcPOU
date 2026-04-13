@@ -1,0 +1,439 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<TcPlcObject Version="1.1.0.1" ProductVersion="3.1.4022.12">
+  <POU Name="FB_PneuChannelRef" Id="{c0cfd1d9-9a87-4585-9512-f007e302914a}" SpecialFunc="None">
+    <Declaration><![CDATA[FUNCTION_BLOCK FB_PneuChannelRef
+VAR_INPUT
+	
+END_VAR
+VAR_OUTPUT
+	nSetPress		: INT;		//Solldruck
+	nCurrentPress	: INT;		//aktueller Ausgangsdruck in kPa
+	nChannel		: USINT;	//Channel-Nr.
+END_VAR
+VAR
+	bSupplyOk		AT %I* : BOOL;	//Druckschalter Versorgung
+	nAnalogInput	AT %I* : INT;	//muss mit Analogklemme verknüpft werden
+	nAnalogOutput	AT %Q* : INT;	//muss mit Analogklemme verknüpft werden
+	bSupplyActor	AT %Q* : BOOL;	//Aktor z.B. Ventil oder Druck-bzw. Vakuumpumpe o.ä.
+	nTemp			: DINT;
+	bPressOk		: BOOL;	//Druck ist im Toleranzbereich
+END_VAR
+
+VAR PERSISTENT
+	rMinPress		: REAL;	//minimal einstellbarer Druck/Vacuum des ITV in kPa
+	rMaxPress		: REAL;	//maximal einstellbarer Druck/Vacuum des ITV in kPa
+	rMinPressCV		: REAL;	//Steuerspannung für "rMinPress" in V
+	rMaxPressCV		: REAL;	//Steuerspannung für "rMaxPress" in V
+	rMinPressMV		: REAL;	//Messspannung bei "rMinPress" in V
+	rMaxPressMV		: REAL;	//Messspannung bei "rMaxPress" in V
+	rFactorSetPress	: REAL := 1.0; //Faktor für Solldruck
+	rFactorCurrPress: REAL:= 1.0; //Faktor für Istdruck	
+	nOffsetSetPress	: INT;	//Offset für Solldruck
+	nOffsetCurrPress: INT;	//Offset für Istdruck
+END_VAR
+
+VAR_STAT
+	nHighestChannel : USINT;
+END_VAR
+]]></Declaration>
+    <Implementation>
+      <ST><![CDATA[nCurrentPress := REAL_TO_INT(F_YFuncX(rxMin:= rMinPressMV,
+							rxMax:= rMaxPressMV,
+							ryMin:= rMinPress,
+							ryMax:= rMaxPress,
+							rx:= 10.0 / 32767.0 * nAnalogInput)* rFactorCurrPress) + nOffsetCurrPress;]]></ST>
+    </Implementation>
+    <Method Name="FB_init" Id="{8fefcbab-e714-4b5d-a046-164e7ae2a10c}">
+      <Declaration><![CDATA[METHOD FB_init : BOOL
+VAR_INPUT
+	bInitRetains : BOOL; // if TRUE, the retain variables are initialized (warm start / cold start)
+	bInCopyCode : BOOL;  // if TRUE, the instance afterwards gets moved into the copy code (online change)
+END_VAR
+]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[nHighestChannel := nHighestChannel + 1;
+nChannel := nHighestChannel;]]></ST>
+      </Implementation>
+    </Method>
+    <Method Name="M_GetPressOk" Id="{05e48e72-092d-47ab-a5e9-b761ebcf0a3f}">
+      <Declaration><![CDATA[METHOD M_GetPressOk : BOOL
+VAR_INPUT
+	nSetPressure	: INT;
+	nTolerancePlus	: INT;
+	nToleranceMinus	: INT;
+END_VAR
+]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[nCurrentPress := P_nCurrentPressure;
+M_GetPressOk := (nCurrentPress >= nSetPressure - nToleranceMinus) AND (nCurrentPress <= nSetPressure + nTolerancePlus);
+]]></ST>
+      </Implementation>
+    </Method>
+    <Method Name="M_SetPressure" Id="{0266e46b-d4ae-41eb-9d66-ee4b43087639}">
+      <Declaration><![CDATA[METHOD M_SetPressure : ERRORID
+VAR_INPUT
+	nPressure		: INT;
+END_VAR
+
+VAR
+	rAnaOut			: REAL;
+END_VAR]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[//Solldruck muss zwischen min und max liegen oder 0
+IF nPressure >= rMinPress OR nPressure <= rMaxPress OR nPressure = 0 THEN
+	nSetPress := REAL_TO_INT(nPressure * rFactorSetPress);
+	nSetPress := nPressure + nOffsetSetPress;
+		 
+	rAnaOut := F_YFuncX(rxMin:= rMinPress,
+						rxMax:= rMaxPress,
+						ryMin:= rMinPressCV,
+						ryMax:= rMaxPressCV,
+						rx:= nSetPress) * 32767.0 / 10.0;
+	
+	IF nPressure <> 0 THEN
+		nAnalogOutput := REAL_TO_INT(rAnaOut);
+		bSupplyActor := TRUE;
+	ELSE
+		nAnalogOutput := 0;
+		bSupplyActor := FALSE;
+	END_IF
+ELSE
+	M_SetPressure := E_ErrorIdCmd.ERRORID_InvalidPressure;
+END_IF]]></ST>
+      </Implementation>
+    </Method>
+    <Property Name="P_bSupplyOk" Id="{e642283a-f95e-43c6-a0c7-7eafcf44ba61}">
+      <Declaration><![CDATA[PROPERTY P_bSupplyOk : BOOL]]></Declaration>
+      <Get Name="Get" Id="{6b2628ae-3b97-4add-bbc6-61a8726f8287}">
+        <Declaration><![CDATA[VAR
+END_VAR
+]]></Declaration>
+        <Implementation>
+          <ST><![CDATA[IF rMaxPress <= 0 THEN
+	P_bSupplyOk := NOT bSupplyOk;
+ELSE
+	P_bSupplyOk := bSupplyOk;
+END_IF]]></ST>
+        </Implementation>
+      </Get>
+    </Property>
+    <Property Name="P_nCurrentPressure" Id="{06bc3d46-b84f-491b-8a6b-75b539ef3350}">
+      <Declaration><![CDATA[PROPERTY P_nCurrentPressure : INT]]></Declaration>
+      <Get Name="Get" Id="{d3f9346f-19b7-428c-9357-91a606358d62}">
+        <Declaration><![CDATA[VAR
+END_VAR
+]]></Declaration>
+        <Implementation>
+          <ST><![CDATA[P_nCurrentPressure := nCurrentPress;]]></ST>
+        </Implementation>
+      </Get>
+    </Property>
+    <Property Name="P_nFactCurrPress" Id="{e021f371-d944-43df-81bb-fea1fd42fa68}">
+      <Declaration><![CDATA[PROPERTY P_nFactCurrPress : DINT]]></Declaration>
+      <Get Name="Get" Id="{58b41382-9c3d-4678-a85c-9442b849477c}">
+        <Declaration><![CDATA[VAR
+END_VAR
+]]></Declaration>
+        <Implementation>
+          <ST><![CDATA[P_nFactCurrPress := REAL_TO_DINT(rFactorCurrPress * 1000000.0);]]></ST>
+        </Implementation>
+      </Get>
+      <Set Name="Set" Id="{859b91c2-8efb-4229-94c0-61813168f7f8}">
+        <Declaration><![CDATA[VAR
+END_VAR
+]]></Declaration>
+        <Implementation>
+          <ST><![CDATA[rFactorCurrPress := DINT_TO_REAL(P_nFactCurrPress) / 1000000.0;
+fbSettings.M_WritePersData();]]></ST>
+        </Implementation>
+      </Set>
+    </Property>
+    <Property Name="P_nFactSetPress" Id="{044a998b-1907-40de-b88a-2c91a840d95d}">
+      <Declaration><![CDATA[PROPERTY P_nFactSetPress : DINT]]></Declaration>
+      <Get Name="Get" Id="{f1c1f884-fb1f-4a0c-bfea-0717ec82962c}">
+        <Declaration><![CDATA[VAR
+END_VAR
+]]></Declaration>
+        <Implementation>
+          <ST><![CDATA[P_nFactSetPress := REAL_TO_DINT(rFactorSetPress * 1000000.0);]]></ST>
+        </Implementation>
+      </Get>
+      <Set Name="Set" Id="{2d946b0f-326d-4837-8461-1ea808872e2c}">
+        <Declaration><![CDATA[VAR
+END_VAR
+]]></Declaration>
+        <Implementation>
+          <ST><![CDATA[rFactorSetPress := DINT_TO_REAL(P_nFactSetPress) / 1000000.0;
+fbSettings.M_WritePersData();]]></ST>
+        </Implementation>
+      </Set>
+    </Property>
+    <Property Name="P_nMaxPress" Id="{92c0abd6-9abc-4253-92e4-17ac9665b9a3}">
+      <Declaration><![CDATA[PROPERTY P_nMaxPress : DINT]]></Declaration>
+      <Get Name="Get" Id="{60b03f93-b9ff-4405-b654-f89b12320e79}">
+        <Declaration><![CDATA[VAR
+END_VAR
+]]></Declaration>
+        <Implementation>
+          <ST><![CDATA[P_nMaxPress := REAL_TO_DINT(rMaxPress);]]></ST>
+        </Implementation>
+      </Get>
+      <Set Name="Set" Id="{41d7ffbe-fdd6-4e76-93ab-92969e6d2e0e}">
+        <Declaration><![CDATA[VAR
+END_VAR
+]]></Declaration>
+        <Implementation>
+          <ST><![CDATA[ rMaxPress := DINT_TO_REAL(P_nMaxPress);
+ fbSettings.M_WritePersData();]]></ST>
+        </Implementation>
+      </Set>
+    </Property>
+    <Property Name="P_nMaxPressCV" Id="{a84adbe9-9994-4fd7-925d-e4384a23f9d9}">
+      <Declaration><![CDATA[PROPERTY P_nMaxPressCV : DINT]]></Declaration>
+      <Get Name="Get" Id="{2cc8a8f5-445b-422c-872c-84c2c5c00670}">
+        <Declaration><![CDATA[VAR
+END_VAR
+]]></Declaration>
+        <Implementation>
+          <ST><![CDATA[P_nMaxPressCV := REAL_TO_DINT(rMaxPressCV * 1000);]]></ST>
+        </Implementation>
+      </Get>
+      <Set Name="Set" Id="{bb6decf6-0314-4e4e-b336-96131a7b6220}">
+        <Declaration><![CDATA[VAR
+END_VAR
+]]></Declaration>
+        <Implementation>
+          <ST><![CDATA[rMaxPressCV := DINT_TO_REAL(P_nMaxPressCV) / 1000;
+fbSettings.M_WritePersData();]]></ST>
+        </Implementation>
+      </Set>
+    </Property>
+    <Property Name="P_nMaxPressMV" Id="{28fb507a-6a76-45d5-8977-3ddcb29d2b4d}">
+      <Declaration><![CDATA[PROPERTY P_nMaxPressMV : DINT]]></Declaration>
+      <Get Name="Get" Id="{d3f734b7-29d6-47f2-acf9-793ee14ec744}">
+        <Declaration><![CDATA[VAR
+END_VAR
+]]></Declaration>
+        <Implementation>
+          <ST><![CDATA[P_nMaxPressMV := REAL_TO_DINT(rMaxPressMV * 1000);]]></ST>
+        </Implementation>
+      </Get>
+      <Set Name="Set" Id="{f6c0b4fd-2b46-4e8e-b453-2a74ccba58eb}">
+        <Declaration><![CDATA[VAR
+END_VAR
+]]></Declaration>
+        <Implementation>
+          <ST><![CDATA[rMaxPressMV := DINT_TO_REAL(P_nMaxPressMV) / 1000;
+fbSettings.M_WritePersData();]]></ST>
+        </Implementation>
+      </Set>
+    </Property>
+    <Property Name="P_nMinPress" Id="{ace0d131-9ba1-43fb-a1db-1c3848819724}">
+      <Declaration><![CDATA[PROPERTY P_nMinPress : DINT]]></Declaration>
+      <Get Name="Get" Id="{8cc39d5f-e479-41e4-9b08-0ca5d3c1a3ee}">
+        <Declaration><![CDATA[VAR
+END_VAR
+]]></Declaration>
+        <Implementation>
+          <ST><![CDATA[P_nMinPress := REAL_TO_DINT(rMinPress);]]></ST>
+        </Implementation>
+      </Get>
+      <Set Name="Set" Id="{81f00bb8-c2e3-4061-bbc6-68f0f2c52bfb}">
+        <Declaration><![CDATA[VAR
+END_VAR
+]]></Declaration>
+        <Implementation>
+          <ST><![CDATA[rMinPress := DINT_TO_REAL(P_nMinPress);
+fbSettings.M_WritePersData();]]></ST>
+        </Implementation>
+      </Set>
+    </Property>
+    <Property Name="P_nMinPressCV" Id="{37c6dbf7-4c6e-4a18-b01f-b867cc8f95e9}">
+      <Declaration><![CDATA[PROPERTY P_nMinPressCV : DINT]]></Declaration>
+      <Get Name="Get" Id="{0710832c-6494-4084-ac22-d828daaaa5f9}">
+        <Declaration><![CDATA[VAR
+END_VAR
+]]></Declaration>
+        <Implementation>
+          <ST><![CDATA[P_nMinPressCV := REAL_TO_DINT(rMinPressCV * 1000);]]></ST>
+        </Implementation>
+      </Get>
+      <Set Name="Set" Id="{f8b890c8-c1b8-44ba-9e0f-d59fb647c5b1}">
+        <Declaration><![CDATA[VAR
+END_VAR
+]]></Declaration>
+        <Implementation>
+          <ST><![CDATA[rMinPressCV := DINT_TO_REAL(P_nMinPressCV) / 1000;
+fbSettings.M_WritePersData();]]></ST>
+        </Implementation>
+      </Set>
+    </Property>
+    <Property Name="P_nMinPressMV" Id="{2467909e-5847-40a3-8a4a-6b4dc88f0d22}">
+      <Declaration><![CDATA[PROPERTY P_nMinPressMV : DINT]]></Declaration>
+      <Get Name="Get" Id="{3eabf0d6-8b33-4a38-963c-d6afed2ac761}">
+        <Declaration><![CDATA[VAR
+END_VAR
+]]></Declaration>
+        <Implementation>
+          <ST><![CDATA[P_nMinPressMV := REAL_TO_DINT(rMinPressMV * 1000);]]></ST>
+        </Implementation>
+      </Get>
+      <Set Name="Set" Id="{ca25dcf9-a6f9-4191-bf68-b941d08f501c}">
+        <Declaration><![CDATA[VAR
+END_VAR
+]]></Declaration>
+        <Implementation>
+          <ST><![CDATA[rMinPressMV := DINT_TO_REAL(P_nMinPressMV) / 1000;
+fbSettings.M_WritePersData();]]></ST>
+        </Implementation>
+      </Set>
+    </Property>
+    <Property Name="P_nOffsetCurrPress" Id="{cb26ed44-b684-4d27-b8b8-1b0ca653e649}">
+      <Declaration><![CDATA[PROPERTY P_nOffsetCurrPress : DINT]]></Declaration>
+      <Get Name="Get" Id="{84f32ab8-afa3-48cb-93ef-e05ebbb3f6c1}">
+        <Declaration><![CDATA[VAR
+END_VAR
+]]></Declaration>
+        <Implementation>
+          <ST><![CDATA[P_nOffsetCurrPress := nOffsetCurrPress;]]></ST>
+        </Implementation>
+      </Get>
+      <Set Name="Set" Id="{ea5ea013-1492-4988-9074-ba6392198e70}">
+        <Declaration><![CDATA[VAR
+END_VAR
+]]></Declaration>
+        <Implementation>
+          <ST><![CDATA[nOffsetCurrPress := DINT_TO_INT(P_nOffsetCurrPress);]]></ST>
+        </Implementation>
+      </Set>
+    </Property>
+    <Property Name="P_nOffsetSetPress" Id="{66ec36e6-bf68-49fa-aecc-de74e9a1c774}">
+      <Declaration><![CDATA[PROPERTY P_nOffsetSetPress : DINT]]></Declaration>
+      <Get Name="Get" Id="{f97924c3-88ad-496b-8f2e-dc1895785ec4}">
+        <Declaration><![CDATA[VAR
+END_VAR
+]]></Declaration>
+        <Implementation>
+          <ST><![CDATA[P_nOffsetSetPress := nOffsetSetPress; ]]></ST>
+        </Implementation>
+      </Get>
+      <Set Name="Set" Id="{ded38aae-7d25-47f7-8920-10db7779ba6e}">
+        <Declaration><![CDATA[VAR
+END_VAR
+]]></Declaration>
+        <Implementation>
+          <ST><![CDATA[nOffsetSetPress := DINT_TO_INT(P_nOffsetSetPress);]]></ST>
+        </Implementation>
+      </Set>
+    </Property>
+    <Property Name="P_nSetPressure" Id="{7787c449-558f-46a6-ac94-eac2bcd9ff76}">
+      <Declaration><![CDATA[PROPERTY P_nSetPressure : INT]]></Declaration>
+      <Get Name="Get" Id="{7821bbba-15c7-4d0f-ac66-6b4cf63e3c72}">
+        <Declaration><![CDATA[VAR
+END_VAR
+]]></Declaration>
+        <Implementation>
+          <ST><![CDATA[P_nSetPressure := nSetPress;]]></ST>
+        </Implementation>
+      </Get>
+    </Property>
+    <LineIds Name="FB_PneuChannelRef">
+      <LineId Id="303" Count="3" />
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="FB_PneuChannelRef.FB_init">
+      <LineId Id="7" Count="1" />
+    </LineIds>
+    <LineIds Name="FB_PneuChannelRef.M_GetPressOk">
+      <LineId Id="3" Count="0" />
+      <LineId Id="16" Count="0" />
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="FB_PneuChannelRef.M_SetPressure">
+      <LineId Id="31" Count="0" />
+      <LineId Id="50" Count="0" />
+      <LineId Id="32" Count="0" />
+      <LineId Id="34" Count="15" />
+      <LineId Id="33" Count="0" />
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="FB_PneuChannelRef.P_bSupplyOk.Get">
+      <LineId Id="3" Count="3" />
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="FB_PneuChannelRef.P_nCurrentPressure.Get">
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="FB_PneuChannelRef.P_nFactCurrPress.Get">
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="FB_PneuChannelRef.P_nFactCurrPress.Set">
+      <LineId Id="3" Count="0" />
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="FB_PneuChannelRef.P_nFactSetPress.Get">
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="FB_PneuChannelRef.P_nFactSetPress.Set">
+      <LineId Id="3" Count="0" />
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="FB_PneuChannelRef.P_nMaxPress.Get">
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="FB_PneuChannelRef.P_nMaxPress.Set">
+      <LineId Id="3" Count="0" />
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="FB_PneuChannelRef.P_nMaxPressCV.Get">
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="FB_PneuChannelRef.P_nMaxPressCV.Set">
+      <LineId Id="3" Count="0" />
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="FB_PneuChannelRef.P_nMaxPressMV.Get">
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="FB_PneuChannelRef.P_nMaxPressMV.Set">
+      <LineId Id="3" Count="0" />
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="FB_PneuChannelRef.P_nMinPress.Get">
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="FB_PneuChannelRef.P_nMinPress.Set">
+      <LineId Id="3" Count="0" />
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="FB_PneuChannelRef.P_nMinPressCV.Get">
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="FB_PneuChannelRef.P_nMinPressCV.Set">
+      <LineId Id="3" Count="0" />
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="FB_PneuChannelRef.P_nMinPressMV.Get">
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="FB_PneuChannelRef.P_nMinPressMV.Set">
+      <LineId Id="3" Count="0" />
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="FB_PneuChannelRef.P_nOffsetCurrPress.Get">
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="FB_PneuChannelRef.P_nOffsetCurrPress.Set">
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="FB_PneuChannelRef.P_nOffsetSetPress.Get">
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="FB_PneuChannelRef.P_nOffsetSetPress.Set">
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="FB_PneuChannelRef.P_nSetPressure.Get">
+      <LineId Id="2" Count="0" />
+    </LineIds>
+  </POU>
+</TcPlcObject>

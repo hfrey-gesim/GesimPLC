@@ -1,0 +1,84 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<TcPlcObject Version="1.1.0.1" ProductVersion="3.1.4020.12">
+  <POU Name="FB_SDO_WRITE" Id="{3af541e1-532b-41d1-8a1b-d7a00fdf1764}" SpecialFunc="None">
+    <Declaration><![CDATA[FUNCTION_BLOCK FB_SDO_WRITE
+VAR_INPUT
+	sADSNetID		: STRING(23); 	//AMSNetID von Klemme EL6751. Can be empty if only one local single channel card is present
+	nPortNr			: WORD;         //Port No. vom CANopen-Knoten (siehe Gerätemanager)
+	nIndex			: DWORD;      	//ObjectIndex vom zu lesenden CANopen-Objecteintrag
+	nSubIndex		: DWORD;   		//SubIndex vom zu lesenden CANopen-Objecteintrag
+	nDataLength		: DWORD;   		//Länge des zu lesenden Datums (max 4 Byte)
+	nData			: DINT;
+	bExecute		: BOOL;
+END_VAR
+
+VAR_OUTPUT
+	bBusy			: BOOL;
+    bError			: BOOL;
+    nAdsErrorId		: ERRORID;	//Ads-ErrorId
+	nSdoErrorId		: UDINT;	//Sdo-ErrorId	
+END_VAR
+
+VAR
+	nState			: USINT;
+	ADSWRITE		: Tc2_System.ADSWRITE;
+	uSdoData		: U_SDO_DATA;	//Union mit zusendenden Bytes und entsprechendem DINT
+	nCount			: USINT;
+END_VAR
+]]></Declaration>
+    <Implementation>
+      <ST><![CDATA[IF bExecute THEN
+	nCount := nCount + 1;
+	IF nState = 0 THEN
+		bBusy := TRUE;
+		uSdoData.nData := nData;
+		ADSWRITE(NETID:= sADSNetID, PORT:= nPortNr, IDXGRP:= nIndex, IDXOFFS:= nSubIndex, 
+				LEN:= nDataLength, SRCADDR:= ADR(uSdoData), WRITE:= TRUE, TMOUT:= T#1S);	
+	ELSIF nState = 1 THEN
+			ADSWRITE(WRITE:= FALSE); //Wenn hier schon auf False gesetzt wird, braucht es weniger Zyklen zum lesen
+	END_IF
+	
+	IF ADSWRITE.ERR THEN
+		//ADSREAD.ERRID in Ads-Error und Sdo-Error aufsplitten
+		// Ads-Error steht in Bit 0-15
+		nAdsErrorId := UDINT_TO_UINT(ADSWRITE.ERRID AND 16#0000FFFF);
+		//Sdo-Error steht in Bit 16-31
+		nSdoErrorId := F_AdsError_TO_SdoError(ADSWRITE.ERRID);
+		
+		//Fals Error = 1802 (out of memory) Schreibvorgang wiederholen
+		IF nAdsErrorId = 1802 THEN
+			nState := 0;
+		ELSE
+			bError := TRUE;
+			bBusy := FALSE;
+			nState := 99;					
+		END_IF
+		ADSWRITE(WRITE:= FALSE);
+	ELSE
+		IF NOT ADSWRITE.BUSY THEN
+			//Gelesenes Datum aus Union in Output-Datum übertragen
+			nData := uSdoData.nData;
+			ADSWRITE(WRITE:= FALSE);
+			nState := 2;
+			bBusy := FALSE;
+		END_IF; 				
+	END_IF		
+ELSE
+	bBusy := FALSE;
+	bError := FALSE;
+	nAdsErrorId := 0;
+	nSdoErrorId := 0;
+	nState := 0;	
+END_IF]]></ST>
+    </Implementation>
+    <LineIds Name="FB_SDO_WRITE">
+      <LineId Id="3" Count="2" />
+      <LineId Id="7" Count="3" />
+      <LineId Id="26" Count="1" />
+      <LineId Id="130" Count="0" />
+      <LineId Id="105" Count="24" />
+      <LineId Id="48" Count="6" />
+      <LineId Id="2" Count="0" />
+    </LineIds>
+  </POU>
+</TcPlcObject>

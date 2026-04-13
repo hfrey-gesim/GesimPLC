@@ -1,0 +1,388 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<TcPlcObject Version="1.1.0.1" ProductVersion="3.1.4022.7">
+  <POU Name="FB_ExtruderRef" Id="{cc13f0ed-bb1c-4ba8-8fc3-fb04af90d564}" SpecialFunc="None">
+    <Declaration><![CDATA[FUNCTION_BLOCK FB_ExtruderRef
+VAR_INPUT
+END_VAR
+VAR
+	rFactorDistance		: REAL;
+	rFactorFeed			: REAL;
+	nFeedOrgin			: DINT;	//µm/s
+	nCompFeedOrgin		: DINT;	//µm/s
+	nRelaxFeedOrgin		: DINT;	//µm/s
+	nDistanceOrgin		: DINT;	//µm
+	nCompDistanceOrgin	: DINT;	//µm
+	nRelaxDistanceOrgin	: DINT;	//µm
+	
+	//Umgerechnete Werte
+	nFeedCalc			: DINT; // 1/100tel RPM
+	nCompFeedCalc		: DINT; // 1/100tel RPM
+	nRelaxFeedCalc		: DINT; // 1/100tel RPM
+	nDistanceCalc		: DINT;	// µm
+	nCompDistanceCalc	: DINT;	// µm
+	nRelaxDistanceCalc	: DINT;	// µm	
+END_VAR
+VAR_OUTPUT
+END_VAR
+]]></Declaration>
+    <Implementation>
+      <ST><![CDATA[//Basisklasse]]></ST>
+    </Implementation>
+    <Property Name="P_bError" Id="{a90aa48c-3e84-437b-b36b-7701c9a26430}">
+      <Declaration><![CDATA[PROPERTY P_bError : BOOL]]></Declaration>
+      <Get Name="Get" Id="{6b65e6a9-f3cc-4540-81a4-f48fa7f7be46}">
+        <Declaration><![CDATA[VAR
+END_VAR
+]]></Declaration>
+        <Implementation>
+          <ST><![CDATA[]]></ST>
+        </Implementation>
+      </Get>
+    </Property>
+    <Property Name="P_bIsActive" Id="{a2846892-759b-4962-9d83-764df0747dd6}">
+      <Declaration><![CDATA[PROPERTY P_bIsActive : BOOL]]></Declaration>
+      <Get Name="Get" Id="{3edad862-2463-477f-a7f4-58a1bdd8625f}">
+        <Declaration><![CDATA[VAR
+END_VAR
+]]></Declaration>
+        <Implementation>
+          <ST><![CDATA[]]></ST>
+        </Implementation>
+      </Get>
+    </Property>
+    <Property Name="P_bIsLocked" Id="{136d906a-8ef0-42fa-85df-aebfb25873cd}">
+      <Declaration><![CDATA[PROPERTY P_bIsLocked : BOOL]]></Declaration>
+      <Get Name="Get" Id="{c05d1e06-e56c-4ad4-850d-67d234557d86}">
+        <Declaration><![CDATA[VAR
+END_VAR
+]]></Declaration>
+        <Implementation>
+          <ST><![CDATA[]]></ST>
+        </Implementation>
+      </Get>
+    </Property>
+    <Property Name="P_nCompDistanceCalc" Id="{d7932961-be6a-4a56-a696-9365c1284f6f}">
+      <Declaration><![CDATA[PROPERTY P_nCompDistanceCalc : DINT]]></Declaration>
+      <Get Name="Get" Id="{9ada38a7-0350-48ce-b2d1-9b66c48d104d}">
+        <Declaration><![CDATA[VAR
+END_VAR
+]]></Declaration>
+        <Implementation>
+          <ST><![CDATA[P_nCompDistanceCalc := nCompDistanceCalc;]]></ST>
+        </Implementation>
+      </Get>
+    </Property>
+    <Property Name="P_nCompDistanceOrgin" Id="{5e1885b2-a4dc-41fc-977c-d2e9e0e4fdaf}">
+      <Declaration><![CDATA[PROPERTY P_nCompDistanceOrgin : DINT]]></Declaration>
+      <Get Name="Get" Id="{8f618551-faf6-42e6-ba50-21c91f759d18}">
+        <Declaration><![CDATA[VAR
+END_VAR
+]]></Declaration>
+        <Implementation>
+          <ST><![CDATA[P_nCompDistanceOrgin := nCompDistanceOrgin;]]></ST>
+        </Implementation>
+      </Get>
+      <Set Name="Set" Id="{755d6107-2010-4731-afb6-9bb98806dc56}">
+        <Declaration><![CDATA[
+VAR
+END_VAR
+]]></Declaration>
+        <Implementation>
+          <ST><![CDATA[nCompDistanceOrgin := P_nCompDistanceOrgin;
+nCompDistanceCalc := REAL_TO_DINT(rFactorDistance * DINT_TO_REAL(nCompDistanceOrgin));]]></ST>
+        </Implementation>
+      </Set>
+    </Property>
+    <Property Name="P_nCompFeedCalc" Id="{1be23e13-c82a-4621-8a81-b8009d3c22ef}">
+      <Declaration><![CDATA[PROPERTY P_nCompFeedCalc : DINT]]></Declaration>
+      <Get Name="Get" Id="{3983d0d5-4248-46a2-8411-b3868de2851b}">
+        <Declaration><![CDATA[VAR
+END_VAR
+]]></Declaration>
+        <Implementation>
+          <ST><![CDATA[P_nCompFeedCalc := nCompFeedCalc;]]></ST>
+        </Implementation>
+      </Get>
+    </Property>
+    <Property Name="P_nCompFeedOrgin" Id="{b6b47049-4937-4eb2-833a-43a852e0d1f7}">
+      <Declaration><![CDATA[PROPERTY P_nCompFeedOrgin : DINT]]></Declaration>
+      <Get Name="Get" Id="{8091d12e-8113-45a6-b1d9-10015d40649c}">
+        <Declaration><![CDATA[VAR
+END_VAR
+]]></Declaration>
+        <Implementation>
+          <ST><![CDATA[P_nCompFeedOrgin := nCompFeedOrgin;]]></ST>
+        </Implementation>
+      </Get>
+      <Set Name="Set" Id="{95087693-fe72-4de1-bfee-5a26515dd631}">
+        <Declaration><![CDATA[VAR
+END_VAR
+]]></Declaration>
+        <Implementation>
+          <ST><![CDATA[nCompFeedOrgin := P_nCompFeedOrgin;
+nCompFeedCalc := REAL_TO_DINT(rFactorFeed * DINT_TO_REAL(nCompFeedOrgin));]]></ST>
+        </Implementation>
+      </Set>
+    </Property>
+    <Property Name="P_nCurrentPos" Id="{0269be9b-31e5-4849-b342-648d45226c4a}">
+      <Declaration><![CDATA[PROPERTY P_nCurrentPos : DINT]]></Declaration>
+      <Get Name="Get" Id="{26c5381f-1be5-45cf-a72b-f30119f83a3d}">
+        <Declaration><![CDATA[VAR
+END_VAR
+]]></Declaration>
+        <Implementation>
+          <ST><![CDATA[]]></ST>
+        </Implementation>
+      </Get>
+    </Property>
+    <Property Name="P_nDistanceCalc" Id="{194f4c34-07e2-41c6-b67c-6d05c2397e15}">
+      <Declaration><![CDATA[PROPERTY P_nDistanceCalc : DINT]]></Declaration>
+      <Get Name="Get" Id="{46b74109-a82d-45e6-a491-cfe87a367f3e}">
+        <Declaration><![CDATA[VAR
+END_VAR
+]]></Declaration>
+        <Implementation>
+          <ST><![CDATA[P_nDistanceCalc := nDistanceCalc;]]></ST>
+        </Implementation>
+      </Get>
+    </Property>
+    <Property Name="P_nDistanceOrgin" Id="{095df1c9-fa12-481a-9952-6e3ac88cdbba}">
+      <Declaration><![CDATA[PROPERTY P_nDistanceOrgin : DINT]]></Declaration>
+      <Get Name="Get" Id="{e590f7e7-20e9-40ea-9cc4-7750b0cc1a97}">
+        <Declaration><![CDATA[VAR
+END_VAR
+]]></Declaration>
+        <Implementation>
+          <ST><![CDATA[P_nDistanceOrgin := nDistanceOrgin;]]></ST>
+        </Implementation>
+      </Get>
+      <Set Name="Set" Id="{412be54d-7c51-43da-a802-726b757f3afd}">
+        <Declaration><![CDATA[VAR
+END_VAR
+]]></Declaration>
+        <Implementation>
+          <ST><![CDATA[nDistanceOrgin := P_nDistanceOrgin;
+nDistanceCalc := REAL_TO_DINT(rFactorDistance * DINT_TO_REAL(nDistanceOrgin));]]></ST>
+        </Implementation>
+      </Set>
+    </Property>
+    <Property Name="P_nFeedCalc" Id="{60155019-64d8-4050-b091-340b26cd2149}">
+      <Declaration><![CDATA[PROPERTY P_nFeedCalc : DINT]]></Declaration>
+      <Get Name="Get" Id="{008b4e81-504b-48ed-8021-d8865e125793}">
+        <Declaration><![CDATA[VAR
+END_VAR
+]]></Declaration>
+        <Implementation>
+          <ST><![CDATA[P_nFeedCalc := nFeedCalc;]]></ST>
+        </Implementation>
+      </Get>
+    </Property>
+    <Property Name="P_nFeedOrgin" Id="{2c9c9e45-b81f-452f-8dc1-41a87f235b1d}">
+      <Declaration><![CDATA[PROPERTY P_nFeedOrgin : DINT]]></Declaration>
+      <Get Name="Get" Id="{6f8027b2-d396-4791-bdf7-f0a96025ced3}">
+        <Declaration><![CDATA[VAR
+END_VAR
+]]></Declaration>
+        <Implementation>
+          <ST><![CDATA[P_nFeedOrgin := nFeedOrgin;]]></ST>
+        </Implementation>
+      </Get>
+      <Set Name="Set" Id="{d7755730-32f8-4860-b672-2472c2a601ae}">
+        <Declaration><![CDATA[VAR
+END_VAR
+]]></Declaration>
+        <Implementation>
+          <ST><![CDATA[nFeedOrgin := P_nFeedOrgin;
+nFeedCalc := REAL_TO_DINT(rFactorFeed * DINT_TO_REAL(nFeedOrgin));]]></ST>
+        </Implementation>
+      </Set>
+    </Property>
+    <Property Name="P_nRelaxDistanceCalc" Id="{b331b8d2-581b-4a10-a2a1-059efc592042}">
+      <Declaration><![CDATA[PROPERTY P_nRelaxDistanceCalc : DINT]]></Declaration>
+      <Get Name="Get" Id="{4de7f85f-8a97-44cc-8510-25ea919cbb07}">
+        <Declaration><![CDATA[VAR
+END_VAR
+]]></Declaration>
+        <Implementation>
+          <ST><![CDATA[P_nRelaxDistanceCalc := nRelaxDistanceCalc;]]></ST>
+        </Implementation>
+      </Get>
+    </Property>
+    <Property Name="P_nRelaxDistanceOrgin" Id="{589dcb0d-27a6-4ad4-bb9e-919c15461576}">
+      <Declaration><![CDATA[PROPERTY P_nRelaxDistanceOrgin : DINT]]></Declaration>
+      <Get Name="Get" Id="{a9b6788d-fb2a-4218-975c-f6ba3e606045}">
+        <Declaration><![CDATA[VAR
+END_VAR
+]]></Declaration>
+        <Implementation>
+          <ST><![CDATA[P_nRelaxDistanceOrgin := nRelaxDistanceOrgin;]]></ST>
+        </Implementation>
+      </Get>
+      <Set Name="Set" Id="{0799025d-c435-4bc8-a22a-eacb42bc2aa7}">
+        <Declaration><![CDATA[VAR
+END_VAR
+]]></Declaration>
+        <Implementation>
+          <ST><![CDATA[nRelaxDistanceOrgin := P_nRelaxDistanceOrgin;
+nRelaxDistanceCalc := REAL_TO_DINT(rFactorDistance * DINT_TO_REAL(nRelaxDistanceOrgin));]]></ST>
+        </Implementation>
+      </Set>
+    </Property>
+    <Property Name="P_nRelaxFeedCalc" Id="{04d8e9d7-c3de-4fb3-ac71-4d617f15ade4}">
+      <Declaration><![CDATA[PROPERTY P_nRelaxFeedCalc : DINT]]></Declaration>
+      <Get Name="Get" Id="{974c1f3c-3ed9-4f74-b66a-4443b3b8b76b}">
+        <Declaration><![CDATA[VAR
+END_VAR
+]]></Declaration>
+        <Implementation>
+          <ST><![CDATA[P_nRelaxFeedCalc := nRelaxFeedCalc;]]></ST>
+        </Implementation>
+      </Get>
+    </Property>
+    <Property Name="P_nRelaxFeedOrgin" Id="{1ebfa167-d1b2-4c39-a5fb-74cc5d6bfc95}">
+      <Declaration><![CDATA[PROPERTY P_nRelaxFeedOrgin : DINT]]></Declaration>
+      <Get Name="Get" Id="{23ec6873-736e-4c58-9455-222b20bba739}">
+        <Declaration><![CDATA[VAR
+END_VAR
+]]></Declaration>
+        <Implementation>
+          <ST><![CDATA[P_nRelaxFeedOrgin := nRelaxFeedOrgin;]]></ST>
+        </Implementation>
+      </Get>
+      <Set Name="Set" Id="{fe95ab7c-79b2-41dc-8ebb-ff37cdcd639a}">
+        <Declaration><![CDATA[VAR
+END_VAR
+]]></Declaration>
+        <Implementation>
+          <ST><![CDATA[nRelaxFeedOrgin := P_nRelaxFeedOrgin;
+nRelaxFeedCalc := REAL_TO_DINT(rFactorFeed * DINT_TO_REAL(nRelaxFeedOrgin));]]></ST>
+        </Implementation>
+      </Set>
+    </Property>
+    <Property Name="P_rFactorDistance" Id="{20def287-7612-4379-8c6a-5a20ad96f60b}">
+      <Declaration><![CDATA[PROPERTY P_rFactorDistance : REAL]]></Declaration>
+      <Get Name="Get" Id="{5cab9da3-fe0b-46c5-95ef-912d946152b5}">
+        <Declaration><![CDATA[VAR
+END_VAR
+]]></Declaration>
+        <Implementation>
+          <ST><![CDATA[P_rFactorDistance := rFactorDistance;]]></ST>
+        </Implementation>
+      </Get>
+      <Set Name="Set" Id="{9e020033-dd7a-43da-ace3-c8d7a0c600ab}">
+        <Declaration><![CDATA[VAR
+END_VAR
+]]></Declaration>
+        <Implementation>
+          <ST><![CDATA[rFactorDistance := P_rFactorDistance;]]></ST>
+        </Implementation>
+      </Set>
+    </Property>
+    <Property Name="P_rFactorFeed" Id="{6825f398-a927-4562-b2d1-db6542088ae8}">
+      <Declaration><![CDATA[PROPERTY P_rFactorFeed : REAL]]></Declaration>
+      <Get Name="Get" Id="{909411c2-61d4-4d6c-976e-202186ccfe42}">
+        <Declaration><![CDATA[VAR
+END_VAR
+]]></Declaration>
+        <Implementation>
+          <ST><![CDATA[P_rFactorFeed := rFactorFeed;]]></ST>
+        </Implementation>
+      </Get>
+      <Set Name="Set" Id="{db2acedd-8ed4-47a6-8b23-030287511c0a}">
+        <Declaration><![CDATA[VAR
+END_VAR
+]]></Declaration>
+        <Implementation>
+          <ST><![CDATA[rFactorFeed := P_rFactorFeed;]]></ST>
+        </Implementation>
+      </Set>
+    </Property>
+    <LineIds Name="FB_ExtruderRef">
+      <LineId Id="9" Count="0" />
+    </LineIds>
+    <LineIds Name="FB_ExtruderRef.P_bError.Get">
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="FB_ExtruderRef.P_bIsActive.Get">
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="FB_ExtruderRef.P_bIsLocked.Get">
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="FB_ExtruderRef.P_nCompDistanceCalc.Get">
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="FB_ExtruderRef.P_nCompDistanceOrgin.Get">
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="FB_ExtruderRef.P_nCompDistanceOrgin.Set">
+      <LineId Id="3" Count="0" />
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="FB_ExtruderRef.P_nCompFeedCalc.Get">
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="FB_ExtruderRef.P_nCompFeedOrgin.Get">
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="FB_ExtruderRef.P_nCompFeedOrgin.Set">
+      <LineId Id="3" Count="0" />
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="FB_ExtruderRef.P_nCurrentPos.Get">
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="FB_ExtruderRef.P_nDistanceCalc.Get">
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="FB_ExtruderRef.P_nDistanceOrgin.Get">
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="FB_ExtruderRef.P_nDistanceOrgin.Set">
+      <LineId Id="3" Count="0" />
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="FB_ExtruderRef.P_nFeedCalc.Get">
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="FB_ExtruderRef.P_nFeedOrgin.Get">
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="FB_ExtruderRef.P_nFeedOrgin.Set">
+      <LineId Id="3" Count="0" />
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="FB_ExtruderRef.P_nRelaxDistanceCalc.Get">
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="FB_ExtruderRef.P_nRelaxDistanceOrgin.Get">
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="FB_ExtruderRef.P_nRelaxDistanceOrgin.Set">
+      <LineId Id="3" Count="0" />
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="FB_ExtruderRef.P_nRelaxFeedCalc.Get">
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="FB_ExtruderRef.P_nRelaxFeedOrgin.Get">
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="FB_ExtruderRef.P_nRelaxFeedOrgin.Set">
+      <LineId Id="3" Count="0" />
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="FB_ExtruderRef.P_rFactorDistance.Get">
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="FB_ExtruderRef.P_rFactorDistance.Set">
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="FB_ExtruderRef.P_rFactorFeed.Get">
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="FB_ExtruderRef.P_rFactorFeed.Set">
+      <LineId Id="2" Count="0" />
+    </LineIds>
+  </POU>
+</TcPlcObject>

@@ -1,0 +1,1280 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<TcPlcObject Version="1.1.0.1" ProductVersion="3.1.4024.11">
+  <POU Name="FB_MultiZRef" Id="{38715b69-500e-42e5-b540-53c2aabfb251}" SpecialFunc="None">
+    <Declaration><![CDATA[FUNCTION_BLOCK FB_MultiZRef EXTENDS FB_CanNodeBase
+
+VAR_INPUT
+	aFbZAxisRef 	: ARRAY[1..7] OF FB_ZAxisRef(THIS);
+	aFbPiezoRef		: ARRAY[1..7] OF FB_PiezoRef(THIS);
+	aFbHeaterRef	: ARRAY[1..7] OF FB_MZHeaterRef(THIS);
+	aFbExtruderRef	: ARRAY[1..7] OF FB_PistonExtruderRef(THIS);
+	aFbGripperRef	: ARRAY[1..7] OF FB_GripperRef(THIS);
+	stStampSupport 	: ST_StampSupport;
+	stStrobTrigger	: ST_StrobTrigger; //Sdo
+	aDigiOut		AT %Q* : ARRAY[1..7] OF BOOL;
+	aFbGPInputRef	: ARRAY[1..6] OF FB_GPInputRef(THIS);
+	bFixConfig		: BOOL;
+	nErrorGlobal	AT %I* : USINT;
+END_VAR
+
+VAR
+	i				: USINT;
+	bLegacy			: BOOL;
+	nAxisNr			: USINT;
+	nAxisNrZSensor 	: USINT;
+	
+	//bPrepareAxis 			: BOOL;
+	nStateA_PrepareAxis 	: USINT;
+	nStateA_PrepareAxisNext : USINT;
+	nPrepareAxisNr 			: USINT;
+	nTemp					: UDINT;
+	sTemp					: STRING;
+	sHwIdTemp				: ST_HardwareId;
+	nTriggerVersion			: USINT;
+	nState					: USINT;
+	
+	//ResetError
+	bMzBaseRestarted : BOOL;
+	bGlobErrorReseted : BOOL;
+
+	//A_SetConfig	
+	bSetConfig : BOOL;
+	nStateA_SetConfig : USINT;
+	nStateA_SetConfigNext : USINT;
+	bSetConfigEnable : BOOL;
+	nStateA_ResetError : USINT;
+	tmrTimeout : TON;
+	nRemoteCRC : UINT;
+	nLocalCRC : UINT;
+	
+	//A_Monitor()
+	nStateA_Monitor 	: USINT;
+	bGlobError 			: BOOL;
+	fbSdoRead_Monitor 	: FB_SDO_READ;
+	
+END_VAR
+
+VAR PERSISTENT
+	stZSensorCalibration : ARRAY[1..4] OF ST_ZSensorCalibration;
+END_VAR]]></Declaration>
+    <Implementation>
+      <ST><![CDATA[IF bNodeEnabled THEN
+	IF nState = 0 THEN //Preparing Step1 (Base)
+		SUPER^();
+		IF bPreparingOK THEN
+			nPrepareAxisNr := 1;
+			FOR i:= 1 TO 7 BY 1 DO
+				IF NOT aFbZAxisRef[i].stInput.nStatus.3 THEN
+					aFbZAxisRef[i].stOutput.nCtrl := 0;
+					aFbZAxisRef[i].stOutput.nMode := 0;
+					aFbZAxisRef[i].stOutput.nTrgtPos := 0;
+					aFbZAxisRef[i].stOutput.nVelo := 0;
+				END_IF
+			END_FOR
+			nState := 1;
+		ELSIF bError THEN
+			nState := 99;
+		END_IF
+	ELSIF nState = 1 THEN
+		A_PrepareAxis();
+		IF nStateA_PrepareAxis >= 80 THEN
+			IF nStateA_PrepareAxis >= 99 THEN
+				nState := 99;
+				bError := TRUE;
+			ELSE
+				nState := 2;
+			END_IF
+			nStateA_PrepareAxis := 0;
+		END_IF
+	ELSIF nState = 2 THEN //Operational
+		SUPER^(); //wird nur zur für ResetApp benötigt
+		
+		IF bSetConfig THEN
+			IF bLegacy THEN
+				A_SetConfigLegacy();	//alte Firmware ohne Toolerkennung
+			ELSE
+				A_SetConfig();
+			END_IF
+			IF nStateA_SetConfig >= 80 THEN
+				IF nStateA_SetConfig >= 99 THEN
+					bError := TRUE;
+				END_IF
+				nStateA_SetConfig := 0;
+				bSetConfig := FALSE;
+			END_IF
+		END_IF
+		
+		IF bResetError THEN
+			A_ResetError();
+			IF nStateA_ResetError >= 80 THEN
+				bError := FALSE;
+				IF nStateA_ResetError >= 99 THEN
+					bError := TRUE;
+				END_IF
+				nStateA_ResetError := 0;
+				bResetError := FALSE;
+			END_IF
+		END_IF
+		
+	END_IF
+	
+	bBusy := (nState < 2) OR bSetConfig OR bResetError OR bResetApp;
+
+	IF NOT (bBusy OR bStopMonitor) THEN
+		A_Monitor();
+	END_IF
+	
+END_IF
+]]></ST>
+    </Implementation>
+    <Action Name="A_Monitor" Id="{e5f63617-1e62-4058-8b93-9fdb10942784}">
+      <Implementation>
+        <ST><![CDATA[//Monitor CanNode
+SUPER^.A_Monitor();
+
+//Monitor GlobError
+IF nStateA_Monitor = 0 THEN
+	IF nErrorGlobal > 0 AND NOT bGlobError THEN
+		bGlobError := TRUE;
+		bError := TRUE;
+		stError.HardwareGrp := E_HardwareGrp.MultiZBasis;
+		stError.HardwareNr := stHardwareId.nItem;
+		stError.POU := E_POU.POU_FB_MultiZRef;
+		stError.POUAction := E_POUACT.POUACT_A_Monitor;
+		stError.ErrorId := F_MultiZError_TO_ErrorId(nErrorGlobal);
+		nStateA_Monitor := 2; //LastErrorState auslesen
+	ELSE
+		nStateA_Monitor := 1;
+	END_IF
+END_IF
+
+//Monitor AxisError
+IF nStateA_Monitor = 1 THEN
+	nStateA_Monitor := 0;
+	FOR nAxisNr := 1 TO 7 BY 1 DO
+		IF aFbZAxisRef[nAxisNr].stInput.nStatus.7 THEN //Achse vorhanden?
+			//Achse ist schon in Error -> dieser braucht nicht mehr gemeldet werden
+			//Dieser Errorstatus kann auch durch Funktionsbausteine gesetzt werden, die auf eine
+			//Achsenreferenz zugreifen. (z.B. FB_Zm_Home, FB_Zm_Jog usw.
+			IF NOT aFbZAxisRef[nAxisNr].stStatus.bError THEN
+				IF NOT aFbZAxisRef[nAxisNr].bIngoreError AND 
+					(aFbZAxisRef[nAxisNr].stInput.nStatus.3 OR aFbZAxisRef[nAxisNr].stInput.nError > 0) THEN
+					aFbZAxisRef[nAxisNr].stStatus.bError := TRUE;
+					//Fehler melden	(nur 1x)
+					stError.HardwareGrp := E_HardwareGrp.AxisZ;
+					stError.HardwareNr := nAxisNr;
+					stError.POU := E_POU.POU_FB_MultiZRef;
+					stError.POUAction := E_POUACT.POUACT_A_Monitor;
+					stError.ErrorId := F_MultiZError_TO_ErrorId(aFbZAxisRef[nAxisNr].stInput.nError);
+					nStateA_Monitor := 2; //LastErrorState auslesen
+					EXIT;
+				END_IF
+			END_IF
+			IF aFbZAxisRef[nAxisNr].stStatus.bError THEN
+				bError := TRUE;
+			END_IF
+		END_IF		
+	END_FOR
+END_IF
+
+//Read LastErrorState
+IF nStateA_Monitor = 2 THEN
+	fbSdoRead_Monitor(sADSNetID:= stAdsAdress.sNetId, nPortNr:= stAdsAdress.nPort, 
+				nIndex:= cLastErrorState.nIndex, nSubIndex:= cLastErrorState.nSubIndex,
+				nDataLength:= cLastErrorState.nLength, bExecute:= TRUE);
+	IF NOT fbSdoRead_Monitor.bBusy THEN
+		stError.ErrorId2 := DINT_TO_UDINT(fbSdoRead_Monitor.nData);
+		fbSdoRead_Monitor(bExecute:= FALSE);
+		nStateA_Monitor := 3;
+	END_IF
+END_IF
+
+//Notify Error
+IF nStateA_Monitor = 3 THEN
+	fbErrorList.M_Add(stError);
+	nStateA_Monitor := 0;
+END_IF
+]]></ST>
+      </Implementation>
+    </Action>
+    <Action Name="A_PrepareAxis" Id="{2cc0abfb-9805-47d7-ab1f-2ecba350db56}">
+      <Implementation>
+        <ST><![CDATA[//1.Versionsvergleich -> Legacy
+IF nStateA_PrepareAxis = 0 THEN
+	IF F_CompVersion(sSoftwVersion,'1.10.X') = -1 THEN //alte Firmware ohne Toolerkennung
+		bLegacy := TRUE;
+	END_IF
+	nStateA_PrepareAxis := 1;
+END_IF
+
+//2.Versionen der Motorsteuerungen auslesen
+IF nStateA_PrepareAxis = 1 THEN
+	//TMC-Version der Motorsteuerungen auslesen
+	fbSdoRead(sADSNetID:= stAdsAdress.sNetId, nPortNr:= stAdsAdress.nPort,
+			nIndex:= cTMCVersion.nIndex, nSubIndex:= nPrepareAxisNr, nDataLength:= cTMCVersion.nLength, bExecute:= TRUE); 
+	
+	IF NOT fbSdoRead.bBusy THEN
+		IF fbSdoRead.bError THEN
+			nErrorId := fbSdoRead.nAdsErrorId;
+			nErrorId2 := fbSdoRead.nSdoErrorId;
+			nStateA_PrepareAxis := 99;	//Error
+		ELSE
+			aFbZAxisRef[nPrepareAxisNr].nTmcModulId := DINT_TO_UINT(SHR(fbSdoRead.nData,16));
+			nTemp := DINT_TO_UDINT(fbSdoRead.nData) AND 16#0000FF00;
+			nTemp := SHR(nTemp,8);
+			sTemp := UDINT_TO_STRING(nTemp);
+			sTemp := CONCAT(sTemp,'.');
+			nTemp := DINT_TO_UDINT(fbSdoRead.nData) AND 16#000000FF;
+			sTemp := CONCAT(sTemp,UDINT_TO_STRING(nTemp));
+			aFbZAxisRef[nPrepareAxisNr].sTmcVersion := sTemp;
+			IF bLegacy THEN
+				nStateA_PrepareAxis := 80;
+			ELSE
+				nStateA_PrepareAxis := 2;
+			END_IF
+			
+			//Nächste aktive Achse für das Auslesen der TMC-Version ermitteln
+			FOR nPrepareAxisNr := nPrepareAxisNr + 1 TO 7 BY 1 DO
+				IF aFbZAxisRef[nPrepareAxisNr].stInput.nStatus.7 THEN
+					//HwId Item auf ZAxis Parent Item übertragen
+					aFbZAxisRef[nPrepareAxisNr].M_RenewHwId();
+					nStateA_PrepareAxis := 1;
+					EXIT;
+				END_IF
+			END_FOR
+		END_IF
+		fbSdoRead(bExecute:= FALSE);
+	END_IF
+END_IF
+
+IF nStateA_PrepareAxis = 2 THEN
+	IF bLegacy THEN
+		nStateA_PrepareAxis := 80;
+	ELSE
+		nPrepareAxisNr := 1;
+		nStateA_PrepareAxis := 3;
+	END_IF
+END_IF
+
+//ToolTypes auslesen (nur bei Toolerkennung möglich) dafür muss bei SetConfig nicht mehr separat ausgelesen werden
+IF nStateA_PrepareAxis = 3 THEN
+	fbSdoRead(sADSNetID:= stAdsAdress.sNetId, nPortNr:= stAdsAdress.nPort,
+			nIndex:= cToolType.nIndex, nSubIndex:= nPrepareAxisNr, nDataLength:= cToolType.nLength, bExecute:= TRUE);
+			
+	IF NOT fbSdoRead.bBusy THEN
+		IF fbSdoRead.bError THEN
+			nErrorId := fbSdoRead.nAdsErrorId;
+			nErrorId2 := fbSdoRead.nSdoErrorId;
+			nStateA_PrepareAxis := 99;	//Error
+		ELSE
+			aFbZAxisRef[nPrepareAxisNr].eDetectedToolType := DINT_TO_USINT(fbSdoRead.nData);
+			nStateA_PrepareAxis := 4;
+			//Nächste aktive Achse ermitteln
+			FOR nPrepareAxisNr := nPrepareAxisNr + 1 TO 7 BY 1 DO
+				IF aFbZAxisRef[nPrepareAxisNr].stInput.nStatus.7 THEN
+					nStateA_PrepareAxis := 3;
+					EXIT;
+				END_IF
+			END_FOR
+		END_IF
+		fbSdoRead(bExecute:= FALSE);
+	END_IF	
+END_IF
+
+IF nStateA_PrepareAxis = 4 THEN
+	nPrepareAxisNr := 1;
+	nStateA_PrepareAxis := 5;
+END_IF
+
+//HeaterExits auslesen (nur bei Toolerkennung möglich) dafür muss bei SetConfig nicht mehr separat ausgelesen werden
+IF nStateA_PrepareAxis = 5 THEN
+	fbSdoRead(sADSNetID:= stAdsAdress.sNetId, nPortNr:= stAdsAdress.nPort,
+			nIndex:= cHeaterExist.nIndex, nSubIndex:= nPrepareAxisNr, nDataLength:= cHeaterExist.nLength, bExecute:= TRUE);
+			
+	IF NOT fbSdoRead.bBusy THEN
+		IF fbSdoRead.bError THEN
+			nErrorId := fbSdoRead.nAdsErrorId;
+			nErrorId2 := fbSdoRead.nSdoErrorId;
+			nStateA_PrepareAxis := 99;	//Error
+		ELSE
+			aFbHeaterRef[nPrepareAxisNr].P_bHeaterDetected := DINT_TO_BOOL(fbSdoRead.nData);
+			nStateA_PrepareAxis := 6;
+			//Nächste aktive Achse ermitteln
+			FOR nPrepareAxisNr := nPrepareAxisNr + 1 TO 7 BY 1 DO
+				IF aFbZAxisRef[nPrepareAxisNr].stInput.nStatus.7 THEN
+					nStateA_PrepareAxis := 5;
+					EXIT;
+				END_IF
+			END_FOR
+		END_IF
+		fbSdoRead(bExecute:= FALSE);
+	END_IF	
+END_IF
+
+IF nStateA_PrepareAxis = 6 THEN
+	nPrepareAxisNr := 1;
+	nStateA_PrepareAxis := 7;
+END_IF
+
+IF nStateA_PrepareAxis = 7 THEN	//Versionen der Tools auslesen
+	fbSdoRead(sADSNetID:= stAdsAdress.sNetId, nPortNr:= stAdsAdress.nPort,
+			nIndex:= cToolVersion.nIndex, nSubIndex:= nPrepareAxisNr, nDataLength:= cToolVersion.nLength, bExecute:= TRUE);
+			
+	IF NOT fbSdoRead.bBusy THEN
+		IF fbSdoRead.bError THEN
+			nErrorId := fbSdoRead.nAdsErrorId;
+			nErrorId2 := fbSdoRead.nSdoErrorId;
+			nStateA_PrepareAxis := 99;	//Error
+		ELSE
+			aFbZAxisRef[nPrepareAxisNr].nToolVersion := DINT_TO_USINT(fbSdoRead.nData);
+			nStateA_PrepareAxis := 8;
+
+			//Nächste aktive Achse für das Auslesen der TMC-Version ermitteln
+			FOR nPrepareAxisNr := nPrepareAxisNr + 1 TO 7 BY 1 DO
+				IF aFbZAxisRef[nPrepareAxisNr].stInput.nStatus.7 THEN
+					nStateA_PrepareAxis := 7;
+					EXIT;
+				END_IF
+			END_FOR
+		END_IF
+		fbSdoRead(bExecute:= FALSE);
+	END_IF	
+END_IF
+
+//TriggerVersion auslesen
+IF nStateA_PrepareAxis = 8 THEN
+	fbSdoRead(sADSNetID:= stAdsAdress.sNetId, nPortNr:= stAdsAdress.nPort,
+				nIndex:= cTriggerVersion.nIndex, nSubIndex:= cTriggerVersion.nSubIndex, nDataLength:= cTriggerVersion.nLength, bExecute:= TRUE);
+			
+	IF NOT fbSdoRead.bBusy THEN
+		IF fbSdoRead.bError THEN
+			nErrorId := fbSdoRead.nAdsErrorId;
+			nErrorId2 := fbSdoRead.nSdoErrorId;
+			nStateA_PrepareAxis := 99;	//Error
+		ELSE
+			nTriggerVersion := DINT_TO_USINT(fbSdoRead.nData);
+			nStateA_PrepareAxis := 9;
+		END_IF
+		fbSdoRead(bExecute:= FALSE);
+	END_IF	
+END_IF
+
+//SubAxis setzen (für den Fall dass an Achse 3 ein StampSupport sich befindet)
+IF nStateA_PrepareAxis = 9 THEN
+	IF aFbZAxisRef[3].eDetectedToolType = E_MzToolType.TOOL_TYPE_Stamp THEN
+		aFbZAxisRef[4].bIsSubAxis := TRUE;
+		aFbZAxisRef[5].bIsSubAxis := TRUE;
+	END_IF
+	nStateA_PrepareAxis := 80;
+END_IF
+
+IF nStateA_PrepareAxis = 99 THEN
+	fbErrorList.M_AddExt(nErrorId:= nErrorId, nErrorId2:= nErrorId2, 
+	HardwareGrp:= E_HardwareGrp.AxisZ, 
+	HardwareNr:= nAxisNr, 
+	POU:= E_POU.POU_FB_MultiZRef, 
+	POUAction:= E_POUACT.POUACT_A_Init,
+	POUState:= nPOUState);
+	nErrorId2 := 0;
+END_IF]]></ST>
+      </Implementation>
+    </Action>
+    <Action Name="A_ResetApp" Id="{27b18419-29a2-4fe5-a28a-be8e34b90d7f}">
+      <Implementation>
+        <ST><![CDATA[IF nStateA_ResetApp = 0 THEN	//MultiZ resetten
+	fbSdoWrite(sADSNetID:= stAdsAdress.sNetId, nPortNr:= stAdsAdress.nPort,
+				nIndex := cUpdateRequest.nIndex, nSubIndex := 8, nDataLength := 1, nData:= 1, bExecute:= TRUE);
+	IF NOT fbSdoWrite.bBusy THEN
+		IF fbSdoWrite.bError THEN
+			nErrorId := fbSdoWrite.nAdsErrorId;
+			nErrorId2 := fbSdoWrite.nSdoErrorId;
+			nStateA_ResetApp := 99;  //Error
+		ELSE
+			FOR i:= 1 TO 7 BY 1 DO
+				aFbZAxisRef[i].stOutput.nMode := 0;
+			END_FOR
+			nStateA_ResetApp := 80;
+		END_IF
+		fbSdoWrite(bExecute:= FALSE);
+	END_IF
+END_IF]]></ST>
+      </Implementation>
+    </Action>
+    <Action Name="A_ResetError" Id="{57a1f2ed-fd80-4af8-8a06-e2b5e1062caf}">
+      <Implementation>
+        <ST><![CDATA[nPOUState := nStateA_ResetError;
+CASE nStateA_ResetError OF
+	//**************************Begin CheckGlobError**********************************
+	0:	//Node erreichbar?
+		tmrTimeout(IN:= FALSE);
+		nErrorId := 0;
+		nErrorId2 := 0;
+		IF nNodeState > 0 THEN
+			CASE nNodeState OF
+				1:	nErrorId := E_ErrorIdCan.ERRORID_NodeDeactivated;
+				2:	nErrorId := E_ErrorIdCan.ERRORID_NodeNotFound;
+				4:	nErrorId := E_ErrorIdCan.ERRORID_SdoSyntaxErrorAtStartup;
+				5:	nErrorId := E_ErrorIdCan.ERRORID_SdoDataMismatchAtStartup;
+				12:	nErrorId := E_ErrorIdCan.ERRORID_NodePreOP;
+			END_CASE
+			nStateA_ResetError := 99;
+		ELSE
+			//Restart Base erforderlich?
+			IF (nErrorGlobal = 14 OR nErrorGlobal = 18 OR  nErrorGlobal = 255) THEN
+				nStateA_ResetError := 20;	//RestartMzBase	
+			ELSIF nErrorGlobal > 0 THEN
+				nStateA_ResetError := 1;	//ResetGlobError
+			ELSE
+				nStateA_ResetError := 10;	//CheckAndResetAxisError
+			END_IF
+		END_IF
+	//***************************End CheckGlobError***********************************
+
+	//**************************Begin ResetGlobError**********************************
+	1:	//globalen Fehler zurücksetzen
+		IF bGlobErrorReseted OR bMzBaseRestarted THEN
+			nErrorId := E_ErrorIdCmd.ERRORID_ErrorResetFailed;
+			nErrorId2 := 0;
+			nStateA_ResetError := 99;
+			RETURN;
+		END_IF
+		fbSdoWrite(sADSNetID:= stAdsAdress.sNetId, nPortNr:= stAdsAdress.nPort,
+					nIndex:= cGlobError.nIndex, nSubIndex:= cGlobError.nSubIndex, 
+					nDataLength:= cGlobError.nLength, nData:= 0, bExecute:= TRUE);
+		IF NOT fbSdoWrite.bBusy THEN
+			IF fbSdoWrite.bError THEN
+				nErrorId := fbSdoWrite.nAdsErrorId;
+				nErrorId2 := fbSdoWrite.nSdoErrorId;
+				nStateA_ResetError := 99;  //Error
+			ELSE
+				bGlobErrorReseted := TRUE;
+				nStateA_ResetError := 0; //CheckGlobError
+			END_IF
+			fbSdoWrite(bExecute:= FALSE);
+		END_IF
+	//***************************End ResetGlobError***********************************
+	
+	//**********************Begin CheckAndResetAxisError******************************
+	10:	//CheckAxisError
+		nStateA_ResetError := 80; //Ready
+		bGlobError := FALSE;
+		FOR nAxisNr := 1 TO 7 BY 1 DO
+			IF aFbZAxisRef[nAxisNr].stInput.nStatus.7 THEN //Achse vorhanden?
+				aFbZAxisRef[nAxisNr].stStatus.bError := FALSE;
+				//Restart Base erforderlich?
+				IF 	aFbZAxisRef[nAxisNr].stInput.nError = 14 OR
+					aFbZAxisRef[nAxisNr].stInput.nError = 15 OR
+					aFbZAxisRef[nAxisNr].stInput.nError = 16 OR
+					aFbZAxisRef[nAxisNr].stInput.nError = 24 OR
+					aFbZAxisRef[nAxisNr].stInput.nError = 26 OR
+					aFbZAxisRef[nAxisNr].stInput.nError = 254 THEN
+					nStateA_ResetError := 20; //RestartMzBase
+					RETURN;
+				END_IF
+				IF aFbZAxisRef[nAxisNr].stInput.nError > 0 OR aFbZAxisRef[nAxisNr].stInput.nStatus.3 THEN
+					IF aFbZAxisRef[nAxisNr].stInput.nError = 22 OR aFbZAxisRef[nAxisNr].stInput.nError = 7THEN
+						aFbZAxisRef[nAxisNr].stStatus.bIsHomed := FALSE;
+					END_IF
+					aFbZAxisRef[nAxisNr].stOutput.nMode := 0;
+					aFbZAxisRef[nAxisNr].stOutput.nCtrl := 8;
+					nStateA_ResetError := 11;
+				END_IF
+			END_IF
+		END_FOR
+	
+	11:	//ControlByte zurücksetzen
+		FOR nAxisNr := 1 TO 7 BY 1 DO
+			IF aFbZAxisRef[nAxisNr].stInput.nStatus.7 THEN //Achse vorhanden?
+				aFbZAxisRef[nAxisNr].stOutput.nCtrl := 0;	
+			END_IF
+		END_FOR
+		tmrTimeout(IN:=FALSE);
+		tmrTimeout(IN:=TRUE, PT:= T#500MS);
+		nStateA_ResetError := 12;
+		
+	12: //Alle Achsen fehlerfrei?
+		tmrTimeout();
+		IF tmrTimeout.Q THEN
+			tmrTimeout(IN:=FALSE);
+			FOR nAxisNr := 1 TO 7 BY 1 DO
+				IF aFbZAxisRef[nAxisNr].stInput.nStatus.7 THEN //Achse vorhanden?
+					IF (aFbZAxisRef[nAxisNr].stInput.nError > 0 OR aFbZAxisRef[nAxisNr].stInput.nStatus.3) THEN
+						//Fehler wurde nicht erfolgreich zurückgesetzt -> MzBase neu starten
+						nStateA_ResetError := 20; //RestartMzBase
+						RETURN;
+					END_IF
+				END_IF
+			END_FOR
+			nStateA_ResetError := 0; //CheckGlobError
+			bGlobErrorReseted := FALSE;
+		END_IF
+	//***********************End CheckAndResetAxisError*******************************
+	
+	//***************************Begin RestartMzBase**********************************
+	20: //Restart MzBase durch setzen von UpdateRequest
+		//Ctrl und Mode der aller Achsen zurücksetzen
+		FOR nAxisNr := 1 TO 7 BY 1 DO
+			aFbZAxisRef[nAxisNr].stOutput.nCtrl := 0;
+			aFbZAxisRef[nAxisNr].stOutput.nMode := 0;
+			aFbZAxisRef[nAxisNr].stStatus.bIsHomed := FALSE;
+		END_FOR
+	
+		IF bMzBaseRestarted THEN //Wurde MzBase bereits 1x neu gestarted, dann in Error gehen
+			nErrorId := E_ErrorIdCmd.ERRORID_ErrorResetFailed;
+			nErrorId2 := 0;
+			nStateA_ResetError := 99;  //Error
+		ELSE
+			fbSdoWrite(sADSNetID:= stAdsAdress.sNetId, nPortNr:= stAdsAdress.nPort,
+						nIndex:= cUpdateRequest.nIndex, nSubIndex:= cUpdateRequest.nSubIndex, 
+						nDataLength:= cUpdateRequest.nLength, nData:= 1, bExecute:= TRUE);
+						
+			IF NOT fbSdoWrite.bBusy THEN
+				IF fbSdoWrite.bError THEN
+					nErrorId := fbSdoWrite.nAdsErrorId;
+					nErrorId2 := fbSdoWrite.nSdoErrorId;
+					nStateA_ResetError := 99;  //Error
+				ELSE
+					nStateA_ResetError := 21;
+				END_IF
+				fbSdoWrite(bExecute:= FALSE);
+			END_IF
+		END_IF
+	
+	21:	//Warten, bis NodeState von MzBase ungleich "0"
+		IF nNodeState > 0 THEN
+			tmrTimeout(IN:= FALSE);
+			nStateA_ResetError := 22;
+		END_IF
+		
+	22:	//Warten, bis MzBase sich wieder meldet und auf operational geht
+		tmrTimeout(IN:= TRUE,PT:= T#6S);
+		IF tmrTimeout.Q THEN
+			nErrorId := E_ErrorIdCan.ERRORID_NodeNotFound;
+			nStateA_ResetError := 99;  //Error
+		END_IF
+	
+		IF nNodeState = 0 THEN
+			nStateA_ResetError := 0; //CheckGlobError
+			bMzBaseRestarted := TRUE;
+			//Falls MzBase neugestartet wurde und es tritt nachher wieder ein Fehler auf
+			//dann in ErrorState gehen
+		END_IF
+	//***************************End RestartMzBase***********************************
+END_CASE
+
+//**************************BeginError**********************************
+IF nStateA_ResetError = 99 THEN
+	fbErrorList.M_AddExt(nErrorId:= nErrorId, nErrorId2:= nErrorId2, 
+	HardwareGrp:= E_HardwareGrp.AxisZ, 
+	HardwareNr:= 0, 
+	POU:= E_POU.POU_FB_MultiZRef, 
+	POUAction:= E_POUACT.POUACT_A_Reset,
+	POUState:= nPOUState);
+	nErrorId2 := 0;
+END_IF
+//***************************EndError***********************************
+]]></ST>
+      </Implementation>
+    </Action>
+    <Action Name="A_SetConfig" Id="{3daaefd5-143b-4767-924b-82e2cc8dc28b}">
+      <Implementation>
+        <ST><![CDATA[stError.POUState := nStateA_SetConfig;
+IF nStateA_SetConfig = 0 THEN	//nächste Achse ermitteln
+	nStateA_SetConfig := 80;
+	FOR nAxisNr := nAxisNr + 1 TO 7 BY 1 DO
+		//Achse vorhanden?
+		IF aFbZAxisRef[nAxisNr].stInput.nStatus.7 THEN
+			IF aFbZAxisRef[nAxisNr].bIsSubAxis AND aFbZAxisRef[nAxisNr].bHasTool THEN
+				stError.ErrorId := E_ErrorIdMultiZ.ERRORID_InvalidToolConfig;
+				stError.ErrorId2 := 0;
+				nStateA_SetConfig := 99;			
+			ELSE
+				stError.HardwareNr := nAxisNr;
+				IF aFbZAxisRef[nAxisNr].bHasTool AND NOT(aFbZAxisRef[nAxisNr].eFixedToolType = E_MzToolType.TOOL_TYPE_None) THEN
+					nStateA_SetConfig := 1; //weiter zu Vergleich ToolType
+				ELSE
+					nStateA_SetConfig := 0;
+				END_IF				
+			END_IF
+			EXIT;
+		ELSE
+			IF aFbZAxisRef[nAxisNr].bHasTool THEN
+				stError.ErrorId := E_ErrorIdMultiZ.ERRORID_NoZAxis;
+				nStateA_SetConfig := 99;
+				EXIT;
+			END_IF
+		END_IF			
+	END_FOR
+END_IF
+
+IF nStateA_SetConfig = 1 THEN	//ToolType vergleichen
+	//Bei allen Tools außer den generischen, muss einfach auf Gleichheit überprüft werden
+	IF aFbZAxisRef[nAxisNr].eDetectedToolType = E_MzToolType.TOOL_TYPE_GenericPEXTool THEN
+		IF aFbZAxisRef[nAxisNr].eFixedToolType = E_MzToolType.TOOL_TYPE_TipEjector OR 
+			aFbZAxisRef[nAxisNr].eFixedToolType = E_MzToolType.TOOL_TYPE_PowderPip THEN
+			nStateA_SetConfig := 2;
+		ELSE
+			stError.ErrorId := E_ErrorIdMultiZ.ERRORID_InvalidToolConfig;
+			stError.ErrorId2 := 0;
+			nStateA_SetConfig := 99;
+		END_IF
+	ELSIF aFbZAxisRef[nAxisNr].eDetectedToolType = aFbZAxisRef[nAxisNr].eFixedToolType THEN
+		nStateA_SetConfig := 0;
+	ELSIF aFbZAxisRef[nAxisNr].eDetectedToolType = E_MzToolType.TOOL_TYPE_PiezoSingle THEN
+		IF aFbZAxisRef[nAxisNr].eFixedToolType = E_MzToolType.TOOL_TYPE_PiezoPip THEN
+			nStateA_SetConfig := 0;
+		ELSE
+			stError.ErrorId := E_ErrorIdMultiZ.ERRORID_InvalidToolConfig;
+			stError.ErrorId2 := 0;
+			nStateA_SetConfig := 99;
+		END_IF
+	ELSIF aFbZAxisRef[nAxisNr].eDetectedToolType = E_MzToolType.TOOL_TYPE_PowderPipGen2 THEN
+		nStateA_SetConfig := 0;
+	ELSE
+		stError.ErrorId := E_ErrorIdMultiZ.ERRORID_InvalidToolConfig;
+		stError.ErrorId2 := 0;
+		nStateA_SetConfig := 99;		
+	END_IF
+END_IF
+
+IF nStateA_SetConfig = 2 THEN	//ToolType bei GenericTools überschreiben
+	fbSdoWrite(sADSNetID:= stAdsAdress.sNetId, nPortNr:= stAdsAdress.nPort,
+				nIndex:= cToolType.nIndex, nSubIndex := nAxisNr, nDataLength:= cToolType.nLength,
+				nData := aFbZAxisRef[nAxisNr].eFixedToolType, bExecute:= TRUE);
+	IF NOT fbSdoWrite.bBusy THEN
+		IF fbSdoWrite.bError THEN
+			stError.ErrorId := fbSdoWrite.nAdsErrorId;
+			stError.ErrorId2 := fbSdoWrite.nSdoErrorId;
+			nStateA_SetConfig := 99;  //Error
+		ELSE
+			nStateA_SetConfig := 0;
+		END_IF
+		fbSdoWrite(bExecute:= FALSE);
+	END_IF
+END_IF
+
+IF nStateA_SetConfig = 99 THEN
+	stError.Cmd := 0;
+	stError.HardwareGrp := E_HardwareGrp.AxisZ;
+	stError.POU := E_POU.POU_FB_MultiZRef;
+	stError.POUAction := E_POUACT.POUACT_A_SetConfig;
+	fbErrorList.M_Add(stError);
+END_IF]]></ST>
+      </Implementation>
+    </Action>
+    <Action Name="A_SetConfigLegacy" Id="{5475b875-78bd-495e-91c4-46ba02aa8ce6}">
+      <Implementation>
+        <ST><![CDATA[//Wenn sich die lokale und remote ToolChecksum unterscheiden, dann MultiZ resetten
+CASE nStateA_SetConfig OF
+	0: //RemoteCrc auslesen
+		fbSdoRead(sADSNetID:= stAdsAdress.sNetId, nPortNr:= stAdsAdress.nPort, 
+					nIndex:= cConfigCRC.nIndex, nSubIndex:= cConfigCRC.nSubIndex,
+					nDataLength:= cConfigCRC.nLength, bExecute:= TRUE);
+		IF NOT fbSdoRead.bBusy THEN
+			IF fbSdoRead.bError THEN
+				nErrorId := fbSdoRead.nAdsErrorId;
+				nErrorId2 := fbSdoRead.nSdoErrorId;
+				nStateA_SetConfig := 99;
+			ELSE
+				nLocalCRC := M_GetToolChecksum();
+				nRemoteCRC := DINT_TO_UINT(fbSdoRead.nData);
+				IF nLocalCRC = 16#A96A THEN //braucht nicht konfiguriert werden da keine aktiven Tools vorhanden
+					nStateA_SetConfig := 80;		
+				ELSE
+					IF nRemoteCRC = 0 THEN //wurde noch nicht konfiguriert
+						nStateA_SetConfig := 4;	//konfigurieren ohne zu resetten
+					ELSIF nLocalCRC = nRemoteCRC THEN //Konfiguration ist identisch
+						nStateA_SetConfig := 80;
+					ELSE
+						nStateA_SetConfig := 1;	//Reset MultiZ, anschließend konfigurieren
+					END_IF
+				END_IF
+			END_IF
+			fbSdoRead(bExecute:= FALSE);
+		END_IF
+	
+	1:	//MultiZ resetten
+		P_bStopMonitor := TRUE;
+		fbSdoWrite.nIndex := cUpdateRequest.nIndex;
+		fbSdoWrite.nSubIndex := cUpdateRequest.nSubIndex;
+		fbSdoWrite.nDataLength := cUpdateRequest.nLength;
+		fbSdoWrite.nData := 1;
+		nStateA_SetConfigNext := 2;
+		nStateA_SetConfig := 50;
+		
+	2:	//Warten, bis sich MultiZ wieder meldet
+		tmrTimeout(IN:= TRUE, PT:= T#6S);
+		IF tmrTimeout.Q THEN
+			tmrTimeout(IN:= FALSE);
+			nStateA_SetConfig := 99;
+		END_IF
+		IF nNodeState = 0 THEN
+			tmrTimeout(IN:= FALSE);
+			nStateA_SetConfig := 3;
+		END_IF
+		
+	3:	//Warten bis MultiZ bereit zum konfigurieren
+		tmrTimeout(IN:= TRUE, PT:= T#1000MS);
+		IF tmrTimeout.Q THEN
+			tmrTimeout(IN:= FALSE);
+			nStateA_SetConfig := 4;
+		END_IF
+END_CASE
+
+IF nStateA_SetConfig = 4 THEN //nächste Achse ermitteln
+	nAxisNr := nAxisNr + 1;
+	IF nAxisNr = 8 THEN
+		IF bSetConfigEnable THEN
+			nStateA_SetConfig := 40;
+			RETURN;
+		ELSE
+			bSetConfigEnable := TRUE;
+			nAxisNr := 1;
+		END_IF
+	END_IF
+
+	//Checken, ob Achse vorhanden
+	IF aFbZAxisRef[nAxisNr].stInput.nStatus.7 THEN
+		IF bSetConfigEnable THEN
+			IF aFbZAxisRef[nAxisNr].eFixedToolType <> E_MzToolType.TOOL_TYPE_None THEN //ToolEnable setzen
+				aFbZAxisRef[nAxisNr].stOutput.nToolEnable := 1;
+				fbSdoWrite.nIndex := cToolEnable.nIndex;
+				fbSdoWrite.nSubIndex := nAxisNr;
+				fbSdoWrite.nDataLength := cToolEnable.nLength;
+				fbSdoWrite.nData := 1;
+				nStateA_SetConfig := 50; //SdoSend
+				nStateA_SetConfigNext := 4;
+			END_IF
+		ELSE
+			CASE aFbZAxisRef[nAxisNr].eFixedToolType OF
+				E_MzToolType.TOOL_TYPE_Cartridge,E_MzToolType.TOOL_TYPE_PiezoPip,E_MzToolType.TOOL_TYPE_TipEjector,E_MzToolType.TOOL_TYPE_Stamp, E_MzToolType.TOOL_TYPE_PowderPip:
+				IF aFbZAxisRef[nAxisNr].eFixedToolType = E_MzToolType.TOOL_TYPE_Stamp THEN
+					aFbZAxisRef[nAxisNr + 1].bIsSubAxis := TRUE;
+					aFbZAxisRef[nAxisNr + 2].bIsSubAxis := TRUE;
+				END_IF
+					nStateA_SetConfig := 5; //ToolType setzen
+			ELSE
+				RETURN;
+			END_CASE
+		END_IF
+	ELSE
+		RETURN;
+	END_IF
+END_IF
+
+CASE nStateA_SetConfig OF
+	5:	//ToolType setzen
+		fbSdoWrite.nIndex := cToolType.nIndex;
+		fbSdoWrite.nSubIndex := nAxisNr;
+		fbSdoWrite.nDataLength := cToolType.nLength;
+		fbSdoWrite.nData := aFbZAxisRef[nAxisNr].eFixedToolType;
+		nStateA_SetConfigNext := 6;
+		nStateA_SetConfig := 50; //SdoSend
+		
+	6:	//HeaterExist setzen
+		fbSdoWrite.nIndex := cHeaterExist.nIndex;
+		fbSdoWrite.nSubIndex := nAxisNr;
+		fbSdoWrite.nDataLength := cHeaterExist.nLength;
+		fbSdoWrite.nData := BOOL_TO_DINT(aFbHeaterRef[nAxisNr].P_bHeaterFixed);
+		nStateA_SetConfigNext := 4; //nächste Achse
+		nStateA_SetConfig := 50; //SdoSend
+		
+	40:	//Checken, ob MultiZ einen globalen Fehler bringt
+		CASE nErrorGlobal OF
+			8,14,18,255:
+				nErrorId := F_MultiZError_TO_ErrorId(nErrorGlobal);
+				nStateA_SetConfig := 99;  //Error wird im FB geworfen
+		ELSE
+			//FixConfig setzen
+			bFixConfig := TRUE;
+			fbSdoWrite.nIndex := cConfigFix.nIndex;
+			fbSdoWrite.nSubIndex := cConfigFix.nSubIndex;
+			fbSdoWrite.nDataLength := cConfigFix.nLength;
+			fbSdoWrite.nData := 1;
+			nStateA_SetConfigNext := 41;
+			nStateA_SetConfig := 50;
+		END_CASE
+	
+	41: //Die Achsen, bei denen das ToolEnable gesetzt ist, müssen innerhalb einerhalb des Timeouts
+		//das Bit3 von ToolState bringen
+		nStateA_SetConfig := 42;
+		tmrTimeout(IN:= TRUE, PT:=T#1S);
+		FOR nAxisNr := 1 TO 7 BY 1 DO
+			IF aFbZAxisRef[nAxisNr].stOutput.nToolEnable = 1 THEN
+				IF NOT aFbZAxisRef[nAxisNr].stInput.nToolState.3 THEN
+					nStateA_SetConfig := 41;
+					EXIT;
+				END_IF
+			END_IF
+		END_FOR
+		IF tmrTimeout.Q THEN
+			nStateA_SetConfig := 42;
+			tmrTimeout(IN:= FALSE);
+		END_IF
+			
+	42:	//Checken, ob alle Achsen fehlerfrei
+		nStateA_SetConfig := 43;
+		FOR nAxisNr := 1 TO 7 BY 1 DO
+			IF aFbZAxisRef[nAxisNr].stInput.nError > 0 THEN
+				nErrorId := aFbZAxisRef[nAxisNr].stInput.nError;
+				nStateA_SetConfig := 99;  //Error wird im FB geworfen
+			END_IF
+		END_FOR
+		
+	43:	
+		bMzBaseRestarted := FALSE;
+		P_bStopMonitor := FALSE;
+		nStateA_SetConfig := 80;
+END_CASE
+
+//SDO senden
+IF nStateA_SetConfig = 50 THEN
+	fbSdoWrite(sADSNetID:= stAdsAdress.sNetId, nPortNr:= stAdsAdress.nPort, bExecute:= TRUE);
+	IF NOT fbSdoWrite.bBusy THEN
+		IF fbSdoWrite.bError THEN
+			nErrorId := fbSdoWrite.nAdsErrorId;
+			nErrorId2 := fbSdoWrite.nSdoErrorId;
+			nStateA_SetConfig := 99;  //Error
+		ELSE
+			nStateA_SetConfig := nStateA_SetConfigNext;
+		END_IF
+		fbSdoWrite(bExecute:= FALSE);
+	END_IF			
+END_IF]]></ST>
+      </Implementation>
+    </Action>
+    <Method Name="FB_init" Id="{be4dc64b-5143-43db-bf5a-994a46415925}">
+      <Declaration><![CDATA[METHOD FB_init : BOOL
+VAR_INPUT
+	bInitRetains : BOOL; // if TRUE, the retain variables are initialized (warm start / cold start)
+	bInCopyCode : BOOL;  // if TRUE, the instance afterwards gets moved into the copy code (online change)
+END_VAR
+]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[stHardwareId.eGroup := E_HardwareGrp.MultiZBasis;]]></ST>
+      </Implementation>
+    </Method>
+    <Method Name="M_DelConfig" Id="{226b70c2-e2ef-47eb-8e00-4317144f737d}">
+      <Declaration><![CDATA[METHOD M_DelConfig
+VAR_INPUT
+END_VAR]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[FOR nAxisNr := 1 TO 7 BY 1 DO
+	aFbZAxisRef[nAxisNr].bHasTool := FALSE;
+	aFbZAxisRef[nAxisNr].eFixedToolType := E_MzToolType.TOOL_TYPE_None;
+	//aFbZAxisRef[nAxisNr].bIsSubAxis := FALSE;
+	aFbHeaterRef[nAxisNr].P_bHeaterDetected := FALSE;
+END_FOR]]></ST>
+      </Implementation>
+    </Method>
+    <Method Name="M_GetHwInfo" Id="{9d2b21e7-f820-4b34-a86b-6f4f30dda194}">
+      <Declaration><![CDATA[METHOD M_GetHwInfo : ST_HardwareInfo
+VAR_INPUT
+END_VAR
+]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[M_GetHwInfo := SUPER^.M_GetHwInfo();
+M_GetHwInfo.sSoftwVersion2 := USINT_TO_STRING(nTriggerVersion);]]></ST>
+      </Implementation>
+    </Method>
+    <Method Name="M_GetPiezoRef" Id="{2605a2cb-2b47-4489-bd59-e7981b11727e}">
+      <Declaration><![CDATA[METHOD M_GetPiezoRef : POINTER TO FB_PiezoRef
+VAR_INPUT
+	nChannel : USINT;
+END_VAR
+]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[IF nChannel > 0 AND nChannel <= 7 THEN
+	M_GetPiezoRef := ADR(aFbPiezoRef[nChannel]);
+END_IF]]></ST>
+      </Implementation>
+    </Method>
+    <Method Name="M_GetToolChecksum" Id="{d3b737a5-577f-4c67-b40e-39636fbe66f2}">
+      <Declaration><![CDATA[METHOD M_GetToolChecksum : UINT
+VAR_INPUT
+END_VAR
+VAR
+	i : USINT;
+	nToolType : UINT;
+	nHeater	: UINT;
+	nResult : UINT;
+	wPrevChecksum	: UINT := 16#FFFF;
+END_VAR
+]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[//Diese Funktion wird nur bei Kopfbasisplatine ohne Toolerkennung benötigt
+FOR i:= 1 TO 7 BY 1 DO
+	nToolType := SHL(USINT_TO_UINT(aFbZAxisRef[i].eFixedToolType),8); 
+	nHeater := BOOL_TO_UINT(aFbHeaterRef[i].P_bHeaterFixed);
+	nResult := nToolType OR nHeater;
+	wPrevChecksum := F_DATA_TO_CRC16_CCITT(ADR(nResult),SIZEOF(nResult),wPrevChecksum);
+END_FOR
+M_GetToolChecksum := wPrevChecksum;]]></ST>
+      </Implementation>
+    </Method>
+    <Method Name="M_GetZSensorCalib" Id="{38c66e5c-4f45-4a9d-8ae2-5b550877fc10}">
+      <Declaration><![CDATA[METHOD M_GetZSensorCalib : REAL
+VAR_INPUT
+	nZSensorId : DINT;
+	nAxisNr : USINT;
+END_VAR
+
+VAR
+	i : USINT;
+END_VAR]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[FOR i := 1 TO 4 BY 1 DO
+	IF stZSensorCalibration[i].nId = nZSensorId AND stZSensorCalibration[i].nAxis = nAxisNr THEN //Eintrag gefunden
+		M_GetZSensorCalib := stZSensorCalibration[i].rValue;
+		RETURN;
+	END_IF
+END_FOR]]></ST>
+      </Implementation>
+    </Method>
+    <Method Name="M_Reset" Id="{cabb45cd-0022-40d3-a109-a06e0810596b}">
+      <Declaration><![CDATA[METHOD M_Reset
+VAR_INPUT
+END_VAR
+]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[IF bError AND NOT bBusy THEN
+	bBusy := TRUE;
+	bResetError := TRUE;
+	bMzBaseRestarted := FALSE;
+END_IF]]></ST>
+      </Implementation>
+    </Method>
+    <Method Name="M_SetConfig" Id="{64f82aac-bc5f-440e-afeb-450f02ffaebc}">
+      <Declaration><![CDATA[METHOD M_SetConfig : ERRORID
+VAR_INPUT
+END_VAR
+]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[IF NOT (bBusy OR bSetConfig) THEN
+	nAxisNr := 0;
+	bSetConfigEnable := FALSE;
+	bBusy := TRUE;
+	bSetConfig := TRUE;
+END_IF]]></ST>
+      </Implementation>
+    </Method>
+    <Method Name="M_SetDigiOut" Id="{58f5f75b-0be7-4280-b1a3-f763daeccdb1}">
+      <Declaration><![CDATA[METHOD M_SetDigiOut : BOOL
+VAR_INPUT
+	nChannel : USINT;
+	bValue : BOOL;
+END_VAR
+]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[IF nChannel > 0 AND nChannel < 8 THEN
+	aDigiOut[nChannel] := bValue;
+	M_SetDigiOut := TRUE;
+END_IF]]></ST>
+      </Implementation>
+    </Method>
+    <Method Name="M_SetZSensorCalib" Id="{bfaa64a0-c423-4c70-a124-20f0374520e9}">
+      <Declaration><![CDATA[METHOD M_SetZSensorCalib
+VAR_INPUT
+	nZSensorId : DINT;
+	nAxisNr : USINT;
+	rValue : REAL;	
+END_VAR
+
+VAR
+	i : USINT;
+	nFree : USINT;
+	bFound : BOOL;
+END_VAR
+]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[//vorhandenen Eintrag suchen
+FOR i := 1 TO 4 BY 1 DO
+	IF stZSensorCalibration[i].nId = 0 THEN //kein Eintrag
+		IF nFree = 0 THEN
+			nFree := i; //erste freie Zeile
+		END_IF
+	ELSIF stZSensorCalibration[i].nId = nZSensorId AND stZSensorCalibration[i].nAxis = nAxisNr THEN //Eintrag gefunden
+		stZSensorCalibration[i].rValue := rValue;
+		fbSettings.M_WritePersData(); //Daten persitent schreiben
+		bFound := TRUE;
+		RETURN;
+	END_IF
+END_FOR
+
+IF NOT bFound THEN //es wurde kein Eintrag gefunden
+	IF nFree = 0 THEN //keine freie Zeile vorhanden, ersten Eintrag überschreiben und folgende nach hinten verschieben
+		stZSensorCalibration[4] := stZSensorCalibration[3];
+		stZSensorCalibration[3] := stZSensorCalibration[2];
+		stZSensorCalibration[2] := stZSensorCalibration[1];
+		stZSensorCalibration[1].nId := nZSensorId;
+		stZSensorCalibration[1].nAxis := nAxisNr;
+		stZSensorCalibration[1].rValue := rValue;
+		fbSettings.M_WritePersData(); //Daten persitent schreiben
+	ELSE
+		stZSensorCalibration[nFree].nId := nZSensorId;
+		stZSensorCalibration[nFree].nAxis := nAxisNr;
+		stZSensorCalibration[nFree].rValue := rValue;
+		fbSettings.M_WritePersData(); //Daten persitent schreiben
+	END_IF
+END_IF]]></ST>
+      </Implementation>
+    </Method>
+    <Property Name="P_bLegacy" Id="{5caa921a-c923-4a03-bd8c-d012a2e5b5dd}">
+      <Declaration><![CDATA[PROPERTY P_bLegacy : BOOL]]></Declaration>
+      <Get Name="Get" Id="{3520fa16-20fd-4613-834f-487bbd44f8ab}">
+        <Declaration><![CDATA[VAR
+END_VAR
+]]></Declaration>
+        <Implementation>
+          <ST><![CDATA[P_bLegacy := bLegacy;]]></ST>
+        </Implementation>
+      </Get>
+    </Property>
+    <Property Name="P_bMzBaseRestarted" Id="{90bfb40a-1759-4988-954e-793a39963d54}">
+      <Declaration><![CDATA[PROPERTY P_bMzBaseRestarted : BOOL]]></Declaration>
+      <Get Name="Get" Id="{0ad987e2-67c9-4fac-a118-c2a3e5b20dda}">
+        <Declaration><![CDATA[VAR
+END_VAR
+]]></Declaration>
+        <Implementation>
+          <ST><![CDATA[P_bMzBaseRestarted := bMzBaseRestarted;]]></ST>
+        </Implementation>
+      </Get>
+    </Property>
+    <Property Name="P_nAdsPort" Id="{57a5909a-c72c-4943-bc23-c37a1d8c4a31}">
+      <Declaration><![CDATA[PROPERTY P_nAdsPort : UINT]]></Declaration>
+      <Get Name="Get" Id="{dbdd74eb-11a9-4cb0-93bc-5a5db684e11f}">
+        <Declaration><![CDATA[VAR
+END_VAR
+]]></Declaration>
+        <Implementation>
+          <ST><![CDATA[P_nAdsPort := stAdsAdress.nPort;]]></ST>
+        </Implementation>
+      </Get>
+    </Property>
+    <Property Name="P_nAxisNrZSensor" Id="{a40808de-2e77-46b7-afea-403fc25119fa}">
+      <Declaration><![CDATA[PROPERTY P_nAxisNrZSensor : USINT]]></Declaration>
+      <Get Name="Get" Id="{f47fba80-567b-4b96-a7c4-9497d204f4f8}">
+        <Declaration><![CDATA[VAR
+END_VAR
+]]></Declaration>
+        <Implementation>
+          <ST><![CDATA[P_nAxisNrZSensor := nAxisNrZSensor;]]></ST>
+        </Implementation>
+      </Get>
+      <Set Name="Set" Id="{c99d9bad-f100-404f-ab4b-0c44960c9bde}">
+        <Declaration><![CDATA[VAR
+END_VAR
+]]></Declaration>
+        <Implementation>
+          <ST><![CDATA[nAxisNrZSensor := P_nAxisNrZSensor;]]></ST>
+        </Implementation>
+      </Set>
+    </Property>
+    <Property Name="P_nTriggerVersion" Id="{4f02031a-a86d-44bd-ae7b-593915eadf0b}">
+      <Declaration><![CDATA[PROPERTY P_nTriggerVersion : USINT]]></Declaration>
+      <Get Name="Get" Id="{9ba48984-8695-4139-8a55-f1d2e56ac2eb}">
+        <Declaration><![CDATA[VAR
+END_VAR
+]]></Declaration>
+        <Implementation>
+          <ST><![CDATA[P_nTriggerVersion := nTriggerVersion;]]></ST>
+        </Implementation>
+      </Get>
+    </Property>
+    <Property Name="P_stError" Id="{2c6e250e-3329-4e5a-9134-75e35f1b5b82}">
+      <Declaration><![CDATA[PROPERTY P_stError : ST_Error]]></Declaration>
+      <Get Name="Get" Id="{09c12201-76cf-485d-8870-47716face67a}">
+        <Declaration><![CDATA[
+VAR
+END_VAR
+]]></Declaration>
+        <Implementation>
+          <ST><![CDATA[P_stError := stError;]]></ST>
+        </Implementation>
+      </Get>
+    </Property>
+    <LineIds Name="FB_MultiZRef">
+      <LineId Id="3" Count="0" />
+      <LineId Id="110" Count="0" />
+      <LineId Id="121" Count="0" />
+      <LineId Id="118" Count="0" />
+      <LineId Id="125" Count="0" />
+      <LineId Id="127" Count="6" />
+      <LineId Id="126" Count="0" />
+      <LineId Id="122" Count="0" />
+      <LineId Id="178" Count="1" />
+      <LineId Id="123" Count="0" />
+      <LineId Id="119" Count="0" />
+      <LineId Id="114" Count="0" />
+      <LineId Id="135" Count="1" />
+      <LineId Id="180" Count="0" />
+      <LineId Id="137" Count="0" />
+      <LineId Id="142" Count="1" />
+      <LineId Id="138" Count="1" />
+      <LineId Id="141" Count="0" />
+      <LineId Id="116" Count="0" />
+      <LineId Id="170" Count="1" />
+      <LineId Id="144" Count="25" />
+      <LineId Id="117" Count="0" />
+      <LineId Id="115" Count="0" />
+      <LineId Id="174" Count="1" />
+      <LineId Id="112" Count="0" />
+      <LineId Id="46" Count="2" />
+      <LineId Id="176" Count="0" />
+      <LineId Id="49" Count="0" />
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="FB_MultiZRef.A_Monitor">
+      <LineId Id="2" Count="8" />
+      <LineId Id="65" Count="0" />
+      <LineId Id="11" Count="22" />
+      <LineId Id="67" Count="0" />
+      <LineId Id="34" Count="30" />
+      <LineId Id="1" Count="0" />
+    </LineIds>
+    <LineIds Name="FB_MultiZRef.A_PrepareAxis">
+      <LineId Id="2" Count="26" />
+      <LineId Id="53" Count="1" />
+      <LineId Id="56" Count="1" />
+      <LineId Id="55" Count="0" />
+      <LineId Id="29" Count="4" />
+      <LineId Id="134" Count="1" />
+      <LineId Id="34" Count="5" />
+      <LineId Id="91" Count="2" />
+      <LineId Id="97" Count="2" />
+      <LineId Id="103" Count="0" />
+      <LineId Id="100" Count="2" />
+      <LineId Id="94" Count="0" />
+      <LineId Id="136" Count="0" />
+      <LineId Id="140" Count="1" />
+      <LineId Id="143" Count="10" />
+      <LineId Id="155" Count="8" />
+      <LineId Id="142" Count="0" />
+      <LineId Id="164" Count="0" />
+      <LineId Id="201" Count="0" />
+      <LineId Id="203" Count="0" />
+      <LineId Id="205" Count="0" />
+      <LineId Id="204" Count="0" />
+      <LineId Id="202" Count="0" />
+      <LineId Id="165" Count="0" />
+      <LineId Id="191" Count="0" />
+      <LineId Id="167" Count="21" />
+      <LineId Id="206" Count="4" />
+      <LineId Id="139" Count="0" />
+      <LineId Id="40" Count="0" />
+      <LineId Id="58" Count="1" />
+      <LineId Id="90" Count="0" />
+      <LineId Id="60" Count="7" />
+      <LineId Id="78" Count="1" />
+      <LineId Id="81" Count="8" />
+      <LineId Id="52" Count="0" />
+      <LineId Id="104" Count="3" />
+      <LineId Id="109" Count="7" />
+      <LineId Id="130" Count="1" />
+      <LineId Id="117" Count="0" />
+      <LineId Id="128" Count="1" />
+      <LineId Id="108" Count="0" />
+      <LineId Id="192" Count="0" />
+      <LineId Id="196" Count="0" />
+      <LineId Id="193" Count="0" />
+      <LineId Id="197" Count="1" />
+      <LineId Id="200" Count="0" />
+      <LineId Id="199" Count="0" />
+      <LineId Id="194" Count="1" />
+      <LineId Id="41" Count="9" />
+      <LineId Id="1" Count="0" />
+    </LineIds>
+    <LineIds Name="FB_MultiZRef.A_ResetApp">
+      <LineId Id="2" Count="7" />
+      <LineId Id="16" Count="2" />
+      <LineId Id="10" Count="4" />
+      <LineId Id="1" Count="0" />
+    </LineIds>
+    <LineIds Name="FB_MultiZRef.A_ResetError">
+      <LineId Id="346" Count="170" />
+      <LineId Id="1" Count="0" />
+    </LineIds>
+    <LineIds Name="FB_MultiZRef.A_SetConfig">
+      <LineId Id="444" Count="80" />
+      <LineId Id="1" Count="0" />
+    </LineIds>
+    <LineIds Name="FB_MultiZRef.A_SetConfigLegacy">
+      <LineId Id="2" Count="28" />
+      <LineId Id="227" Count="0" />
+      <LineId Id="226" Count="0" />
+      <LineId Id="32" Count="79" />
+      <LineId Id="113" Count="3" />
+      <LineId Id="166" Count="42" />
+      <LineId Id="228" Count="0" />
+      <LineId Id="209" Count="16" />
+      <LineId Id="1" Count="0" />
+    </LineIds>
+    <LineIds Name="FB_MultiZRef.FB_init">
+      <LineId Id="7" Count="0" />
+    </LineIds>
+    <LineIds Name="FB_MultiZRef.M_DelConfig">
+      <LineId Id="6" Count="0" />
+      <LineId Id="12" Count="0" />
+      <LineId Id="17" Count="0" />
+      <LineId Id="13" Count="0" />
+      <LineId Id="11" Count="0" />
+      <LineId Id="5" Count="0" />
+    </LineIds>
+    <LineIds Name="FB_MultiZRef.M_GetHwInfo">
+      <LineId Id="5" Count="0" />
+      <LineId Id="8" Count="0" />
+    </LineIds>
+    <LineIds Name="FB_MultiZRef.M_GetPiezoRef">
+      <LineId Id="3" Count="1" />
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="FB_MultiZRef.M_GetToolChecksum">
+      <LineId Id="21" Count="0" />
+      <LineId Id="3" Count="1" />
+      <LineId Id="6" Count="3" />
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="FB_MultiZRef.M_GetZSensorCalib">
+      <LineId Id="3" Count="4" />
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="FB_MultiZRef.M_Reset">
+      <LineId Id="3" Count="3" />
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="FB_MultiZRef.M_SetConfig">
+      <LineId Id="3" Count="4" />
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="FB_MultiZRef.M_SetDigiOut">
+      <LineId Id="3" Count="2" />
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="FB_MultiZRef.M_SetZSensorCalib">
+      <LineId Id="3" Count="28" />
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="FB_MultiZRef.P_bLegacy.Get">
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="FB_MultiZRef.P_bMzBaseRestarted.Get">
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="FB_MultiZRef.P_nAdsPort.Get">
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="FB_MultiZRef.P_nAxisNrZSensor.Get">
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="FB_MultiZRef.P_nAxisNrZSensor.Set">
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="FB_MultiZRef.P_nTriggerVersion.Get">
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="FB_MultiZRef.P_stError.Get">
+      <LineId Id="2" Count="0" />
+    </LineIds>
+  </POU>
+</TcPlcObject>

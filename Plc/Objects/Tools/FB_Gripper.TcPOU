@@ -1,0 +1,471 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<TcPlcObject Version="1.1.0.1" ProductVersion="3.1.4024.11">
+  <POU Name="FB_Gripper" Id="{053407a7-3085-4f5e-b1d6-540f90dd8403}" SpecialFunc="None">
+    <Declaration><![CDATA[FUNCTION_BLOCK FB_Gripper EXTENDS FB_MzTool
+VAR_INPUT
+END_VAR
+VAR_OUTPUT
+END_VAR
+VAR
+	//SpecProperties
+	pGripperRef	: POINTER TO FB_GripperRef;
+
+	//****************************************Aktionvariablen****************************************************
+	
+	//Action: "OpenClose"
+	bOpenClose			: BOOL;
+	nStateA_OpenClose	: USINT;	//Statemachine von A_OpenClose();
+	eOpClCtrl			: E_OpClCtrl;
+	timerOpenClose 		: TON;
+	bCloseWithPiece		: BOOL;		//Dient zur Überwachung, ob bei Schließen wirklich ein Piece geklemmt wird (Position zwischen beiden Endlagen)
+END_VAR]]></Declaration>
+    <Implementation>
+      <ST><![CDATA[IF eCurrentState = E_MachineState.MACHINESTATE_Active THEN
+	IF bOpenClose THEN
+		A_OpenClose();
+		IF nStateA_OpenClose >= 80 THEN
+			IF nStateA_OpenClose >= 99 THEN
+				bError := TRUE;	
+			END_IF
+			bOpenClose := FALSE;
+			nStateA_OpenClose := 0;
+			M_RemoveListEntry(nSearchValue:= E_Action.ACTION_OpenClose);
+		END_IF
+	END_IF		
+END_IF
+
+SUPER^();	//FB_MzTool aufrufen
+
+//Prozessdaten aktualisieren
+stProcessData.n32Data[7] := pGripperRef^.P_eGripperState;
+aObjProcData[nNotifyId] := stProcessData;
+]]></ST>
+    </Implementation>
+    <Action Name="A_OpenClose" Id="{ad20343e-6f41-4d81-b846-19b7967c0fcd}">
+      <Implementation>
+        <ST><![CDATA[IF nStateA_OpenClose = 0 THEN
+	pGripperRef^.M_Actuate(eOpClCtrl);
+	timerOpenClose(IN:= TRUE, PT:= T#500MS);
+	nStateA_OpenClose := 1;
+ELSIF nStateA_OpenClose = 1 THEN
+	timerOpenClose();
+	IF timerOpenClose.Q THEN
+		timerOpenClose(IN:= FALSE);
+		//Auf State checken
+		IF eOpClCtrl = E_OpClCtrl.Open THEN
+			IF pGripperRef^.P_eGripperState = E_GripperState.Open THEN
+				nStateA_OpenClose := 80;
+			ELSE
+				//Fehler: nicht vollständig geöffnet
+				stError.ErrorId := E_ErrorIdCmd.ERRORID_NotFullyOpened;
+				nStateA_OpenClose := 99;
+			END_IF
+		ELSE //Close , hier wird noch unterschieden, ob Soll-State nur HalfClosed sein soll (wird nur bei ExeActionDirect gesetzt)
+			IF bCloseWithPiece THEN
+				IF pGripperRef^.P_eGripperState = E_GripperState.HalfClosed THEN
+					nStateA_OpenClose := 80;
+				ELSE
+					//Fehler: kein Vial im Gripper
+					stError.ErrorId := E_ErrorIdCmd.ERRORID_NoPieceTaken;
+					nStateA_OpenClose := 99;
+				END_IF
+			ELSE //Hier ist nicht eindeutig angeben, ob mit oder ohne Piece (bei manueller Betätigung)
+				//In diesem Fall darf der State HalfClosed  oder auch FullyClosed sein.
+				IF pGripperRef^.P_eGripperState = E_GripperState.HalfClosed
+						OR pGripperRef^.P_eGripperState = E_GripperState.FullyClosed THEN
+					nStateA_OpenClose := 80;
+				ELSE
+					//Fehler beim Schließen des Grippers
+					stError.ErrorId := E_ErrorIdCmd.ERRORID_NotFullyClosed;
+					nStateA_OpenClose := 99;
+				END_IF
+			END_IF
+		END_IF
+	END_IF
+END_IF
+
+IF nStateA_OpenClose = 99 THEN
+	stError.Cmd := E_Action.ACTION_OpenClose;
+	stError.POU := E_POU.POU_FB_Gripper;
+	stError.POUAction := E_POUACT.POUACT_A_OpenClose;
+	fbErrorList.M_Add(stError);
+END_IF]]></ST>
+      </Implementation>
+    </Action>
+    <Action Name="A_Reset" Id="{6d85bd4a-0c35-460a-b3a3-6913b98a37fc}">
+      <Implementation>
+        <ST><![CDATA[//Ist noch eine Aktion aktiv?
+IF nStateA_ResetSpec = 0 THEN 
+	nStateA_ResetSpec := 80;
+END_IF
+
+SUPER^.A_Reset();]]></ST>
+      </Implementation>
+    </Action>
+    <Action Name="A_Stop" Id="{504223a3-429b-481c-8137-d02acc39caeb}">
+      <Implementation>
+        <ST><![CDATA[IF nStateA_Stop = 0 THEN
+	nStateA_Stop := 1;
+END_IF
+
+SUPER^.A_Stop();]]></ST>
+      </Implementation>
+    </Action>
+    <Method Name="FB_init" Id="{e1571af8-011d-45e5-a5ea-ddebea9a8d47}">
+      <Declaration><![CDATA[METHOD FB_init : BOOL
+VAR_INPUT
+	bInitRetains : BOOL; // if TRUE, the retain variables are initialized (warm start / cold start)
+	bInCopyCode : BOOL;  // if TRUE, the instance afterwards gets moved into the copy code (online change)
+END_VAR
+]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[eObjectType := E_ObjectType.OBJECTTYPE_Gripper;
+eObjectGroup := E_ObjectGroup.OBJECTGROUP_MzTool OR E_ObjectGroup.OBJECTGROUP_Device;]]></ST>
+      </Implementation>
+    </Method>
+    <Method Name="M_AddChild" Id="{9276646c-c226-4d36-986f-621b020c3053}">
+      <Declaration><![CDATA[METHOD M_AddChild : ERRORID
+VAR_INPUT
+	pObject : POINTER TO FB_Object;
+	nSlotNr	: UINT;
+	nIndex 	: INT;	
+END_VAR
+]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[//Kann folgende Objekt-Typen aufnehmen
+//Vial
+IF pObject > 0 THEN
+	IF pObject^.P_eObjectType = E_ObjectType.OBJECTTYPE_Vial THEN
+		M_AddChild := SUPER^.M_AddChild(pObject,nSlotNr,nIndex);
+	ELSE
+		M_AddChild := E_ErrorIdObjMgmt.ERRORID_InvalidParentObject;
+	END_IF
+ELSE
+	M_AddChild := E_ErrorIdObjMgmt.ERRORID_InvalidParentObject;
+END_IF]]></ST>
+      </Implementation>
+    </Method>
+    <Method Name="M_CheckAction" Id="{1ffad34c-cbe2-4a11-a44c-8afc2af4ea0e}">
+      <Declaration><![CDATA[METHOD M_CheckAction : ERRORID
+VAR_INPUT
+	refActionData 	: REFERENCE TO ST_ActionData;
+	pCorrelObject	: POINTER TO FB_Object;
+END_VAR
+
+VAR
+	pRack 			: POINTER TO FB_Rack;
+	pReactor 		: POINTER TO FB_Reactor;
+	pPowderStation 	: POINTER TO FB_PowderStation;
+	pSlot 			: POINTER TO FB_PieceSlot;
+	pTarget 		: POINTER TO FB_TargetBase;
+END_VAR]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[CASE refActionData.eAction OF
+	E_Action.ACTION_ExchangePiece:
+		pTarget := fbObjectDirectory.M_GetObjPointer(refActionData.nTarget);
+		//Welches Piece soll gehandelt werden?
+		IF refActionData.aParams[2] = 0 THEN //Drop
+			IF pPiece = 0 THEN
+				M_CheckAction := E_ErrorIdCmd.ERRORID_NoPieceOnTool;
+				RETURN;	
+			END_IF
+			//Gripper kann folgende Pieces handeln
+			//Vial, ???
+			IF pPiece^.P_eObjectType = E_ObjectType.OBJECTTYPE_Vial THEN
+				//Target muss VialRack oder Reaktor sein
+				IF pTarget^.P_eObjectType = E_ObjectType.OBJECTTYPE_VialRack THEN
+					pRack := pTarget;
+					//Slot muss frei sein
+					pSlot := pRack^.M_GetSlot(DINT_TO_UINT(refActionData.aParams[1]));
+					IF pSlot = 0 THEN
+						M_CheckAction := E_ErrorIdCmd.ERRORID_InvalidTargetSlot;
+						RETURN;
+					ELSIF pSlot^.P_pPiece > 0 THEN
+						M_CheckAction := E_ErrorIdCmd.ERRORID_PieceAlreadyInSlot;
+						RETURN;
+					END_IF
+				ELSIF pTarget^.P_eObjectType = E_ObjectType.OBJECTTYPE_Reactor THEN
+					//Slot muss frei sein
+					pReactor := pTarget;
+					IF pReactor^.P_pVial > 0 THEN
+						M_CheckAction := E_ErrorIdCmd.ERRORID_PieceAlreadyInSlot;
+						RETURN;
+					END_IF
+				ELSIF pTarget^.P_eObjectType = E_ObjectType.OBJECTTYPE_PowderStation THEN
+					//Slot muss frei sein
+					pPowderStation := pTarget;
+					IF pPowderStation^.P_pVial > 0 THEN
+						M_CheckAction := E_ErrorIdCmd.ERRORID_PieceAlreadyInSlot;
+						RETURN;
+					END_IF
+				ELSE
+					M_CheckAction := E_ErrorIdCmd.ERRORID_UnsuitableTarget;
+					RETURN;
+				END_IF
+			ELSE
+				M_CheckAction := E_ErrorIdCmd.ERRORID_InvalidPieceType;
+				RETURN;
+			END_IF
+		ELSE  //Take
+			//Schon ein Piece am Tool?
+			IF THIS^.pPiece > 0 THEN
+				M_CheckAction := E_ErrorIdCmd.ERRORID_PieceAlreadyOnTool;
+				RETURN;
+			END_IF
+			
+			IF pTarget^.P_eObjectType = E_ObjectType.OBJECTTYPE_Reactor THEN
+				//Hier kann ein Vial geholt werden
+				pReactor := pTarget;
+				IF pReactor^.P_pVial = 0 THEN
+					M_CheckAction := E_ErrorIdCmd.ERRORID_NoPieceInSlot;
+					RETURN;
+				ELSIF pReactor^.P_pVial^.P_pSeptum > 0 THEN
+					M_CheckAction := E_ErrorIdCmd.ERRORID_SeptumAlreadyOnVial;
+					RETURN;
+				END_IF
+			ELSIF pTarget^.P_eObjectType = E_ObjectType.OBJECTTYPE_PowderStation THEN
+				pPowderStation := pTarget;
+				IF pPowderStation^.P_pVial = 0 THEN
+					M_CheckAction := E_ErrorIdCmd.ERRORID_NoPieceInSlot;
+					RETURN;
+				END_IF
+			ELSIF pTarget^.P_eObjectType = E_ObjectType.OBJECTTYPE_VialRack THEN
+				//Hier kann ein Vial geholt werden
+				pRack := pTarget;
+				pSlot := pRack^.M_GetSlot(DINT_TO_UINT(refActionData.aParams[1]));
+				IF pSlot > 0 THEN
+					IF pSlot^.P_pPiece = 0 THEN
+						M_CheckAction := E_ErrorIdCmd.ERRORID_NoPieceInSlot;
+						RETURN;
+					ELSIF pSlot^.P_pPiece^.P_eObjectType <> E_ObjectType.OBJECTTYPE_Vial THEN
+						M_CheckAction := E_ErrorIdCmd.ERRORID_InvalidPieceType;
+						RETURN;
+					END_IF
+				ELSE
+					M_CheckAction := E_ErrorIdCmd.ERRORID_InvalidTargetSlot;
+					RETURN;				
+				END_IF
+			ELSE
+				M_CheckAction := E_ErrorIdCmd.ERRORID_UnsuitableTarget;
+				RETURN;
+			END_IF
+		END_IF	
+ELSE
+	M_CheckAction := SUPER^.M_CheckAction(refActionData, pCorrelObject);
+END_CASE]]></ST>
+      </Implementation>
+    </Method>
+    <Method Name="M_ExeAction" Id="{fce56b3e-e7e9-452f-851f-2351d438d685}">
+      <Declaration><![CDATA[METHOD M_ExeAction : ERRORID
+VAR_INPUT
+	refActionData : REFERENCE TO ST_ActionData;	
+END_VAR]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[IF NOT (eCurrentState = E_MachineState.MACHINESTATE_Idle OR
+	eCurrentState = E_MachineState.MACHINESTATE_Active OR
+	eCurrentState = E_MachineState.MACHINESTATE_Ready) THEN
+	M_ExeAction := E_ErrorIdCmd.ERRORID_InvalidState;
+	RETURN;
+END_IF
+
+IF refActionData.eAction = E_Action.ACTION_OpenClose THEN
+	IF NOT bOpenClose THEN
+		eOpClCtrl := DINT_TO_USINT(refActionData.aParams[1]);
+		fbList.A_AddHeadValue(hList := hList, putValue:= E_Action.ACTION_OpenClose);
+		bOpenClose := TRUE;
+	ELSE
+		RETURN;
+	END_IF
+ 
+ELSE
+	M_ExeAction := SUPER^.M_ExeAction(refActionData);
+	RETURN;
+END_IF
+
+bBusy := TRUE;
+eCurrentState := E_MachineState.MACHINESTATE_Active;]]></ST>
+      </Implementation>
+    </Method>
+    <Method Name="M_OpenClose" Id="{eb4ca921-ea6a-4340-b14d-237cf2d151c3}">
+      <Declaration><![CDATA[METHOD M_OpenClose : ERRORID
+VAR_INPUT
+	eCtrl			: E_OpClCtrl;
+	bCloseWithPiece : BOOL;
+END_VAR
+]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[IF NOT (eCurrentState = E_MachineState.MACHINESTATE_Idle OR
+	eCurrentState = E_MachineState.MACHINESTATE_Active OR
+	eCurrentState = E_MachineState.MACHINESTATE_Ready) THEN
+	M_OpenClose := E_ErrorIdCmd.ERRORID_InvalidState;
+	RETURN;
+END_IF
+
+IF NOT bOpenClose THEN
+	eOpClCtrl := eCtrl;
+	THIS^.bCloseWithPiece := bCloseWithPiece;
+	fbList.A_AddHeadValue(hList := hList, putValue:= E_Action.ACTION_OpenClose);
+	bOpenClose := TRUE;
+ELSE
+	RETURN;
+END_IF
+
+bBusy := TRUE;
+eCurrentState := E_MachineState.MACHINESTATE_Active;]]></ST>
+      </Implementation>
+    </Method>
+    <Method Name="M_SetAllProps" Id="{316e63f0-dadd-4562-a5e0-68e256cdf77e}">
+      <Declaration><![CDATA[METHOD M_SetAllProps : ERRORID
+VAR_INPUT
+	refCmdData : REFERENCE TO  ST_CmdData;
+END_VAR
+
+VAR
+	
+END_VAR]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[M_SetAllProps := SUPER^.M_SetAllProps(refCmdData);
+
+IF M_SetAllProps > 0 THEN
+	RETURN;
+END_IF
+
+pGripperRef := ADR(pFbMultiZ^.aFbGripperRef[pZAxisRef^.nChannel]);
+pZAxisRef^.eFixedToolType := E_MzToolType.TOOL_TYPE_Gripper;]]></ST>
+      </Implementation>
+    </Method>
+    <Property Name="P_bVialDetector" Id="{cef55640-5b5b-492d-a8b0-d7bd8dfbe188}">
+      <Declaration><![CDATA[PROPERTY P_bVialDetector : BOOL]]></Declaration>
+      <Get Name="Get" Id="{ea79fee1-88fc-40a6-90f5-a2c441c14cf8}">
+        <Declaration><![CDATA[VAR
+END_VAR
+]]></Declaration>
+        <Implementation>
+          <ST><![CDATA[P_bVialDetector :=  pGripperRef^.P_bVialDetector;]]></ST>
+        </Implementation>
+      </Get>
+    </Property>
+    <Property Name="P_eCurrentGripperState" Id="{49d9b408-8ed9-4739-843d-0049ffdbe36f}">
+      <Declaration><![CDATA[PROPERTY P_eCurrentGripperState : E_GripperState]]></Declaration>
+      <Get Name="Get" Id="{06e79817-0137-43fc-9c6b-8554c13268ad}">
+        <Declaration><![CDATA[VAR
+END_VAR
+]]></Declaration>
+        <Implementation>
+          <ST><![CDATA[P_eCurrentGripperState := pGripperRef^.P_eGripperState;]]></ST>
+        </Implementation>
+      </Get>
+    </Property>
+    <LineIds Name="FB_Gripper">
+      <LineId Id="3" Count="0" />
+      <LineId Id="149" Count="10" />
+      <LineId Id="28" Count="4" />
+      <LineId Id="177" Count="0" />
+      <LineId Id="45" Count="0" />
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="FB_Gripper.A_OpenClose">
+      <LineId Id="1" Count="1" />
+      <LineId Id="5" Count="0" />
+      <LineId Id="4" Count="0" />
+      <LineId Id="7" Count="0" />
+      <LineId Id="9" Count="7" />
+      <LineId Id="36" Count="0" />
+      <LineId Id="39" Count="0" />
+      <LineId Id="17" Count="6" />
+      <LineId Id="37" Count="0" />
+      <LineId Id="40" Count="0" />
+      <LineId Id="24" Count="7" />
+      <LineId Id="38" Count="0" />
+      <LineId Id="41" Count="0" />
+      <LineId Id="32" Count="3" />
+      <LineId Id="8" Count="0" />
+      <LineId Id="3" Count="0" />
+      <LineId Id="43" Count="5" />
+      <LineId Id="42" Count="0" />
+    </LineIds>
+    <LineIds Name="FB_Gripper.A_Reset">
+      <LineId Id="2" Count="4" />
+      <LineId Id="1" Count="0" />
+    </LineIds>
+    <LineIds Name="FB_Gripper.A_Stop">
+      <LineId Id="2" Count="3" />
+      <LineId Id="1" Count="0" />
+    </LineIds>
+    <LineIds Name="FB_Gripper.FB_init">
+      <LineId Id="7" Count="1" />
+    </LineIds>
+    <LineIds Name="FB_Gripper.M_AddChild">
+      <LineId Id="19" Count="0" />
+      <LineId Id="8" Count="1" />
+      <LineId Id="22" Count="0" />
+      <LineId Id="17" Count="1" />
+      <LineId Id="15" Count="0" />
+      <LineId Id="11" Count="0" />
+      <LineId Id="13" Count="0" />
+      <LineId Id="12" Count="0" />
+      <LineId Id="5" Count="0" />
+    </LineIds>
+    <LineIds Name="FB_Gripper.M_CheckAction">
+      <LineId Id="113" Count="0" />
+      <LineId Id="118" Count="0" />
+      <LineId Id="121" Count="23" />
+      <LineId Id="146" Count="4" />
+      <LineId Id="241" Count="1" />
+      <LineId Id="244" Count="1" />
+      <LineId Id="248" Count="1" />
+      <LineId Id="247" Count="0" />
+      <LineId Id="151" Count="3" />
+      <LineId Id="162" Count="20" />
+      <LineId Id="232" Count="0" />
+      <LineId Id="234" Count="0" />
+      <LineId Id="236" Count="0" />
+      <LineId Id="239" Count="1" />
+      <LineId Id="238" Count="0" />
+      <LineId Id="183" Count="15" />
+      <LineId Id="228" Count="0" />
+      <LineId Id="230" Count="1" />
+      <LineId Id="215" Count="0" />
+      <LineId Id="120" Count="0" />
+      <LineId Id="116" Count="0" />
+      <LineId Id="119" Count="0" />
+      <LineId Id="117" Count="0" />
+    </LineIds>
+    <LineIds Name="FB_Gripper.M_ExeAction">
+      <LineId Id="3" Count="5" />
+      <LineId Id="100" Count="1" />
+      <LineId Id="109" Count="0" />
+      <LineId Id="114" Count="5" />
+      <LineId Id="104" Count="0" />
+      <LineId Id="99" Count="0" />
+      <LineId Id="105" Count="0" />
+      <LineId Id="107" Count="0" />
+      <LineId Id="106" Count="0" />
+      <LineId Id="9" Count="0" />
+      <LineId Id="67" Count="0" />
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="FB_Gripper.M_OpenClose">
+      <LineId Id="10" Count="4" />
+      <LineId Id="5" Count="0" />
+      <LineId Id="18" Count="2" />
+      <LineId Id="26" Count="0" />
+      <LineId Id="21" Count="3" />
+      <LineId Id="17" Count="0" />
+      <LineId Id="33" Count="1" />
+      <LineId Id="32" Count="0" />
+    </LineIds>
+    <LineIds Name="FB_Gripper.M_SetAllProps">
+      <LineId Id="3" Count="4" />
+      <LineId Id="10" Count="0" />
+      <LineId Id="57" Count="0" />
+      <LineId Id="56" Count="0" />
+    </LineIds>
+    <LineIds Name="FB_Gripper.P_bVialDetector.Get">
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="FB_Gripper.P_eCurrentGripperState.Get">
+      <LineId Id="2" Count="0" />
+    </LineIds>
+  </POU>
+</TcPlcObject>

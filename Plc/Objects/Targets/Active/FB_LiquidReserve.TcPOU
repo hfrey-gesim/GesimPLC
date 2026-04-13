@@ -1,0 +1,1111 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<TcPlcObject Version="1.1.0.1" ProductVersion="3.1.4022.18">
+  <POU Name="FB_LiquidReserve" Id="{1f11ce1f-4b14-4939-9808-b6ff1df9759f}" SpecialFunc="None">
+    <Declaration><![CDATA[FUNCTION_BLOCK FB_LiquidReserve EXTENDS FB_ActiveTarget
+VAR
+	aLevelSensor		AT %I* : ARRAY[1..cMaxSlots] OF BOOL; 		
+	
+	//Spec-Properties
+
+	nNoOfSlots			: USINT;
+	nNoOfSpecPoints		: USINT;
+	nNoOfWasteChannels	: USINT;
+	nNoOfLiquidChannels	: USINT;
+	
+	aSlots				: ARRAY[1..cMaxSlots] OF FB_PieceSlot(pOwner:= This);
+	aSpecPoints			: ARRAY[1..cMaxSpecPoints] OF ST_3DPoint;
+	aWasteChannels		: ARRAY[1..cMaxWasteChannels] OF ST_WasteChannel;
+	aLiquidChannels		: ARRAY[1..cMaxLiquidChannels] OF ST_LiquidChannel;
+	//aFbGearPump			: ARRAY[1..cMaxLiquidChannels] OF FB_GearPump(stCANInterfaceBuffer := CANInterfaceCom.stCanInterfaceBuffer);
+	nPumpNr				: USINT;
+
+	//Variablen allgemeine Statemachine
+	
+	
+	//****************************************Aktionvariablen****************************************************
+	
+	nChannelCnt			: USINT;	//allg.Zählvariable für For Next-Schleifen
+	
+	//Action: "FillLiquid"
+	bFillLiquid				: BOOL;
+
+	//Action: "EmptyLiquid"
+	bEmptyLiquid			: BOOL;
+
+	nStateA_FillEmptyLiquid		: USINT;
+	aFillEmptyLiquid			: ARRAY[1..cMaxLiquidChannels] OF BOOL;
+	aSubStateA_FillEmptyLiquid 	: ARRAY[1..cMaxLiquidChannels] OF USINT;
+	
+	nFillEmptyChannel			: USINT;
+	aFillEmptyQuantity			: ARRAY[1..cMaxLiquidChannels] OF DINT;
+	aFillEmptyFlow				: ARRAY[1..cMaxLiquidChannels] OF DINT;
+	
+	//Action: EmptyWaste
+	bEmptyWaste				: BOOL;
+	nStateA_EmptyWaste		: USINT;
+	nEmptyWasteChannel		: USINT;
+	tEmptyTime				: TIME;
+	tmrEmptyWaste			: TON;
+
+END_VAR
+
+VAR CONSTANT
+	cMaxSlots 			: USINT := 6;
+	cMaxSpecPoints		: USINT := 2;
+	cMaxLiquidChannels 	: USINT := 4;
+	cMaxWasteChannels 	: USINT := 2;
+END_VAR
+
+
+
+
+]]></Declaration>
+    <Implementation>
+      <ST><![CDATA[IF bInitFB THEN
+	bInitFB := FALSE;
+	F_CreateLinkedListHnd( ADR( aNodes ), SIZEOF( aNodes ), hList );
+	//Fehlerstruktur vorausfüllen
+	stError.ObjectId := nObjectID;
+	stError.HardwareGrp := E_HardwareGrp.Nothing;
+	stError.POU := E_POU.POU_FB_LiquidReserve;
+	//Pumpennummer zu den Instanzen von FB_GearPump zuordnen
+	
+END_IF
+
+FOR nPumpNr := 1 TO cMaxLiquidChannels BY 1 DO
+	//aFbGearPump[nPumpNr](stTMCMBuffer := stTMCMBuffer, nPumpNr := nPumpNr);
+	//aFbGearPump[nPumpNr](nPumpNr:=nPumpNr);
+END_FOR
+
+CASE eCurrentState OF
+	E_MachineState.MACHINESTATE_Active:
+		//BasicActions ausführen
+		IF bInit THEN	//Initialisieren
+			A_Init();
+			IF nStateA_Init >= 80 THEN
+				IF nStateA_Init >= 99 THEN
+					fbErrorList.M_Add(stError);	//Error in Error-Liste eintragen
+					bError := TRUE;	
+				END_IF
+				bInit := FALSE;
+				nStateA_Init := 0;
+				M_RemoveListEntry(nSearchValue:= E_Action.ACTION_Init);
+			END_IF
+		END_IF
+		
+		IF bFillLiquid THEN
+			A_FillLiquid();
+			IF nStateA_FillEmptyLiquid >= 80 THEN
+				IF nStateA_FillEmptyLiquid >= 99 THEN
+					fbErrorList.M_Add(stError);	//Error in Error-Liste eintragen
+					bError := TRUE;
+				END_IF
+				bFillLiquid := FALSE;
+				nStateA_FillEmptyLiquid := 0;
+				M_RemoveListEntry(nSearchValue:= E_Action.ACTION_FillLiquid);
+			END_IF
+		END_IF
+		
+		IF bEmptyLiquid THEN
+			A_EmptyLiquid();
+			IF nStateA_FillEmptyLiquid >= 80 THEN
+				IF nStateA_FillEmptyLiquid >= 99 THEN
+					fbErrorList.M_Add(stError);	//Error in Error-Liste eintragen
+					bError := TRUE;
+				END_IF
+				bEmptyLiquid := FALSE;
+				nStateA_FillEmptyLiquid := 0;
+				M_RemoveListEntry(nSearchValue:= E_Action.ACTION_EmptyLiquid);
+			END_IF
+		END_IF
+		
+		IF bEmptyWaste THEN
+			A_EmptyWaste();
+			IF nStateA_EmptyWaste >= 80 THEN
+				IF nStateA_EmptyWaste >= 99 THEN
+					fbErrorList.M_Add(stError);	//Error in Error-Liste eintragen
+					bError := TRUE;
+				END_IF
+				bEmptyWaste := FALSE;
+				nStateA_EmptyWaste := 0;
+				M_RemoveListEntry(nSearchValue:= E_Action.ACTION_EmptyWaste);
+			END_IF
+		END_IF
+		
+		IF bStop THEN
+			A_Stop();
+			IF nStateA_Stop >= 80 THEN
+				IF nStateA_Stop >= 99 THEN
+					fbErrorList.M_Add(stError);	//Error in Error-Liste eintragen
+					bError := TRUE;
+				END_IF
+				bStop := FALSE;
+				nStateA_Stop := 0;
+				bStop := FALSE;
+				M_RemoveListEntry(nSearchValue:= E_Action.ACTION_Stop);
+			END_IF							
+		END_IF		
+		
+		IF hList.nCount = 0 THEN
+			eCurrentState := E_MachineState.MACHINESTATE_Ready;
+		END_IF
+
+		IF bError  THEN
+			eCurrentState := E_MachineState.MACHINESTATE_Error;
+		END_IF
+
+	E_MachineState.MACHINESTATE_Reset:
+		A_Reset();
+		IF nStateA_Reset = 80 THEN
+			nStateA_Init := 0;
+			nStateA_Stop := 0;
+			nStateA_Reset := 0;
+			bBusy := FALSE;
+			bError := FALSE;
+			bStopAllOnError := FALSE;
+			fbList.A_Reset( hList := hList);
+			nErrorId := 0;
+			stError.Cmd := 0;
+			stError.ErrorId := 0;
+			eCurrentState := E_MachineState.MACHINESTATE_Idle;
+		ELSIF
+			nStateA_Reset = 99 THEN
+			fbErrorList.M_Add(stError);
+			nStateA_Reset := 0;
+			bBusy := FALSE;
+			bError := TRUE;
+			eCurrentState := E_MachineState.MACHINESTATE_Error;			
+		END_IF
+	
+	E_MachineState.MACHINESTATE_Ready:
+		bBusy := FALSE;
+		eCurrentState := E_MachineState.MACHINESTATE_Idle;
+	
+	E_MachineState.MACHINESTATE_Error:
+		bBusy := FALSE;
+END_CASE
+
+//Prozessdaten aktualisieren
+stProcessData.nObjId := nObjectID;
+stProcessData.n32Data[0] := BOOL_TO_DINT(bIsInit);
+stProcessData.n32Data[1] := eCurrentState;
+stProcessData.n32Data[2] := stError.ErrorId;
+
+aObjProcData[nNotifyId] := stProcessData;
+]]></ST>
+    </Implementation>
+    <Action Name="A_EmptyLiquid" Id="{6020f6c4-dcee-47aa-b4f1-4b92a58d3dc4}">
+      <Implementation>
+        <ST><![CDATA[IF nStateA_FillEmptyLiquid = 0 THEN
+	//Die einzelnen Channels durchlaufen
+	//Die einzelnen Channels haben ihre eigene Statemachine
+	//In diesem State werden auch geändert Werte angenommen
+	nStateA_FillEmptyLiquid := 80;
+	FOR nChannelCnt := 1 TO cMaxLiquidChannels BY 1 DO
+		CASE aSubStateA_FillEmptyLiquid[nChannelCnt] OF
+			0:
+				IF aFillEmptyLiquid[nChannelCnt] THEN
+					aFillEmptyLiquid[nChannelCnt] := FALSE;
+					nStateA_FillEmptyLiquid := 0;
+					aLiquidChannels[nChannelCnt].pGearPump^.M_PumpQuantity(aFillEmptyQuantity[nChannelCnt],aFillEmptyFlow[nChannelCnt]);
+					aSubStateA_FillEmptyLiquid[nChannelCnt] := 1;
+				END_IF
+			1:	//Warten bis fertig
+				IF aLiquidChannels[nChannelCnt].pGearPump^.bBusy THEN
+					nStateA_FillEmptyLiquid := 0;
+				ELSE
+					aSubStateA_FillEmptyLiquid[nChannelCnt] := 0;
+				END_IF
+		END_CASE
+	END_FOR
+ELSIF nStateA_FillEmptyLiquid = 70 THEN
+	nStateA_FillEmptyLiquid := 80;
+	FOR nChannelCnt := 1 TO cMaxLiquidChannels BY 1 DO
+		aLiquidChannels[nChannelCnt].pGearPump^.M_Stop();
+		IF aLiquidChannels[nChannelCnt].pGearPump^.bBusy THEN
+			nStateA_FillEmptyLiquid := 70;
+		END_IF
+	END_FOR
+END_IF]]></ST>
+      </Implementation>
+    </Action>
+    <Action Name="A_EmptyWaste" Id="{e8e7f146-327e-45e4-814d-266903dd4e95}">
+      <Implementation>
+        <ST><![CDATA[IF nStateA_EmptyWaste = 0 THEN
+	FOR nChannelCnt := 1 TO cMaxWasteChannels BY 1 DO
+		aPumps[aWasteChannels[nChannelCnt].nPumpNr].M_Off();
+		IF 	nEmptyWasteChannel = 0 THEN //Alle leeren
+			aPumps[aWasteChannels[nChannelCnt].nPumpNr].M_On();
+		ELSIF nEmptyWasteChannel = nChannelCnt THEN
+			aPumps[aWasteChannels[nChannelCnt].nPumpNr].M_On();
+		END_IF
+	END_FOR
+	tmrEmptyWaste(IN:= TRUE, PT:= tEmptyTime);
+	IF tmrEmptyWaste.Q THEN
+		FOR nChannelCnt := 1 TO cMaxWasteChannels BY 1 DO
+			aPumps[aWasteChannels[nChannelCnt].nPumpNr].M_Off();
+		END_FOR
+		nStateA_EmptyWaste := 80;		
+	END_IF
+ELSIF nStateA_EmptyWaste = 70 THEN
+	nStateA_EmptyWaste := 80;
+	FOR nChannelCnt := 1 TO cMaxWasteChannels BY 1 DO
+		aPumps[aWasteChannels[nChannelCnt].nPumpNr].M_Off();
+	END_FOR
+END_IF]]></ST>
+      </Implementation>
+    </Action>
+    <Action Name="A_FillLiquid" Id="{356c6e6c-5230-40d7-8f71-8cf962574d75}">
+      <Implementation>
+        <ST><![CDATA[FOR nChannelCnt := 1 TO cMaxWasteChannels BY 1 DO
+	aPumps[aWasteChannels[nChannelCnt].nPumpNr].M_Off();
+END_FOR
+
+IF nStateA_FillEmptyLiquid = 0 THEN
+	//Die einzelnen Channels durchlaufen
+	//Die einzelnen Channels haben ihre eigene Statemachine
+	//In diesem State werden auch geändert Werte angenommen
+	nStateA_FillEmptyLiquid := 80;
+	FOR nChannelCnt := 1 TO cMaxLiquidChannels BY 1 DO
+		//Sensoren der Bottles überwachen
+		IF aFillEmptyFlow[nChannelCnt] > 0 THEN
+			IF aLiquidChannels[nChannelCnt].nBottleNr > 0 THEN
+				IF NOT aSensSysLiquidBottle[aLiquidChannels[nChannelCnt].nBottleNr] THEN //Leer
+					stError.ErrorId := E_ErrorIdCmd.ERRORID_LiquidBottleEmpty;
+					nStateA_FillEmptyLiquid := 99;
+				END_IF
+			END_IF
+			IF aWasteChannels[aLiquidChannels[nChannelCnt].nWasteCh].nBottleNr > 0 THEN
+				IF NOT aSensWasteBottle[aWasteChannels[aLiquidChannels[nChannelCnt].nWasteCh].nBottleNr] THEN
+					stError.ErrorId := E_ErrorIdCmd.ERRORID_WasteBottleFull;
+					nStateA_FillEmptyLiquid := 99;
+				END_IF
+			END_IF
+		END_IF
+		IF nStateA_FillEmptyLiquid < 99 THEN
+			CASE aSubStateA_FillEmptyLiquid[nChannelCnt] OF
+				0:
+					IF aFillEmptyLiquid[nChannelCnt] THEN
+						aFillEmptyLiquid[nChannelCnt] := FALSE;
+						//zugeordnete WastePump einschalten
+						//Befehl absenden
+						//Wenn eine Menge vorgegeben, dann M_PumpQuantity, sonse M_PumpConst
+						nStateA_FillEmptyLiquid := 0;
+						IF aFillEmptyQuantity[nChannelCnt] = 0 THEN
+							aLiquidChannels[nChannelCnt].pGearPump^.M_PumpConst(aFillEmptyFlow[nFillEmptyChannel]);
+						ELSE
+							aLiquidChannels[nChannelCnt].pGearPump^.M_PumpQuantity(aFillEmptyQuantity[nChannelCnt],aFillEmptyFlow[nChannelCnt]);
+						END_IF
+						aSubStateA_FillEmptyLiquid[nChannelCnt] := 1;
+					END_IF
+				1:
+					//Wartet bis fertig, nimmt aber auch neuen Befehl an
+					//Wenn Füllstandssensor, dann auch abschalten
+					IF aFillEmptyLiquid[nChannelCnt] THEN
+						aSubStateA_FillEmptyLiquid[nChannelCnt] := 0;
+						nStateA_FillEmptyLiquid := 0;
+					ELSE
+						IF NOT aLiquidChannels[nChannelCnt].pGearPump^.bBusy THEN
+							aSubStateA_FillEmptyLiquid[nChannelCnt] := 0;
+							aFillEmptyFlow[nChannelCnt] := 0;
+						ELSE
+							IF NOT aLevelSensor[nChannelCnt] THEN
+								IF aFillEmptyQuantity[nChannelCnt] = 0 THEN
+									aLiquidChannels[nChannelCnt].pGearPump^.M_Stop();
+									aFillEmptyFlow[nChannelCnt] := 0;
+								END_IF
+							END_IF
+							nStateA_FillEmptyLiquid := 0;
+						END_IF
+					END_IF
+			END_CASE
+			IF aLiquidChannels[nChannelCnt].pGearPump^.bBusy THEN
+				aPumps[aWasteChannels[aLiquidChannels[nChannelCnt].nWasteCh].nPumpNr].M_On();
+			END_IF
+		END_IF
+	END_FOR
+ELSIF nStateA_FillEmptyLiquid = 70 THEN
+	//WastePumps ausschalten
+	FOR nChannelCnt := 1 TO cMaxWasteChannels BY 1 DO
+		aPumps[aWasteChannels[nChannelCnt].nPumpNr].M_Off();
+	END_FOR
+	
+	nStateA_FillEmptyLiquid := 80;
+	FOR nChannelCnt := 1 TO cMaxLiquidChannels BY 1 DO
+		aLiquidChannels[nChannelCnt].pGearPump^.M_Stop();
+		IF aLiquidChannels[nChannelCnt].pGearPump^.bBusy THEN
+			nStateA_FillEmptyLiquid := 70;
+		END_IF
+	END_FOR
+END_IF
+
+//Errorhandling
+IF nStateA_FillEmptyLiquid = 99 THEN
+	//Alle Pumpen ausschalten
+	FOR nChannelCnt := 1 TO cMaxLiquidChannels BY 1 DO
+		aLiquidChannels[nChannelCnt].pGearPump^.M_Stop();
+		aFillEmptyFlow[nChannelCnt] := 0;
+	END_FOR
+	
+	FOR nChannelCnt := 1 TO cMaxWasteChannels BY 1 DO
+		aPumps[aWasteChannels[nChannelCnt].nPumpNr].M_Off();
+	END_FOR
+
+	stError.Cmd := E_Action.ACTION_FillLiquid;
+	stError.POUAction := E_POUACT.POUACT_A_FillLiquid;
+	fbErrorList.M_Add(stError);
+END_IF]]></ST>
+      </Implementation>
+    </Action>
+    <Action Name="A_Init" Id="{5e054744-3686-4702-8ebf-662856ab1d46}">
+      <Implementation>
+        <ST><![CDATA[nStateA_Init := 80;
+]]></ST>
+      </Implementation>
+    </Action>
+    <Action Name="A_Reset" Id="{e6170d25-5f66-4110-84ad-913102d7e0a1}">
+      <Implementation>
+        <ST><![CDATA[CASE nStateA_Reset OF
+	0:
+		nStateA_Reset := 80;
+END_CASE]]></ST>
+      </Implementation>
+    </Action>
+    <Action Name="A_Stop" Id="{498e4ef6-cfae-47cd-bd08-c5d1cf6c05e8}">
+      <Implementation>
+        <ST><![CDATA[CASE nStateA_Stop OF
+	0:	//Fehlerstruktur vorausfüllen
+		stError.Cmd := E_Action.ACTION_Stop;
+		IF bInit THEN
+			nStateA_Init := 70;	
+		END_IF
+		
+		nStateA_Stop := 1;
+	
+	1:	//Warten bis alle Actions außer Stop abgebrochen sind
+		IF hList.nCount = 1 THEN	//nur der Eintrag von Stop
+			nStateA_Stop := 80;
+		END_IF
+END_CASE]]></ST>
+      </Implementation>
+    </Action>
+    <Method Name="FB_init" Id="{3198edb2-d313-4c00-9186-d4f141aa7804}">
+      <Declaration><![CDATA[METHOD FB_init : BOOL
+VAR_INPUT
+	bInitRetains : BOOL; // if TRUE, the retain variables are initialized (warm start / cold start)
+	bInCopyCode : BOOL;  // if TRUE, the instance afterwards gets moved into the copy code (online change)
+END_VAR
+]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[eObjectType := E_ObjectType.OBJECTTYPE_LiquidReserve;
+eObjectGroup := E_ObjectGroup.OBJECTGROUP_Target OR E_ObjectGroup.OBJECTGROUP_Device;]]></ST>
+      </Implementation>
+    </Method>
+    <Method Name="M_ApplyPos" Id="{712415a5-b476-40f4-a9b9-3cc020630746}">
+      <Declaration><![CDATA[METHOD M_ApplyPos : ERRORID
+VAR_INPUT
+	eTargetRef 		: E_TargetRef;
+	nPointSlotNr	: UINT;
+	stPos 			: ST_3DPoint;
+	bXPos			: BOOL;
+	bYPos			: BOOL;
+	bZPos			: BOOL;	
+END_VAR
+
+VAR
+	stAbsPos		: ST_3DPoint;
+END_VAR]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[stAbsPos := P_stAbsPosLB;
+IF eTargetRef = E_TargetRef.TARGETREF_SpecPoint THEN
+	IF nPointSlotNr > 0 AND nPointSlotNr <= nNoOfSpecPoints THEN
+		IF bXPos THEN
+			aSpecPoints[nPointSlotNr].X := stPos.X - stAbsPos.X;	
+		END_IF
+		IF bYPos THEN
+			aSpecPoints[nPointSlotNr].Y := stPos.Y - stAbsPos.Y;	
+		END_IF
+		IF bZPos THEN
+			aSpecPoints[nPointSlotNr].Z := stPos.Z - stAbsPos.Z;	
+		END_IF
+	ELSE
+		M_ApplyPos := E_ErrorIdCmd.ERRORID_InvalidTargetPointNr;
+	END_IF
+ELSIF eTargetRef = E_TargetRef.TARGETREF_Slot THEN
+	IF nPointSlotNr > 0 AND nPointSlotNr <= nNoOfSlots THEN
+		IF bXPos THEN
+			aSlots[nPointSlotNr].P_rRelPosX := stPos.X - stAbsPos.X;	
+		END_IF
+		IF bYPos THEN
+			aSlots[nPointSlotNr].P_rRelPosY := stPos.Y - stAbsPos.Y;	
+		END_IF
+		IF bZPos THEN
+			aSlots[nPointSlotNr].P_rRelPosZ := stPos.Z - stAbsPos.Z;	
+		END_IF
+	ELSE
+		M_ApplyPos := E_ErrorIdCmd.ERRORID_InvalidTargetPointNr;
+	END_IF
+ELSE
+	M_ApplyPos := SUPER^.M_ApplyPos(eTargetRef, nPointSlotNr, stPos,bXPos, bYPos, bZPos);
+END_IF]]></ST>
+      </Implementation>
+    </Method>
+    <Method Name="M_CancelAction" Id="{3d2118aa-ecf8-4e7c-8b5f-0470392bf33b}">
+      <Declaration><![CDATA[METHOD M_CancelAction
+VAR_INPUT
+	eAction : E_Action;
+END_VAR
+]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[CASE eAction OF
+	E_Action.ACTION_FillLiquid:
+		IF bFillLiquid AND nStateA_FillEmptyLiquid < 70 THEN
+			nStateA_FillEmptyLiquid := 70;
+		END_IF	
+	E_Action.ACTION_EmptyLiquid:
+		IF bEmptyLiquid AND nStateA_FillEmptyLiquid < 70 THEN
+			nStateA_FillEmptyLiquid := 70;
+		END_IF
+	E_Action.ACTION_EmptyWaste:
+		IF bEmptyWaste AND nStateA_EmptyWaste < 70 THEN
+			nStateA_EmptyWaste := 70;
+		END_IF
+END_CASE]]></ST>
+      </Implementation>
+    </Method>
+    <Method Name="M_CheckBottles" Id="{83bcbca8-e199-43f6-896a-be80a1fa7f07}">
+      <Declaration><![CDATA[METHOD M_CheckBottles : ERRORID
+VAR_INPUT
+END_VAR
+]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[//Systemliquidbottle OK?
+(*IF nSysLiquidBottle > 0 THEN
+	IF NOT aSensSysLiquidBottle[nSysLiquidBottle] THEN //Leer
+		M_GetBottleState := E_ErrorIdCmd.ERRORID_LiquidBottleEmpty;
+		RETURN;
+	END_IF
+END_IF
+//Wastebottle OK?
+IF nWasteBottle > 0 THEN
+	IF NOT aSensWasteBottle[nWasteBottle] THEN //Voll
+		M_GetBottleState := E_ErrorIdCmd.ERRORID_WasteBottleFull;
+		RETURN;
+	END_IF
+END_IF*) 			]]></ST>
+      </Implementation>
+    </Method>
+    <Method Name="M_CheckForAction" Id="{dcad24b9-c824-457b-8498-f67d84c9b0b2}">
+      <Declaration><![CDATA[METHOD M_CheckForAction : BOOL
+VAR_INPUT
+	refActionData : REFERENCE TO ST_ActionData;
+END_VAR
+]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[IF refActionData.eAction = E_Action.ACTION_TeachTarget THEN
+	IF DINT_TO_UINT(refActionData.aParams[1]) = E_TargetRef.TARGETREF_SpecPoint AND (refActionData.aParams[2] = 1 AND refActionData.aParams[2] = 2) THEN
+		M_CheckForAction := TRUE;
+	END_IF
+END_IF]]></ST>
+      </Implementation>
+    </Method>
+    <Method Name="M_CheckProcDataType" Id="{109be9ad-d129-47c5-a203-47a6f1b60cc0}">
+      <Declaration><![CDATA[METHOD M_CheckProcDataType : BOOL
+VAR_INPUT
+	eProcDataType : E_ProcDataType;
+END_VAR
+]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[]]></ST>
+      </Implementation>
+    </Method>
+    <Method Name="M_ExeAction" Id="{736712f4-04da-4560-a970-7595f1fbf36d}">
+      <Declaration><![CDATA[METHOD M_ExeAction : ERRORID
+VAR_INPUT
+	refActionData : REFERENCE TO ST_ActionData;	
+END_VAR
+]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[IF refActionData.eAction = E_Action.ACTION_Init THEN
+	bIsInit := TRUE;
+	RETURN;
+ELSIF refActionData.eAction = E_Action.ACTION_FillLiquid THEN
+	IF bEmptyLiquid THEN
+		M_ExeAction := E_ErrorIdCmd.ERRORID_BasicActionActive;
+	END_IF
+
+	nFillEmptyChannel := DINT_TO_USINT(refActionData.aParams[3]);
+	IF nFillEmptyChannel > cMaxLiquidChannels THEN
+		M_ExeAction := E_ErrorIdCmd.ERRORID_InvalidLiquidChannel;
+		RETURN;
+	END_IF
+
+	aFillEmptyQuantity[nFillEmptyChannel] := refActionData.aParams[1];
+	aFillEmptyFlow[nFillEmptyChannel] := refActionData.aParams[2];
+	aFillEmptyLiquid[nFillEmptyChannel] := TRUE;
+	
+	IF NOT bFillLiquid THEN
+		fbList.A_AddHeadValue(hList := hList, putValue:= E_Action.ACTION_FillLiquid);
+		bFillLiquid := TRUE;
+	END_IF
+	
+ELSIF refActionData.eAction = E_Action.ACTION_EmptyLiquid THEN
+	IF bFillLiquid THEN
+		M_ExeAction := E_ErrorIdCmd.ERRORID_BasicActionActive;
+	END_IF
+	
+	nFillEmptyChannel := DINT_TO_USINT(refActionData.aParams[3]);
+	IF nFillEmptyChannel > cMaxLiquidChannels THEN
+		M_ExeAction := E_ErrorIdCmd.ERRORID_InvalidLiquidChannel;
+		RETURN;
+	END_IF
+	
+	aFillEmptyQuantity[nFillEmptyChannel] := refActionData.aParams[1] * -1;
+	aFillEmptyFlow[nFillEmptyChannel] := refActionData.aParams[2];
+	aFillEmptyLiquid[nFillEmptyChannel] := TRUE;
+	
+	IF NOT bEmptyLiquid THEN
+		fbList.A_AddHeadValue(hList := hList, putValue:= E_Action.ACTION_EmptyLiquid);
+		bEmptyLiquid := TRUE;
+	END_IF
+ELSIF refActionData.eAction = E_Action.ACTION_EmptyWaste THEN
+	nEmptyWasteChannel := DINT_TO_USINT(refActionData.aParams[1]);
+	IF nEmptyWasteChannel >= 0 AND  nEmptyWasteChannel <= cMaxWasteChannels THEN
+		tEmptyTime := DINT_TO_TIME(refActionData.aParams[2]);
+		tmrEmptyWaste(IN:= FALSE);
+		IF NOT bEmptyWaste THEN
+			fbList.A_AddHeadValue(hList := hList, putValue:= E_Action.ACTION_EmptyWaste);
+			bEmptyWaste := TRUE;
+		END_IF	
+	ELSE
+		M_ExeAction := E_ErrorIdCmd.ERRORID_InvalidWasteChannel;
+		RETURN;		
+	END_IF
+ELSIF refActionData.eAction = E_Action.ACTION_Stop THEN
+	;
+ELSE
+	M_ExeAction := E_ErrorIdCmd.ERRORID_InvalidAction;
+	RETURN;
+END_IF
+bBusy := TRUE;
+eCurrentState:= E_MachineState.MACHINESTATE_Active;]]></ST>
+      </Implementation>
+    </Method>
+    <Method Name="M_GetAbsPos" Id="{c5088185-49e3-4ff2-a97d-5fb0bb4ff7a8}">
+      <Declaration><![CDATA[METHOD M_GetAbsPos : ST_3DPoint
+VAR_INPUT
+	pChildPos	: POINTER TO ST_3DPoint;
+	eTargetRef 	: E_TargetRef;
+	nParam1		: UINT;
+ 	nParam2		: UINT;
+	nParam3		: USINT;
+	nZLevel		: USINT;
+END_VAR
+VAR_OUTPUT
+	nErrorId 	: ERRORID;
+	lrAngle		: LREAL;
+END_VAR
+VAR
+	stLocPosLB : ST_3DPoint;
+END_VAR
+]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[IF eTargetRef = E_TargetRef.TARGETREF_SpecPoint THEN
+	IF nParam1 >= 1 AND nParam1 <= nNoOfSpecPoints THEN
+		stLocPosLB := P_stRelPosLB;
+		stLocPosLB := F_Add3DPoints(stLocPosLB,aSpecPoints[nParam1]);
+		M_GetAbsPos := pParentTarget^.M_GetAbsPos(pChildPos := ADR(stLocPosLB), eTargetRef:= E_TargetRef.TARGETREF_LeftBottom,
+													nParam1:= 0,
+													nParam2:= 0, nParam3:= 0,nZLevel:= 0,
+													lrAngle => lrAngle, nErrorId=> nErrorId);		
+	ELSE
+		nErrorId := E_ErrorIdCmd.ERRORID_InvalidTargetPointNr;
+	END_IF
+	
+ELSIF eTargetRef = E_TargetRef.TARGETREF_Slot THEN
+	IF nParam1 >= 1 AND nParam1 <= nNoOfSlots THEN
+		stLocPosLB := P_stRelPosLB;
+		stLocPosLB := F_Add3DPoints(stLocPosLB,aSlots[nParam1].P_stRelPos);
+		M_GetAbsPos := pParentTarget^.M_GetAbsPos(pChildPos := ADR(stLocPosLB), eTargetRef:= E_TargetRef.TARGETREF_LeftBottom,
+													nParam1:= 0,
+													nParam2:= 0, nParam3:= 0,nZLevel:= 0,
+													lrAngle => lrAngle, nErrorId=> nErrorId);			
+	ELSE
+		nErrorId := E_ErrorIdCmd.ERRORID_InvalidTargetPointNr;
+	END_IF
+ELSE
+	M_GetAbsPos := SUPER^.M_GetAbsPos(pChildPos := pChildPos, eTargetRef:= eTargetRef,
+													nParam1:= nParam1,
+													nParam2:= nParam2, nParam3:= nParam3, nZLevel:= nZLevel,
+													lrAngle => lrAngle, nErrorId=> nErrorId);		
+END_IF]]></ST>
+      </Implementation>
+    </Method>
+    <Method Name="M_GetActionBusy" Id="{52148765-3148-41f4-8fc8-39d4369c7ced}">
+      <Declaration><![CDATA[METHOD M_GetActionBusy : BOOL
+VAR_INPUT
+	eAction : E_Action;
+END_VAR
+]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[IF eAction = E_Action.ACTION_FillLiquid THEN
+	M_GetActionBusy := bFillLiquid;
+ELSIF eAction = E_Action.ACTION_EmptyLiquid THEN
+	M_GetActionBusy := bEmptyLiquid;
+ELSIF eAction = E_Action.ACTION_EmptyWaste THEN
+	M_GetActionBusy := bEmptyWaste;
+END_IF]]></ST>
+      </Implementation>
+    </Method>
+    <Method Name="M_GetAllProps" Id="{cb1b13f0-410a-475f-b207-12a55a78bc5d}">
+      <Declaration><![CDATA[METHOD M_GetAllProps : ERRORID
+VAR_INPUT
+	refCmdData : REFERENCE TO  ST_CmdData;
+END_VAR
+
+VAR
+	i 		: USINT;
+END_VAR]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[SUPER^.M_GetAllProps(refCmdData); 
+
+//Slots
+nCurrentPropIndex := nCurrentPropIndex + 1;
+refCmdData.n32Data[nCurrentPropIndex] := nNoOfSlots;
+FOR i := 1 TO nNoOfSlots BY 1 DO
+	nCurrentPropIndex := nCurrentPropIndex + 1;
+	refCmdData.n32Data[nCurrentPropIndex] := aSlots[i].nNr;
+	nCurrentPropIndex := nCurrentPropIndex + 1;
+	refCmdData.n32Data[nCurrentPropIndex] := REAL_TO_DINT(aSlots[i].stRelPos.X);
+	nCurrentPropIndex := nCurrentPropIndex + 1;
+	refCmdData.n32Data[nCurrentPropIndex] := REAL_TO_DINT(aSlots[i].stRelPos.Y);
+	nCurrentPropIndex := nCurrentPropIndex + 1;
+	refCmdData.n32Data[nCurrentPropIndex] := REAL_TO_DINT(aSlots[i].stRelPos.Z);
+	nCurrentPropIndex := nCurrentPropIndex + 1;
+	refCmdData.n32Data[nCurrentPropIndex] := REAL_TO_DINT(aSlots[i].rDepth);
+END_FOR
+
+//SpecPoints
+nCurrentPropIndex := nCurrentPropIndex + 1;
+refCmdData.n32Data[nCurrentPropIndex] := nNoOfSpecPoints;
+FOR i := 1 TO nNoOfSpecPoints BY 1 DO
+	nCurrentPropIndex := nCurrentPropIndex + 1;
+	refCmdData.n32Data[nCurrentPropIndex] := REAL_TO_DINT(aSpecPoints[i].X);
+	nCurrentPropIndex := nCurrentPropIndex + 1;
+	refCmdData.n32Data[nCurrentPropIndex] := REAL_TO_DINT(aSpecPoints[i].Y);
+	nCurrentPropIndex := nCurrentPropIndex + 1;
+	refCmdData.n32Data[nCurrentPropIndex] := REAL_TO_DINT(aSpecPoints[i].Z);
+END_FOR
+
+//WasteChannles
+nCurrentPropIndex := nCurrentPropIndex + 1;
+refCmdData.n32Data[nCurrentPropIndex] := nNoOfWasteChannels;
+FOR i := 1 TO nNoOfWasteChannels BY 1 DO
+	nCurrentPropIndex := nCurrentPropIndex + 1;
+	refCmdData.n32Data[nCurrentPropIndex] := aWasteChannels[i].nNr;
+	nCurrentPropIndex := nCurrentPropIndex + 1;
+	refCmdData.n32Data[nCurrentPropIndex] := aWasteChannels[i].nSpecPointNr;
+	nCurrentPropIndex := nCurrentPropIndex + 1;
+	refCmdData.n32Data[nCurrentPropIndex] := aWasteChannels[i].nPumpNr;
+	nCurrentPropIndex := nCurrentPropIndex + 1;
+	refCmdData.n32Data[nCurrentPropIndex] := aWasteChannels[i].nBottleNr;
+END_FOR
+
+//LiquidChannels
+nCurrentPropIndex := nCurrentPropIndex + 1;
+refCmdData.n32Data[nCurrentPropIndex] := nNoOfLiquidChannels;
+FOR i := 1 TO nNoOfLiquidChannels BY 1 DO
+	nCurrentPropIndex := nCurrentPropIndex + 1;
+	refCmdData.n32Data[nCurrentPropIndex] := aLiquidChannels[i].nNr;
+	nCurrentPropIndex := nCurrentPropIndex + 1;
+	refCmdData.n32Data[nCurrentPropIndex] := aLiquidChannels[i].nSlotNr;
+	nCurrentPropIndex := nCurrentPropIndex + 1;
+	refCmdData.n32Data[nCurrentPropIndex] := aLiquidChannels[i].nWasteCh;
+	nCurrentPropIndex := nCurrentPropIndex + 1;
+	refCmdData.n32Data[nCurrentPropIndex] := aLiquidChannels[i].nBottleNr;
+END_FOR]]></ST>
+      </Implementation>
+    </Method>
+    <Method Name="M_GetProcData" Id="{ee92c936-2f5d-48b8-9f2e-280cdd7fa231}">
+      <Declaration><![CDATA[METHOD M_GetProcData : DINT
+VAR_INPUT
+	eProcDataType : E_ProcDataType;
+END_VAR
+]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[]]></ST>
+      </Implementation>
+    </Method>
+    <Method Name="M_RemoveListEntry" Id="{a8089ddd-4eb2-4bb4-8b54-e7c35671ef76}">
+      <Declaration><![CDATA[METHOD M_RemoveListEntry : BOOL
+VAR_INPUT
+	nSearchValue	: E_Action;
+END_VAR
+]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[getPosPtr := 0;(* start from first node element *)
+fbList.A_FindNext( hList := hList, putPosPtr := getPosPtr, putValue := nSearchValue, getValue=>getValue, getPosPtr=>getPosPtr );
+IF fbList.bOk THEN	//Eintrag wurde gefunden
+	fbList.A_RemoveValueAtPosPtr(hList:= hList,	putPosPtr:= getPosPtr);
+	IF fbList.bOk THEN
+		M_RemoveListEntry := TRUE;
+	END_IF
+END_IF
+]]></ST>
+      </Implementation>
+    </Method>
+    <Method Name="M_Reset" Id="{7286f37f-7763-4b2f-a879-768189402995}">
+      <Declaration><![CDATA[METHOD M_Reset
+]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[bError := FALSE;
+bBusy := FALSE;
+eCurrentState := E_MachineState.MACHINESTATE_Idle;
+
+]]></ST>
+      </Implementation>
+    </Method>
+    <Method Name="M_SetAllProps" Id="{2de4de80-7560-438f-bf3a-a8e0cf06a479}">
+      <Declaration><![CDATA[METHOD M_SetAllProps : ERRORID
+VAR_INPUT
+	refCmdData : REFERENCE TO  ST_CmdData;
+END_VAR
+
+VAR
+	i 		: USINT;
+END_VAR]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[M_SetAllProps := SUPER^.M_SetAllProps(refCmdData);
+
+IF M_SetAllProps > 0 THEN	//Error beim setzen der Base-Parameter
+	RETURN;
+END_IF
+
+//Slots
+nCurrentPropIndex := nCurrentPropIndex + 1;
+nSpecPropIndex := nCurrentPropIndex;
+IF refCmdData.n32Data[nCurrentPropIndex] >= 1 AND refCmdData.n32Data[nCurrentPropIndex] <= cMaxSlots THEN
+	nNoOfSlots := DINT_TO_USINT(refCmdData.n32Data[nCurrentPropIndex]);
+ELSE
+	M_SetAllProps := E_ErrorIdObjMgmt.ERRORID_InvalidNoOfSlots;
+	RETURN;
+END_IF
+
+FOR i:= 1 TO nNoOfSlots BY 1 DO
+	nCurrentPropIndex := nCurrentPropIndex + 1;
+	aSlots[i].P_nNr := DINT_TO_UINT(refCmdData.n32Data[nCurrentPropIndex]);
+	nCurrentPropIndex := nCurrentPropIndex + 1;
+	aSlots[i].P_rRelPosX := DINT_TO_REAL(refCmdData.n32Data[nCurrentPropIndex]);
+	nCurrentPropIndex := nCurrentPropIndex + 1;
+	aSlots[i].P_rRelPosY := DINT_TO_REAL(refCmdData.n32Data[nCurrentPropIndex]);
+	nCurrentPropIndex := nCurrentPropIndex + 1;
+	aSlots[i].P_rRelPosZ := DINT_TO_REAL(refCmdData.n32Data[nCurrentPropIndex ]);
+	nCurrentPropIndex := nCurrentPropIndex + 1;
+	aSlots[i].P_rDepth := DINT_TO_REAL(refCmdData.n32Data[nCurrentPropIndex]);
+	aLiquidChannels[i].pGearPump := ADR(aFbGearPumps[i]);
+END_FOR
+
+//SpecPoints
+nCurrentPropIndex := nCurrentPropIndex + 1;
+IF refCmdData.n32Data[nCurrentPropIndex] >= 1 AND refCmdData.n32Data[nCurrentPropIndex] <= cMaxSpecPoints THEN
+	nNoOfSpecPoints := DINT_TO_USINT(refCmdData.n32Data[nCurrentPropIndex]);
+ELSE
+	M_SetAllProps := E_ErrorIdObjMgmt.ERRORID_InvalidNoOfSpecPoints;
+	RETURN;	
+END_IF
+
+//SpecPoints  parametrieren
+FOR i:= 1 TO nNoOfSpecPoints BY 1 DO
+	nCurrentPropIndex := nCurrentPropIndex + 1;
+	aSpecPoints[i].X := DINT_TO_REAL(refCmdData.n32Data[nCurrentPropIndex]);
+	nCurrentPropIndex := nCurrentPropIndex + 1;
+	aSpecPoints[i].Y := DINT_TO_REAL(refCmdData.n32Data[nCurrentPropIndex]);
+	nCurrentPropIndex := nCurrentPropIndex + 1;
+	aSpecPoints[i].Z := DINT_TO_REAL(refCmdData.n32Data[nCurrentPropIndex]);
+END_FOR
+
+//WasteChannels
+nCurrentPropIndex := nCurrentPropIndex + 1;
+IF refCmdData.n32Data[nCurrentPropIndex] >= 1 AND refCmdData.n32Data[nCurrentPropIndex] <= cMaxWasteChannels THEN
+	nNoOfWasteChannels := DINT_TO_USINT(refCmdData.n32Data[nCurrentPropIndex]);
+ELSE
+	{warning 'Implement ErrorId"}
+	M_SetAllProps := E_ErrorIdObjMgmt.ERRORID_InvalidNoOfSlots;
+	RETURN;	
+END_IF
+
+//WasteChannels parametrieren
+FOR i:= 1 TO nNoOfWasteChannels BY 1 DO
+	nCurrentPropIndex := nCurrentPropIndex + 1;
+	aWasteChannels[i].nNr := DINT_TO_USINT(refCmdData.n32Data[nCurrentPropIndex]);
+	nCurrentPropIndex := nCurrentPropIndex + 1; 
+	aWasteChannels[i].nSpecPointNr := DINT_TO_USINT(refCmdData.n32Data[nCurrentPropIndex]);
+	nCurrentPropIndex := nCurrentPropIndex + 1;
+	aWasteChannels[i].nPumpNr := DINT_TO_USINT(refCmdData.n32Data[nCurrentPropIndex]);
+	nCurrentPropIndex := nCurrentPropIndex + 1;
+	aWasteChannels[i].nBottleNr := DINT_TO_USINT(refCmdData.n32Data[nCurrentPropIndex]);
+END_FOR
+
+//LiquidChannels
+nCurrentPropIndex := nCurrentPropIndex + 1;
+IF refCmdData.n32Data[nCurrentPropIndex] >= 1 AND refCmdData.n32Data[nCurrentPropIndex] <= cMaxLiquidChannels THEN
+	nNoOfLiquidChannels := DINT_TO_USINT(refCmdData.n32Data[nCurrentPropIndex]);
+ELSE
+	{warning 'Implement ErrorId"}
+	M_SetAllProps := E_ErrorIdObjMgmt.ERRORID_InvalidNoOfSlots;
+	RETURN;	
+END_IF
+
+//LiquidChannels parametrieren
+FOR i:= 1 TO nNoOfLiquidChannels BY 1 DO
+	nCurrentPropIndex := nCurrentPropIndex + 1;
+	aLiquidChannels[i].nNr := DINT_TO_USINT(refCmdData.n32Data[nCurrentPropIndex]);
+	nCurrentPropIndex := nCurrentPropIndex + 1;
+	aLiquidChannels[i].nSlotNr := DINT_TO_USINT(refCmdData.n32Data[nCurrentPropIndex]);
+	nCurrentPropIndex := nCurrentPropIndex + 1;
+	aLiquidChannels[i].nWasteCh := DINT_TO_USINT(refCmdData.n32Data[nCurrentPropIndex]);
+	nCurrentPropIndex := nCurrentPropIndex + 1;
+	aLiquidChannels[i].nBottleNr := DINT_TO_USINT(refCmdData.n32Data[nCurrentPropIndex]);
+END_FOR
+
+nNoOfProps := nCurrentPropIndex + 1;]]></ST>
+      </Implementation>
+    </Method>
+    <Method Name="M_SetSingleProp" Id="{3f9a415a-74eb-401b-a537-46d088a83f2e}">
+      <Declaration><![CDATA[METHOD M_SetSingleProp : ERRORID
+VAR_INPUT
+	refCmdData : REFERENCE TO  ST_CmdData;
+END_VAR
+VAR
+	i : UINT;
+	nIndex					: UINT;
+	nIndexSlots 		 	: UINT;
+	nIndexSpecPoints 	 	: UINT;
+	nIndexWasteChannels  	: UINT;
+	nIndexLiquidChannels 	: UINT;
+	nValue					: USINT;
+END_VAR
+]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[nIndexSlots := nSpecPropIndex;
+nIndexSpecPoints := nIndexSlots + nNoOfSlots * 5 + 1;
+nIndexWasteChannels := nIndexSpecPoints + nNoOfSpecPoints * 3 + 1;
+nIndexLiquidChannels := nIndexWasteChannels + nNoOfWasteChannels * 4 + 1;
+
+//Section: Slots
+IF refCmdData.aHeader[1] > nIndexSlots AND refCmdData.aHeader[1] < nIndexSpecPoints THEN
+	FOR i:= 1 TO nNoOfSlots BY 1 DO
+		//ersten Index innerhalb der Section ermitteln
+		nIndex := nIndexSlots + ((i - 1) * 5) + 1;
+		IF refCmdData.aHeader[1] = nIndex THEN
+			M_SetSingleProp := E_ErrorIdCmd.ERRORID_InvalidProperty; //SlotNr darf nicht verändert werden
+			RETURN;
+		ELSIF refCmdData.aHeader[1] = nIndex + 1 THEN
+			aSlots[i].P_rRelPosX := DINT_TO_REAL(refCmdData.n32Data[0]);
+		ELSIF refCmdData.aHeader[1] = nIndex + 2 THEN
+			aSlots[i].P_rRelPosY := DINT_TO_REAL(refCmdData.n32Data[0]);
+		ELSIF refCmdData.aHeader[1] = nIndex + 3 THEN
+			aSlots[i].P_rRelPosZ := DINT_TO_REAL(refCmdData.n32Data[0]);
+		ELSIF refCmdData.aHeader[1] = nIndex + 4 THEN
+			aSlots[i].P_rDepth := DINT_TO_REAL(refCmdData.n32Data[0]);
+		END_IF
+	END_FOR
+//Section: SpePoints
+ELSIF refCmdData.aHeader[1] > nIndexSpecPoints AND refCmdData.aHeader[1] < nIndexWasteChannels THEN
+	FOR i:= 1 TO nNoOfSpecPoints BY 1 DO
+		//ersten Index innerhalb der Section ermitteln
+		nIndex := nIndexSpecPoints + ((i - 1) * 3) + 1;
+		IF refCmdData.aHeader[1] = nIndex THEN
+			aSpecPoints[i].X := DINT_TO_REAL(refCmdData.n32Data[0]);
+		ELSIF refCmdData.aHeader[1] = nIndex + 1 THEN
+			aSpecPoints[i].Y := DINT_TO_REAL(refCmdData.n32Data[0]);
+		ELSIF refCmdData.aHeader[1] = nIndex + 2 THEN
+			aSpecPoints[i].Z := DINT_TO_REAL(refCmdData.n32Data[0]);
+		END_IF
+	END_FOR
+//Section WasteChannels
+ELSIF refCmdData.aHeader[1] > nIndexWasteChannels AND refCmdData.aHeader[1] < nIndexLiquidChannels THEN
+	FOR i:= 1 TO nNoOfWasteChannels BY 1 DO
+		//ersten Index innerhalb der Section ermitteln
+		nIndex := nIndexWasteChannels + ((i - 1) * 4) + 1;
+		IF refCmdData.aHeader[1] = nIndex THEN
+			M_SetSingleProp := E_ErrorIdCmd.ERRORID_InvalidProperty; //WasteChannelNr darf nicht verändert werden
+			RETURN;
+		ELSIF refCmdData.aHeader[1] = nIndex + 1 THEN
+			M_SetSingleProp := E_ErrorIdCmd.ERRORID_InvalidProperty; //AssignedSpecPointNr darf nicht verändert werden
+			RETURN;
+		ELSIF refCmdData.aHeader[1] = nIndex + 2 THEN
+			nValue := DINT_TO_USINT(refCmdData.n32Data[0]);
+			IF nValue > 0 AND nValue <= cNoOfPumps THEN
+				aWasteChannels[i].nPumpNr := nValue;
+			ELSE
+				M_SetSingleProp := E_ErrorIdObjMgmt.ERRORID_InvalidPumpNumber;
+				RETURN;					
+			END_IF
+		ELSIF refCmdData.aHeader[1] = nIndex + 3 THEN
+			nValue := DINT_TO_USINT(refCmdData.n32Data[0]);
+			IF nValue > 0 AND nValue <= cNoOfWasteBottles THEN
+				aWasteChannels[i].nBottleNr := nValue;
+			ELSE
+				M_SetSingleProp := E_ErrorIdObjMgmt.ERRORID_InvalidWastebottle;
+				RETURN;					
+			END_IF
+		END_IF
+	END_FOR
+//Section LiquidChannels
+ELSIF refCmdData.aHeader[1] > nIndexLiquidChannels AND refCmdData.aHeader[1] < nNoOfProps THEN
+	FOR i:= 1 TO nNoOfLiquidChannels BY 1 DO
+		//ersten Index innerhalb der Section ermitteln
+		nIndex := nIndexLiquidChannels + ((i - 1) * 4) + 1;
+		IF refCmdData.aHeader[1] = nIndex THEN
+			M_SetSingleProp := E_ErrorIdCmd.ERRORID_InvalidProperty; //WasteChannelNr darf nicht verändert werden
+			RETURN;
+		ELSIF refCmdData.aHeader[1] = nIndex + 1 THEN
+			M_SetSingleProp := E_ErrorIdCmd.ERRORID_InvalidProperty; //AssignedSpecPointNr darf nicht verändert werden
+			RETURN;
+		ELSIF refCmdData.aHeader[1] = nIndex + 2 THEN
+			M_SetSingleProp := E_ErrorIdCmd.ERRORID_InvalidProperty; //AssignedSpecPointNr darf nicht verändert werden
+			RETURN;
+		ELSIF refCmdData.aHeader[1] = nIndex + 3 THEN
+			nValue := DINT_TO_USINT(refCmdData.n32Data[0]);
+			IF nValue > 0 AND nValue <= cNoOfLiquidBottles THEN
+				aLiquidChannels[i].nBottleNr := nValue;
+			ELSE
+				M_SetSingleProp := E_ErrorIdObjMgmt.ERRORID_InvalidLiquidbottle;
+				RETURN;					
+			END_IF
+		END_IF
+	END_FOR
+ELSE
+	M_SetSingleProp := SUPER^.M_SetSingleProp(refCmdData);
+END_IF
+]]></ST>
+      </Implementation>
+    </Method>
+    <Method Name="M_Stop" Id="{2c69eb76-66a1-4f82-8110-e951ee259f02}">
+      <Declaration><![CDATA[METHOD M_Stop : ERRORID
+VAR_INPUT
+END_VAR
+]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[IF bFillLiquid AND nStateA_FillEmptyLiquid < 70 THEN
+	nStateA_FillEmptyLiquid := 70;
+END_IF
+
+IF bEmptyLiquid AND nStateA_FillEmptyLiquid < 70 THEN
+	nStateA_FillEmptyLiquid := 70;
+END_IF
+
+]]></ST>
+      </Implementation>
+    </Method>
+    <LineIds Name="FB_LiquidReserve">
+      <LineId Id="3" Count="130" />
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="FB_LiquidReserve.A_EmptyLiquid">
+      <LineId Id="2" Count="29" />
+      <LineId Id="1" Count="0" />
+    </LineIds>
+    <LineIds Name="FB_LiquidReserve.A_EmptyWaste">
+      <LineId Id="2" Count="20" />
+      <LineId Id="1" Count="0" />
+    </LineIds>
+    <LineIds Name="FB_LiquidReserve.A_FillLiquid">
+      <LineId Id="2" Count="96" />
+      <LineId Id="1" Count="0" />
+    </LineIds>
+    <LineIds Name="FB_LiquidReserve.A_Init">
+      <LineId Id="2" Count="0" />
+      <LineId Id="1" Count="0" />
+    </LineIds>
+    <LineIds Name="FB_LiquidReserve.A_Reset">
+      <LineId Id="2" Count="2" />
+      <LineId Id="1" Count="0" />
+    </LineIds>
+    <LineIds Name="FB_LiquidReserve.A_Stop">
+      <LineId Id="2" Count="12" />
+      <LineId Id="1" Count="0" />
+    </LineIds>
+    <LineIds Name="FB_LiquidReserve.FB_init">
+      <LineId Id="7" Count="1" />
+    </LineIds>
+    <LineIds Name="FB_LiquidReserve.M_ApplyPos">
+      <LineId Id="3" Count="30" />
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="FB_LiquidReserve.M_CancelAction">
+      <LineId Id="3" Count="12" />
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="FB_LiquidReserve.M_CheckBottles">
+      <LineId Id="3" Count="12" />
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="FB_LiquidReserve.M_CheckForAction">
+      <LineId Id="3" Count="3" />
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="FB_LiquidReserve.M_CheckProcDataType">
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="FB_LiquidReserve.M_ExeAction">
+      <LineId Id="3" Count="61" />
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="FB_LiquidReserve.M_GetAbsPos">
+      <LineId Id="18" Count="0" />
+      <LineId Id="21" Count="0" />
+      <LineId Id="56" Count="0" />
+      <LineId Id="29" Count="0" />
+      <LineId Id="49" Count="2" />
+      <LineId Id="48" Count="0" />
+      <LineId Id="31" Count="1" />
+      <LineId Id="30" Count="0" />
+      <LineId Id="34" Count="0" />
+      <LineId Id="19" Count="0" />
+      <LineId Id="40" Count="0" />
+      <LineId Id="57" Count="0" />
+      <LineId Id="43" Count="0" />
+      <LineId Id="53" Count="2" />
+      <LineId Id="52" Count="0" />
+      <LineId Id="45" Count="1" />
+      <LineId Id="44" Count="0" />
+      <LineId Id="23" Count="0" />
+      <LineId Id="26" Count="2" />
+      <LineId Id="25" Count="0" />
+      <LineId Id="20" Count="0" />
+    </LineIds>
+    <LineIds Name="FB_LiquidReserve.M_GetActionBusy">
+      <LineId Id="3" Count="5" />
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="FB_LiquidReserve.M_GetAllProps">
+      <LineId Id="3" Count="55" />
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="FB_LiquidReserve.M_GetProcData">
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="FB_LiquidReserve.M_RemoveListEntry">
+      <LineId Id="3" Count="7" />
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="FB_LiquidReserve.M_Reset">
+      <LineId Id="3" Count="3" />
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="FB_LiquidReserve.M_SetAllProps">
+      <LineId Id="3" Count="92" />
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="FB_LiquidReserve.M_SetSingleProp">
+      <LineId Id="3" Count="91" />
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="FB_LiquidReserve.M_Stop">
+      <LineId Id="3" Count="7" />
+      <LineId Id="2" Count="0" />
+    </LineIds>
+  </POU>
+</TcPlcObject>

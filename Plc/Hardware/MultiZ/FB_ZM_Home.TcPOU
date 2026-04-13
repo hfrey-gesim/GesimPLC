@@ -1,0 +1,220 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<TcPlcObject Version="1.1.0.1" ProductVersion="3.1.4020.12">
+  <POU Name="FB_ZM_Home" Id="{7ed7f7ab-29ac-4d0f-bf59-6cc0d7055630}" SpecialFunc="None">
+    <Declaration><![CDATA[FUNCTION_BLOCK FB_ZM_Home
+VAR_INPUT
+	bExecute		: BOOL;
+	pFbZAxisRef		: POINTER TO FB_ZAxisRef;
+	bMoveToHome		: BOOL;
+END_VAR
+VAR_OUTPUT
+	bBusy		: BOOL;
+	bError		: BOOL;
+	nErrorId	: ERRORID;
+END_VAR
+VAR
+	fbSdoWrite	: FB_SDO_WRITE;
+	nState		: USINT;
+	timeOut		: TON;
+	bTest		: BOOL;
+	tTime		: TIME;
+	nErrorState : USINT;
+END_VAR
+]]></Declaration>
+    <Implementation>
+      <ST><![CDATA[IF bExecute THEN
+	IF pFbZAxisRef = 0 THEN
+		RETURN;
+	END_IF
+	
+	//Fehler-Simualation
+	(*IF pFbZAxisRef^.nChannel = 4 THEN
+		bBusy := FALSE;
+		bError := TRUE;
+		nState := 99;	//go in errorstate
+		RETURN;
+	END_IF*)
+	
+	IF pFbZAxisRef^.stInput.nStatus.3 THEN //Error
+		pFbZAxisRef^.stStatus.bError := TRUE;
+		pFbZAxisRef^.stStatus.bIsMoving := FALSE;
+		pFbZAxisRef^.stStatus.bIsHoming := FALSE;
+		pFbZAxisRef^.stOutput.nMode := 0;
+		pFbZAxisRef^.stOutput.nCtrl := 0;
+		nErrorID := F_MultiZError_TO_ErrorId(pFbZAxisRef^.stInput.nError);
+		timeOut(IN:= FALSE);
+		bBusy := FALSE;
+		bError := TRUE;
+		nState := 99;	//go in errorstate
+		RETURN;
+	END_IF
+	
+	timeOut();
+	IF timeOut.Q THEN
+		tTime := timeOut.ET;
+		nErrorState := nState;
+		timeOut(IN:= FALSE);
+		pFbZAxisRef^.stStatus.bError := TRUE;
+		pFbZAxisRef^.stStatus.bIsMoving := FALSE;
+		pFbZAxisRef^.stStatus.bIsHoming := FALSE;
+		pFbZAxisRef^.stOutput.nMode := 0;
+		pFbZAxisRef^.stOutput.nCtrl := 0;
+		CASE nState OF
+			0:	//Timeout reset error
+				nErrorId := E_ErrorIdMultiZ.ERRORID_ToResetErr;
+			3,6: //Timeout wait for setpointacknowledge
+				nErrorId := E_ErrorIdMultiZ.ERRORID_ToWaitSetPointAck;
+				bTest := TRUE;
+			4: //Timeout wait for targetreached
+				nErrorId := E_ErrorIdMultiZ.ERRORID_ToWaitTrgtReached;
+		ELSE
+			nErrorId := E_ErrorIdMultiZ.ERRORID_UnknownError;	
+		END_CASE
+		bBusy := FALSE;
+		bError := TRUE;
+		nState := 99;	//go in errorstate
+		RETURN;
+	END_IF
+	
+	CASE nState OF
+		0:	bBusy := TRUE;
+			pFbZAxisRef^.stStatus.bError := FALSE;
+			pFbZAxisRef^.stStatus.bIsHomed := FALSE;
+			pFbZAxisRef^.stStatus.bIsHoming := TRUE;
+			
+			//Das zurücksetzen von Fehlern sollte ausschließlich im FB_MultiZRef stattfinden!!!
+			//Hier nur abfragen, ob "pFbZAxisRef^.stStatus.bError" und dann in Error gehen	
+			IF pFbZAxisRef^.stInput.nStatus.3 THEN //Error
+				pFbZAxisRef^.stOutput.nCtrl := 8;	//Error zurücksetzen
+				pFbZAxisRef^.stOutput.nVelo := 0;	//Geschwindigkeit auf 0 setzen
+				timeOut(IN:= TRUE, PT:=T#1000MS);	//Timer für Timeout starten
+			ELSE
+				//Mode of Operation setzen
+				IF pFbZAxisRef^.P_bInvertInitDir THEN
+					pFbZAxisRef^.stOutput.nMode := 7;
+				ELSE
+					pFbZAxisRef^.stOutput.nMode := 6;
+					pFbZAxisRef^.stOutput.nVelo := 50000;
+				END_IF
+				
+				fbSdoWrite(sADSNetID:= pFbZAxisRef^.pMultiZRef^.P_sAdsNetId, nPortNr:= pFbZAxisRef^.pMultiZRef^.P_nAdsPort,
+							nIndex:= cRefPos.nIndex, nSubIndex:= pFbZAxisRef^.nChannel, 
+							nDataLength:= cRefPos.nLength, nData:= REAL_TO_DINT(pFbZAxisRef^.P_rRefPos) , bExecute:= TRUE);
+				nState := 1;
+				timeOut(IN:= FALSE);
+			END_IF
+			
+		1:	//Geschwindigkeit setzen
+			fbSdoWrite();
+			IF NOT fbSdoWrite.bBusy THEN
+				IF fbSdoWrite.bError THEN
+					nErrorId := fbSdoWrite.nAdsErrorId;
+					bBusy := FALSE;
+					bError := TRUE;
+					nState := 99;	//go in errorstate
+				ELSE
+					nState := 200;	
+				END_IF
+				fbSdoWrite(bExecute:= FALSE);
+			END_IF
+			
+		200:
+			nState := 201;
+			
+		201:
+			nState := 2;
+						
+		2:	//Fahrauftrag starten
+			pFbZAxisRef^.stOutput.nCtrl := 1;
+			pFbZAxisRef^.stStatus.bIsMoving := TRUE;
+			timeOut(IN:= TRUE, PT:=T#2000MS);	//Timer für Timeout starten
+			nState := 3;
+	
+		3:	//SetpointAcknowledge?
+			IF pFbZAxisRef^.stInput.nStatus.1 THEN
+				pFbZAxisRef^.stOutput.nCtrl := 0;	//Fahrauftrag zurücksetzen
+				timeOut(IN:= FALSE);
+				nState := 4;
+			END_IF
+			
+		4:	//TargetReached?
+			IF pFbZAxisRef^.stInput.nStatus.0 THEN
+				pFbZAxisRef^.stStatus.bIsMoving := FALSE;	
+				pFbZAxisRef^.stOutput.nMode := 1;		//in Positioniermodus umschalten
+				timeOut(IN:= FALSE);
+				IF bMoveToHome THEN
+					pFbZAxisRef^.P_rAbsTargetPos := pFbZAxisRef^.P_rHomePos;
+					nState := 5;
+				ELSE
+					nState := 8;
+				END_IF
+			ELSE
+				timeOut(IN:= TRUE, PT:=T#5S);	//Timer für Timeout starten
+			END_IF
+			
+		5:	//auf HomePos fahren
+			pFbZAxisRef^.stOutput.nCtrl := 1;
+			pFbZAxisRef^.stStatus.bIsMoving := TRUE;
+			timeOut(IN:= TRUE, PT:=T#500MS);	//Timer für Timeout starten
+			nState := 6;
+			
+		6:	//SetpointAcknowledge?
+			IF pFbZAxisRef^.stInput.nStatus.1 THEN
+				pFbZAxisRef^.stOutput.nCtrl := 0;	//Fahrauftrag zurücksetzen
+				timeOut(IN:= FALSE);
+				nState := 7;
+			END_IF			
+			
+		7:	//TargetReached?
+			IF pFbZAxisRef^.stInput.nStatus.0 THEN
+				pFbZAxisRef^.stStatus.bIsMoving := FALSE;
+				timeOut(IN:= FALSE);
+				nState := 8;
+			ELSE
+				timeOut(IN:= TRUE, PT:=T#3S);	//Timer für Timeout starten
+			END_IF	
+		
+		8:	IF pFbZAxisRef^.stInput.nStatus.3 THEN		//Error ist in Achse aufgetreten
+				pFbZAxisRef^.stStatus.bError := TRUE;
+				pFbZAxisRef^.stStatus.bIsMoving := FALSE;
+				pFbZAxisRef^.stStatus.bIsHoming := FALSE;
+				nErrorID := F_MultiZError_TO_ErrorId(pFbZAxisRef^.stInput.nError);
+				bBusy := FALSE;
+				bError := TRUE;
+				nState := 99;	//go in errorstate
+				RETURN;
+			ELSE
+				pFbZAxisRef^.stStatus.bIsHomed := pFbZAxisRef^.stInput.nStatus.6;
+				pFbZAxisRef^.stStatus.bIsHoming := FALSE;
+				bBusy := FALSE;
+				nState := 9;
+			END_IF
+	END_CASE
+ELSE
+	bMoveToHome := FALSE;
+	bError := FALSE;
+	nErrorId := 0;
+	nState := 0;
+	timeOut(IN:= FALSE);
+	IF pFbZAxisRef > 0 THEN
+		pFbZAxisRef^.stStatus.bIsHoming := FALSE;
+		pFbZAxisRef^.stOutput.nCtrl := 0;	//Fahrauftrag zurücksetzen (notwendig bei Cancel)	
+		IF pFbZAxisRef^.stOutput.nMode = 6 THEN
+			pFbZAxisRef^.stOutput.nMode := 0;
+		END_IF
+	END_IF
+	bBusy := FALSE;
+END_IF]]></ST>
+    </Implementation>
+    <LineIds Name="FB_ZM_Home">
+      <LineId Id="3" Count="15" />
+      <LineId Id="200" Count="0" />
+      <LineId Id="20" Count="150" />
+      <LineId Id="220" Count="0" />
+      <LineId Id="172" Count="5" />
+      <LineId Id="221" Count="3" />
+      <LineId Id="178" Count="2" />
+      <LineId Id="2" Count="0" />
+    </LineIds>
+  </POU>
+</TcPlcObject>

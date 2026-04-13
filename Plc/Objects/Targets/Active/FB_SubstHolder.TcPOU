@@ -1,0 +1,723 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<TcPlcObject Version="1.1.0.1" ProductVersion="3.1.4024.4">
+  <POU Name="FB_SubstHolder" Id="{af76b085-fb62-4818-9cd9-ad0715c254c0}" SpecialFunc="None">
+    <Declaration><![CDATA[FUNCTION_BLOCK FB_SubstHolder EXTENDS FB_ActiveTarget IMPLEMENTS I_SlotTarget
+
+VAR
+	fbSlotList			: FB_SlotList;
+	nNumberOfSlots		: UINT;
+	nFirstSlotPropIndex	: UINT;	//erster Index für Slots (benötigt in M_SetSingleProps)
+	nLastSlotPropIndex	: UINT;	//letzte Index für Slots (benötigt in M_SetSingleProps)
+
+	//Hardware-Verküpfung
+	pHeaterRef			: POINTER TO FB_HwRef4ChHeater;
+
+	//Prozessdaten
+	bVacuumOk			: BOOL;
+	nTempActual			: UINT;
+
+	//Spec-Properties
+	nHeaterChannel		: USINT;
+	nValveNrCool		: USINT;	//VentilNr Kühlung (FBox)
+	nValveNrVac			: USINT;	//VentilNr Vakuum (FBox)
+	
+	//****************************************Aktionvariablen****************************************************
+	
+	//Action: "Heating"
+	bHeating			: BOOL;		//Action A_Heating() aktiv setzen
+	nStateA_Heating		: USINT;	//State von A_Heating()
+	nTempHeating		: USINT;	//Bei Mtp-Holder bzw. SubstHolder in ganzen °C
+	bHeaterOn			: BOOL;
+	
+
+	//Action: "Cooling"
+	bCooling			: BOOL;		//Action A_Cooling() aktiv setzen
+	nStateA_Cooling		: USINT;	//State von A_Cooling()
+	nTempCooling		: UINT;		//Bei Mtp-Holder bzw. SubstHolder in 10tel °C
+	bCoolingOn			: BOOL;
+	timerCooling		: TON;
+	
+	//Action: "EdgeLight"
+	bEdgeLigthOn		: BOOL;
+	
+END_VAR
+]]></Declaration>
+    <Implementation>
+      <ST><![CDATA[IF bInitFB THEN
+	bInitFB := FALSE;
+	//Fehlerstruktur vorausfüllen
+	stError.ObjectId := nObjectID;
+	stError.HardwareGrp := E_HardwareGrp.Nothing;
+	stError.POU := E_POU.POU_FB_SubstHolder;	
+END_IF
+
+CASE eCurrentState OF
+	E_MachineState.MACHINESTATE_Active:
+		IF bCooling THEN
+			A_Cooling();
+			IF nStateA_Cooling = 80 THEN
+				bCooling := FALSE;
+				nStateA_Cooling := 0;
+				eCurrentAction := E_Action.ACTION_Nothing;
+				eCurrentState := E_MachineState.MACHINESTATE_Idle;
+				bBusy := FALSE;
+			END_IF
+		END_IF
+END_CASE
+
+//Prozessdaten aktualisieren
+stProcessData.nObjId := nObjectID;
+stProcessData.n32Data[0] := BOOL_TO_DINT(bIsInit);
+stProcessData.n32Data[1] := eCurrentState;
+stProcessData.n32Data[2] := stError.ErrorId;
+IF pHeaterRef > 0 THEN
+	nTempActual := pHeaterRef^.P_nTempActual;
+	stProcessData.n32Data[3] := BOOL_TO_DINT(pHeaterRef^.P_bHeatingOn);
+	stProcessData.n32Data[4] := UINT_TO_DINT(pHeaterRef^.P_nTempActual);
+	stProcessData.n32Data[7] := BOOL_TO_DINT(pHeaterRef^.P_bEdgeLightOn);	
+END_IF
+stProcessData.n32Data[5] := BOOL_TO_DINT(aValves[nValveNrCool].bDigiOut1); 
+stProcessData.n32Data[6] := BOOL_TO_DINT(bVacuumOk);
+
+aObjProcData[nNotifyId] := stProcessData;]]></ST>
+    </Implementation>
+    <Action Name="A_Cooling" Id="{4a109686-ef7e-4f86-b769-36b1cda67428}">
+      <Implementation>
+        <ST><![CDATA[CASE nStateA_Cooling OF
+	0:	aValves[nValveNrCool].M_On(1);
+		nStateA_Cooling := 1;
+		
+	1:	//Warten bis Temp erreicht
+		IF nTempActual <= nTempCooling THEN
+			aValves[nValveNrCool].M_Off();
+			nStateA_Cooling := 80;
+		END_IF
+		
+		(*timerCooling(IN:= TRUE, PT:= T#2S);
+		
+		IF timerCooling.Q THEN
+			timerCooling(IN:= FALSE);
+			aValves[nValveNrCool].M_Off();
+			nStateA_Cooling := 80;	
+		END_IF*)
+		
+	70:	//Abbrechen
+		aValves[nValveNrCool].M_Off();
+		//timerCooling(IN:= FALSE);
+		nStateA_Cooling := 80;
+	
+END_CASE]]></ST>
+      </Implementation>
+    </Action>
+    <Method Name="FB_init" Id="{7465b5c3-1421-46f0-abdf-f4859dc2d508}">
+      <Declaration><![CDATA[METHOD FB_init : BOOL
+VAR_INPUT
+	bInitRetains : BOOL; // if TRUE, the retain variables are initialized (warm start / cold start)
+	bInCopyCode : BOOL;  // if TRUE, the instance afterwards gets moved into the copy code (online change)
+END_VAR
+]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[eObjectType := E_ObjectType.OBJECTTYPE_SubstHolder;
+eObjectGroup := E_ObjectGroup.OBJECTGROUP_Target OR E_ObjectGroup.OBJECTGROUP_Device;]]></ST>
+      </Implementation>
+    </Method>
+    <Method Name="M_AddChild" Id="{f200a523-f224-476b-b463-9e9f6dd05b7c}">
+      <Declaration><![CDATA[METHOD M_AddChild : ERRORID
+VAR_INPUT
+	pObject : POINTER TO FB_Object;
+	nSlotNr	: UINT;
+	nIndex 	: INT;	
+END_VAR
+
+VAR
+	pSlot : POINTER TO FB_Slot;
+END_VAR]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[//In den abgeleiteten Tool-FBs wird überprüft, ob das entsprechende Objekt als Child tauglich ist
+IF pObject > 0 THEN
+	IF nSlotNr > 0 THEN
+		pSlot := fbSlotList.M_GetAtNr(nSlotNr);
+		IF pSlot > 0 THEN
+			IF pSlot^.P_pChild = 0 THEN
+				//Object darf selber noch an keinem Parent hängen
+				IF pObject^.P_pParentObject = 0 THEN
+					pSlot^.P_pChild := pObject;
+					pObject^.P_pObjCollectNode := pObjCollectNode^.nodes.M_AddNewNode(pObject,nIndex);
+					pObject^.M_UpdateParent();
+				ELSE
+					M_AddChild := E_ErrorIdObjMgmt.ERRORID_ObjectAlreadyOnAnotherParent;
+				END_IF
+			ELSE //Slot bereits belegt
+				M_AddChild := E_ErrorIdObjMgmt.ERRORID_SlotIsAlreadyOccupied;
+			END_IF		
+		ELSE
+			M_AddChild := E_ErrorIdObjMgmt.ERRORID_InvalidSlotNumber;			
+		END_IF	
+	ELSE
+		M_AddChild := SUPER^.M_AddChild(pObject,nSlotNr,nIndex);
+	END_IF
+ELSE
+	M_AddChild := E_ErrorIdObjMgmt.ERRORID_InvalidParentObject;
+END_IF]]></ST>
+      </Implementation>
+    </Method>
+    <Method Name="M_CancelAction" Id="{a92c15eb-876b-49a2-8588-d431a82268aa}">
+      <Declaration><![CDATA[METHOD M_CancelAction
+VAR_INPUT
+	eAction : E_Action;
+END_VAR
+]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[IF eAction = E_Action.ACTION_Cooling THEN
+	IF bCooling AND nStateA_Cooling < 70 THEN
+		nStateA_Cooling := 70;
+	END_IF
+END_IF
+]]></ST>
+      </Implementation>
+    </Method>
+    <Method Name="M_CheckAction" Id="{0dca0f4e-498b-46a8-b258-58e7e5934e99}">
+      <Declaration><![CDATA[METHOD M_CheckAction : ERRORID
+VAR_INPUT
+	refActionData	: REFERENCE TO ST_ActionData;
+	pCorrelObject	: POINTER TO FB_Object;
+END_VAR
+]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[IF NOT refActionData.eAction = E_Action.ACTION_MoveToTarget THEN
+	M_CheckAction := E_ErrorIdCmd.ERRORID_InvalidAction;	
+END_IF]]></ST>
+      </Implementation>
+    </Method>
+    <Method Name="M_CheckProcDataType" Id="{6b78506a-7e03-42bb-aafa-446869253681}">
+      <Declaration><![CDATA[METHOD M_CheckProcDataType : BOOL
+VAR_INPUT
+	eProcDataType : E_ProcDataType;
+END_VAR
+]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[IF eProcDataType = E_ProcDataType.PROCDATATYPE_Temp1 THEN
+	M_CheckProcDataType := TRUE;
+END_IF]]></ST>
+      </Implementation>
+    </Method>
+    <Method Name="M_ClearAllProps" Id="{6b6605dc-4300-4761-892e-34aa6a630adb}">
+      <Declaration><![CDATA[METHOD M_ClearAllProps
+VAR_INPUT
+	bIgnoreParent : BOOL; //Es wird das gesamte OD gelöscht. -> Zeiger auf Parent nicht mehr gültig!
+END_VAR
+]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[fbSlotList.M_Reset();
+SUPER^.M_ClearAllProps(bIgnoreParent);]]></ST>
+      </Implementation>
+    </Method>
+    <Method Name="M_ExeAction" Id="{48f269e3-fdfd-445d-8ee3-d47f4cb86f38}">
+      <Declaration><![CDATA[METHOD M_ExeAction : ERRORID
+VAR_INPUT
+	refActionData : REFERENCE TO ST_ActionData;
+END_VAR
+]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[CASE refActionData.eAction OF
+	E_Action.ACTION_Init:
+		bIsInit := TRUE;
+	E_Action.ACTION_Heating:	//Heizung ON/OFF
+		IF pHeaterRef > 0 THEN
+			nTempHeating := DINT_TO_USINT(refActionData.aParams[1]/10);
+			bHeaterOn := DINT_TO_BOOL(refActionData.aParams[2]);	//Heizung "EIN"
+			IF bHeaterOn THEN
+				IF bCooling THEN
+					nStateA_Cooling := 70;
+				END_IF
+				//aValves[nValveNrCool].M_Off();	//Kühlung "AUS"
+				IF nTempHeating > 170 THEN
+					M_ExeAction := E_ErrorIdCmd.ERRORID_InvalidHeatingTemp;
+					RETURN;
+				END_IF		
+				pHeaterRef^.P_nTempSetpoint := nTempHeating;
+				pHeaterRef^.P_bHeatingOn := TRUE;
+			ELSE
+				pHeaterRef^.P_bHeatingOn := FALSE;
+			END_IF
+		END_IF
+	
+	E_Action.ACTION_Cooling:	//Kühlung ON/OFF
+		nTempCooling := DINT_TO_UINT(refActionData.aParams[1]);
+		bCoolingOn := DINT_TO_BOOL(refActionData.aParams[2]);
+		IF bCoolingOn THEN
+			IF nValveNrCool = 0 THEN
+				M_ExeAction := E_ErrorIdCmd.ERRORID_InvalidAction;
+				RETURN;
+			END_IF
+			aValves[nValveNrCool].M_On(1); //Kühlung "EIN"
+			IF pHeaterRef > 0 THEN
+				pHeaterRef^.P_bHeatingOn := FALSE;	//Heizung "AUS"	
+			END_IF
+			
+			bCooling := TRUE;
+			eCurrentState := E_MachineState.MACHINESTATE_Active;
+			eCurrentAction := E_Action.ACTION_Cooling;
+			bBusy := TRUE;
+		ELSE
+			IF bCooling THEN
+				nStateA_Cooling := 70;
+			ELSE
+				aValves[nValveNrCool].M_Off(); //Kühlung "AUS"	
+			END_IF
+		END_IF
+		
+	E_Action.ACTION_SwitchLight:	//Seitenlicht ON/OFF
+		IF pHeaterRef > 0 THEN
+			pHeaterRef^.P_bEdgeLightOn := DINT_TO_BOOL(refActionData.aParams[1]);	
+		END_IF
+		RETURN;
+		
+	E_Action.ACTION_SwitchPressure:
+		IF refActionData.aParams[1] = 0 THEN
+			aValves[nValveNrVac].M_Off();
+			bVacuumOk := FALSE;
+		ELSE
+			aValves[nValveNrVac].M_On(1);
+			bVacuumOk := TRUE;
+		END_IF
+	ELSE
+		M_ExeAction := E_ErrorIdCmd.ERRORID_InvalidAction;
+END_CASE]]></ST>
+      </Implementation>
+    </Method>
+    <Method Name="M_GetAbsPos" Id="{1a86c8ba-f97f-4b2f-baaf-d520387aa217}">
+      <Declaration><![CDATA[METHOD M_GetAbsPos : ST_3DPoint
+VAR_INPUT
+	pChildPos	: POINTER TO ST_3DPoint;
+	eTargetRef 	: E_TargetRef;
+	nParam1		: UINT;
+ 	nParam2		: UINT;
+	nParam3		: USINT;
+	nZLevel		: USINT;
+END_VAR
+VAR_OUTPUT
+	nErrorId 	: ERRORID;
+	lrAngle		: LREAL;
+END_VAR
+VAR
+	stLocPos : ST_3DPoint;
+	pSlot : POINTER TO FB_Slot;
+END_VAR
+]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[IF eTargetRef = E_TargetRef.TARGETREF_Slot THEN
+	//Slotnummer checken
+	pSlot := M_GetSlot(nParam1);
+	IF pSlot > 0 THEN
+		stLocPos := F_Add3DPoints(pSlot^.P_stRelPos,stRelPos);
+		stLocPos.Z := stLocPos.Z + stDimension.Height;
+		//kann es mal sein, dass hier das ParentTarget = 0 ist?
+		//ja -> bei der Workplate
+		IF pChildPos > 0 THEN
+			stLocPos := F_Add3DPoints(stLocPos,pChildPos^);
+		END_IF
+		IF pParentTarget > 0 THEN
+			IF pParentSlot > 0 THEN
+				M_GetAbsPos := pParentTarget^.M_GetAbsPos(pChildPos := ADR(stLocPos), eTargetRef:= E_TargetRef.TARGETREF_Slot,
+															nParam1:= pParentSlot^.P_nNr,
+															nParam2:= 0, nParam3:= 0,nZLevel:= 0, lrAngle=> lrAngle,
+															nErrorId=> nErrorId);		
+			ELSE
+				M_GetAbsPos := pParentTarget^.M_GetAbsPos(pChildPos := ADR(stLocPos), eTargetRef:= E_TargetRef.TARGETREF_LeftBottom,
+																nParam1:= 0,
+																nParam2:= 0, nParam3:= 0,nZLevel:= 0,
+																lrAngle => lrAngle, nErrorId=> nErrorId);
+			END_IF
+		ELSE
+			M_GetAbsPos := stLocPos;
+		END_IF		
+	ELSE
+		nErrorId := E_ErrorIdCmd.ERRORID_InvalidTargetSlot;
+	END_IF
+	
+ELSE
+	M_GetAbsPos := SUPER^.M_GetAbsPos(pChildPos := pChildPos, eTargetRef:= eTargetRef,
+													nParam1:= nParam1,
+													nParam2:= nParam2, nParam3:= nParam3, nZLevel:= nZLevel,
+													lrAngle => lrAngle, nErrorId=> nErrorId);	
+END_IF]]></ST>
+      </Implementation>
+    </Method>
+    <Method Name="M_GetActionBusy" Id="{2cdf9e85-dd1b-42a5-b7b2-9ad9c741092b}">
+      <Declaration><![CDATA[METHOD M_GetActionBusy : BOOL
+VAR_INPUT
+	eAction : E_Action;
+END_VAR
+]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[M_GetActionBusy := (eCurrentAction = eAction);
+]]></ST>
+      </Implementation>
+    </Method>
+    <Method Name="M_GetAllProps" Id="{358422ab-e664-40db-84bc-a56b524bbec2}">
+      <Declaration><![CDATA[METHOD M_GetAllProps : ERRORID
+VAR_INPUT
+	refCmdData : REFERENCE TO  ST_CmdData;
+END_VAR
+
+VAR
+	i : UINT;
+	pSlot		: POINTER TO FB_Slot;
+END_VAR
+]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[SUPER^.M_GetAllProps(refCmdData);
+
+nCurrentPropIndex := nCurrentPropIndex + 1;
+
+refCmdData.n32Data[nCurrentPropIndex] := fbSlotList.P_nCount;
+
+fbSlotList.M_SetCurrentToHead();
+
+FOR i := 1 TO fbSlotList.P_nCount BY 1 DO
+	pSlot := fbSlotList.M_GetNext();
+	IF pSlot > 0 THEN
+		nCurrentPropIndex := nCurrentPropIndex + 1;
+		refCmdData.n32Data[nCurrentPropIndex] := pSlot^.P_nNr;
+		nCurrentPropIndex := nCurrentPropIndex + 1;
+		refCmdData.n32Data[nCurrentPropIndex] := REAL_TO_DINT(pSlot^.P_rRelPosX);
+		nCurrentPropIndex := nCurrentPropIndex + 1;
+		refCmdData.n32Data[nCurrentPropIndex] := REAL_TO_DINT(pSlot^.P_rRelPosY);
+		nCurrentPropIndex := nCurrentPropIndex + 1;
+		refCmdData.n32Data[nCurrentPropIndex] := REAL_TO_DINT(pSlot^.P_rRelPosZ);
+	END_IF		
+END_FOR	
+
+nCurrentPropIndex := nCurrentPropIndex + 1;
+refCmdData.n32Data[nCurrentPropIndex] := nHeaterChannel;
+IF pHeaterRef > 0 THEN
+	nCurrentPropIndex := nCurrentPropIndex + 1;
+	refCmdData.n32Data[nCurrentPropIndex] := pHeaterRef^.P_nPidKp;
+	nCurrentPropIndex := nCurrentPropIndex + 1;
+	refCmdData.n32Data[nCurrentPropIndex] := pHeaterRef^.P_nPidKi;
+	nCurrentPropIndex := nCurrentPropIndex + 1;
+	refCmdData.n32Data[nCurrentPropIndex] := pHeaterRef^.P_nPidKd;
+	nCurrentPropIndex := nCurrentPropIndex + 1;
+	refCmdData.n32Data[nCurrentPropIndex] := pHeaterRef^.P_nPidTa;
+ELSE
+	nCurrentPropIndex := nCurrentPropIndex + 1;
+	refCmdData.n32Data[nCurrentPropIndex] := 0;
+	nCurrentPropIndex := nCurrentPropIndex + 1;
+	refCmdData.n32Data[nCurrentPropIndex] := 0;
+	nCurrentPropIndex := nCurrentPropIndex + 1;
+	refCmdData.n32Data[nCurrentPropIndex] := 0;
+	nCurrentPropIndex := nCurrentPropIndex + 1;
+	refCmdData.n32Data[nCurrentPropIndex] := 0;
+END_IF
+nCurrentPropIndex := nCurrentPropIndex + 1;
+refCmdData.n32Data[nCurrentPropIndex] := nValveNrCool;
+nCurrentPropIndex := nCurrentPropIndex + 1;
+refCmdData.n32Data[nCurrentPropIndex] := nValveNrVac;]]></ST>
+      </Implementation>
+    </Method>
+    <Method Name="M_GetProcData" Id="{bdeed174-268c-45eb-aaed-5463d186bc5c}">
+      <Declaration><![CDATA[METHOD M_GetProcData : DINT
+VAR_INPUT
+	eProcDataType : E_ProcDataType;
+END_VAR
+]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[IF eProcDataType = E_ProcDataType.PROCDATATYPE_Temp1 THEN
+	M_GetProcData := nTempActual;
+END_IF]]></ST>
+      </Implementation>
+    </Method>
+    <Method Name="M_GetSlot" Id="{2603f028-fe8e-4661-ac2a-8acb8de982cb}">
+      <Declaration><![CDATA[METHOD M_GetSlot : POINTER TO FB_Slot
+VAR_INPUT
+	nSlotNr : UINT;
+END_VAR
+]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[M_GetSlot := fbSlotList.M_GetAtNr(nSlotNr);]]></ST>
+      </Implementation>
+    </Method>
+    <Method Name="M_GetSlotFromChild" Id="{4e0d46b7-308f-45c5-a9f1-7956460155b4}">
+      <Declaration><![CDATA[METHOD M_GetSlotFromChild : POINTER TO FB_Slot
+VAR_INPUT
+	pObject : POINTER TO FB_Object;
+END_VAR
+
+VAR
+	pSlot : POINTER TO FB_Slot;
+END_VAR
+]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[//Die SlotList iterieren und vergleichen ob Objekte übereinstimmen
+fbSlotList.M_SetCurrentToHead();
+REPEAT
+	pSlot := fbSlotList.M_GetNext();
+	IF pSlot > 0 THEN
+		IF pSlot^.P_pChild = pObject THEN
+			M_GetSlotFromChild := pSlot;
+			EXIT;
+		END_IF
+	END_IF
+UNTIL pSlot = 0
+END_REPEAT]]></ST>
+      </Implementation>
+    </Method>
+    <Method Name="M_SetAllProps" Id="{a13aaf39-9e4d-463d-bb86-66dc300d77a1}">
+      <Declaration><![CDATA[METHOD M_SetAllProps : ERRORID
+VAR_INPUT
+	refCmdData : REFERENCE TO  ST_CmdData;
+END_VAR
+
+VAR
+	i : UINT;
+	pSlot 		: POINTER TO FB_Slot;
+END_VAR]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[M_SetAllProps := SUPER^.M_SetAllProps(refCmdData);
+
+IF M_SetAllProps > 0 THEN
+	RETURN;
+END_IF
+
+//Slots parametrieren
+nCurrentPropIndex := nCurrentPropIndex + 1;
+nFirstSlotPropIndex := nCurrentPropIndex;
+nNumberOfSlots := DINT_TO_UINT(refCmdData.n32Data[nCurrentPropIndex]);
+
+//Falls SlotList noch nicht existiert, dann neue erstellen
+IF fbSlotList.P_nCount = 0 THEN
+	FOR i:= 1 TO nNumberOfSlots BY 1 DO
+		pSlot := __NEW(FB_Slot(pOwner := THIS));
+		fbSlotList.M_Add(pSlot);
+		nCurrentPropIndex := nCurrentPropIndex + 1;
+		pSlot^.P_nNr := DINT_TO_USINT(refCmdData.n32Data[nCurrentPropIndex]);
+		nCurrentPropIndex := nCurrentPropIndex + 1;
+		pSlot^.P_rRelPosX := DINT_TO_REAL(refCmdData.n32Data[nCurrentPropIndex]);
+		nCurrentPropIndex := nCurrentPropIndex + 1;
+		pSlot^.P_rRelPosY := DINT_TO_REAL(refCmdData.n32Data[nCurrentPropIndex]);
+		nCurrentPropIndex := nCurrentPropIndex + 1;
+		pSlot^.P_rRelPosZ := DINT_TO_REAL(refCmdData.n32Data[nCurrentPropIndex]);
+	END_FOR
+ELSE
+	IF nNumberOfSlots <> fbSlotList.P_nCount THEN	//Anzahl der Slots dürfen sich nicht ändern
+		M_SetAllProps := E_ErrorIdObjMgmt.ERRORID_ChangeNoOfSlotsNotAllowed;
+		RETURN;		
+	END_IF
+
+	FOR i:= 1 TO nNumberOfSlots BY 1 DO
+		nCurrentPropIndex := nCurrentPropIndex + 1;
+		pSlot := fbSlotList.M_GetAtNr(DINT_TO_USINT(refCmdData.n32Data[nCurrentPropIndex]));
+		IF pSlot > 0 THEN
+			nCurrentPropIndex := nCurrentPropIndex + 1;
+			pSlot^.P_rRelPosX := DINT_TO_REAL(refCmdData.n32Data[nCurrentPropIndex]);
+			nCurrentPropIndex := nCurrentPropIndex + 1;
+			pSlot^.P_rRelPosY := DINT_TO_REAL(refCmdData.n32Data[nCurrentPropIndex]);
+			nCurrentPropIndex := nCurrentPropIndex + 1;
+			pSlot^.P_rRelPosZ := DINT_TO_REAL(refCmdData.n32Data[nCurrentPropIndex]);
+		ELSE
+			M_SetAllProps := 222;
+			RETURN;
+		END_IF	
+	END_FOR
+END_IF
+nLastSlotPropIndex := nCurrentPropIndex;
+nNoOfProps := nCurrentPropIndex + 1;
+
+nCurrentPropIndex := nCurrentPropIndex + 1;
+nSpecPropIndex := nCurrentPropIndex;
+{IF defined (variable:afbSubstHeatRef)}
+IF refCmdData.n32Data[nCurrentPropIndex] > 0 AND refCmdData.n32Data[nCurrentPropIndex] <= cNoOfSubstHeaters THEN
+	nHeaterChannel := DINT_TO_USINT(refCmdData.n32Data[nCurrentPropIndex]);
+	pHeaterRef := ADR(afbSubstHeatRef[nHeaterChannel]);
+	nCurrentPropIndex := nCurrentPropIndex + 1;
+	pHeaterRef^.P_nPidKp := DINT_TO_UINT(refCmdData.n32Data[nCurrentPropIndex]);
+	nCurrentPropIndex := nCurrentPropIndex + 1;
+	pHeaterRef^.P_nPidKi := DINT_TO_UINT(refCmdData.n32Data[nCurrentPropIndex]);
+	nCurrentPropIndex := nCurrentPropIndex + 1;
+	pHeaterRef^.P_nPidKd := DINT_TO_UINT(refCmdData.n32Data[nCurrentPropIndex]);
+	nCurrentPropIndex := nCurrentPropIndex + 1;
+	pHeaterRef^.P_nPidTa := DINT_TO_USINT(refCmdData.n32Data[nCurrentPropIndex]);
+ELSIF refCmdData.n32Data[nCurrentPropIndex] = 0 THEN
+	nHeaterChannel := 0;
+	pHeaterRef := 0;
+	nCurrentPropIndex := nCurrentPropIndex + 4;
+ELSE
+	M_SetAllProps := E_ErrorIdObjMgmt.ERRORID_InvalidHeaterChannel;
+END_IF	
+{ELSE}
+M_SetAllProps := E_ErrorIdObjMgmt.ERRORID_InvalidHardwareRef;
+{END_IF}
+nCurrentPropIndex := nCurrentPropIndex + 1;
+IF refCmdData.n32Data[nCurrentPropIndex] >= 0 AND refCmdData.n32Data[nCurrentPropIndex] <= cNoOfValves THEN
+	nValveNrCool := DINT_TO_USINT(refCmdData.n32Data[nCurrentPropIndex]);
+END_IF
+nCurrentPropIndex := nCurrentPropIndex + 1;
+IF refCmdData.n32Data[nCurrentPropIndex] > 0 AND refCmdData.n32Data[nCurrentPropIndex] <= cNoOfValves THEN
+	nValveNrVac := DINT_TO_USINT(refCmdData.n32Data[nCurrentPropIndex]);	
+END_IF
+
+nNoOfProps := nCurrentPropIndex + 1;]]></ST>
+      </Implementation>
+    </Method>
+    <Method Name="M_SetSingleProp" Id="{a5ac6f3e-daf8-4c76-9194-373063cc66a4}">
+      <Declaration><![CDATA[METHOD M_SetSingleProp : ERRORID
+VAR_INPUT
+	refCmdData : REFERENCE TO  ST_CmdData;
+END_VAR
+]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[IF nSpecPropIndex = refCmdData.aHeader[1] THEN
+	M_SetSingleProp := E_ErrorIdCmd.ERRORID_InvalidProperty; //HeaterChannel darf nicht verändert werden
+ELSIF (nSpecPropIndex + 1) = refCmdData.aHeader[1] THEN
+	IF pHeaterRef > 0 THEN
+		pHeaterRef^.P_nPidKp := DINT_TO_UINT(refCmdData.n32Data[0]);
+	ELSE
+		M_SetSingleProp := E_ErrorIdCmd.ERRORID_InvalidProperty;
+	END_IF	
+ELSIF (nSpecPropIndex + 2) = refCmdData.aHeader[1] THEN
+	IF pHeaterRef > 0 THEN
+		pHeaterRef^.P_nPidKi := DINT_TO_UINT(refCmdData.n32Data[0]);
+	ELSE
+		M_SetSingleProp := E_ErrorIdCmd.ERRORID_InvalidProperty;
+	END_IF	
+ELSIF (nSpecPropIndex + 3) = refCmdData.aHeader[1] THEN
+	IF pHeaterRef > 0 THEN
+		pHeaterRef^.P_nPidKd := DINT_TO_UINT(refCmdData.n32Data[0]);
+	ELSE
+		M_SetSingleProp := E_ErrorIdCmd.ERRORID_InvalidProperty;
+	END_IF	
+ELSIF (nSpecPropIndex + 4) = refCmdData.aHeader[1] THEN
+	IF pHeaterRef > 0 THEN
+		pHeaterRef^.P_nPidTa := DINT_TO_USINT(refCmdData.n32Data[0]);
+	ELSE
+		M_SetSingleProp := E_ErrorIdCmd.ERRORID_InvalidProperty;
+	END_IF	
+ELSIF (nSpecPropIndex + 5) = refCmdData.aHeader[1] THEN
+	IF refCmdData.n32Data[0] > 0 AND refCmdData.n32Data[0] <= cNoOfValves THEN
+		nValveNrCool := DINT_TO_USINT(refCmdData.n32Data[0]);
+	ELSE
+		M_SetSingleProp := E_ErrorIdObjMgmt.ERRORID_InvalidValveNumber;
+	END_IF	
+ELSIF (nSpecPropIndex + 6) = refCmdData.aHeader[1] THEN
+	IF refCmdData.n32Data[0] > 0 AND refCmdData.n32Data[0] <= cNoOfValves THEN
+		nValveNrVac := DINT_TO_USINT(refCmdData.n32Data[0]);
+	ELSE
+		M_SetSingleProp := E_ErrorIdObjMgmt.ERRORID_InvalidValveNumber;
+	END_IF	
+ELSE
+	M_SetSingleProp := SUPER^.M_SetSingleProp(refCmdData);
+END_IF]]></ST>
+      </Implementation>
+    </Method>
+    <Method Name="M_Stop" Id="{7f026b1f-a073-48a5-a2a9-8a4cae354634}">
+      <Declaration><![CDATA[METHOD M_Stop : ERRORID
+VAR_INPUT
+END_VAR
+]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[IF bCooling THEN
+	nStateA_Cooling := 70;
+END_IF]]></ST>
+      </Implementation>
+    </Method>
+    <LineIds Name="FB_SubstHolder">
+      <LineId Id="7" Count="6" />
+      <LineId Id="104" Count="0" />
+      <LineId Id="17" Count="18" />
+      <LineId Id="101" Count="0" />
+      <LineId Id="105" Count="0" />
+      <LineId Id="36" Count="1" />
+      <LineId Id="103" Count="0" />
+      <LineId Id="102" Count="0" />
+      <LineId Id="38" Count="2" />
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="FB_SubstHolder.A_Cooling">
+      <LineId Id="2" Count="22" />
+      <LineId Id="1" Count="0" />
+    </LineIds>
+    <LineIds Name="FB_SubstHolder.FB_init">
+      <LineId Id="7" Count="1" />
+    </LineIds>
+    <LineIds Name="FB_SubstHolder.M_AddChild">
+      <LineId Id="8" Count="0" />
+      <LineId Id="42" Count="1" />
+      <LineId Id="47" Count="8" />
+      <LineId Id="57" Count="2" />
+      <LineId Id="61" Count="3" />
+      <LineId Id="45" Count="1" />
+      <LineId Id="44" Count="0" />
+      <LineId Id="16" Count="0" />
+      <LineId Id="14" Count="0" />
+      <LineId Id="10" Count="0" />
+      <LineId Id="7" Count="0" />
+    </LineIds>
+    <LineIds Name="FB_SubstHolder.M_CancelAction">
+      <LineId Id="3" Count="4" />
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="FB_SubstHolder.M_CheckAction">
+      <LineId Id="8" Count="1" />
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="FB_SubstHolder.M_CheckProcDataType">
+      <LineId Id="3" Count="1" />
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="FB_SubstHolder.M_ClearAllProps">
+      <LineId Id="3" Count="0" />
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="FB_SubstHolder.M_ExeAction">
+      <LineId Id="3" Count="63" />
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="FB_SubstHolder.M_GetAbsPos">
+      <LineId Id="3" Count="34" />
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="FB_SubstHolder.M_GetActionBusy">
+      <LineId Id="3" Count="0" />
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="FB_SubstHolder.M_GetAllProps">
+      <LineId Id="3" Count="45" />
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="FB_SubstHolder.M_GetProcData">
+      <LineId Id="3" Count="1" />
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="FB_SubstHolder.M_GetSlot">
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="FB_SubstHolder.M_GetSlotFromChild">
+      <LineId Id="11" Count="10" />
+      <LineId Id="6" Count="0" />
+    </LineIds>
+    <LineIds Name="FB_SubstHolder.M_SetAllProps">
+      <LineId Id="3" Count="3" />
+      <LineId Id="59" Count="0" />
+      <LineId Id="61" Count="0" />
+      <LineId Id="81" Count="41" />
+      <LineId Id="62" Count="1" />
+      <LineId Id="9" Count="13" />
+      <LineId Id="43" Count="0" />
+      <LineId Id="45" Count="0" />
+      <LineId Id="44" Count="0" />
+      <LineId Id="50" Count="0" />
+      <LineId Id="23" Count="3" />
+      <LineId Id="28" Count="10" />
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="FB_SubstHolder.M_SetSingleProp">
+      <LineId Id="3" Count="39" />
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="FB_SubstHolder.M_Stop">
+      <LineId Id="3" Count="1" />
+      <LineId Id="2" Count="0" />
+    </LineIds>
+  </POU>
+</TcPlcObject>

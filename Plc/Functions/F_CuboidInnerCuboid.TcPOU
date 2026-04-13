@@ -1,0 +1,27 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<TcPlcObject Version="1.1.0.1" ProductVersion="3.1.4024.11">
+  <POU Name="F_CuboidInnerCuboid" Id="{a85c0ca8-0281-4eb3-836e-68a085340dc3}" SpecialFunc="None">
+    <Declaration><![CDATA[FUNCTION F_CuboidInnerCuboid : BOOL
+VAR_INPUT
+	stCuboid1 : ST_Cuboid;
+	stCuboid2 : ST_Cuboid;
+END_VAR
+VAR
+END_VAR
+]]></Declaration>
+    <Implementation>
+      <ST><![CDATA[F_CuboidInnerCuboid := (stCuboid1.stPos.X + stCuboid1.stDim.Width) > stCuboid2.stPos.X AND
+						stCuboid1.stPos.X < (stCuboid2.stPos.X + stCuboid2.stDim.Width) AND
+						(stCuboid1.stPos.Y + stCuboid1.stDim.Depth) > stCuboid2.stPos.Y AND
+						stCuboid1.stPos.Y < (stCuboid2.stPos.Y + stCuboid2.stDim.Depth) AND  
+						(stCuboid1.stPos.Z + stCuboid1.stDim.Height) > stCuboid2.stPos.Z AND
+						stCuboid1.stPos.Y < (stCuboid2.stPos.Z + stCuboid2.stDim.Height);]]></ST>
+    </Implementation>
+    <LineIds Name="F_CuboidInnerCuboid">
+      <LineId Id="43" Count="2" />
+      <LineId Id="41" Count="0" />
+      <LineId Id="46" Count="0" />
+      <LineId Id="16" Count="0" />
+    </LineIds>
+  </POU>
+</TcPlcObject>

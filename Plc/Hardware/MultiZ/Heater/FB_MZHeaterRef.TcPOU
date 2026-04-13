@@ -1,0 +1,131 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<TcPlcObject Version="1.1.0.1" ProductVersion="3.1.4022.18">
+  <POU Name="FB_MZHeaterRef" Id="{65c87e2f-4183-4293-8be1-f16cff76eb5a}" SpecialFunc="None">
+    <Declaration><![CDATA[FUNCTION_BLOCK FB_MZHeaterRef
+VAR_INPUT
+END_VAR
+VAR_OUTPUT
+	pMultiZRef 		: POINTER TO FB_MultiZRef;
+	nChannel 		: USINT;
+	nTemp1Actual 	AT %I* : UINT;
+	nTemp2Actual 	AT %I* : UINT;
+	nTemp3Actual 	AT %I* : UINT;	
+	bHeaterIsOn		AT %I* : BOOL;
+END_VAR
+VAR
+	bHeaterExistDetected	: BOOL;
+	bHeaterExistFixed		: BOOL;
+	nTemp1Setpoint	: UINT;
+END_VAR
+]]></Declaration>
+    <Implementation>
+      <ST><![CDATA[]]></ST>
+    </Implementation>
+    <Method Name="FB_init" Id="{d3e74796-9cf6-4ba6-9718-4727b951d51e}">
+      <Declaration><![CDATA[METHOD FB_init : BOOL
+VAR_INPUT
+	bInitRetains : BOOL; // if TRUE, the retain variables are initialized (warm start / cold start)
+	bInCopyCode : BOOL;  // if TRUE, the instance afterwards gets moved into the copy code (online change)
+	pMultiZRef 		: POINTER TO FB_MultiZRef;
+END_VAR
+
+VAR
+	nFirstAdress : PVOID;
+	nSelfAdress : PVOID;
+END_VAR
+]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[THIS^.pMultiZRef := pMultiZRef;
+nFirstAdress := ADR(pMultiZRef^.aFbHeaterRef);
+nSelfAdress := THIS;
+{IF hasvalue (RegisterSize, '32')}
+nChannel := UDINT_TO_USINT((nSelfAdress - nFirstAdress)/SIZEOF(THIS^) + 1);
+{ELSE}
+nChannel := ULINT_TO_USINT((nSelfAdress - nFirstAdress)/SIZEOF(THIS^) + 1);
+{END_IF}]]></ST>
+      </Implementation>
+    </Method>
+    <Property Name="P_bHeaterDetected" Id="{12c075e0-4a35-4347-b611-72372288168c}">
+      <Declaration><![CDATA[PROPERTY P_bHeaterDetected : BOOL]]></Declaration>
+      <Get Name="Get" Id="{77f28342-85fe-441f-9fba-41470b6cbe76}">
+        <Declaration><![CDATA[VAR
+END_VAR
+]]></Declaration>
+        <Implementation>
+          <ST><![CDATA[P_bHeaterDetected := bHeaterExistDetected;]]></ST>
+        </Implementation>
+      </Get>
+      <Set Name="Set" Id="{18556449-fe3f-47af-8ab3-e3d571e72d8e}">
+        <Declaration><![CDATA[VAR
+END_VAR
+]]></Declaration>
+        <Implementation>
+          <ST><![CDATA[bHeaterExistDetected := P_bHeaterDetected;]]></ST>
+        </Implementation>
+      </Set>
+    </Property>
+    <Property Name="P_bHeaterFixed" Id="{9fbe1f83-07bb-4738-8b99-3eddcc55f066}">
+      <Declaration><![CDATA[PROPERTY P_bHeaterFixed : BOOL]]></Declaration>
+      <Get Name="Get" Id="{a31725dd-d735-477e-9ad2-16243126793e}">
+        <Declaration><![CDATA[VAR
+END_VAR
+]]></Declaration>
+        <Implementation>
+          <ST><![CDATA[P_bHeaterFixed := bHeaterExistFixed;]]></ST>
+        </Implementation>
+      </Get>
+      <Set Name="Set" Id="{037c7b4d-a7c3-42d9-a593-cf990456ca32}">
+        <Declaration><![CDATA[VAR
+END_VAR
+]]></Declaration>
+        <Implementation>
+          <ST><![CDATA[bHeaterExistFixed := P_bHeaterFixed;]]></ST>
+        </Implementation>
+      </Set>
+    </Property>
+    <Property Name="P_nTemp1Setpoint" Id="{baa31b71-6661-46a3-82e0-1f1b8b7622ed}">
+      <Declaration><![CDATA[PROPERTY P_nTemp1Setpoint : UINT]]></Declaration>
+      <Get Name="Get" Id="{2b2734ba-fb4d-4e93-a9aa-3cd275b4c657}">
+        <Declaration><![CDATA[VAR
+END_VAR
+]]></Declaration>
+        <Implementation>
+          <ST><![CDATA[P_nTemp1Setpoint := nTemp1Setpoint;]]></ST>
+        </Implementation>
+      </Get>
+      <Set Name="Set" Id="{cc6931de-5147-4618-abb4-130c709e723d}">
+        <Declaration><![CDATA[VAR
+END_VAR
+]]></Declaration>
+        <Implementation>
+          <ST><![CDATA[nTemp1Setpoint := P_nTemp1Setpoint;]]></ST>
+        </Implementation>
+      </Set>
+    </Property>
+    <LineIds Name="FB_MZHeaterRef">
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="FB_MZHeaterRef.FB_init">
+      <LineId Id="19" Count="6" />
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="FB_MZHeaterRef.P_bHeaterDetected.Get">
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="FB_MZHeaterRef.P_bHeaterDetected.Set">
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="FB_MZHeaterRef.P_bHeaterFixed.Get">
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="FB_MZHeaterRef.P_bHeaterFixed.Set">
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="FB_MZHeaterRef.P_nTemp1Setpoint.Get">
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="FB_MZHeaterRef.P_nTemp1Setpoint.Set">
+      <LineId Id="2" Count="0" />
+    </LineIds>
+  </POU>
+</TcPlcObject>

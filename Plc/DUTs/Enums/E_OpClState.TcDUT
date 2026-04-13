@@ -1,0 +1,13 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<TcPlcObject Version="1.1.0.1" ProductVersion="3.1.4020.6">
+  <DUT Name="E_OpClState" Id="{61c5e088-a74c-4c3f-aae4-f167d5cf8d0e}">
+    <Declaration><![CDATA[TYPE E_OpClState :
+(
+	UNDEFINED,
+	Closed,
+	Open
+)USINT;
+END_TYPE
+]]></Declaration>
+  </DUT>
+</TcPlcObject>

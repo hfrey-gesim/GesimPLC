@@ -1,0 +1,14 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<TcPlcObject Version="1.1.0.1" ProductVersion="3.1.0.25">
+  <DUT Name="ST_ZSensorCalibration" Id="{34089374-86da-45da-9679-f910024fbc56}">
+    <Declaration><![CDATA[TYPE ST_ZSensorCalibration :
+STRUCT
+	nId : DINT;
+	nAxis : USINT;
+	rValue : REAL;
+END_STRUCT
+END_TYPE
+]]></Declaration>
+    <ObjectProperties />
+  </DUT>
+</TcPlcObject>

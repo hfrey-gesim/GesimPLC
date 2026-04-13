@@ -1,0 +1,104 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<TcPlcObject Version="1.1.0.1" ProductVersion="3.1.4022.18">
+  <POU Name="FB_BuildGroup" Id="{c4565470-601b-4e7e-97c9-478baec8af89}" SpecialFunc="None">
+    <Declaration><![CDATA[FUNCTION_BLOCK FB_BuildGroup
+VAR_INPUT
+	bExecute	: BOOL;
+END_VAR
+VAR_OUTPUT
+	bBusy		: BOOL;
+	bError		: BOOL;
+	nErrorId	: ERRORID;
+END_VAR
+VAR_IN_OUT
+	stGCodeRef : ST_GCodeRef;
+END_VAR
+VAR
+	nState				: USINT;
+	fbCfgBuild3DGroup	: Tc2_NCI.CfgBuildExt3DGroup;
+	fbMcGearIn			: Tc2_MC2.MC_GearIn;
+	fbMcGearOut			: Tc2_MC2.MC_GearOut;
+	pNciToPlc 			: POINTER TO NCTOPLC_NCICHANNEL_REF;
+	pXDrive				: POINTER TO FB_XYDriveBase;
+	pYDrive				: POINTER TO FB_XYDriveBase;
+	pTwinDrive			: POINTER TO FB_XYDrive_Beck_Twin;
+END_VAR
+]]></Declaration>
+    <Implementation>
+      <ST><![CDATA[//hier werden die XYZ-Antriebe zur einer NCI-Gruppe hinzugefügt
+//für den Fall, dass ein Antrieb aus zwei Motoren besteht(TwinDrive), vorher auskoppeln und danach wieder einkoppeln
+IF bExecute THEN
+	CASE nState OF
+		0:	//X-Slave-Achse auskoppeln
+			//darf nicht wie bisher über die Instanz des Drives gemacht werden, da es ab 4022.5 nicht mehrt erlaubt ist,
+			//Instanzen von FBs taskübergreifend zu nutzen
+			bBusy := TRUE;
+			pNciToPlc := ADR(stGCodeRef.sNciToPlc);
+			pXDrive := stGCodeRef.pHead^.P_pXDrive;
+			pYDrive := stGCodeRef.pHead^.P_pYDrive;
+			IF pXDrive^.P_bIsTwinDrive THEN
+				pTwinDrive := pXDrive;
+				fbMcGearOut(Slave := pTwinDrive^.P_pAxisRefSlave^, Execute:= TRUE);
+				IF NOT fbMcGearOut.Busy THEN
+					IF fbMcGearOut.Error THEN
+						nErrorId := UDINT_TO_UINT(fbMcGearOut.ErrorID);
+						nState := 99;
+					ELSE
+						nState := 1;
+					END_IF
+					fbMcGearOut(Slave := pTwinDrive^.P_pAxisRefSlave^, Execute:= FALSE);
+				END_IF
+			ELSE
+				nState := 1;
+			END_IF
+			
+		1:	//Interpolationsgruppe bilden
+			fbCfgBuild3DGroup(bExecute:= TRUE, nGroupId:= ItpGetGroupId(pNciToPlc^),	
+								nXAxisId:= pXDrive^.P_pAxisRef^.NcToPlc.AxisId,
+								nYAxisId:= pYDrive^.P_pAxisRef^.NcToPlc.AxisId, 
+								nQ1AxisId:= AxisRefQ1.NcToPlc.AxisId);
+			IF NOT fbCfgBuild3DGroup.bBusy THEN
+				IF fbCfgBuild3DGroup.bErr THEN
+					nErrorId := UDINT_TO_UINT(fbCfgBuild3DGroup.nErrId);
+					nState := 99;
+				ELSE
+					IF pXDrive^.P_bIsTwinDrive THEN
+						nState := 2;
+					ELSE
+						bBusy := FALSE;
+						nState := 80;
+					END_IF
+				END_IF
+				fbCfgBuild3DGroup(bExecute:= FALSE);
+			END_IF
+		
+		2:	//X-Slave-Achse ankoppeln
+			fbMcGearIn(Master:= pTwinDrive^.P_pAxisRef^, Slave:= pTwinDrive^.P_pAxisRefSlave^, Execute:= TRUE, RatioNumerator:= 1.0);
+			IF NOT fbMcGearIn.Busy THEN
+				IF fbMcGearIn.Error THEN
+					nErrorId := UDINT_TO_UINT(fbMcGearIn.ErrorID);
+					nState := 99;
+				ELSE
+					bBusy := FALSE;
+					nState := 80;
+				END_IF
+				fbMcGearIn(Master:= pTwinDrive^.P_pAxisRef^, Slave:= pTwinDrive^.P_pAxisRefSlave^, Execute:= FALSE);
+			END_IF
+	END_CASE
+	
+	IF nState = 99 THEN
+		bError := TRUE;
+		bBusy := FALSE;	
+	END_IF
+ELSE
+	bError := FALSE;
+	nErrorId := 0;
+	nState := 0;
+END_IF]]></ST>
+    </Implementation>
+    <LineIds Name="FB_BuildGroup">
+      <LineId Id="344" Count="68" />
+      <LineId Id="2" Count="0" />
+    </LineIds>
+  </POU>
+</TcPlcObject>

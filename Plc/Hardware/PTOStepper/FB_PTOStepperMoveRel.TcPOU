@@ -1,0 +1,126 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<TcPlcObject Version="1.1.0.1" ProductVersion="3.1.4020.12">
+  <POU Name="FB_PTOStepperMoveRel" Id="{fbe886f9-1aa1-4fa2-b768-f66bd8b5bd7d}" SpecialFunc="None">
+    <Declaration><![CDATA[FUNCTION_BLOCK FB_PTOStepperMoveRel
+VAR_INPUT
+	bExecute	: BOOL;
+	bStop		: BOOL;
+	nSteps		: INT;
+	nSpeed		: UINT;	//Steps/sec	
+END_VAR
+VAR_OUTPUT
+	bBusy		: BOOL;
+END_VAR
+VAR_IN_OUT
+	pPTOStepperRef : POINTER TO ST_PTOStepperRef;	
+END_VAR
+VAR
+	nState : USINT;
+	nSpeedIntern: INT;
+END_VAR
+]]></Declaration>
+    <Implementation>
+      <ST><![CDATA[IF bExecute THEN
+	CASE nState OF
+		0:	//Prepare
+			IF bStop THEN
+				RETURN;
+			END_IF
+			
+			bBusy := TRUE;
+			IF nSteps < 0 THEN
+				//CCW Drehung -> muss Richtung "0" drehen -> auf Counter "0" oder Counter underflow abfragen
+				pPTOStepperRef^.nSetCounterValue := INT_TO_UINT(ABS(nSteps));
+				nSpeedIntern := -UINT_TO_INT(nSpeed);
+			ELSIF nSteps > 0 THEN
+				//CW Drehung -> muss Richtung "0" drehen -> auf Counter >= SetCounter oder Counter overflow abfragen
+				pPTOStepperRef^.nSetCounterValue := 0;
+				nSpeedIntern := UINT_TO_INT(nSpeed);
+			ELSE
+				bBusy := FALSE;
+				nState := 80;
+				RETURN;
+			END_IF
+			pPTOStepperRef^.bSetCounter := TRUE;
+			nState := 1;
+			
+		1:	//Start
+			IF bStop THEN
+				bBusy := FALSE;
+				nState := 80;
+				RETURN;
+			END_IF
+			IF pPTOStepperRef^.nSetCounterValue = pPTOStepperRef^.nCountervalue THEN
+				pPTOStepperRef^.bSetCounter := FALSE;
+				MEMCPY(ADR(pPTOStepperRef^.nFrequencyValue),ADR(nSpeedIntern),2);
+				nState := 2;
+			END_IF
+			
+		2:	//Waiting for target reached
+			IF bStop OR
+					 	//CCW Drehung -> abwärts zählen -> auf Counter "0" oder Counter underflow abfragen
+						((nSteps < 0) AND ((pPTOStepperRef^.nCountervalue = 0) OR pPTOStepperRef^.bCounterUnderflow))
+					 OR
+					 	//CW Drehung -> aufwärts zählen -> auf Counter >= SetCounter oder Counter overflow abfragen
+						((nSteps > 0) AND ((pPTOStepperRef^.nCountervalue >= INT_TO_UINT(ABS(nSteps))) OR pPTOStepperRef^.bCounterUnderflow))THEN
+						
+				pPTOStepperRef^.nFrequencyValue := 0;
+				nState := 3;
+			END_IF
+			
+		3:	//Wartezyklus
+			bBusy := FALSE;
+	END_CASE
+ELSE
+	nState := 0;
+	bBusy := FALSE;
+END_IF]]></ST>
+    </Implementation>
+    <LineIds Name="FB_PTOStepperMoveRel">
+      <LineId Id="21" Count="0" />
+      <LineId Id="26" Count="0" />
+      <LineId Id="37" Count="3" />
+      <LineId Id="28" Count="0" />
+      <LineId Id="174" Count="0" />
+      <LineId Id="163" Count="0" />
+      <LineId Id="106" Count="0" />
+      <LineId Id="113" Count="0" />
+      <LineId Id="42" Count="0" />
+      <LineId Id="164" Count="0" />
+      <LineId Id="33" Count="0" />
+      <LineId Id="175" Count="0" />
+      <LineId Id="34" Count="2" />
+      <LineId Id="47" Count="0" />
+      <LineId Id="31" Count="0" />
+      <LineId Id="45" Count="0" />
+      <LineId Id="44" Count="0" />
+      <LineId Id="58" Count="0" />
+      <LineId Id="48" Count="0" />
+      <LineId Id="86" Count="0" />
+      <LineId Id="51" Count="0" />
+      <LineId Id="53" Count="1" />
+      <LineId Id="52" Count="0" />
+      <LineId Id="103" Count="0" />
+      <LineId Id="112" Count="0" />
+      <LineId Id="107" Count="0" />
+      <LineId Id="109" Count="0" />
+      <LineId Id="111" Count="0" />
+      <LineId Id="49" Count="0" />
+      <LineId Id="56" Count="0" />
+      <LineId Id="61" Count="0" />
+      <LineId Id="168" Count="0" />
+      <LineId Id="167" Count="0" />
+      <LineId Id="165" Count="0" />
+      <LineId Id="169" Count="0" />
+      <LineId Id="162" Count="0" />
+      <LineId Id="170" Count="0" />
+      <LineId Id="66" Count="1" />
+      <LineId Id="140" Count="0" />
+      <LineId Id="195" Count="2" />
+      <LineId Id="114" Count="0" />
+      <LineId Id="23" Count="2" />
+      <LineId Id="22" Count="0" />
+      <LineId Id="9" Count="0" />
+    </LineIds>
+  </POU>
+</TcPlcObject>

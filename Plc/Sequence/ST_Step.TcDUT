@@ -1,0 +1,26 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<TcPlcObject Version="1.1.0.1" ProductVersion="3.1.4020.12">
+  <DUT Name="ST_Step" Id="{e9ea7165-46cf-4576-b98f-0d38d9325317}">
+    <Declaration><![CDATA[{attribute 'enable_dynamic_creation'}
+TYPE ST_Step :
+STRUCT
+	nStepNr				: UINT;	
+	bStop				: BOOL;
+	tDelay				: TIME;
+	nTimerId			: USINT;
+	eState 				: E_StepState;
+	stActionData		: ST_ActionData;
+	nActionId			: UINT;
+	pCondi				: POINTER TO FB_CondiBase;
+	aFollower			: ARRAY[0..9] OF UINT;
+	bFollowerInQueue	: BOOL;	//Follwoer wurden in ProcessingQueue eingetragen
+	bHasForerunner		: BOOL; //Hat einen Vorgänger (PreStep oder SpecStep) auf den gewartet wird
+	bActionResultIsValid: BOOL;
+	nActionResult		: DINT;
+	nInfo				: DINT;
+	bInfoChanged		: BOOL; //wird gesetzt, sobald sich der State oder nInfo ändert
+END_STRUCT
+END_TYPE
+]]></Declaration>
+  </DUT>
+</TcPlcObject>

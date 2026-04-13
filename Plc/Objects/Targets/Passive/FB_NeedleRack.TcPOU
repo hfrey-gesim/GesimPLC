@@ -1,0 +1,253 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<TcPlcObject Version="1.1.0.1" ProductVersion="3.1.4022.18">
+  <POU Name="FB_NeedleRack" Id="{945431a6-c11b-429f-af93-612937f10104}" SpecialFunc="None">
+    <Declaration><![CDATA[FUNCTION_BLOCK FB_NeedleRack EXTENDS FB_Rack
+
+VAR
+	stWasteOffset1 : ST_3DPoint;
+	stWasteOffset2 : ST_3DPoint;
+END_VAR
+]]></Declaration>
+    <Implementation>
+      <ST><![CDATA[]]></ST>
+    </Implementation>
+    <Method Name="FB_init" Id="{e6931810-e6eb-4b73-9523-16896fef32da}">
+      <Declaration><![CDATA[METHOD FB_init : BOOL
+VAR_INPUT
+	bInitRetains : BOOL; // if TRUE, the retain variables are initialized (warm start / cold start)
+	bInCopyCode : BOOL;  // if TRUE, the instance afterwards gets moved into the copy code (online change)
+END_VAR
+]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[eObjectType := E_ObjectType.OBJECTTYPE_NeedleRack;
+eObjectGroup := E_ObjectGroup.OBJECTGROUP_Target OR E_ObjectGroup.OBJECTGROUP_Rack;]]></ST>
+      </Implementation>
+    </Method>
+    <Method Name="M_AddChild" Id="{65019a33-46c9-40ae-9965-897325820142}">
+      <Declaration><![CDATA[METHOD M_AddChild : ERRORID
+VAR_INPUT
+	pObject : POINTER TO FB_Object;
+	nSlotNr	: UINT;	
+	nIndex 	: INT;
+END_VAR
+]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[//Kann folgende Objekte aufnehmen:
+//Point, Needles
+IF pObject > 0 THEN
+	IF pObject^.P_eObjectType = E_ObjectType.OBJECTTYPE_Point THEN
+		M_AddChild := SUPER^.M_AddChild(pObject,nSlotNr,nIndex);
+	ELSIF pObject^.P_eObjectType = E_ObjectType.OBJECTTYPE_Needle THEN
+		//darf nur in ein Slot
+		IF nSlotNr > 0 THEN
+			M_AddChild := SUPER^.M_AddChild(pObject,nSlotNr,nIndex);
+		ELSE
+			M_AddChild := E_ErrorIdObjMgmt.ERRORID_InvalidSlotNumber;	
+		END_IF
+	ELSE
+		M_AddChild := E_ErrorIdObjMgmt.ERRORID_InvalidParentObject;
+	END_IF
+ELSE
+	M_AddChild := E_ErrorIdObjMgmt.ERRORID_InvalidParentObject;
+END_IF]]></ST>
+      </Implementation>
+    </Method>
+    <Method Name="M_CheckAction" Id="{7ff198e7-76f4-411c-b399-cb385200de2f}">
+      <Declaration><![CDATA[METHOD M_CheckAction : ERRORID
+VAR_INPUT
+	refActionData 	: REFERENCE TO ST_ActionData;
+	pCorrelObject	: POINTER TO FB_Object;
+END_VAR
+
+VAR
+	pSlot 			: POINTER TO FB_PieceSlot;
+	pMzTool 		: POINTER TO FB_MzTool;
+	pFbUsingPiese 	: POINTER TO FB_UsingPiece;
+END_VAR]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[IF refActionData.eAction = E_Action.ACTION_ExchangePiece THEN
+	pSlot := super^.M_GetSlot(DINT_TO_UINT(refActionData.aParams[1]));
+	IF pSlot = 0 THEN
+		M_CheckAction := E_ErrorIdCmd.ERRORID_InvalidTargetSlot;
+	ELSE
+		IF refActionData.aParams[2] = 0 THEN //Drop - es darf kein Piece im Slot sein
+			IF pSlot^.P_pPiece > 0 THEN
+				M_CheckAction := E_ErrorIdCmd.ERRORID_PieceAlreadyInSlot;
+				RETURN;	
+			END_IF
+			pMzTool := fbObjectDirectory.M_GetObjPointer(refActionData.nObject);
+			IF pMzTool^.P_pPiece^.P_eObjectType <> E_ObjectType.OBJECTTYPE_Needle THEN
+				M_CheckAction := E_ErrorIdCmd.ERRORID_InvalidPieceType;
+			END_IF
+		ELSIF refActionData.aParams[2] = 1 THEN //Take - es muss ein Piece im Slot
+			IF pSlot^.P_pPiece = 0 THEN
+				M_CheckAction := E_ErrorIdCmd.ERRORID_NoPieceInSlot;
+			ELSE	
+				pFbUsingPiese := pSlot^.P_pPiece;
+				IF pFbUsingPiese^.P_bUsed THEN
+					M_CheckAction := E_ErrorIdCmd.ERRORID_PieceAlreadyUsed;
+				END_IF
+			END_IF
+		ELSE
+			M_CheckAction := E_ErrorIdCmd.ERRORID_InvalidCtrl;
+		END_IF		
+	END_IF
+ELSE
+	M_CheckAction := SUPER^.M_CheckAction(refActionData, pCorrelObject);
+END_IF]]></ST>
+      </Implementation>
+    </Method>
+    <Method Name="M_GetAllProps" Id="{ee316525-31dd-44fb-87eb-2eaea6fcb783}">
+      <Declaration><![CDATA[METHOD M_GetAllProps : ERRORID
+VAR_INPUT
+	refCmdData : REFERENCE TO  ST_CmdData;
+END_VAR
+
+VAR
+END_VAR]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[SUPER^.M_GetAllProps(refCmdData);
+
+//WasteOffsets
+nCurrentPropIndex := nCurrentPropIndex + 1;
+refCmdData.n32Data[nCurrentPropIndex] := REAL_TO_DINT(stWasteOffset1.X);
+nCurrentPropIndex := nCurrentPropIndex + 1;
+refCmdData.n32Data[nCurrentPropIndex] := REAL_TO_DINT(stWasteOffset1.Y);
+nCurrentPropIndex := nCurrentPropIndex + 1;
+refCmdData.n32Data[nCurrentPropIndex] := REAL_TO_DINT(stWasteOffset1.Z);
+nCurrentPropIndex := nCurrentPropIndex + 1;
+refCmdData.n32Data[nCurrentPropIndex] := REAL_TO_DINT(stWasteOffset2.X);
+nCurrentPropIndex := nCurrentPropIndex + 1;
+refCmdData.n32Data[nCurrentPropIndex] := REAL_TO_DINT(stWasteOffset2.Y);
+nCurrentPropIndex := nCurrentPropIndex + 1;
+refCmdData.n32Data[nCurrentPropIndex] := REAL_TO_DINT(stWasteOffset2.Z);]]></ST>
+      </Implementation>
+    </Method>
+    <Method Name="M_SetAllProps" Id="{eea41df0-2ef9-4637-844c-10e1281da0c6}">
+      <Declaration><![CDATA[METHOD M_SetAllProps : ERRORID
+VAR_INPUT
+	refCmdData : REFERENCE TO  ST_CmdData;
+END_VAR
+
+VAR
+END_VAR
+]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[M_SetAllProps := SUPER^.M_SetAllProps(refCmdData);
+
+IF M_SetAllProps > 0 THEN
+	RETURN;
+END_IF
+
+//WasteOffsets
+nCurrentPropIndex := nCurrentPropIndex + 1;
+nSpecPropIndex := nCurrentPropIndex;
+stWasteOffset1.X := DINT_TO_REAL(refCmdData.n32Data[nCurrentPropIndex]);
+nCurrentPropIndex := nCurrentPropIndex + 1;
+stWasteOffset1.Y := DINT_TO_REAL(refCmdData.n32Data[nCurrentPropIndex]);
+nCurrentPropIndex := nCurrentPropIndex + 1;
+stWasteOffset1.Z := DINT_TO_REAL(refCmdData.n32Data[nCurrentPropIndex]);
+nCurrentPropIndex := nCurrentPropIndex + 1;
+stWasteOffset2.X := DINT_TO_REAL(refCmdData.n32Data[nCurrentPropIndex]);
+nCurrentPropIndex := nCurrentPropIndex + 1;
+stWasteOffset2.Y := DINT_TO_REAL(refCmdData.n32Data[nCurrentPropIndex]);
+nCurrentPropIndex := nCurrentPropIndex + 1;
+stWasteOffset2.Z := DINT_TO_REAL(refCmdData.n32Data[nCurrentPropIndex]);
+nNoOfProps := nCurrentPropIndex + 1;]]></ST>
+      </Implementation>
+    </Method>
+    <Method Name="M_SetSingleProp" Id="{abd91a10-4ec0-47c0-9f22-9dbbd61ca9e1}">
+      <Declaration><![CDATA[METHOD M_SetSingleProp : ERRORID
+VAR_INPUT
+	refCmdData : REFERENCE TO  ST_CmdData;
+END_VAR
+]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[IF nSpecPropIndex = refCmdData.aHeader[1] THEN
+	stWasteOffset1.X := DINT_TO_REAL(refCmdData.n32Data[0]);
+ELSIF (nSpecPropIndex + 1) = refCmdData.aHeader[1] THEN
+	stWasteOffset1.Y := DINT_TO_REAL(refCmdData.n32Data[0]);
+ELSIF (nSpecPropIndex + 2) = refCmdData.aHeader[1] THEN
+	stWasteOffset1.Z := DINT_TO_REAL(refCmdData.n32Data[0]);
+ELSIF (nSpecPropIndex + 3) = refCmdData.aHeader[1] THEN
+	stWasteOffset2.X := DINT_TO_REAL(refCmdData.n32Data[0]);
+ELSIF (nSpecPropIndex + 4) = refCmdData.aHeader[1] THEN
+	stWasteOffset2.Y := DINT_TO_REAL(refCmdData.n32Data[0]);
+ELSIF (nSpecPropIndex + 5) = refCmdData.aHeader[1] THEN
+	stWasteOffset2.Z := DINT_TO_REAL(refCmdData.n32Data[0]);
+ELSE
+	M_SetSingleProp := SUPER^.M_SetSingleProp(refCmdData);
+END_IF]]></ST>
+      </Implementation>
+    </Method>
+    <Property Name="P_stWasteOffset1" Id="{44143237-ca5f-4249-868f-52ee049615fd}">
+      <Declaration><![CDATA[PROPERTY P_stWasteOffset1 : ST_3DPoint]]></Declaration>
+      <Get Name="Get" Id="{a7165937-9c3b-41be-b421-5575b6c18f9e}">
+        <Declaration><![CDATA[VAR
+END_VAR
+]]></Declaration>
+        <Implementation>
+          <ST><![CDATA[P_stWasteOffset1 := stWasteOffset1;]]></ST>
+        </Implementation>
+      </Get>
+    </Property>
+    <Property Name="P_stWasteOffset2" Id="{da5a8fd9-0742-4275-9523-21df212e9568}">
+      <Declaration><![CDATA[PROPERTY P_stWasteOffset2 : ST_3DPoint]]></Declaration>
+      <Get Name="Get" Id="{6cbfd7f3-472d-4d38-9791-331eb864bc45}">
+        <Declaration><![CDATA[VAR
+END_VAR
+]]></Declaration>
+        <Implementation>
+          <ST><![CDATA[P_stWasteOffset2 := stWasteOffset2;]]></ST>
+        </Implementation>
+      </Get>
+    </Property>
+    <LineIds Name="FB_NeedleRack">
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="FB_NeedleRack.FB_init">
+      <LineId Id="7" Count="1" />
+    </LineIds>
+    <LineIds Name="FB_NeedleRack.M_AddChild">
+      <LineId Id="19" Count="0" />
+      <LineId Id="8" Count="1" />
+      <LineId Id="21" Count="0" />
+      <LineId Id="20" Count="0" />
+      <LineId Id="22" Count="2" />
+      <LineId Id="26" Count="1" />
+      <LineId Id="25" Count="0" />
+      <LineId Id="16" Count="0" />
+      <LineId Id="18" Count="0" />
+      <LineId Id="15" Count="0" />
+      <LineId Id="11" Count="0" />
+      <LineId Id="13" Count="0" />
+      <LineId Id="12" Count="0" />
+      <LineId Id="5" Count="0" />
+    </LineIds>
+    <LineIds Name="FB_NeedleRack.M_CheckAction">
+      <LineId Id="3" Count="8" />
+      <LineId Id="42" Count="0" />
+      <LineId Id="12" Count="0" />
+      <LineId Id="14" Count="17" />
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="FB_NeedleRack.M_GetAllProps">
+      <LineId Id="3" Count="13" />
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="FB_NeedleRack.M_SetAllProps">
+      <LineId Id="3" Count="19" />
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="FB_NeedleRack.M_SetSingleProp">
+      <LineId Id="3" Count="13" />
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="FB_NeedleRack.P_stWasteOffset1.Get">
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="FB_NeedleRack.P_stWasteOffset2.Get">
+      <LineId Id="2" Count="0" />
+    </LineIds>
+  </POU>
+</TcPlcObject>

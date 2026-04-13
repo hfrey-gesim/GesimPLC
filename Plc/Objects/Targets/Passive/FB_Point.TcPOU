@@ -1,0 +1,61 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<TcPlcObject Version="1.1.0.1" ProductVersion="3.1.4022.18">
+  <POU Name="FB_Point" Id="{c76aeecd-ce05-4fba-9991-bd19f76b71ea}" SpecialFunc="None">
+    <Declaration><![CDATA[{attribute 'enable_dynamic_creation'}
+FUNCTION_BLOCK FB_Point EXTENDS FB_TargetBase
+VAR_INPUT
+END_VAR
+VAR_OUTPUT
+END_VAR
+VAR
+END_VAR
+]]></Declaration>
+    <Implementation>
+      <ST><![CDATA[]]></ST>
+    </Implementation>
+    <Method Name="FB_init" Id="{34fe9d96-6306-4e2f-bd47-41fd9905add2}">
+      <Declaration><![CDATA[METHOD FB_init : BOOL
+VAR_INPUT
+	bInitRetains : BOOL; // if TRUE, the retain variables are initialized (warm start / cold start)
+	bInCopyCode : BOOL;  // if TRUE, the instance afterwards gets moved into the copy code (online change)
+END_VAR
+]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[eObjectType := E_ObjectType.OBJECTTYPE_Point;
+eObjectGroup := E_ObjectGroup.OBJECTGROUP_Target;]]></ST>
+      </Implementation>
+    </Method>
+    <Method Name="M_AddChild" Id="{e29fadf3-86c4-4178-9df6-0b1e19ca94dc}">
+      <Declaration><![CDATA[METHOD M_AddChild : ERRORID
+VAR_INPUT
+	pObject : POINTER TO FB_Object;
+	nSlotNr	: UINT;
+	nIndex 	: INT;
+END_VAR
+]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[//Kann folgende Objekte aufnehmen:
+//Point
+IF pObject <> 0 THEN
+	IF pObject^.P_eObjectType = E_ObjectType.OBJECTTYPE_Point OR pObject^.P_eObjectType = E_ObjectType.OBJECTTYPE_SpotArray Then
+		M_AddChild := SUPER^.M_AddChild(pObject,nSlotNr,nIndex);
+	ELSE
+		M_AddChild := E_ErrorIdObjMgmt.ERRORID_InvalidParentObject;
+	END_IF
+ELSE
+	M_AddChild := E_ErrorIdObjMgmt.ERRORID_InvalidParentObject;
+END_IF]]></ST>
+      </Implementation>
+    </Method>
+    <LineIds Name="FB_Point">
+      <LineId Id="9" Count="0" />
+    </LineIds>
+    <LineIds Name="FB_Point.FB_init">
+      <LineId Id="7" Count="1" />
+    </LineIds>
+    <LineIds Name="FB_Point.M_AddChild">
+      <LineId Id="28" Count="9" />
+      <LineId Id="5" Count="0" />
+    </LineIds>
+  </POU>
+</TcPlcObject>

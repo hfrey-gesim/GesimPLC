@@ -1,0 +1,669 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<TcPlcObject Version="1.1.0.1" ProductVersion="3.1.4022.10">
+  <POU Name="FB_XYDrive_Beck" Id="{4743b473-2b12-4cda-be83-a30334d04d12}" SpecialFunc="None">
+    <Declaration><![CDATA[FUNCTION_BLOCK FB_XYDrive_Beck EXTENDS FB_XYDriveNC
+VAR_INPUT
+END_VAR
+VAR_OUTPUT
+END_VAR
+VAR
+
+	fbMcAbortTrigger		: Tc2_MC2.MC_AbortTrigger;	//falls Latchvorgang erfolglos abgebrochen
+	fbMcTouchProbe			: Tc2_MC2.MC_TouchProbe;
+	
+	
+	stTriggerRef			: TRIGGER_REF := (TouchProbe:= E_TouchProbe.TouchProbe1, Edge:= E_SignalEdge.FallingEdge,
+											 Mode:= E_TouchProbeMode.TOUCHPROBEMODE_SINGLE);
+											 
+	rHomePosSlave : REAL;
+	
+	bHomeSwitchMaster AT %I* : BOOL;
+	
+END_VAR]]></Declaration>
+    <Implementation>
+      <ST><![CDATA[pAxisRefMaster^.ReadStatus();
+rActPos := LREAL_TO_REAL(LIMIT(-999.0,pAxisRefMaster^.NcToPlc.ActPos,999.0) * 1000.0);
+bHomed := pAxisRefMaster^.Status.Homed;
+
+SUPER^();]]></ST>
+    </Implementation>
+    <Action Name="A_Capture" Id="{7699f116-5481-4765-b641-a8fec9a75279}">
+      <Implementation>
+        <ST><![CDATA[IF nStateA_Capture = 0 THEN 
+	fbMcTouchProbe(Axis:= pAxisRefMaster^, TriggerInput:= stTriggerRef, Execute:= TRUE);
+	IF NOT fbMcTouchProbe.Busy AND fbMcTouchProbe.Done THEN
+		rCapturedPos := LREAL_TO_REAL(fbMcTouchProbe.RecordedPosition * 1000.0);
+		bCaptureOk := TRUE;
+		fbMcTouchProbe(Axis:= pAxisRefMaster^, TriggerInput:= stTriggerRef, Execute:= FALSE);
+		nStateA_Capture := 80;		
+	END_IF
+END_IF]]></ST>
+      </Implementation>
+    </Action>
+    <Action Name="A_Error" Id="{e939731c-8064-49f5-9cfd-e2e119e1f934}">
+      <Implementation>
+        <ST><![CDATA[IF nStateA_Error = 0 THEN
+	IF nErrorId = 17744 OR nErrorId = 18000 THEN //Schleppabstandüberwachung "Position" bzw Antriebshardware nicht bereit
+		nStateA_Error := 1;
+	END_IF
+END_IF
+
+CASE nStateA_Error OF
+	1:	//Achse ausschalten
+		fbMcPower(Axis:= pAxisRefMaster^, Enable:= FALSE);
+		IF NOT fbMcPower.Busy THEN
+			nStateA_Error := 2;
+		END_IF		
+	
+	2:	//Calibration zurücksetzen
+		fbMcHome(Axis:= pAxisRefMaster^, Execute:= TRUE, HomingMode:= MC_ResetCalibration);
+		IF NOT fbMcHome.Busy THEN
+			IF fbMcHome.Error THEN
+				nStateA_Error := 99;
+			ELSE
+				nStateA_Error := 3;
+			END_IF
+ 			fbMcHome(Axis:= pAxisRefMaster^, Execute:= FALSE);
+		END_IF
+END_CASE]]></ST>
+      </Implementation>
+    </Action>
+    <Action Name="A_Init" Id="{6996a989-d40e-494e-aaed-e8d1e6cc010b}">
+      <Implementation>
+        <ST><![CDATA[CASE nStateA_Init OF
+	0:	//DriveAdress der Achse ermitteln (EncoderId wird für TriggerRef benötigt)
+		bBusy := TRUE;
+		fbMcReadDriveAddress(Axis:= pAxisRefMaster^ ,Execute:= TRUE, DriveAddress=> stDriveAddress);
+		IF NOT fbMcReadDriveAddress.Busy THEN
+			IF fbMcReadDriveAddress.Error THEN
+				nErrorId := UDINT_TO_UINT(fbMcReadDriveAddress.ErrorID);
+				nStateA_Init := 99;
+			ELSE
+				stTriggerRef.EncoderID := stDriveAddress.NcEncoderId;
+				nStateA_Init := 1;
+			END_IF
+			fbMcReadDriveAddress(Axis:= pAxisRefMaster^ ,Execute:= FALSE);
+		END_IF
+
+	1:	//Achse im Fehlerzustand?
+		IF pAxisRefMaster^.Status.Error OR fbMcReset.Busy  THEN
+			fbMcReset(Axis:= pAxisRefMaster^, Execute:= TRUE); 
+			IF fbMcReset.Error THEN	//Error beim zurücksetzen
+				nErrorId := UDINT_TO_UINT(fbMcReset.ErrorID);
+				fbMcReset(Axis:= pAxisRefMaster^, Execute := FALSE);
+				nStateA_Init := 99;
+			ELSIF fbMcReset.Done THEN
+				fbMcReset(Axis:= pAxisRefMaster^, Execute := FALSE);
+				nStateA_Init := 2;
+			END_IF
+		ELSE
+			nStateA_Init := 2;
+		END_IF
+		
+	2:	//Achse freigegeben?
+		IF NOT pAxisRefMaster^.Status.ControlLoopClosed THEN
+			fbMcPower(Axis:= pAxisRefMaster^, Enable:= TRUE, Enable_Positive:= TRUE, Enable_Negative:= TRUE, Override:= 100 );
+			IF fbMcPower.Error THEN	 //Error bei Ausführung
+				nErrorId := UDINT_TO_UINT(fbMcPower.ErrorID);
+				fbMcPower(Axis:= pAxisRefMaster^, Enable:= FALSE);
+				nStateA_Init := 99;
+			END_IF
+		ELSE
+			nStateA_Init := 3;
+		END_IF
+
+	3:	//TouchProbe abbrechen
+		fbMcAbortTrigger(Axis:= pAxisRefMaster^, TriggerInput:= stTriggerRef, Execute:= TRUE);
+		IF NOT fbMcAbortTrigger.Busy THEN
+			IF fbMcAbortTrigger.Error THEN
+				nErrorId := UDINT_TO_UINT(fbMcAbortTrigger.ErrorID);
+				nStateA_Init := 99;
+			ELSE
+				IF NOT bReInit AND pAxisRefMaster^.Status.Homed THEN
+					nStateA_Init := 80; //FERTIG!!
+				ELSE
+					IF bStop THEN
+						nStateA_Init := 80;
+					ELSE
+						nStateA_Init := 4; //Referenzieren	
+					END_IF
+					
+				END_IF
+			END_IF
+			fbMcAbortTrigger(Axis:= pAxisRefMaster^ ,TriggerInput:= stTriggerRef, Execute:= FALSE);
+		END_IF
+		
+	4:	//In Abhängigkeit von bInitInvers die Suchrichtung für RefNocken setzen
+		fbMcWriteBoolParameter(Axis:= pAxisRefMaster^, Execute:= TRUE, ParameterNumber:= MC_AxisParameter.AxisEncoderHomingInvDirCamSearch, Value:= bInvertInitDir);
+		IF NOT fbMcWriteBoolParameter.Busy THEN
+			IF fbMcWriteBoolParameter.Error THEN
+				nStateA_Init := 99;
+			ELSE
+				IF bStop THEN
+					nStateA_Init := 80;
+				ELSE
+					nStateA_Init := 5;	
+				END_IF
+				
+			END_IF
+			fbMcWriteBoolParameter(Axis:= pAxisRefMaster^, Execute:= FALSE);
+		END_IF
+		
+	5:	//In Abhängigkeit von bInitInvers die Suchrichtung für RefSync setzen
+		fbMcWriteBoolParameter(Axis:= pAxisRefMaster^, Execute:= TRUE, ParameterNumber:= MC_AxisParameter.AxisEncoderHomingInvDirSyncSearch, Value:= NOT bInvertInitDir);
+		IF NOT fbMcWriteBoolParameter.Busy THEN
+			IF fbMcWriteBoolParameter.Error THEN
+				nStateA_Init := 99;
+			ELSE
+				IF bStop THEN
+					nStateA_Init := 80;
+				ELSE
+					nStateA_Init := 6;	
+				END_IF
+				
+			END_IF
+			fbMcWriteBoolParameter(Axis:= pAxisRefMaster^, Execute:= FALSE);
+		END_IF		
+	
+	6:	//Achse referenzieren
+		fbMcHome(Axis:= pAxisRefMaster^,Execute:= TRUE, Position:= rHomePos, HomingMode:= MC_DefaultHoming, bCalibrationCam:= bHomeSwitchMaster);
+		IF NOT fbMcHome.Busy THEN
+			IF fbMcHome.Error THEN
+				nErrorId := UDINT_TO_UINT(fbMcHome.ErrorID);
+				fbMcHome(Axis:= pAxisRefMaster^, Execute := FALSE);
+				nStateA_Init := 99;
+			END_IF
+		END_IF
+				
+		IF fbMcHome.Done  THEN	//Referenzfahrt abgeschlossen
+			fbMcHome(Axis:= pAxisRefMaster^, Execute := FALSE);
+			nStateA_Init := 7;
+		END_IF
+		
+		IF bStop THEN
+			nStateA_Init := 50;
+		END_IF
+		
+	7:	//Achse auf Referenzpunkt fahren
+		fbMcMoveAbs(Axis:= pAxisRefMaster^, Execute:= TRUE, Position:= rHomePos, Velocity:= 10.0);
+		IF NOT fbMcMoveAbs.Busy THEN
+			IF fbMcMoveAbs.Error THEN
+				nErrorId := UDINT_TO_UINT(fbMcMoveAbs.ErrorID);
+				fbMcMoveAbs(Axis:= pAxisRefMaster^ , Execute:= FALSE);
+				nStateA_Init := 99;
+			END_IF
+		END_IF
+		
+		IF fbMcMoveAbs.Done THEN
+			fbMcMoveAbs(Axis:= pAxisRefMaster^ , Execute:= FALSE);
+			bBusy := FALSE;
+			nStateA_Init := 80;
+		END_IF
+		
+		IF bStop THEN
+			nStateA_Init := 50;
+		END_IF
+END_CASE
+
+CASE nStateA_Init OF
+	50:	//Stop
+		fbMcHalt(Axis:= pAxisRefMaster^, Execute:= TRUE);
+		IF NOT fbMcHalt.Busy THEN
+			nStateA_Init := 51;
+			IF fbMcHalt.Error THEN
+				nErrorId := UDINT_TO_UINT(fbMcHalt.ErrorID);
+				nStateA_Init := 99;
+			END_IF
+			fbMcHalt(Axis:= pAxisRefMaster^, Execute:= FALSE);
+		END_IF
+		
+	51,99:
+		fbMcPower(Axis:= pAxisRefMaster^, Enable:= FALSE);
+		fbMcMoveAbs(Axis:= pAxisRefMaster^ , Execute:= FALSE);
+		fbMcHome(Axis:= pAxisRefMaster^, Execute:= FALSE);
+		IF nStateA_Init = 51 THEN
+			nStateA_Init := 80;
+		ELSE
+			nStateA_Init := 99;	
+		END_IF
+END_CASE]]></ST>
+      </Implementation>
+    </Action>
+    <Action Name="A_Setup" Id="{471fe16a-fb92-4a9e-aeb8-c16cfeac0bd9}">
+      <Implementation>
+        <ST><![CDATA[CASE nStateA_Setup OF
+	0:	
+		bSetupWaitForResp := FALSE;
+		//Negativen LimitSwitch deaktivieren(notwendig, da nach Referenzpunkt anfahren auf "0" gefahren wird
+		fbMcWriteBoolParameter(Axis:= pAxisRefMaster^, Execute:= TRUE, ParameterNumber:= MC_AxisParameter.EnableLimitNeg, Value:= FALSE);
+		IF NOT fbMcWriteBoolParameter.Busy THEN
+			IF fbMcWriteBoolParameter.Error THEN
+				nStateA_Setup := 99;
+			ELSE
+				nStateA_Setup := 1;
+			END_IF
+			fbMcWriteBoolParameter(Axis:= pAxisRefMaster^, Execute:= FALSE);
+		END_IF
+	
+	1:	//Achsen intitialisieren mit RefPos0
+		bInit := TRUE;
+		nStateA_Setup := 2;
+		
+	2:	//Warten bis "Init" fertig"
+		//Achsen auf halbe Workplate - 70 fahren (negative Richtung)
+		IF NOT bInit THEN
+			IF bStop THEN
+				nStateA_Setup := 52;
+			ELSE
+				fbMcMoveAbs.Position := - (rWorkplateLength / 2000.0 - 70.0);
+				fbMcMoveAbs.Velocity := 30.0;
+				fbMcMoveAbs(Axis:= pAxisRefMaster^, Execute:= TRUE);
+				nStateA_Setup := 3;			
+			END_IF
+		END_IF
+		
+		IF bError THEN
+			nStateA_Setup := 99;
+		END_IF
+		
+	3:	//Warten bis Move fertig
+		IF bStop THEN
+			nStateA_Setup := 50; //weiter zu Stop
+		ELSE
+			fbMcMoveAbs(Axis:= pAxisRefMaster^, Execute:= TRUE);
+			IF fbMcMoveAbs.Error THEN
+				nStateA_Setup := 99;
+			END_IF
+	
+			IF NOT fbMcMoveAbs.Busy THEN
+				fbMcMoveAbs(Axis:= pAxisRefMaster^, Execute:= FALSE);
+				nStateA_Setup := 4;
+			END_IF
+		END_IF
+		
+	4:	//Achse ausschalten
+		fbMcPower(Axis:= pAxisRefMaster^, Enable:= FALSE);
+		IF NOT fbMcPower.Busy THEN
+			nStateA_Setup := 5;
+		END_IF
+		
+		IF bStop THEN
+			nStateA_Setup := 50;
+		END_IF
+		
+	5:	//Calibration zurücksetzen
+		fbMcHome(Axis:= pAxisRefMaster^, Execute:= TRUE, HomingMode:= MC_ResetCalibration);
+		IF NOT fbMcHome.Busy THEN
+			IF fbMcHome.Error THEN
+				nStateA_Setup := 99;
+			ELSE
+				nStateA_Setup := 10;
+				bSetupWaitForResp := TRUE;
+				bContinueSetup := FALSE;
+			END_IF
+			fbMcHome(Axis:= pAxisRefMaster^, Execute:= FALSE);
+			IF bStop THEN
+				nStateA_Setup := 80;
+			END_IF
+		END_IF
+		
+	10:	//Warte auf UserResponse
+		IF bContinueSetup THEN
+			nStateA_Setup := 11;
+		ELSIF bStop THEN
+			nStateA_Setup := 52;
+		END_IF
+		
+	11:	//Negaitiven LimitSwitch aktivieren
+		fbMcWriteBoolParameter(Axis:= pAxisRefMaster^, Execute:= TRUE, ParameterNumber:= MC_AxisParameter.EnableLimitNeg, Value:= TRUE);
+		IF NOT fbMcWriteBoolParameter.Busy THEN
+			IF fbMcWriteBoolParameter.Error THEN
+				nStateA_Setup := 99;
+			ELSE
+				nStateA_Setup := 12;
+			END_IF
+			fbMcWriteBoolParameter(Axis:= pAxisRefMaster^, Execute:= FALSE);
+		END_IF
+		
+	12:	//Neue Referenzposition berechnen und in persistente Variable schreiben
+		rRefPosMaster := LREAL_TO_REAL(ABS(pAxisRefMaster^.NcToPlc.ActPos * 1000.0) - 1000);
+		bSetupOK := TRUE;
+		nStateA_Setup := 80;
+		fbSettings.M_WritePersData();
+		
+	50:	//Stop
+		fbMcHalt(Axis:= pAxisRefMaster^, Execute:= TRUE);
+		IF NOT fbMcHalt.Busy THEN
+			nStateA_Setup := 51;
+			IF fbMcHalt.Error THEN
+				nErrorId := UDINT_TO_UINT(fbMcHalt.ErrorID);
+				nStateA_Setup := 99;
+			END_IF
+			fbMcHalt(Axis:= pAxisRefMaster^, Execute:= FALSE);
+		END_IF
+		
+	51:	//Falls fbMoveAbs noch busy, dann zu ende führen
+		IF fbMcMoveAbs.Busy THEN
+			fbMcMoveAbs(Axis:= pAxisRefMaster^);
+		ELSE
+			fbMcMoveAbs(Axis:= pAxisRefMaster^, Execute := FALSE);
+			nStateA_Setup := 52;
+		END_IF	
+		
+	52:	//Antriebe aus und ResetCalibration
+		fbMcPower(Axis:= pAxisRefMaster^, Enable:= FALSE);
+		fbMcMoveAbs(Axis:= pAxisRefMaster^ , Execute:= FALSE);
+		fbMcHome(Axis:= pAxisRefMaster^, Execute:= TRUE, HomingMode:= MC_ResetCalibration);
+		IF NOT fbMcHome.Busy THEN
+			IF fbMcHome.Error THEN
+				nStateA_Setup := 99;
+			ELSE
+				nStateA_Setup := 53;
+			END_IF
+			fbMcHome(Axis:= pAxisRefMaster^, Execute:= FALSE);
+		END_IF
+
+	53:	//negativen LimitSwitch wieder aktivieren		
+		fbMcWriteBoolParameter(Axis:= pAxisRefMaster^, Execute:= TRUE, ParameterNumber:= MC_AxisParameter.EnableLimitNeg, Value:= TRUE);
+		IF NOT fbMcWriteBoolParameter.Busy THEN
+			IF fbMcWriteBoolParameter.Error THEN
+				nStateA_Setup := 99;
+			ELSE
+				nStateA_Setup := 80;
+			END_IF
+			fbMcWriteBoolParameter(Axis:= pAxisRefMaster^, Execute:= FALSE);
+		END_IF	
+END_CASE]]></ST>
+      </Implementation>
+    </Action>
+    <Action Name="A_StopCapture" Id="{82e2cf6c-c173-4f8b-b6f9-ee5a6898d561}">
+      <Implementation>
+        <ST><![CDATA[IF nStateA_StopCapture = 0 THEN
+	fbMcAbortTrigger(Axis:= pAxisRefMaster^, TriggerInput:= stTriggerRef, Execute:= TRUE);
+	IF NOT fbMcAbortTrigger.Busy THEN
+		fbMcAbortTrigger(Axis:= pAxisRefMaster^, TriggerInput:= stTriggerRef, Execute:= FALSE);
+		fbMcTouchProbe(Axis:= pAxisRefMaster^, TriggerInput:= stTriggerRef, Execute:= FALSE);
+		bCaptureStopped := TRUE;
+		nStateA_StopCapture := 80;
+	END_IF
+END_IF]]></ST>
+      </Implementation>
+    </Action>
+    <Action Name="A_WriteAxisParameter" Id="{b71384e1-fad0-4ab5-84f6-e2f7923ca534}">
+      <Implementation>
+        <ST><![CDATA[IF nStateA_WriteAxisParamter = 0 THEN
+	//feststellen, welcher Parameter als nächstes geschrieben werden muss
+	IF nStateWriteLimitNegative = 1 THEN
+		nStateWriteLimitNegative := 2;
+	ELSIF nStateWriteLimitPositive = 1 THEN
+		nStateWriteLimitPositive := 2;
+	ELSIF nStateWriteNCIFastSpeed = 1 THEN
+		nStateWriteNCIFastSpeed := 2;
+	ELSE
+		nStateWriteLimitNegative := 1;
+		nStateWriteLimitPositive := 1;
+		nStateWriteNCIFastSpeed := 1;
+		nStateA_WriteAxisParamter := 80;
+		RETURN;
+	END_IF
+	
+	IF nStateWriteLimitNegative = 2 THEN
+		fbMcWriteParameter.ParameterNumber := MC_AxisParameter.SWLimitNeg;
+		fbMcWriteParameter.Value := P_rMinPos / 1000.0;
+		nStateA_WriteAxisParamter := 1;
+	END_IF
+	
+	IF nStateWriteLimitPositive = 2 THEN
+		fbMcWriteParameter.ParameterNumber := MC_AxisParameter.SWLimitPos;
+		fbMcWriteParameter.Value := P_rMaxPos / 1000.0;
+		nStateA_WriteAxisParamter := 1;
+	END_IF
+
+	IF nStateWriteNCIFastSpeed = 2 THEN
+		fbMcWriteParameter.ParameterNumber := MC_AxisParameter.AxisRapidTraverseVelocity;
+		fbMcWriteParameter.Value := rMaxSpeed / 1000.0;
+		nStateA_WriteAxisParamter := 1;
+	END_IF
+	
+END_IF
+
+IF nStateA_WriteAxisParamter = 1 THEN
+	fbMcWriteParameter(Axis:= pAxisRefMaster^, Execute:= TRUE);
+	//Hier kann es passieren, dass der Fehler "1793" auftritt. Das passiert manchmal beim Start der SPS
+	//In diesem Falle, sollte es solange probiert werden, bis dieser nicht mehr auftritt
+	IF NOT fbMcWriteParameter.Busy THEN
+		IF fbMcWriteParameter.Error THEN
+			IF fbMcWriteParameter.ErrorID <> 1793 THEN
+				nStateA_WriteAxisParamter := 99;
+			END_IF
+		ELSE
+			CASE fbMcWriteParameter.ParameterNumber OF
+				MC_AxisParameter.SWLimitNeg:
+					nStateWriteLimitNegative := 3;
+				MC_AxisParameter.SWLimitPos:
+					nStateWriteLimitPositive := 3;
+				MC_AxisParameter.AxisRapidTraverseVelocity:
+					nStateWriteNCIFastSpeed := 3;
+			END_CASE
+			nStateA_WriteAxisParamter := 0;
+		END_IF
+		fbMcWriteParameter(Axis:= pAxisRefMaster^, Execute:= FALSE);
+	END_IF	
+END_IF
+
+]]></ST>
+      </Implementation>
+    </Action>
+    <Method Name="FB_init" Id="{49b5cd3d-6aae-41a1-9400-5aec6d5d79b0}">
+      <Declaration><![CDATA[METHOD FB_init : BOOL
+VAR_INPUT
+	bInitRetains 	: BOOL; // if TRUE, the retain variables are initialized (warm start / cold start)
+	bInCopyCode 	: BOOL;  // if TRUE, the instance afterwards gets moved into the copy code (online change)
+	eXYOrientation	: E_XYOrientation;
+	pNCAxisRefMaster: POINTER TO AXIS_REF;
+END_VAR
+]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[pAxisRefMaster := pNCAxisRefMaster;]]></ST>
+      </Implementation>
+    </Method>
+    <Method Name="M_Capture" Id="{6f0f9b2f-daa9-449c-b8ff-43909af2281e}">
+      <Declaration><![CDATA[METHOD M_Capture : ERRORID
+VAR_INPUT
+END_VAR
+]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[bCapture := TRUE;
+bCaptureOk := FALSE;
+bCaptureStopped := FALSE;
+A_Capture();]]></ST>
+      </Implementation>
+    </Method>
+    <Method Name="M_Init" Id="{29cb2da0-13a8-46ff-85f2-b47cf314b230}">
+      <Declaration><![CDATA[METHOD M_Init : ERRORID
+VAR_INPUT
+	bReInit : BOOL;
+END_VAR
+]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[IF bBusy THEN
+	M_Init := E_ErrorIdCmd.ERRORID_AxisStillBusy;
+ELSE
+	THIS^.bReInit := bReInit;
+	//Die Action wird von hier aus einmalig ausgeführt damit ein Aufruf schon in diesem Zyklus stattfindet
+	rHomePos := rRefPosMaster / 1000.0;
+	bInit := TRUE;
+	A_Init();		
+END_IF
+
+]]></ST>
+      </Implementation>
+    </Method>
+    <Method Name="M_SetProperty" Id="{acbc5013-0db2-4079-8779-2a8c71c4dcff}">
+      <Declaration><![CDATA[METHOD M_SetProperty : ERRORID
+VAR_INPUT
+	eType	: E_HardwarePropType;
+	nValue 	: DINT;
+END_VAR
+]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[CASE eType OF
+	E_HardwarePropType.RefPos1:
+		rRefPosMaster := DINT_TO_REAL(nValue);
+	E_HardwarePropType.MinPos:
+		M_SetProperty := E_ErrorIdCmd.ERRORID_OnlyReadHwProp;
+	E_HardwarePropType.MaxPos:
+		M_SetProperty := E_ErrorIdCmd.ERRORID_OnlyReadHwProp;
+	E_HardwarePropType.LimitMargeNeg:
+		rLimitMargeNeg := DINT_TO_REAL(nValue);
+		bWriteAxisParameter := TRUE;
+	E_HardwarePropType.LimitMargePos:
+		rLimitMargePos := DINT_TO_REAL(nValue);
+		bWriteAxisParameter := TRUE;
+	E_HardwarePropType.MaxSpeed:
+		rMaxSpeed := DINT_TO_REAL(nValue);
+		bWriteAxisParameter := TRUE;
+	E_HardwarePropType.WorkplateDim:
+		rWorkplateLength := DINT_TO_REAL(nValue);
+		bWriteAxisParameter := TRUE;
+	E_HardwarePropType.NullPosDist:
+		rNullPosDist := DINT_TO_REAL(nValue);
+		bWriteAxisParameter := TRUE;
+	E_HardwarePropType.MaxPosDist:
+		rMaxPosDist := DINT_TO_REAL(nValue);
+		bWriteAxisParameter := TRUE;
+	E_HardwarePropType.SetupPosDist:
+		rSetupPosDist := DINT_TO_REAL(nValue);
+	E_HardwarePropType.InvertInitDir:
+		bInvertInitDir := DINT_TO_BOOL(nValue);
+ELSE
+	M_SetProperty := E_ErrorIdCmd.ERRORID_InvalidHwProperty;	
+END_CASE]]></ST>
+      </Implementation>
+    </Method>
+    <LineIds Name="FB_XYDrive_Beck">
+      <LineId Id="18" Count="3" />
+      <LineId Id="9" Count="0" />
+    </LineIds>
+    <LineIds Name="FB_XYDrive_Beck.A_Capture">
+      <LineId Id="2" Count="7" />
+      <LineId Id="1" Count="0" />
+    </LineIds>
+    <LineIds Name="FB_XYDrive_Beck.A_Error">
+      <LineId Id="2" Count="22" />
+      <LineId Id="1" Count="0" />
+    </LineIds>
+    <LineIds Name="FB_XYDrive_Beck.A_Init">
+      <LineId Id="2" Count="51" />
+      <LineId Id="166" Count="1" />
+      <LineId Id="169" Count="1" />
+      <LineId Id="168" Count="0" />
+      <LineId Id="54" Count="3" />
+      <LineId Id="96" Count="0" />
+      <LineId Id="118" Count="0" />
+      <LineId Id="98" Count="5" />
+      <LineId Id="156" Count="1" />
+      <LineId Id="159" Count="1" />
+      <LineId Id="158" Count="0" />
+      <LineId Id="104" Count="2" />
+      <LineId Id="119" Count="1" />
+      <LineId Id="107" Count="0" />
+      <LineId Id="109" Count="4" />
+      <LineId Id="161" Count="1" />
+      <LineId Id="164" Count="1" />
+      <LineId Id="163" Count="0" />
+      <LineId Id="114" Count="3" />
+      <LineId Id="58" Count="0" />
+      <LineId Id="60" Count="13" />
+      <LineId Id="139" Count="3" />
+      <LineId Id="74" Count="15" />
+      <LineId Id="143" Count="0" />
+      <LineId Id="145" Count="2" />
+      <LineId Id="171" Count="1" />
+      <LineId Id="121" Count="1" />
+      <LineId Id="124" Count="7" />
+      <LineId Id="123" Count="0" />
+      <LineId Id="175" Count="0" />
+      <LineId Id="133" Count="0" />
+      <LineId Id="135" Count="2" />
+      <LineId Id="151" Count="1" />
+      <LineId Id="154" Count="1" />
+      <LineId Id="153" Count="0" />
+      <LineId Id="1" Count="0" />
+    </LineIds>
+    <LineIds Name="FB_XYDrive_Beck.A_Setup">
+      <LineId Id="2" Count="20" />
+      <LineId Id="84" Count="1" />
+      <LineId Id="87" Count="0" />
+      <LineId Id="89" Count="3" />
+      <LineId Id="86" Count="0" />
+      <LineId Id="27" Count="6" />
+      <LineId Id="93" Count="1" />
+      <LineId Id="96" Count="0" />
+      <LineId Id="98" Count="8" />
+      <LineId Id="95" Count="0" />
+      <LineId Id="43" Count="5" />
+      <LineId Id="125" Count="3" />
+      <LineId Id="49" Count="11" />
+      <LineId Id="129" Count="2" />
+      <LineId Id="61" Count="4" />
+      <LineId Id="157" Count="2" />
+      <LineId Id="67" Count="16" />
+      <LineId Id="107" Count="1" />
+      <LineId Id="111" Count="7" />
+      <LineId Id="110" Count="0" />
+      <LineId Id="160" Count="1" />
+      <LineId Id="163" Count="4" />
+      <LineId Id="162" Count="0" />
+      <LineId Id="119" Count="1" />
+      <LineId Id="123" Count="1" />
+      <LineId Id="133" Count="5" />
+      <LineId Id="141" Count="1" />
+      <LineId Id="132" Count="0" />
+      <LineId Id="147" Count="0" />
+      <LineId Id="146" Count="0" />
+      <LineId Id="148" Count="7" />
+      <LineId Id="122" Count="0" />
+      <LineId Id="1" Count="0" />
+    </LineIds>
+    <LineIds Name="FB_XYDrive_Beck.A_StopCapture">
+      <LineId Id="2" Count="7" />
+      <LineId Id="1" Count="0" />
+    </LineIds>
+    <LineIds Name="FB_XYDrive_Beck.A_WriteAxisParameter">
+      <LineId Id="2" Count="59" />
+      <LineId Id="1" Count="0" />
+    </LineIds>
+    <LineIds Name="FB_XYDrive_Beck.FB_init">
+      <LineId Id="8" Count="0" />
+    </LineIds>
+    <LineIds Name="FB_XYDrive_Beck.M_Capture">
+      <LineId Id="3" Count="0" />
+      <LineId Id="8" Count="0" />
+      <LineId Id="4" Count="0" />
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="FB_XYDrive_Beck.M_Init">
+      <LineId Id="3" Count="9" />
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="FB_XYDrive_Beck.M_Jog">
+      <LineId Id="3" Count="31" />
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="FB_XYDrive_Beck.M_MoveAbs">
+      <LineId Id="3" Count="18" />
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="FB_XYDrive_Beck.M_MoveRel">
+      <LineId Id="3" Count="19" />
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="FB_XYDrive_Beck.M_SetProperty">
+      <LineId Id="3" Count="25" />
+      <LineId Id="37" Count="1" />
+      <LineId Id="29" Count="2" />
+      <LineId Id="2" Count="0" />
+    </LineIds>
+  </POU>
+</TcPlcObject>

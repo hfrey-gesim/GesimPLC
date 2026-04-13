@@ -1,0 +1,112 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<TcPlcObject Version="1.1.0.1" ProductVersion="3.1.4022.10">
+  <POU Name="HwInfoList" Id="{7037a841-97fd-42af-9934-161d02824bd5}" SpecialFunc="None">
+    <Declaration><![CDATA[PROGRAM HwInfoList
+VAR
+	pHead	: POINTER TO ST_Pointer;
+	pTail	: POINTER TO ST_Pointer;
+	pCurrent: POINTER TO ST_Pointer;	
+END_VAR
+]]></Declaration>
+    <Implementation>
+      <ST><![CDATA[]]></ST>
+    </Implementation>
+    <Method Name="FB_exit" Id="{c5da8db0-8851-476e-b5ac-3d9753df1830}">
+      <Declaration><![CDATA[METHOD FB_exit : BOOL
+VAR_INPUT
+	bInCopyCode : BOOL; // if TRUE, the exit method is called for exiting an instance that is copied afterwards (online change).
+END_VAR
+
+VAR
+	pPointer : POINTER TO ST_Pointer;
+END_VAR]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[WHILE pPointer > 0 DO
+	__DELETE(pPointer^.pContent);
+	__DELETE(pPointer);
+	pPointer := pPointer^.pNext;
+END_WHILE]]></ST>
+      </Implementation>
+    </Method>
+    <Method Name="M_Add" Id="{0eaceacd-39c2-467a-a729-91af35972f31}">
+      <Declaration><![CDATA[METHOD M_Add
+VAR_INPUT
+	stHwInfo : ST_HardwareInfo;
+END_VAR
+
+VAR
+	pNewPointer : POINTER TO ST_Pointer;
+	pNewHwInfo : POINTER TO ST_HardwareInfo;
+	pModule: POINTER TO PVOID;
+END_VAR
+]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[pNewPointer := __NEW(ST_Pointer);
+MEMSET(pNewPointer,0,SIZEOF(ST_Pointer));
+pNewHwInfo := __NEW(ST_HardwareInfo);
+pNewHwInfo^ := stHwInfo;
+
+pNewPointer^.pContent := pNewHwInfo;
+
+IF pHead = 0 THEN
+	pHead := pTail := pNewPointer;
+ELSE
+	pNewPointer^.pPrev := pTail; 
+	pTail^.pNext := pNewPointer;
+	pTail := pNewPointer;
+END_IF]]></ST>
+      </Implementation>
+    </Method>
+    <Method Name="M_GetNext" Id="{3ab79044-c6af-4e07-a3a4-cd7d3c24766b}">
+      <Declaration><![CDATA[METHOD M_GetNext : ST_HardwareInfo
+VAR_INPUT
+END_VAR
+
+VAR
+	pHwInfo : POINTER TO ST_HardwareInfo;
+END_VAR]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[IF pCurrent > 0 THEN
+	pHwInfo := pCurrent^.pContent;
+	M_GetNext := pHwInfo^;
+	pCurrent := pCurrent^.pNext;
+END_IF]]></ST>
+      </Implementation>
+    </Method>
+    <Method Name="M_ResetPointer" Id="{df7e006d-b235-42c5-8beb-9a7f1fca5212}">
+      <Declaration><![CDATA[METHOD M_ResetPointer : BOOL
+VAR_INPUT
+END_VAR
+]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[pCurrent := pHead;]]></ST>
+      </Implementation>
+    </Method>
+    <LineIds Name="HwInfoList">
+      <LineId Id="5" Count="0" />
+    </LineIds>
+    <LineIds Name="HwInfoList.FB_exit">
+      <LineId Id="7" Count="3" />
+      <LineId Id="6" Count="0" />
+    </LineIds>
+    <LineIds Name="HwInfoList.M_Add">
+      <LineId Id="30" Count="0" />
+      <LineId Id="35" Count="0" />
+      <LineId Id="33" Count="1" />
+      <LineId Id="31" Count="0" />
+      <LineId Id="21" Count="0" />
+      <LineId Id="36" Count="0" />
+      <LineId Id="22" Count="6" />
+    </LineIds>
+    <LineIds Name="HwInfoList.M_GetNext">
+      <LineId Id="5" Count="0" />
+      <LineId Id="12" Count="0" />
+      <LineId Id="14" Count="0" />
+      <LineId Id="13" Count="0" />
+      <LineId Id="11" Count="0" />
+    </LineIds>
+    <LineIds Name="HwInfoList.M_ResetPointer">
+      <LineId Id="5" Count="0" />
+    </LineIds>
+  </POU>
+</TcPlcObject>

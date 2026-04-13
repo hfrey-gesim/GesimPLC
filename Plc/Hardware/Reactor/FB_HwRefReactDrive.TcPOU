@@ -1,0 +1,30 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<TcPlcObject Version="1.1.0.1" ProductVersion="3.1.0.25">
+  <POU Name="FB_HwRefReactDrive" Id="{9e70e598-8cd7-4b5f-a27f-fa52937c4b59}">
+    <Declaration><![CDATA[FUNCTION_BLOCK FB_HwRefReactDrive EXTENDS FB_CanNodeBase
+VAR_INPUT
+	//Ausgänge
+	nControl	AT %Q* : ARRAY[1..3] OF UINT;	//Controlword
+	nOpMode		AT %Q* : ARRAY[1..3] OF USINT;	//Mode of Operation
+	nTargetPos	AT %Q* : ARRAY[1..3] OF DINT;	//TargetPos
+	nClosedPosition : ARRAY[1..3] OF DINT;
+	nMotorSpeed : ARRAY[1..3] OF DINT;
+	eCurrentState : ARRAY[1..3] OF E_OpClState;
+	bIsInit : BOOL;
+END_VAR
+VAR_OUTPUT
+	//Eingänge
+	nStatus			AT %I* : ARRAY[1..3] OF UINT;	//Statusword
+	nCurrentOpMode	AT %I* : ARRAY[1..3] OF USINT; //Aktueller Wert von Mode of Operation
+END_VAR
+VAR
+	
+END_VAR]]></Declaration>
+    <Implementation>
+      <ST><![CDATA[IF bNodeEnabled THEN
+	SUPER^();	
+END_IF]]></ST>
+    </Implementation>
+    <ObjectProperties />
+  </POU>
+</TcPlcObject>

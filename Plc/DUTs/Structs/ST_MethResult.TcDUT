@@ -1,0 +1,13 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<TcPlcObject Version="1.1.0.1" ProductVersion="3.1.4020.6">
+  <DUT Name="ST_MethResult" Id="{49c5fcf6-4d73-4eb0-b3cd-2c0f81ac8c58}">
+    <Declaration><![CDATA[TYPE ST_MethResult :
+STRUCT
+	bBusy 		: BOOL;
+	bCanceled	: BOOL;
+	bError		: BOOL;
+	nErrorId	: ERRORID;
+END_STRUCT
+END_TYPE]]></Declaration>
+  </DUT>
+</TcPlcObject>

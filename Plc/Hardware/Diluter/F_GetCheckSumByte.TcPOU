@@ -1,0 +1,23 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<TcPlcObject Version="1.1.0.1" ProductVersion="3.1.0.25">
+  <POU Name="F_GetCheckSumByte" Id="{424547fe-e718-4843-ab5d-f44b15df7b19}">
+    <Declaration><![CDATA[FUNCTION F_GetCheckSumByte : BYTE
+VAR_INPUT
+	aData: ARRAY[0..30] OF BYTE;
+	nLength: USINT;
+END_VAR
+VAR
+	i: USINT;
+	nTemp: BYTE;
+END_VAR
+]]></Declaration>
+    <Implementation>
+      <ST><![CDATA[FOR i:= 0 TO nLength-1 BY 1 DO
+	nTemp := aData[i] XOR nTemp;
+END_FOR
+
+F_GetCheckSumByte := nTemp;]]></ST>
+    </Implementation>
+    <ObjectProperties />
+  </POU>
+</TcPlcObject>

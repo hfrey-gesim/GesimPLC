@@ -1,0 +1,45 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<TcPlcObject Version="1.1.0.1" ProductVersion="3.1.4022.12">
+  <POU Name="FB_SafetyBase" Id="{b5db477d-5c7e-44a0-92a7-31f4293dad49}" SpecialFunc="None">
+    <Declaration><![CDATA[FUNCTION_BLOCK FB_SafetyBase
+VAR_INPUT
+END_VAR
+VAR_OUTPUT
+	eCurrentState : E_SafetyState;
+END_VAR
+VAR
+END_VAR
+]]></Declaration>
+    <Implementation>
+      <ST><![CDATA[eCurrentState := E_SafetyState.Locked;]]></ST>
+    </Implementation>
+    <Method Name="M_Control" Id="{cb601563-1aae-4609-92ad-51b4ca46df86}">
+      <Declaration><![CDATA[METHOD M_Control : ERRORID
+VAR_INPUT
+	eCtrl : E_SafetyCtrl;
+END_VAR
+]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[]]></ST>
+      </Implementation>
+    </Method>
+    <Method Name="M_MesBoxOn" Id="{22cf7d7f-4f32-4f1c-b8bc-902214350d0c}">
+      <Declaration><![CDATA[METHOD M_MesBoxOn : ERRORID
+VAR_INPUT
+END_VAR
+]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[]]></ST>
+      </Implementation>
+    </Method>
+    <LineIds Name="FB_SafetyBase">
+      <LineId Id="9" Count="0" />
+    </LineIds>
+    <LineIds Name="FB_SafetyBase.M_Control">
+      <LineId Id="5" Count="0" />
+    </LineIds>
+    <LineIds Name="FB_SafetyBase.M_MesBoxOn">
+      <LineId Id="7" Count="0" />
+    </LineIds>
+  </POU>
+</TcPlcObject>

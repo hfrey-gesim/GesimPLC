@@ -1,0 +1,123 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<TcPlcObject Version="1.1.0.1" ProductVersion="3.1.4020.12">
+  <POU Name="FB_SendCanMessage" Id="{8ca95061-529e-46ab-b425-b620e62f991d}" SpecialFunc="None">
+    <Declaration><![CDATA[FUNCTION_BLOCK FB_SendCanMessage
+VAR_INPUT
+	nIdentifierTX : UINT;
+	nIdentifierRX : UINT;
+	tTimeout	: TIME;
+	nTxLength : USINT;
+	aTxData : ARRAY[0..7] OF USINT;
+	bExecute : BOOL;
+END_VAR
+VAR_OUTPUT
+	bBusy : BOOL;
+	bError : BOOL;
+	nErrorId : ERRORID;
+	nRxLength : USINT;
+	aRxData : ARRAY[0..7] OF USINT;
+END_VAR
+VAR
+	pBuffer : POINTER TO ST_CANInterfaceBuffer;
+	nState 	: USINT;
+	pSelf 	: PVOID;
+	fbList		: FB_LinkedListCtrl;
+	tmrTimeout	: TON;
+END_VAR]]></Declaration>
+    <Implementation>
+      <ST><![CDATA[//Dieser Baustein regelt die Kommunikation mit dem CANInterface
+//Wenn es mehrere Instanzen gibt, dann muss eigentlich CANInterfaceCom das Dispachen übernehmen
+//In der Regel muss auf jede Tx ein Rx erfolgen
+IF bExecute THEN
+	//am CANInterface anmelden und warten, bis angemeldet
+	//Wie am Interface anmelden? In den Buffer die eigene Adresse schreiben
+	//dann nachschauen, ob eigende Adresse übernommen wurde, dass ist das Zeichen, dass die Daten von diesem Baustein verarbeitet werden
+	//es auf done gewartet
+	IF nState = 0 THEN
+		//Request an CANInterface
+		fbList.A_AddHeadValue(hList:= pBuffer^.hList, putValue:= pSelf);
+		nState := 1;
+		bBusy := TRUE;
+	END_IF
+	
+	IF nState = 1 THEN	//Checken, ob an der Reihe
+		fbList.A_GetTail(hList:= pBuffer^.hList);
+		IF fbList.bOk THEN
+			IF fbList.getValue = pSelf THEN
+				nState := 2;	
+			END_IF
+		END_IF
+	END_IF
+	
+	IF nState = 2 THEN	//Buffer füllen; Ab hier wird das CANInterface für andere Instanzen dieses Bausteins blockiert
+		IF NOT pBuffer^.bExecute THEN
+			pBuffer^.nTxIdent := nIdentifierTX;
+			pBuffer^.nTxDlc := nTxLength;
+			pBuffer^.aTxData := aTxData;
+			pBuffer^.bExecute := TRUE;
+			nState := 3;
+			//Timer starten !!!
+			tmrTimeout(IN:= TRUE, PT:= tTimeout);
+		END_IF
+	ELSIF nState = 3 THEN	//warten bis gesendet und erwarteter RxIdent empfangen
+		tmrTimeout();
+		IF tmrTimeout.Q THEN
+			bError := TRUE;
+			nErrorId := E_ErrorIdCan.ERRORID_TimeoutSendCanMsg;
+			bBusy := FALSE;
+			nState := 99;
+			fbList.A_RemoveTailValue(hList:= pBuffer^.hList);
+			pBuffer^.bExecute := FALSE;
+			RETURN;
+		END_IF
+		
+		IF NOT pBuffer^.bBusy THEN
+			IF pBuffer^.bError THEN
+				bError := TRUE;
+			ELSE //Daten auswerten
+				//wenn erwarteter RxIdent nicht übereinstimmt, dann Error
+				IF nIdentifierRX = pBuffer^.nRxIdent THEN
+					nRxLength := pBuffer^.nRxDlc;
+					aRxData := pBuffer^.aRxData;
+				ELSE //Error
+					bError := TRUE;
+					nState := 99;
+				END_IF
+			END_IF
+			fbList.A_RemoveTailValue(hList:= pBuffer^.hList);
+			pBuffer^.bExecute := FALSE;
+			bBusy := FALSE;
+		END_IF
+	END_IF
+ELSE
+	bBusy := FALSE;
+	bError := FALSE;
+	nState := 0;
+	nRxLength := 0;
+	MEMSET(ADR(aRxData),0,SIZEOF(aRxData));
+	tmrTimeout(IN:= FALSE);
+END_IF]]></ST>
+    </Implementation>
+    <Method Name="FB_init" Id="{80d05480-fbee-474b-9ed6-f5c0279f1716}">
+      <Declaration><![CDATA[METHOD FB_init : BOOL
+VAR_INPUT
+	bInitRetains : BOOL; // if TRUE, the retain variables are initialized (warm start / cold start)
+	bInCopyCode : BOOL;  // if TRUE, the instance afterwards gets moved into the copy code (online change)
+	pCANInterfaceBuffer : POINTER TO ST_CANInterfaceBuffer;
+END_VAR
+]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[THIS^.pBuffer := pCANInterfaceBuffer;
+pSelf := THIS;]]></ST>
+      </Implementation>
+    </Method>
+    <LineIds Name="FB_SendCanMessage">
+      <LineId Id="3" Count="70" />
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="FB_SendCanMessage.FB_init">
+      <LineId Id="3" Count="0" />
+      <LineId Id="2" Count="0" />
+    </LineIds>
+  </POU>
+</TcPlcObject>

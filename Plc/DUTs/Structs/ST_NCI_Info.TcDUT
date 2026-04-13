@@ -1,0 +1,14 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<TcPlcObject Version="1.1.0.1" ProductVersion="3.1.0.25">
+  <DUT Name="ST_NCI_Info" Id="{21cae84d-7ad1-47f8-92b3-353c011d0c65}">
+    <Declaration><![CDATA[TYPE ST_NCI_Info :
+STRUCT
+	Dummy 		: UDINT;
+	FileOffset 	: UDINT;
+	Path		: ARRAY[1..260] OF USINT;
+END_STRUCT
+END_TYPE
+]]></Declaration>
+    <ObjectProperties />
+  </DUT>
+</TcPlcObject>

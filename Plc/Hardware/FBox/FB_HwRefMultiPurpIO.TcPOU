@@ -1,0 +1,51 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<TcPlcObject Version="1.1.0.1" ProductVersion="3.1.4024.6">
+  <POU Name="FB_HwRefMultiPurpIO" Id="{698d4eec-a5b0-4072-bef3-f60e17a748e4}" SpecialFunc="None">
+    <Declaration><![CDATA[FUNCTION_BLOCK FB_HwRefMultiPurpIO EXTENDS FB_CanNodeBase
+VAR_INPUT
+END_VAR
+VAR_OUTPUT
+END_VAR
+VAR
+END_VAR
+]]></Declaration>
+    <Implementation>
+      <ST><![CDATA[IF bNodeEnabled THEN
+	SUPER^();
+END_IF
+
+//Wenn die analogen Eingänge gemappt sind, dann müssen diese enabled werden.
+//Hier sind diese allerdings nicht verfügbar. Wie komme ich an den Mapping-Status?
+//IF F_GetMappingStatus(]]></ST>
+    </Implementation>
+    <Action Name="A_ResetApp" Id="{39ca8893-6fb3-4264-a84f-9dbc5734756a}">
+      <Implementation>
+        <ST><![CDATA[IF nStateA_ResetApp = 0 THEN
+	fbSdoWrite(sADSNetID:= stAdsAdress.sNetId, nPortNr:= stAdsAdress.nPort,
+				nIndex := cUpdateRequest.nIndex, nSubIndex := 0, nDataLength := 1, nData:= 1, bExecute:= TRUE);
+	IF NOT fbSdoWrite.bBusy THEN
+		IF fbSdoWrite.bError THEN
+			nErrorId := fbSdoWrite.nAdsErrorId;
+			nErrorId2 := fbSdoWrite.nSdoErrorId;
+			nStateA_ResetApp := 99;  //Error
+		ELSE
+			nStateA_ResetApp := 80;
+		END_IF
+		fbSdoWrite(bExecute:= FALSE);
+	END_IF
+END_IF]]></ST>
+      </Implementation>
+    </Action>
+    <LineIds Name="FB_HwRefMultiPurpIO">
+      <LineId Id="3" Count="1" />
+      <LineId Id="2" Count="0" />
+      <LineId Id="13" Count="0" />
+      <LineId Id="12" Count="0" />
+      <LineId Id="15" Count="1" />
+    </LineIds>
+    <LineIds Name="FB_HwRefMultiPurpIO.A_ResetApp">
+      <LineId Id="2" Count="12" />
+      <LineId Id="1" Count="0" />
+    </LineIds>
+  </POU>
+</TcPlcObject>

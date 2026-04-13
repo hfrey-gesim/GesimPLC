@@ -1,0 +1,28 @@
+﻿<TcPlcObject Version="1.1.0.1" ProductVersion="3.1.0.23">
+  <POU Name="F_AdsError_TO_SdoError" Id="{f24bca36-8189-41b8-9828-1aae3d0900fd}">
+    <Declaration><![CDATA[FUNCTION F_AdsError_TO_SdoError : UDINT
+VAR_INPUT
+	nAdsErrorId		: UDINT;
+END_VAR
+VAR
+	nSdoErrorIdTemp	: UDINT;
+END_VAR
+]]></Declaration>
+    <Implementation>
+      <ST><![CDATA[//SDO abort-Codes stehen in Bit 16-30
+//SDO Additional Code (0..6) in Bit 24-30
+nSdoErrorIdTemp := nAdsErrorId AND 16#7F000000;	//maskieren
+nSdoErrorIdTemp := SHR(nSdoErrorIdTemp,24);	//24 bit nach rechts verschieben
+F_AdsError_TO_SdoError := F_AdsError_TO_SdoError OR nSdoErrorIdTemp;
+//SDO Error Code (16..19) in Bit 20-23
+nSdoErrorIdTemp := nAdsErrorId AND 16#00F00000;	//maskieren
+nSdoErrorIdTemp := SHR(nSdoErrorIdTemp,4);	//4 bit nach rechts verschieben
+F_AdsError_TO_SdoError := F_AdsError_TO_SdoError OR nSdoErrorIdTemp;
+//SDO Error Class (24..27) in Bit 16-19
+nSdoErrorIdTemp := nAdsErrorId AND 16#000F0000;	//maskieren
+nSdoErrorIdTemp := SHL(nSdoErrorIdTemp,8);	//8 bit nach links verschieben
+F_AdsError_TO_SdoError := F_AdsError_TO_SdoError OR nSdoErrorIdTemp;]]></ST>
+    </Implementation>
+    <ObjectProperties />
+  </POU>
+</TcPlcObject>

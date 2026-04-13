@@ -1,0 +1,1018 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<TcPlcObject Version="1.1.0.1" ProductVersion="3.1.4024.3">
+  <POU Name="FB_XYDrive_Beck_Twin" Id="{ee7a1f7d-c7ca-4fba-8895-c21dce662689}" SpecialFunc="None">
+    <Declaration><![CDATA[FUNCTION_BLOCK FB_XYDrive_Beck_Twin EXTENDS FB_XYDrive_Beck
+VAR PERSISTENT
+	rRefPosSlave : REAL;
+END_VAR
+VAR_INPUT
+END_VAR
+VAR_OUTPUT
+END_VAR
+VAR
+	bHomeSwitchSlave 		AT %I* : BOOL;
+	fbMcHomingSlave			: Tc2_MC2.MC_Home;
+	fbMcMoveAbsSlave		: Tc2_MC2.MC_MoveAbsolute;
+	fbMcHaltSlave			: Tc2_MC2.MC_Halt;
+	timeout : TON;
+	stMethResult			: ST_MethResult;
+	bPowerOn				: BOOL;
+	nStateA_PowerOn			: USINT;
+	bFlag1					: BOOL;
+	bFlag2					: BOOL;
+	pAxisRefSlave			: POINTER TO Tc2_MC2.AXIS_REF;
+	fbClearGroup			: FB_ClearGroup;
+END_VAR
+]]></Declaration>
+    <Implementation>
+      <ST><![CDATA[SUPER^();
+IF bPowerOn THEN
+	A_PowerOn();
+	IF nStateA_PowerOn >= 80 THEN
+		IF nStateA_PowerOn >= 99 THEN
+			bError := TRUE;
+		END_IF
+		nStateA_PowerOn := 0;
+		bPowerOn := FALSE;
+	END_IF
+END_IF
+pAxisRefSlave^.ReadStatus();
+bHomed := pAxisRefMaster^.Status.Homed AND pAxisRefSlave^.Status.Homed;]]></ST>
+    </Implementation>
+    <Action Name="A_Error" Id="{82358bdf-5130-496c-87bc-d6c4bd60a860}">
+      <Implementation>
+        <ST><![CDATA[IF nStateA_Error = 0 THEN
+	IF nErrorId = 17744 OR nErrorId = 18000 THEN //Schleppabstandüberwachung "Position" bzw Antriebshardware nicht bereit
+		nStateA_Error := 1;
+	END_IF
+END_IF
+
+CASE nStateA_Error OF
+	1: //Master ausschalten
+		fbMcPower(Axis:= pAxisRefMaster^, Enable:= FALSE);
+		IF NOT fbMcPower.Busy THEN
+			nStateA_Error := 2;
+		END_IF
+
+	2: //Slave ausschalten	
+		fbMcPower(Axis:= pAxisRefSlave^, Enable:= FALSE);
+		IF NOT fbMcPower.Busy THEN
+			nStateA_Error := 3;
+		END_IF
+		
+	3:	//Calibration Master + Slave zurücksetzen
+		fbMcHome(Axis:= pAxisRefMaster^, Execute:= TRUE, HomingMode:= MC_ResetCalibration);
+		fbMcHomingSlave(Axis:= pAxisRefSlave^, Execute:= TRUE, HomingMode:= MC_ResetCalibration);
+		
+		IF NOT fbMcHome.Busy AND NOT fbMcHome.Busy THEN
+			IF fbMcHome.Error OR fbMcHomingSlave.Error THEN
+				nStateA_Error := 99;
+			ELSE
+				nStateA_Error := 4;
+			END_IF
+			fbMcHome(Axis:= pAxisRefMaster^, Execute:= FALSE);
+			fbMcHomingSlave(Axis:= pAxisRefSlave^, Execute:= FALSE);
+		END_IF
+END_CASE]]></ST>
+      </Implementation>
+    </Action>
+    <Action Name="A_Init" Id="{db372799-5330-4b1a-9f4d-84b9cfd2ef3d}">
+      <Implementation>
+        <ST><![CDATA[IF timeout.Q THEN
+	nErrorId := ERRORID_SimultanErrorX1X2;
+	nStateA_Init := 90;
+END_IF
+
+CASE nStateA_Init OF
+	0:	//DriveAdress Masterachse ermitteln (EncoderId wird für TriggerRef benötigt)
+		bBusy := TRUE;
+		fbMcReadDriveAddress(Axis:= pAxisRefMaster^ ,Execute:= TRUE, DriveAddress=> stDriveAddress);
+		IF NOT fbMcReadDriveAddress.Busy THEN
+			IF fbMcReadDriveAddress.Error THEN
+				nErrorId := UDINT_TO_UINT(fbMcReadDriveAddress.ErrorID);
+				nStateA_Init := 99;
+			ELSE
+				stTriggerRef.EncoderID := stDriveAddress.NcEncoderId;
+				IF GCode.P_bNciAvailable THEN
+					nStateA_Init := 1;
+				ELSE
+					nStateA_Init := 2;
+				END_IF
+			END_IF
+			fbMcReadDriveAddress(Axis:= pAxisRefMaster^ ,Execute:= FALSE);
+		END_IF
+		
+	1:	//NCI-Gruppe auflösen ohne Slave-Achse einzukopplen
+		IF GCode.bBusy OR GCode.bError THEN
+			nStateA_Init := 99;
+		ELSE
+			fbClearGroup(bExecute:= TRUE, bReGearInSlave:= FALSE, stGCodeRef:= GCode.stGCodeRef);
+			IF NOT fbClearGroup.bBusy THEN
+				IF fbClearGroup.bError THEN
+					nErrorId := fbClearGroup.nErrorId;
+					nStateA_Init := 99;
+				ELSE
+					pAxisRefSlave^.ReadStatus();
+					IF pAxisRefSlave^.Status.Coupled THEN
+						nStateA_Init := 2;
+					ELSE
+						nStateA_Init := 3;
+					END_IF
+				END_IF
+				fbClearGroup(bExecute:= FALSE, bReGearInSlave:= FALSE, stGCodeRef:= GCode.stGCodeRef);
+			END_IF
+		END_IF
+		
+	2:	//Slave auskoppeln
+		stMethResult := M_GearOut();
+		IF NOT stMethResult.bBusy THEN
+			IF stMethResult.bError THEN
+				nErrorId := stMethResult.nErrorID;
+				nStateA_Init := 99;	
+			ELSE
+				nStateA_Init := 3;	
+			END_IF
+		END_IF
+	
+	3:	//Masterachse im Fehlerzustand?
+		IF pAxisRefMaster^.Status.Error OR fbMcReset.Busy  THEN
+			fbMcReset(Axis:= pAxisRefMaster^, Execute:= TRUE); 
+			IF fbMcReset.Error THEN	//Error beim zurücksetzen
+				nErrorId := UDINT_TO_UINT(fbMcReset.ErrorID);
+				fbMcReset(Axis:= pAxisRefMaster^, Execute := FALSE);
+				nStateA_Init := 99;
+			ELSIF  fbMcReset.Done THEN
+				fbMcReset(Axis:= pAxisRefMaster^, Execute := FALSE);
+				nStateA_Init := 4;
+			END_IF
+		ELSE
+			nStateA_Init := 4;
+		END_IF
+		
+	4:	//Slaveachse im Fehlerzustand?
+		IF pAxisRefSlave^.Status.Error OR fbMcReset.Busy THEN
+			fbMcReset(Axis:= pAxisRefSlave^, Execute:= TRUE);
+			IF fbMcReset.Error THEN	//Error beim zurücksetzen
+				nErrorId := UDINT_TO_UINT(fbMcReset.ErrorID);
+				fbMcReset(Axis:= pAxisRefSlave^, Execute := FALSE);
+				nStateA_Init := 99;
+			ELSIF  fbMcReset.Done THEN
+				fbMcReset(Axis:= pAxisRefSlave^, Execute := FALSE);
+				nStateA_Init := 5;
+			END_IF
+		ELSE
+			nStateA_Init := 5;
+		END_IF		
+
+	5:	//Masterachse freigegeben?
+		IF NOT pAxisRefMaster^.Status.ControlLoopClosed THEN
+			fbMcPower(Axis:= pAxisRefMaster^, Enable:= TRUE, Enable_Positive:= TRUE, Enable_Negative:= TRUE, Override:= 100 );
+			IF fbMcPower.Error THEN	 //Error bei Ausführung
+				nErrorId := UDINT_TO_UINT(fbMcPower.ErrorID);
+				fbMcPower(Axis:= pAxisRefMaster^, Enable:= FALSE);
+				nStateA_Init := 99;
+			END_IF
+		ELSE
+			nStateA_Init := 6;
+		END_IF
+
+	6:	//Slaveachse freigegeben?
+		IF NOT pAxisRefSlave^.Status.ControlLoopClosed THEN
+			fbMcPower(Axis:= pAxisRefSlave^, Enable:= TRUE, Enable_Positive:= TRUE, Enable_Negative:= TRUE, Override:= 100);
+			IF fbMcPower.Error THEN	 //Error bei Ausführung
+				nErrorId := UDINT_TO_UINT(fbMcPower.ErrorID);
+				fbMcPower(Axis:= pAxisRefMaster^, Enable:= FALSE);
+				fbMcPower(Axis:= pAxisRefSlave^, Enable:= FALSE);
+				nStateA_Init := 99;
+			END_IF
+		ELSE
+			nStateA_Init := 7;
+		END_IF
+		
+	7:	//TouchProbe abbrechen
+		fbMcAbortTrigger(Axis:= pAxisRefMaster^, TriggerInput:= stTriggerRef, Execute:= TRUE);
+		IF NOT fbMcAbortTrigger.Busy THEN
+			IF fbMcAbortTrigger.Error THEN
+				nErrorId := UDINT_TO_UINT(fbMcAbortTrigger.ErrorID);
+				nStateA_Init := 92;
+			ELSE
+				IF NOT bReInit AND pAxisRefMaster^.Status.Homed AND pAxisRefSlave^.Status.Homed THEN
+					nStateA_Init := 10; //Slave Achse an Masterachse ankoppeln
+				ELSE
+					nStateA_Init := 8; //Achsen referenzieren
+				END_IF
+			END_IF
+			fbMcAbortTrigger(Axis:= pAxisRefMaster^ ,TriggerInput:= stTriggerRef, Execute:= FALSE);
+		END_IF
+		
+	8:	//Achsen referenzieren
+		//Wenn eine Achse einen Fehler meldet, dann das Homing für die andere Achse abbrechen
+		fbMcHome(Axis:= pAxisRefMaster^, Execute:= TRUE, Position:= rHomePos,
+								HomingMode:= MC_DefaultHoming,	bCalibrationCam:= bHomeSwitchMaster);
+							
+		fbMcHomingSlave(Axis:= pAxisRefSlave^, Execute:= TRUE, Position:= rHomePosSlave,
+								HomingMode:= MC_DefaultHoming, bCalibrationCam:= bHomeSwitchSlave);
+							
+		IF NOT fbMcHome.Busy THEN
+			IF fbMcHome.Error THEN
+				nErrorId := UDINT_TO_UINT(fbMcHome.ErrorID);
+				fbMcHome(Axis:= pAxisRefMaster^, Execute := FALSE);
+				nStateA_Init := 91;
+			END_IF
+		END_IF
+		
+		IF NOT fbMcHomingSlave.Busy THEN
+			IF fbMcHomingSlave.Error THEN
+				nErrorId := UDINT_TO_UINT(fbMcHomingSlave.ErrorID);
+				fbMcHomingSlave(Axis:= pAxisRefSlave^, Execute := FALSE);
+				nStateA_Init := 91;
+			END_IF
+		END_IF
+		
+		//Es müssen sowohl die Nocken als auch die Referenzpositionen jeweils im gleichen Zeitfenster kommen
+		IF fbMcHome.Done OR fbMcHomingSlave.Done THEN
+			timeout(IN:= TRUE, PT:= T#200MS);
+		END_IF
+		
+		IF fbMcHome.Done AND fbMcHomingSlave.Done THEN
+			timeout(IN:= FALSE);
+			fbMcHome(Axis:= pAxisRefMaster^, Execute := FALSE);
+			fbMcHomingSlave(Axis:= pAxisRefSlave^, Execute := FALSE);
+			nStateA_Init := 9;
+		END_IF
+		
+		IF bStop THEN
+			nStateA_Init := 50;
+		END_IF
+		
+	9:	//Achsen auf Durchschnitt von Referenzpunkt zurückfahren
+		fbMcMoveAbs(Axis:= pAxisRefMaster^, Execute:= TRUE, Position:= (rHomePos + rHomePosSlave)/2.0 , Velocity:= 10.0);
+		
+		IF NOT fbMcMoveAbs.Busy THEN
+			IF fbMcMoveAbs.Error	THEN
+				nErrorId := UDINT_TO_UINT(fbMcMoveAbs.ErrorID);
+				fbMcMoveAbs(Axis:= pAxisRefMaster^, Execute:= FALSE);
+				nStateA_Init := 90;
+			END_IF
+		END_IF
+		
+		fbMcMoveAbsSlave(Axis:= pAxisRefSlave^, Execute:= TRUE, Position:= (rHomePos + rHomePosSlave)/2.0 , Velocity:= 10.0);
+		
+		IF NOT fbMcMoveAbsSlave.Busy THEN
+			IF fbMcMoveAbsSlave.Error	THEN
+				nErrorId := UDINT_TO_UINT(fbMcMoveAbsSlave.ErrorID);
+				fbMcMoveAbsSlave(Axis:= pAxisRefSlave^, Execute:= FALSE);
+				nStateA_Init := 90;
+			END_IF
+		END_IF
+		
+		IF fbMcMoveAbs.Done AND fbMcMoveAbsSlave.Done THEN
+			fbMcMoveAbs(Axis:= pAxisRefMaster^ , Execute:= FALSE);
+			fbMcMoveAbsSlave(Axis:= pAxisRefSlave^ , Execute:= FALSE);
+			nStateA_Init := 10;
+		END_IF
+		
+		IF bStop THEN
+			nStateA_Init := 50;
+		END_IF
+		
+	10:	//Slave an Master ankoppeln
+		stMethResult := M_GearIn();
+		IF NOT stMethResult.bBusy THEN
+			IF stMethResult.bError THEN
+				nErrorId := stMethResult.nErrorID;
+				nStateA_Init := 92;	
+			ELSE
+				IF bStop THEN
+					nStateA_Init := 50;
+				ELSE
+					nStateA_Init := 80;
+				END_IF
+			END_IF
+		END_IF
+		
+	50:	//Stop
+		fbMcHalt(Axis:= pAxisRefMaster^, Execute:= TRUE);
+		fbMcHaltSlave(Axis:= pAxisRefSlave^, Execute:= TRUE);
+		IF NOT (fbMcHalt.Busy OR fbMcHaltSlave.Busy) THEN
+			fbMcHalt(Axis:= pAxisRefMaster^, Execute:= FALSE);
+			fbMcHaltSlave(Axis:= pAxisRefSlave^, Execute:= FALSE);
+			fbMcHome(Axis:= pAxisRefMaster^, Execute:= FALSE);
+			fbMcHomingSlave(Axis:= pAxisRefSlave^, Execute:= FALSE);
+			fbMcMoveAbs(Axis:= pAxisRefMaster^, Execute:= FALSE);
+			fbMcMoveAbsSlave(Axis:= pAxisRefSlave^, Execute:= FALSE);
+			fbMcPower(Axis:= pAxisRefMaster^, Enable:= FALSE);
+			fbMcPower(Axis:= pAxisRefSlave^, Enable:= FALSE);
+			nStateA_Init := 80;
+		END_IF
+	
+	90:	//Error
+		//Wenn Antriebe aktiv, dann stoppen
+		IF pAxisRefMaster^.Status.Moving OR pAxisRefSlave^.Status.Moving THEN
+			nStateA_Init := 91;
+		ELSE
+			nStateA_Init := 92;
+		END_IF
+
+END_CASE
+
+IF nStateA_Init = 91 THEN
+		fbMcHalt(Axis:= pAxisRefMaster^ , Execute:= TRUE);
+		fbMcHaltSlave(Axis:= pAxisRefSlave^, Execute:= TRUE);
+		IF NOT (fbMcHalt.Busy OR fbMcHaltSlave.Busy) THEN
+			nStateA_Init := 92;	
+		END_IF
+ELSIF nStateA_Init = 92 THEN
+		fbMcHome(Axis:= pAxisRefMaster^, Execute:= FALSE);
+		fbMcHomingSlave(Axis:= pAxisRefSlave^, Execute:= FALSE);
+		fbMcMoveAbs(Axis:= pAxisRefMaster^, Execute:= FALSE);
+		fbMcMoveAbsSlave(Axis:= pAxisRefSlave^, Execute:= FALSE);
+		fbMcPower(Axis:= pAxisRefMaster^, Enable:= FALSE);
+		fbMcPower(Axis:= pAxisRefSlave^, Enable:= FALSE);
+		fbMcHalt(Axis:= pAxisRefMaster^ , Execute:= FALSE);
+		fbMcHaltSlave(Axis:= pAxisRefSlave^, Execute:= FALSE);
+		bError := TRUE;
+		nStateA_Init := 99;	
+END_IF]]></ST>
+      </Implementation>
+    </Action>
+    <Action Name="A_PowerOn" Id="{039fcfdd-9c37-4481-b424-513513449782}">
+      <Implementation>
+        <ST><![CDATA[//Nur zum Wiedereinschalten der Antriebe nach einem PowerOff
+CASE nStateA_PowerOn OF
+	0:	//Slave-Achse ausgekoppelt?
+		IF pAxisRefSlave^.Status.Coupled THEN
+			nStateA_PowerOn := 1;	//weiter zu auskoppln
+		ELSE
+			nStateA_PowerOn := 2;
+		END_IF
+		
+	1:	//Slave auskoppeln
+		stMethResult := M_GearOut();
+		IF NOT stMethResult.bBusy THEN
+			IF stMethResult.bError THEN
+				nErrorId := stMethResult.nErrorId;
+				nStateA_PowerOn := 99;
+			ELSE
+				nStateA_PowerOn := 2;
+			END_IF
+		END_IF
+		
+	2:	//Masterachse freigegeben (einschalten)
+		IF NOT pAxisRefMaster^.Status.ControlLoopClosed THEN
+			fbMcPower(Axis:= pAxisRefMaster^, Enable:= TRUE, Enable_Positive:= TRUE, Enable_Negative:= TRUE, Override:= 100 );
+			IF fbMcPower.Error THEN	 //Fehler bei Ausführung
+				nErrorId := UDINT_TO_UINT(fbMcPower.ErrorID);
+				fbMcPower(Axis:= pAxisRefMaster^, Enable:= FALSE);
+				nStateA_PowerOn := 99;
+			END_IF
+		ELSE
+			nStateA_PowerOn := 3;
+		END_IF
+		
+	3:	//Slaveachse freigegeben (einschalten)
+		IF NOT pAxisRefSlave^.Status.ControlLoopClosed THEN
+			fbMcPower(Axis:= pAxisRefSlave^, Enable:= TRUE, Enable_Positive:= TRUE, Enable_Negative:= TRUE, Override:= 100);
+			IF fbMcPower.Error THEN	 //Fehler bei Ausführung
+				nErrorId := UDINT_TO_UINT(fbMcPower.ErrorID);
+				fbMcPower(Axis:= pAxisRefSlave^, Enable:= FALSE);
+				nStateA_PowerOn := 99;
+			END_IF
+		ELSE
+			nStateA_PowerOn := 4;
+			IF pAxisRefMaster^.NcToPlc.ActPos > (P_rMaxPos / 1000.0) THEN
+				fbMcMoveAbs.Position := P_rMaxPos / 1000.0;
+			ELSE
+				fbMcMoveAbs.Position := pAxisRefMaster^.NcToPlc.ActPos;
+			END_IF
+			fbMcMoveAbsSlave.Position := fbMcMoveAbs.Position;
+			bFlag1 := TRUE;
+			bFlag2 := TRUE;
+		END_IF
+		
+	4:	//Beide Achsen auf aktuellen Wert von Masterachse fahren
+		IF bFlag1 XOR fbMcMoveAbs.Busy THEN
+			bFlag1 := FALSE;
+			fbMcMoveAbs(Axis:= pAxisRefMaster^, Execute:= TRUE, Velocity:= 10.0); 
+		END_IF
+		
+		IF bFlag2 XOR fbMcMoveAbsSlave.Busy THEN
+			bFlag2 := FALSE;
+			fbMcMoveAbsSlave(Axis:= pAxisRefSlave^, Execute:= TRUE, Velocity:= 10.0);
+		END_IF
+		
+		IF fbMcMoveAbs.Done AND fbMcMoveAbsSlave.Done THEN
+			fbMcMoveAbs(Axis:= pAxisRefMaster^, Execute:= FALSE);
+			fbMcMoveAbsSlave(Axis:= pAxisRefSlave^, Execute:= FALSE);
+			bFlag1 := TRUE;
+			bFlag2 := TRUE;
+			nStateA_PowerOn := 5;
+		END_IF
+
+		IF fbMcMoveAbs.Error	THEN
+			nErrorId := UDINT_TO_UINT(fbMcMoveAbs.ErrorID);
+			fbMcMoveAbs(Axis:= pAxisRefMaster^, Execute:= FALSE);
+			nStateA_PowerOn := 99;
+		END_IF
+		
+		IF fbMcMoveAbsSlave.Error	THEN
+			nErrorId := UDINT_TO_UINT(fbMcMoveAbsSlave.ErrorID);
+			fbMcMoveAbsSlave(Axis:= pAxisRefSlave^, Execute:= FALSE);
+			nStateA_PowerOn := 99;
+		END_IF
+		
+	5:	//Slave an Master ankoppeln
+		stMethResult := M_GearIn();
+		IF NOT stMethResult.bBusy THEN
+			IF stMethResult.bError THEN
+				nErrorId := stMethResult.nErrorId;
+				nStateA_PowerOn := 99;
+			ELSE
+				nStateA_PowerOn := 80;
+			END_IF
+		END_IF		
+END_CASE]]></ST>
+      </Implementation>
+    </Action>
+    <Action Name="A_Reset" Id="{3a15bc99-4825-41f8-8d64-b9708c0db24d}">
+      <Implementation>
+        <ST><![CDATA[CASE nStateA_Reset OF
+	0:	
+		bBusy := TRUE;
+		//Slaveachse
+		IF pAxisRefSlave^.Status.Error THEN
+			IF pAxisRefSlave^.Status.ErrorID = 16#4550 THEN
+				nStateA_Reset := 1;
+			ELSE
+				nStateA_Reset := 2;
+			END_IF
+		ELSE
+			nStateA_Reset := 3;
+		END_IF
+	
+	1:	//Reset Calibration Slaveachse
+		fbMcHomingSlave(Axis:= pAxisRefSlave^, Execute:= TRUE, HomingMode:= Tc2_MC2.MC_HomingMode.MC_ResetCalibration);
+		IF NOT fbMcHomingSlave.Busy THEN
+			fbMcHomingSlave(Axis:= pAxisRefSlave^, Execute:= FALSE);
+			nStateA_Reset := 2;
+		END_IF
+	
+	2:	//Reset Slaveachse
+		fbMcReset(Axis:= pAxisRefSlave^, Execute:= TRUE);
+		IF NOT fbMcReset.Busy THEN
+			fbMcReset(Axis:= pAxisRefSlave^, Execute:= FALSE);
+			nStateA_Reset := 3;
+		END_IF
+		
+	3:	//Masterachse
+		IF pAxisRefMaster^.Status.Error THEN
+			IF pAxisRefMaster^.Status.ErrorID = 16#4550 THEN
+				nStateA_Reset := 4;
+			ELSE
+				nStateA_Reset := 5;
+			END_IF
+		ELSE
+			nStateA_Reset := 6;
+		END_IF
+		
+	4:	//Reset Calibration Masterachse
+		fbMcHome(Axis:= pAxisRefMaster^, Execute:= TRUE, HomingMode:= Tc2_MC2.MC_HomingMode.MC_ResetCalibration);
+		IF NOT fbMcHome.Busy THEN
+			fbMcHome(Axis:= pAxisRefMaster^, Execute:= FALSE);
+			nStateA_Reset := 5;
+		END_IF
+	
+	5:	//Reset Masterachse
+		fbMcReset(Axis:= pAxisRefMaster^, Execute:= TRUE);
+		IF NOT fbMcReset.Busy THEN
+			fbMcReset(Axis:= pAxisRefMaster^, Execute:= FALSE);
+			nStateA_Reset := 6;
+		END_IF
+		
+	6:	//Checken, ob beide Achsen fehlerfrei
+		IF pAxisRefMaster^.Status.Error OR pAxisRefSlave^.Status.Error THEN
+			nStateA_Reset := 99;
+		ELSE
+			//Motion-Bausteine zurücksetzen
+			fbMcMoveAbs(Axis:= pAxisRefMaster^, Execute:= FALSE);
+			fbMcMoveRel(Axis:= pAxisRefMaster^, Execute:= FALSE);
+			fbMcHalt(Axis:= pAxisRefMaster^, Execute:= FALSE);
+			fbMcHaltSlave(Axis:= pAxisRefSlave^, Execute:= FALSE);
+			nStateA_Reset := 80;
+			nStateA_Error := 0;
+			bError := FALSE;
+		END_IF
+END_CASE]]></ST>
+      </Implementation>
+    </Action>
+    <Action Name="A_Setup" Id="{2403c79a-4667-4ace-8896-6546ae209aaf}">
+      <Implementation>
+        <ST><![CDATA[CASE nStateA_Setup OF
+	0:	bSetupWaitForResp := FALSE;
+		bContinueSetup := FALSE;
+		//Negativen LimitSwitch deaktivieren(notwendig, da nach Referenzpunkt anfahren auf "0" gefahren wird
+		fbMcWriteBoolParameter(Axis:= pAxisRefMaster^, Execute:= TRUE, ParameterNumber:= MC_AxisParameter.EnableLimitNeg, Value:= FALSE);
+		IF NOT fbMcWriteBoolParameter.Busy THEN
+			IF fbMcWriteBoolParameter.Error THEN
+				nStateA_Setup := 99;
+			ELSE
+				bInit := TRUE;	//Start "Init" auf HomePos "0" (HomePos wird in M_Setup(..) gesetzt)
+				nStateA_Setup := 1;
+			END_IF
+			fbMcWriteBoolParameter(Axis:= pAxisRefMaster^, Execute:= FALSE);
+		END_IF
+		
+	1:	//Warten bis "Init" fertig"
+		//danach Achsen auf halbe Workplate + 100 fahren
+		IF NOT bInit THEN
+			IF bStop THEN
+				nStateA_Setup := 5;//weiter zu ResetCalib
+			ELSE
+				fbMcMoveAbs.Position := rWorkplateLength / 2000.0 - 100.0;
+				fbMcMoveAbs.Velocity := 40.0;
+				fbMcMoveAbs(Axis:= pAxisRefMaster^, Execute:= TRUE);
+				nStateA_Setup := 2;			
+			END_IF
+		END_IF
+		
+		IF bError THEN
+			bSetupError := TRUE;
+			nStateA_Setup := 8; //neg. LimitSwitch wieder aktivieren
+		END_IF
+		
+	2:	//Warten bis Move fertig
+		IF bStop THEN
+			nStateA_Setup := 50; //weiter zu Stop
+		ELSE
+			fbMcMoveAbs(Axis:= pAxisRefMaster^, Execute:= TRUE);
+			IF fbMcMoveAbs.Error THEN
+				nStateA_Setup := 99;
+			END_IF
+	
+			IF NOT fbMcMoveAbs.Busy THEN
+				fbMcMoveAbs(Axis:= pAxisRefMaster^, Execute:= FALSE);
+				nStateA_Setup := 3;
+			END_IF
+		END_IF
+		
+	3:	//Slave auskoppeln
+		stMethResult := M_GearOut();
+		IF NOT stMethResult.bBusy THEN
+			IF stMethResult.bError THEN
+				nStateA_Setup := 99;
+			ELSE
+				nStateA_Setup := 4;
+			END_IF
+		END_IF
+
+	4:	//beide Achsen ausschalten
+		fbMcPower(Axis:= pAxisRefMaster^, Enable:= FALSE);
+		fbMcPower(Axis:= pAxisRefSlave^, Enable:= FALSE);
+		pAxisRefMaster^.ReadStatus();
+		pAxisRefSlave^.ReadStatus();
+		IF NOT (pAxisRefMaster^.Status.ControlLoopClosed OR pAxisRefSlave^.Status.ControlLoopClosed) THEN
+			nStateA_Setup := 5;
+		END_IF
+		
+	5:	//Calibration Master zurücksetzen
+		fbMcHome(Axis:= pAxisRefMaster^, Execute:= TRUE, HomingMode:= MC_ResetCalibration);
+		fbMcHomingSlave(Axis:= pAxisRefSlave^, Execute:= TRUE, HomingMode:= MC_ResetCalibration);
+		
+		IF NOT fbMcHome.Busy AND NOT fbMcHome.Busy THEN
+			IF fbMcHome.Error OR fbMcHomingSlave.Error THEN
+				nStateA_Setup := 99;
+			ELSE
+				IF bStop THEN
+					nStateA_Setup := 80;
+				ELSE
+					nStateA_Setup := 6;
+					bSetupWaitForResp := TRUE;
+					bContinueSetup := FALSE;
+				END_IF
+			END_IF
+			fbMcHome(Axis:= pAxisRefMaster^, Execute:= FALSE);
+			fbMcHomingSlave(Axis:= pAxisRefSlave^, Execute:= FALSE);
+		END_IF
+		
+	6:	//Warte auf UserResponse
+		IF bContinueSetup THEN
+			nStateA_Setup := 7;
+		ELSIF bStop THEN
+			nStateA_Setup := 8;
+		END_IF		
+		
+	7:	//Neue Referenzposition berechnen und in persistente Variable schreiben
+		rRefPosMaster := LREAL_TO_REAL(rWorkplateLength - pAxisRefMaster^.NcToPlc.ActPos * 1000.0 - rNullPosDist - rSetupPosDist);
+		rRefPosSlave := LREAL_TO_REAL(rWorkplateLength - pAxisRefSlave^.NcToPlc.ActPos * 1000.0 - rNullPosDist - rSetupPosDist);
+		bSetupOK := TRUE;
+		nStateA_Setup := 8;
+		fbSettings.M_WritePersData();
+		
+	8:	//Negativen Limit-Switch wieder aktivieren
+		fbMcWriteBoolParameter(Axis:= pAxisRefMaster^, Execute:= TRUE, ParameterNumber:= MC_AxisParameter.EnableLimitNeg, Value:= TRUE);
+		IF NOT fbMcWriteBoolParameter.Busy THEN
+			IF fbMcWriteBoolParameter.Error THEN
+				nStateA_Setup := 99;
+			ELSE
+				IF bSetupError THEN
+					nStateA_Setup := 99;
+				ELSE
+					nStateA_Setup := 80;
+				END_IF
+			END_IF
+			fbMcWriteBoolParameter(Axis:= pAxisRefMaster^, Execute:= FALSE);
+		END_IF
+	
+	50:	//Stop Antriebe (noch im gekoppeltem Zustand)
+		fbMcHalt(Axis:= pAxisRefMaster^, Execute:= TRUE);
+		IF NOT fbMcHalt.Busy THEN
+			fbMcHalt(Axis:= pAxisRefMaster^, Execute:= FALSE);
+			nStateA_Setup := 51;
+		END_IF
+		
+	51:	//Falls fbMoveAbs noch busy, dann zu ende führen
+		IF fbMcMoveAbs.Busy THEN
+			fbMcMoveAbs(Axis:= pAxisRefMaster^);
+		ELSE
+			fbMcMoveAbs(Axis:= pAxisRefMaster^, Execute := FALSE);
+			nStateA_Setup := 3;
+		END_IF
+	
+END_CASE]]></ST>
+      </Implementation>
+    </Action>
+    <Method Name="FB_init" Id="{61e82133-6054-437c-8a4b-8848284f230a}">
+      <Declaration><![CDATA[METHOD FB_init : BOOL
+VAR_INPUT
+	bInitRetains 	: BOOL; // if TRUE, the retain variables are initialized (warm start / cold start)
+	bInCopyCode 	: BOOL;  // if TRUE, the instance afterwards gets moved into the copy code (online change)
+	eXYOrientation	: E_XYOrientation;
+	pNCAxisRefMaster: POINTER TO AXIS_REF;
+	pNCAxisRefSlave : POINTER TO AXIS_REF;
+END_VAR
+]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[pAxisRefSlave := pNCAxisRefSlave;]]></ST>
+      </Implementation>
+    </Method>
+    <Method Name="M_GearIn" Id="{2c3198a0-1f8a-491d-987d-a99321ae1e12}">
+      <Declaration><![CDATA[METHOD M_GearIn : ST_MethResult
+
+VAR_INST
+	fbMcGearIn				: Tc2_MC2.MC_GearIn;	//Zum Koppeln der Slave-Achse an die Master-Achse
+END_VAR
+]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[fbMcGearIn(Master:= pAxisRefMaster^, Slave:= pAxisRefSlave^, Execute:= TRUE,
+			RatioNumerator:= 1.0, RatioDenominator:= 1, Busy=> M_GearIn.bBusy, Error=> M_GearIn.bError);
+IF NOT fbMcGearIn.Busy THEN
+	M_GearIn.nErrorId := UDINT_TO_UINT(fbMcGearIn.ErrorID);
+	fbMcGearIn(Master:= pAxisRefMaster^, Slave:= pAxisRefSlave^, Execute:= FALSE);
+END_IF]]></ST>
+      </Implementation>
+    </Method>
+    <Method Name="M_GearOut" Id="{2b04f70d-3bcc-4be3-8233-73c889bce900}">
+      <Declaration><![CDATA[METHOD M_GearOut : ST_MethResult
+
+VAR_INST
+	fbMcGearOut	: Tc2_MC2.MC_GearOut;	//Zum Auskoppeln der Slave-Achse von der Master-Achse
+END_VAR
+
+]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[fbMcGearOut(Slave:= pAxisRefSlave^, Execute:= TRUE, Busy=> M_GearOut.bBusy, Error=> M_GearOut.bError);
+IF NOT fbMcGearOut.Busy THEN
+	IF fbMcGearOut.Error THEN
+		M_GearOut.nErrorId := UDINT_TO_UINT(fbMcGearOut.ErrorID);	
+	END_IF
+	fbMcGearOut(Slave:= pAxisRefSlave^, Execute := FALSE);
+END_IF
+]]></ST>
+      </Implementation>
+    </Method>
+    <Method Name="M_GetProperty" Id="{edc7de02-04e4-42a7-ba94-de293db6cd7c}">
+      <Declaration><![CDATA[METHOD M_GetProperty : ERRORID
+VAR_INPUT
+	eType	: E_HardwarePropType;
+END_VAR
+VAR_OUTPUT
+	nValue 	: DINT;
+END_VAR
+]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[IF eType = E_HardwarePropType.RefPos2 THEN
+	nValue := REAL_TO_DINT(rRefPosSlave);
+ELSE
+	M_GetProperty := SUPER^.M_GetProperty(eType,nValue=>nValue);
+END_IF]]></ST>
+      </Implementation>
+    </Method>
+    <Method Name="M_Init" Id="{60fbbe40-1102-4954-a7ff-059fc7e67d4b}">
+      <Declaration><![CDATA[METHOD M_Init : ERRORID
+VAR_INPUT
+	bReInit : BOOL;
+END_VAR
+]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[IF bBusy THEN
+	M_Init := E_ErrorIdCmd.ERRORID_AxisStillBusy;
+ELSE
+	THIS^.bReInit := bReInit;
+	//Die Action wird von hier aus einmalig ausgeführt damit ein Aufruf schon in diesem Zyklus stattfindet
+	rHomePos := rRefPosMaster / 1000.0;
+	rHomePosSlave := rRefPosSlave / 1000.0;
+	bInit := TRUE;
+	A_Init();		
+END_IF]]></ST>
+      </Implementation>
+    </Method>
+    <Method Name="M_Jog" Id="{7526c092-a1df-4b54-abff-e1cf58795199}">
+      <Declaration><![CDATA[METHOD M_Jog : ERRORID
+VAR_INPUT
+	bForward	: BOOL;
+	bBackward	: BOOL;
+	bInching	: BOOL;
+	rDistance	: REAL;
+	rSpeed		: REAL;
+END_VAR]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[IF NOT pAxisRefSlave^.Status.Coupled THEN
+	M_Jog := E_ErrorIdCmd.ERRORID_X2AxisNotCoupled;
+ELSE
+	M_Jog := SUPER^.M_Jog(bForward:= bForward, bBackward:= bBackward, bInching:= bInching, rDistance:= rDistance, rSpeed:= rSpeed);
+END_IF]]></ST>
+      </Implementation>
+    </Method>
+    <Method Name="M_MoveAbs" Id="{0ab0d30f-4f58-403a-bb40-1e7cf1b18b49}">
+      <Declaration><![CDATA[METHOD M_MoveAbs : ERRORID
+VAR_INPUT
+	rPosition 		: REAL;
+	rSpeed			: REAL;
+	rAcceleration 	: REAL;
+	rDeceleration 	: REAL;
+END_VAR]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[IF NOT pAxisRefSlave^.Status.Coupled THEN
+	M_MoveAbs := E_ErrorIdCmd.ERRORID_X2AxisNotCoupled;
+ELSE
+	M_MoveAbs:= SUPER^.M_MoveAbs(rPosition:= rPosition, rSpeed:= rSpeed, rAcceleration:= rAcceleration, rDeceleration:= rDeceleration);
+END_IF]]></ST>
+      </Implementation>
+    </Method>
+    <Method Name="M_MoveRel" Id="{0b14e80e-16ad-4700-bdc0-f7a8ad62af88}">
+      <Declaration><![CDATA[METHOD M_MoveRel : ERRORID
+VAR_INPUT
+	rDistance		: REAL;
+	rSpeed			: REAL;
+	rAcceleration 	: REAL;
+	rDeceleration 	: REAL;
+END_VAR
+]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[IF NOT pAxisRefSlave^.Status.Coupled THEN
+	M_MoveRel := E_ErrorIdCmd.ERRORID_X2AxisNotCoupled;
+ELSE
+	M_MoveRel := SUPER^.M_MoveRel(rDistance:= rDistance, rSpeed:= rSpeed, rAcceleration:= rAcceleration, rDeceleration:= rDeceleration);
+END_IF]]></ST>
+      </Implementation>
+    </Method>
+    <Method Name="M_PowerOff" Id="{e25417d3-b301-456b-ac85-9050d38488d5}">
+      <Declaration><![CDATA[METHOD M_PowerOff : ERRORID
+VAR_INPUT
+END_VAR
+]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[fbMcPower(Axis:= pAxisRefMaster^, Enable:= FALSE);
+fbMcPower(Axis:= pAxisRefSlave^, Enable:= FALSE);]]></ST>
+      </Implementation>
+    </Method>
+    <Method Name="M_PowerOn" Id="{a2649c29-07cd-41b8-916e-66613ea7f58c}">
+      <Declaration><![CDATA[METHOD M_PowerOn : ERRORID
+VAR_INPUT
+END_VAR
+]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[IF pAxisRefMaster^.Status.Homed AND pAxisRefSlave^.Status.Homed AND NOT P_bBusy THEN
+	bPowerOn := TRUE;
+END_IF]]></ST>
+      </Implementation>
+    </Method>
+    <Method Name="M_SetProperty" Id="{6298d095-fec6-4e02-9a59-e58cc82dc3f8}">
+      <Declaration><![CDATA[METHOD M_SetProperty : ERRORID
+VAR_INPUT
+	eType	: E_HardwarePropType;
+	nValue 	: DINT;
+END_VAR
+]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[IF eType = E_HardwarePropType.RefPos2 THEN
+	rRefPosSlave := DINT_TO_REAL(nValue);
+ELSE
+	M_SetProperty := SUPER^.M_SetProperty(eType, nValue);
+END_IF ]]></ST>
+      </Implementation>
+    </Method>
+    <Method Name="M_Setup" Id="{c13c3b56-7762-40ef-a9ae-be7bf59fb6e1}">
+      <Declaration><![CDATA[METHOD M_Setup : ERRORID
+VAR_INPUT
+END_VAR
+]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[IF bBusy THEN
+	M_Setup := E_ErrorIdCmd.ERRORID_AxisStillBusy;
+ELSE
+	THIS^.bReInit := TRUE;
+	rHomePos := 0;
+	rHomePosSlave := 0;
+	bSetup := TRUE;
+END_IF
+
+
+]]></ST>
+      </Implementation>
+    </Method>
+    <Property Name="P_bBusy" Id="{f0629910-ae9c-49c8-802b-eacc6d464e8b}">
+      <Declaration><![CDATA[PROPERTY P_bBusy : BOOL]]></Declaration>
+      <Get Name="Get" Id="{c98cf623-f833-40e6-b6d5-d041beb72a9d}">
+        <Declaration><![CDATA[VAR
+END_VAR
+]]></Declaration>
+        <Implementation>
+          <ST><![CDATA[P_bBusy := SUPER^.P_bBusy OR bPowerOn;]]></ST>
+        </Implementation>
+      </Get>
+    </Property>
+    <Property Name="P_bCoupled" Id="{da90636e-2c65-4c4f-9f7e-bbf6ac697bc1}">
+      <Declaration><![CDATA[PROPERTY P_bCoupled : BOOL]]></Declaration>
+      <Get Name="Get" Id="{ee75751b-622b-4158-b717-a45131b5e73d}">
+        <Declaration><![CDATA[VAR
+END_VAR
+]]></Declaration>
+        <Implementation>
+          <ST><![CDATA[P_bCoupled :=  pAxisRefSlave^.Status.Coupled;]]></ST>
+        </Implementation>
+      </Get>
+    </Property>
+    <Property Name="P_bIsTwinDrive" Id="{7c353e9b-4eb0-42e3-8f07-1fd9c637a50f}">
+      <Declaration><![CDATA[PROPERTY P_bIsTwinDrive : BOOL]]></Declaration>
+      <Get Name="Get" Id="{3ff1423c-aa57-4d67-a99e-bfcd1bff7865}">
+        <Declaration><![CDATA[VAR
+END_VAR
+]]></Declaration>
+        <Implementation>
+          <ST><![CDATA[P_bIsTwinDrive := TRUE;]]></ST>
+        </Implementation>
+      </Get>
+    </Property>
+    <Property Name="P_pAxisRefSlave" Id="{d4041238-b10b-4a63-9315-40d1cc03c803}">
+      <Declaration><![CDATA[PROPERTY P_pAxisRefSlave : POINTER TO AXIS_REF]]></Declaration>
+      <Get Name="Get" Id="{dcba46e1-c94e-477a-8f0a-816bece326ac}">
+        <Declaration><![CDATA[VAR
+END_VAR
+]]></Declaration>
+        <Implementation>
+          <ST><![CDATA[P_pAxisRefSlave := pAxisRefSlave;]]></ST>
+        </Implementation>
+      </Get>
+    </Property>
+    <LineIds Name="FB_XYDrive_Beck_Twin">
+      <LineId Id="18" Count="0" />
+      <LineId Id="37" Count="10" />
+      <LineId Id="9" Count="0" />
+    </LineIds>
+    <LineIds Name="FB_XYDrive_Beck_Twin.A_Error">
+      <LineId Id="2" Count="31" />
+      <LineId Id="1" Count="0" />
+    </LineIds>
+    <LineIds Name="FB_XYDrive_Beck_Twin.A_Init">
+      <LineId Id="340" Count="254" />
+      <LineId Id="1" Count="0" />
+    </LineIds>
+    <LineIds Name="FB_XYDrive_Beck_Twin.A_PowerOn">
+      <LineId Id="91" Count="92" />
+      <LineId Id="1" Count="0" />
+    </LineIds>
+    <LineIds Name="FB_XYDrive_Beck_Twin.A_Reset">
+      <LineId Id="2" Count="65" />
+      <LineId Id="1" Count="0" />
+    </LineIds>
+    <LineIds Name="FB_XYDrive_Beck_Twin.A_Setup">
+      <LineId Id="149" Count="0" />
+      <LineId Id="163" Count="0" />
+      <LineId Id="175" Count="0" />
+      <LineId Id="166" Count="5" />
+      <LineId Id="176" Count="0" />
+      <LineId Id="172" Count="2" />
+      <LineId Id="164" Count="0" />
+      <LineId Id="18" Count="3" />
+      <LineId Id="102" Count="1" />
+      <LineId Id="105" Count="0" />
+      <LineId Id="107" Count="3" />
+      <LineId Id="104" Count="0" />
+      <LineId Id="26" Count="2" />
+      <LineId Id="177" Count="1" />
+      <LineId Id="30" Count="2" />
+      <LineId Id="111" Count="1" />
+      <LineId Id="114" Count="0" />
+      <LineId Id="116" Count="8" />
+      <LineId Id="113" Count="0" />
+      <LineId Id="42" Count="0" />
+      <LineId Id="54" Count="11" />
+      <LineId Id="131" Count="0" />
+      <LineId Id="69" Count="0" />
+      <LineId Id="132" Count="3" />
+      <LineId Id="75" Count="8" />
+      <LineId Id="136" Count="1" />
+      <LineId Id="139" Count="0" />
+      <LineId Id="141" Count="2" />
+      <LineId Id="138" Count="0" />
+      <LineId Id="87" Count="7" />
+      <LineId Id="197" Count="1" />
+      <LineId Id="95" Count="6" />
+      <LineId Id="148" Count="0" />
+      <LineId Id="179" Count="1" />
+      <LineId Id="183" Count="4" />
+      <LineId Id="189" Count="0" />
+      <LineId Id="193" Count="0" />
+      <LineId Id="195" Count="1" />
+      <LineId Id="194" Count="0" />
+      <LineId Id="190" Count="2" />
+      <LineId Id="182" Count="0" />
+      <LineId Id="128" Count="0" />
+      <LineId Id="144" Count="1" />
+      <LineId Id="208" Count="0" />
+      <LineId Id="146" Count="1" />
+      <LineId Id="200" Count="1" />
+      <LineId Id="203" Count="1" />
+      <LineId Id="206" Count="0" />
+      <LineId Id="209" Count="0" />
+      <LineId Id="207" Count="0" />
+      <LineId Id="205" Count="0" />
+      <LineId Id="129" Count="0" />
+      <LineId Id="1" Count="0" />
+    </LineIds>
+    <LineIds Name="FB_XYDrive_Beck_Twin.FB_init">
+      <LineId Id="9" Count="0" />
+    </LineIds>
+    <LineIds Name="FB_XYDrive_Beck_Twin.M_GearIn">
+      <LineId Id="3" Count="1" />
+      <LineId Id="13" Count="0" />
+      <LineId Id="6" Count="1" />
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="FB_XYDrive_Beck_Twin.M_GearOut">
+      <LineId Id="3" Count="6" />
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="FB_XYDrive_Beck_Twin.M_GetProperty">
+      <LineId Id="36" Count="0" />
+      <LineId Id="38" Count="1" />
+      <LineId Id="37" Count="0" />
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="FB_XYDrive_Beck_Twin.M_Init">
+      <LineId Id="3" Count="8" />
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="FB_XYDrive_Beck_Twin.M_Jog">
+      <LineId Id="3" Count="3" />
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="FB_XYDrive_Beck_Twin.M_MoveAbs">
+      <LineId Id="3" Count="3" />
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="FB_XYDrive_Beck_Twin.M_MoveRel">
+      <LineId Id="3" Count="3" />
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="FB_XYDrive_Beck_Twin.M_PowerOff">
+      <LineId Id="3" Count="0" />
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="FB_XYDrive_Beck_Twin.M_PowerOn">
+      <LineId Id="3" Count="1" />
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="FB_XYDrive_Beck_Twin.M_SetProperty">
+      <LineId Id="3" Count="3" />
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="FB_XYDrive_Beck_Twin.M_Setup">
+      <LineId Id="3" Count="9" />
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="FB_XYDrive_Beck_Twin.P_bBusy.Get">
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="FB_XYDrive_Beck_Twin.P_bCoupled.Get">
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="FB_XYDrive_Beck_Twin.P_bIsTwinDrive.Get">
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="FB_XYDrive_Beck_Twin.P_pAxisRefSlave.Get">
+      <LineId Id="2" Count="0" />
+    </LineIds>
+  </POU>
+</TcPlcObject>

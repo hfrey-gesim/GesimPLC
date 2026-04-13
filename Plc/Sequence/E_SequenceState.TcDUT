@@ -1,0 +1,20 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<TcPlcObject Version="1.1.0.1" ProductVersion="3.1.4020.6">
+  <DUT Name="E_SequenceState" Id="{23e92192-ac23-4c2b-a112-e5e245c6ea35}">
+    <Declaration><![CDATA[TYPE E_SequenceState :
+(
+	State_Idle,
+	State_Start,
+	State_Active,
+	State_PauseRequest,
+	State_Pause,
+	State_Continue,
+	State_Cancel,
+	State_Canceled,
+	State_Ready,
+	State_Error
+)USINT;
+END_TYPE
+]]></Declaration>
+  </DUT>
+</TcPlcObject>

@@ -1,0 +1,157 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<TcPlcObject Version="1.1.0.1" ProductVersion="3.1.4022.10">
+  <POU Name="FB_PistonExtruderRef" Id="{7e17c57e-f43e-4fa3-a30b-77bf1afbc755}" SpecialFunc="None">
+    <Declaration><![CDATA[FUNCTION_BLOCK FB_PistonExtruderRef EXTENDS FB_ExtruderRef
+VAR_INPUT
+END_VAR
+VAR
+	nCurrentPlungerPos 	AT %I* : DINT;
+	bLimitSwitch		AT %I* : BOOL;
+	
+	nUnlockOffsetOrgin	: DINT; //µm
+	nUnlockOffsetCalc	: DINT; //µm
+END_VAR
+
+VAR_OUTPUT
+	pMultiZRef 	: POINTER TO FB_MultiZRef;
+	nChannel 	: USINT;
+	pToolCtrl	: POINTER TO BYTE;
+	pToolState	: POINTER TO BYTE;
+END_VAR
+]]></Declaration>
+    <Implementation>
+      <ST><![CDATA[]]></ST>
+    </Implementation>
+    <Method Name="FB_init" Id="{f8e5a0f8-bfb1-4fc7-8e9a-ba245f0956fe}">
+      <Declaration><![CDATA[METHOD FB_init : BOOL
+VAR_INPUT
+	bInitRetains : BOOL; // if TRUE, the retain variables are initialized (warm start / cold start)
+	bInCopyCode : BOOL;  // if TRUE, the instance afterwards gets moved into the copy code (online change)
+	pMultiZRef 		: POINTER TO FB_MultiZRef;
+END_VAR
+
+VAR
+	nFirstAdress : PVOID;
+	nSelfAdress : PVOID;
+END_VAR]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[THIS^.pMultiZRef := pMultiZRef;
+nFirstAdress := ADR(pMultiZRef^.aFbExtruderRef);
+nSelfAdress := THIS;
+{IF  hasvalue (RegisterSize, '32')}
+nChannel := UDINT_TO_USINT((nSelfAdress - nFirstAdress)/SIZEOF(THIS^) + 1);
+{ELSE}
+nChannel := ULINT_TO_USINT((nSelfAdress - nFirstAdress)/SIZEOF(THIS^) + 1);
+{END_IF}
+pToolCtrl := ADR(pMultiZRef^.aFbZAxisRef[nChannel].stOutput.nToolCtrl);
+pToolState := ADR(pMultiZRef^.aFbZAxisRef[nChannel].stInput.nToolState);]]></ST>
+      </Implementation>
+    </Method>
+    <Property Name="P_bError" Id="{306712e3-bf1c-42d1-b0b6-a0ebfbf07f04}">
+      <Declaration><![CDATA[PROPERTY P_bError : BOOL]]></Declaration>
+      <Get Name="Get" Id="{095cde6a-6ce9-4651-9ec5-5a9c4f7a484d}">
+        <Declaration><![CDATA[VAR
+END_VAR
+]]></Declaration>
+        <Implementation>
+          <ST><![CDATA[P_bError := (pMultiZRef^.aFbZAxisRef[nChannel].stInput.nError > 0);]]></ST>
+        </Implementation>
+      </Get>
+    </Property>
+    <Property Name="P_bIsActive" Id="{2a64f26e-4904-4896-8d17-d8c7fb239056}">
+      <Declaration><![CDATA[PROPERTY P_bIsActive : BOOL]]></Declaration>
+      <Get Name="Get" Id="{5ee2a392-894f-49bf-b6af-f6bb1c515f6b}">
+        <Declaration><![CDATA[VAR
+END_VAR
+]]></Declaration>
+        <Implementation>
+          <ST><![CDATA[P_bIsActive := pToolState^.0;]]></ST>
+        </Implementation>
+      </Get>
+    </Property>
+    <Property Name="P_bIsLocked" Id="{3ad8a4e7-477f-4920-8654-942be68fb58b}">
+      <Declaration><![CDATA[PROPERTY P_bIsLocked : BOOL]]></Declaration>
+      <Get Name="Get" Id="{e9db0a51-11da-4438-bedd-b8921ce95179}">
+        <Declaration><![CDATA[VAR
+END_VAR
+]]></Declaration>
+        <Implementation>
+          <ST><![CDATA[P_bIsLocked := pToolState^.4;]]></ST>
+        </Implementation>
+      </Get>
+    </Property>
+    <Property Name="P_nCurrentPos" Id="{012fbeaf-d6a6-4ffa-871a-d476a668b3d0}">
+      <Declaration><![CDATA[PROPERTY P_nCurrentPos : DINT]]></Declaration>
+      <Get Name="Get" Id="{c2387adb-5516-4a2c-bb72-71509e42fbaa}">
+        <Declaration><![CDATA[VAR
+END_VAR
+]]></Declaration>
+        <Implementation>
+          <ST><![CDATA[P_nCurrentPos := REAL_TO_DINT(DINT_TO_REAL(nCurrentPlungerPos) / rFactorDistance);]]></ST>
+        </Implementation>
+      </Get>
+    </Property>
+    <Property Name="P_nUnlockOffsetCalc" Id="{f2642bb4-4577-4531-bd67-cdcefc9ca995}">
+      <Declaration><![CDATA[PROPERTY P_nUnlockOffsetCalc : DINT]]></Declaration>
+      <Get Name="Get" Id="{c2d9576f-f07b-41d1-b4f5-8e366aadfb70}">
+        <Declaration><![CDATA[VAR
+END_VAR
+]]></Declaration>
+        <Implementation>
+          <ST><![CDATA[P_nUnlockOffsetCalc := nUnlockOffsetCalc;]]></ST>
+        </Implementation>
+      </Get>
+    </Property>
+    <Property Name="P_nUnlockOffsetOrgin" Id="{bc87c0c6-36b1-46cb-9c14-86129a9e3218}">
+      <Declaration><![CDATA[PROPERTY P_nUnlockOffsetOrgin : DINT]]></Declaration>
+      <Get Name="Get" Id="{b000cc65-d2ae-4669-b1fb-f0a06275bbbf}">
+        <Declaration><![CDATA[VAR
+END_VAR
+]]></Declaration>
+        <Implementation>
+          <ST><![CDATA[P_nUnlockOffsetOrgin := nUnlockOffsetOrgin;]]></ST>
+        </Implementation>
+      </Get>
+      <Set Name="Set" Id="{d113fbf4-74f2-402b-8d28-50cf265719ea}">
+        <Declaration><![CDATA[VAR
+END_VAR
+]]></Declaration>
+        <Implementation>
+          <ST><![CDATA[nUnlockOffsetOrgin := P_nUnlockOffsetOrgin;
+nUnlockOffsetCalc := REAL_TO_DINT(rFactorDistance * DINT_TO_REAL(nUnlockOffsetOrgin));]]></ST>
+        </Implementation>
+      </Set>
+    </Property>
+    <LineIds Name="FB_PistonExtruderRef">
+      <LineId Id="9" Count="0" />
+    </LineIds>
+    <LineIds Name="FB_PistonExtruderRef.FB_init">
+      <LineId Id="13" Count="2" />
+      <LineId Id="29" Count="3" />
+      <LineId Id="16" Count="1" />
+      <LineId Id="7" Count="0" />
+    </LineIds>
+    <LineIds Name="FB_PistonExtruderRef.P_bError.Get">
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="FB_PistonExtruderRef.P_bIsActive.Get">
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="FB_PistonExtruderRef.P_bIsLocked.Get">
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="FB_PistonExtruderRef.P_nCurrentPos.Get">
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="FB_PistonExtruderRef.P_nUnlockOffsetCalc.Get">
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="FB_PistonExtruderRef.P_nUnlockOffsetOrgin.Get">
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="FB_PistonExtruderRef.P_nUnlockOffsetOrgin.Set">
+      <LineId Id="2" Count="0" />
+      <LineId Id="5" Count="0" />
+    </LineIds>
+  </POU>
+</TcPlcObject>

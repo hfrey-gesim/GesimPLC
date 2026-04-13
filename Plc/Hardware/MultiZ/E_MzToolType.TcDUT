@@ -1,0 +1,26 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<TcPlcObject Version="1.1.0.1" ProductVersion="3.1.4022.18">
+  <DUT Name="E_MzToolType" Id="{8aa12a30-f256-4afa-aba3-522ed3e881d0}">
+    <Declaration><![CDATA[TYPE E_MzToolType :
+(
+	TOOL_TYPE_None := 0,
+	TOOL_TYPE_Cartridge := 1,
+	TOOL_TYPE_PiezoPip := 2,
+	TOOL_TYPE_Stamp := 3,
+	TOOL_TYPE_TipEjector := 4,
+	TOOL_TYPE_PowderPip := 5,
+	TOOL_TYPE_HTExtruder := 6,
+	TOOL_TYPE_PiezoMaster := 7,
+	TOOL_TYPE_PiezoSlave := 8,
+	TOOL_TYPE_PiezoSingle := 9,
+	TOOL_TYPE_SyringeExtruder := 10,
+	TOOL_TYPE_CoolingCartridge := 11,
+	TOOL_TYPE_HTCartrigde := 12,
+	TOOL_TYPE_PowderPipGen2 := 13,
+	TOOL_TYPE_Gripper :=14,
+	TOOL_TYPE_GenericPEXTool:= 254	//PEX = Portexpander
+)USINT;
+END_TYPE
+]]></Declaration>
+  </DUT>
+</TcPlcObject>

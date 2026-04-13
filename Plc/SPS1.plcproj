@@ -1,0 +1,1644 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<Project DefaultTargets="Build" xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
+  <PropertyGroup>
+    <FileVersion>1.0.0.0</FileVersion>
+    <SchemaVersion>2.0</SchemaVersion>
+    <ProjectGuid>{1b7a0f23-2101-4e14-a800-8ef24a658beb}</ProjectGuid>
+    <Name>SPS1</Name>
+    <ProgramVersion>3.1.4022.7</ProgramVersion>
+    <Application>{e97ec0bb-653f-4dc8-923f-54540e65ab2c}</Application>
+    <TypeSystem>{f2ede3b8-a25f-4701-af2f-4a4dca96a66c}</TypeSystem>
+    <Implicit_Task_Info>{b62beedd-e373-482e-a879-f8910a8de40b}</Implicit_Task_Info>
+    <Implicit_KindOfTask>{c999e3d8-06b5-4a5d-a761-720fee33ec9b}</Implicit_KindOfTask>
+    <Implicit_Jitter_Distribution>{8a4de1c2-cae3-4bed-ae59-d9fabd3e499f}</Implicit_Jitter_Distribution>
+    <LibraryReferences>{bbe6f7d5-1b31-43dc-a72f-96709a5dcd71}</LibraryReferences>
+    <Company>Gesim</Company>
+    <Author>U.Seifert (T.Bohatzsch)</Author>
+    <Released>false</Released>
+    <Title>SPS PlattformCD</Title>
+    <DeploymentEvents>
+      <Events xmlns="" />
+    </DeploymentEvents>
+    <CompilerVersion>3.1.4022.22</CompilerVersion>
+    <CombineIds>false</CombineIds>
+    <ProjectVersion>2.0.18.19</ProjectVersion>
+    <CompilerDefines>C6015</CompilerDefines>
+  </PropertyGroup>
+  <ItemGroup>
+    <Compile Include="Actions\ActionDispacher.TcPOU">
+      <SubType>Code</SubType>
+    </Compile>
+    <Compile Include="Actions\FB_ActionList.TcPOU">
+      <SubType>Code</SubType>
+    </Compile>
+    <Compile Include="Actions\FB_ActionStatusList.TcPOU">
+      <SubType>Code</SubType>
+    </Compile>
+    <Compile Include="Actions\FB_ComplexAction.TcPOU">
+      <SubType>Code</SubType>
+    </Compile>
+    <Compile Include="Actions\FB_DelayAction.TcPOU">
+      <SubType>Code</SubType>
+    </Compile>
+    <Compile Include="Actions\FB_MeasTip.TcPOU">
+      <SubType>Code</SubType>
+    </Compile>
+    <Compile Include="Actions\FB_MoveToTarget.TcPOU">
+      <SubType>Code</SubType>
+    </Compile>
+    <Compile Include="ComTask.TcTTO">
+      <SubType>Code</SubType>
+    </Compile>
+    <Compile Include="Configuration\FB_Configuration.TcPOU">
+      <SubType>Code</SubType>
+    </Compile>
+    <Compile Include="Configuration\FB_GetObjPropChecksum.TcPOU">
+      <SubType>Code</SubType>
+    </Compile>
+    <Compile Include="Configuration\FB_IdPool.TcPOU">
+      <SubType>Code</SubType>
+    </Compile>
+    <Compile Include="Configuration\FB_ObjCollection.TcPOU">
+      <SubType>Code</SubType>
+    </Compile>
+    <Compile Include="Configuration\FB_ObjCollectionNode.TcPOU">
+      <SubType>Code</SubType>
+    </Compile>
+    <Compile Include="Configuration\FB_ObjCollectIterator.TcPOU">
+      <SubType>Code</SubType>
+    </Compile>
+    <Compile Include="Configuration\FB_ObjCollectIteratorDeep.TcPOU">
+      <SubType>Code</SubType>
+    </Compile>
+    <Compile Include="Configuration\FB_ObjectDirectory.TcPOU">
+      <SubType>Code</SubType>
+    </Compile>
+    <Compile Include="Configuration\GVL_ObjectArrays.TcGVL">
+      <SubType>Code</SubType>
+    </Compile>
+    <Compile Include="Configuration\GVL_ObjectConstants.TcGVL">
+      <SubType>Code</SubType>
+    </Compile>
+    <Compile Include="Configuration\GVL_ObjMgmt.TcGVL">
+      <SubType>Code</SubType>
+    </Compile>
+    <Compile Include="Configuration\ST_IdNode.TcDUT">
+      <SubType>Code</SubType>
+    </Compile>
+    <Compile Include="DUTs\Enums\E_ActionStatus.TcDUT">
+      <SubType>Code</SubType>
+    </Compile>
+    <Compile Include="DUTs\Enums\E_ArrayOrder.TcDUT">
+      <SubType>Code</SubType>
+    </Compile>
+    <Compile Include="DUTs\Enums\E_Condition.TcDUT">
+      <SubType>Code</SubType>
+    </Compile>
+    <Compile Include="DUTs\Enums\E_CrashAvoidanceMode.TcDUT">
+      <SubType>Code</SubType>
+    </Compile>
+    <Compile Include="DUTs\Enums\E_DilPrepareMode.TcDUT">
+      <SubType>Code</SubType>
+    </Compile>
+    <Compile Include="DUTs\Enums\E_DilPumpMode.TcDUT">
+      <SubType>Code</SubType>
+    </Compile>
+    <Compile Include="DUTs\Enums\E_DilType.TcDUT">
+      <SubType>Code</SubType>
+    </Compile>
+    <Compile Include="DUTs\Enums\E_DilValveType.TcDUT">
+      <SubType>Code</SubType>
+    </Compile>
+    <Compile Include="DUTs\Enums\E_DispenserState.TcDUT">
+      <SubType>Code</SubType>
+    </Compile>
+    <Compile Include="DUTs\Enums\E_DrivingPinCtrl.TcDUT">
+      <SubType>Code</SubType>
+    </Compile>
+    <Compile Include="DUTs\Enums\E_DrivingPinSelection.TcDUT">
+      <SubType>Code</SubType>
+    </Compile>
+    <Compile Include="DUTs\Enums\E_DrivingPinState.TcDUT">
+      <SubType>Code</SubType>
+    </Compile>
+    <Compile Include="DUTs\Enums\E_ErrorIdDS402.TcDUT">
+      <SubType>Code</SubType>
+    </Compile>
+    <Compile Include="DUTs\Enums\E_ErrorIdGCode.TcDUT">
+      <SubType>Code</SubType>
+    </Compile>
+    <Compile Include="DUTs\Enums\E_ErrorIdCan.TcDUT">
+      <SubType>Code</SubType>
+    </Compile>
+    <Compile Include="DUTs\Enums\E_ErrorIdHwGeneral.TcDUT">
+      <SubType>Code</SubType>
+    </Compile>
+    <Compile Include="DUTs\Enums\E_ExchangePieceOption.TcDUT">
+      <SubType>Code</SubType>
+    </Compile>
+    <Compile Include="DUTs\Enums\E_ExtruderType.TcDUT">
+      <SubType>Code</SubType>
+    </Compile>
+    <Compile Include="DUTs\Enums\E_GCodeState.TcDUT">
+      <SubType>Code</SubType>
+    </Compile>
+    <Compile Include="DUTs\Enums\E_GripperState.TcDUT">
+      <SubType>Code</SubType>
+    </Compile>
+    <Compile Include="DUTs\Enums\E_HardwarePropType.TcDUT">
+      <SubType>Code</SubType>
+    </Compile>
+    <Compile Include="DUTs\Enums\E_InteractMessageType.TcDUT">
+      <SubType>Code</SubType>
+    </Compile>
+    <Compile Include="DUTs\Enums\E_InterlockState.TcDUT">
+      <SubType>Code</SubType>
+    </Compile>
+    <Compile Include="DUTs\Enums\E_CompOperator.TcDUT">
+      <SubType>Code</SubType>
+    </Compile>
+    <Compile Include="DUTs\Enums\E_LockCtrl.TcDUT">
+      <SubType>Code</SubType>
+    </Compile>
+    <Compile Include="DUTs\Enums\E_LockState.TcDUT">
+      <SubType>Code</SubType>
+    </Compile>
+    <Compile Include="DUTs\Enums\E_MeasureMode.TcDUT">
+      <SubType>Code</SubType>
+    </Compile>
+    <Compile Include="DUTs\Enums\E_MeasureOption.TcDUT">
+      <SubType>Code</SubType>
+    </Compile>
+    <Compile Include="DUTs\Enums\E_MethodState.TcDUT">
+      <SubType>Code</SubType>
+    </Compile>
+    <Compile Include="DUTs\Enums\E_ModalDesignationAbsInc.TcDUT">
+      <SubType>Code</SubType>
+    </Compile>
+    <Compile Include="DUTs\Enums\E_ModalGeoTypes.TcDUT">
+      <SubType>Code</SubType>
+    </Compile>
+    <Compile Include="DUTs\Enums\E_MoveDirection.TcDUT">
+      <SubType>Code</SubType>
+    </Compile>
+    <Compile Include="DUTs\Enums\E_MoveMode.TcDUT">
+      <SubType>Code</SubType>
+    </Compile>
+    <Compile Include="DUTs\Enums\E_ObjectGroup.TcDUT">
+      <SubType>Code</SubType>
+    </Compile>
+    <Compile Include="DUTs\Enums\E_OpClCtrl.TcDUT">
+      <SubType>Code</SubType>
+    </Compile>
+    <Compile Include="DUTs\Enums\E_OpClState.TcDUT">
+      <SubType>Code</SubType>
+    </Compile>
+    <Compile Include="DUTs\Enums\E_LogicOperator.TcDUT">
+      <SubType>Code</SubType>
+    </Compile>
+    <Compile Include="DUTs\Enums\E_PickPutMode.TcDUT">
+      <SubType>Code</SubType>
+    </Compile>
+    <Compile Include="DUTs\Enums\E_POU.TcDUT">
+      <SubType>Code</SubType>
+    </Compile>
+    <Compile Include="DUTs\Enums\E_POUACT.TcDUT">
+      <SubType>Code</SubType>
+    </Compile>
+    <Compile Include="DUTs\Enums\E_PressCtrl.TcDUT">
+      <SubType>Code</SubType>
+    </Compile>
+    <Compile Include="DUTs\Enums\E_PrintParamType.TcDUT">
+      <SubType>Code</SubType>
+    </Compile>
+    <Compile Include="DUTs\Enums\E_ProcDataType.TcDUT">
+      <SubType>Code</SubType>
+    </Compile>
+    <Compile Include="DUTs\Enums\E_StackerRotPosition.TcDUT">
+      <SubType>Code</SubType>
+    </Compile>
+    <Compile Include="DUTs\Enums\E_SwivelCtrl.TcDUT">
+      <SubType>Code</SubType>
+    </Compile>
+    <Compile Include="DUTs\Enums\E_SwivelState.TcDUT">
+      <SubType>Code</SubType>
+    </Compile>
+    <Compile Include="DUTs\Enums\E_TargetRef.TcDUT">
+      <SubType>Code</SubType>
+    </Compile>
+    <Compile Include="DUTs\Enums\E_Action.TcDUT">
+      <SubType>Code</SubType>
+    </Compile>
+    <Compile Include="DUTs\Enums\E_ErrorIdCmd.TcDUT">
+      <SubType>Code</SubType>
+    </Compile>
+    <Compile Include="DUTs\Enums\E_ErrorIdDiluter.TcDUT">
+      <SubType>Code</SubType>
+    </Compile>
+    <Compile Include="DUTs\Enums\E_ErrorIdMultiZ.TcDUT">
+      <SubType>Code</SubType>
+    </Compile>
+    <Compile Include="DUTs\Enums\E_HardwareGrp.TcDUT">
+      <SubType>Code</SubType>
+    </Compile>
+    <Compile Include="DUTs\Enums\E_MachineMode.TcDUT">
+      <SubType>Code</SubType>
+    </Compile>
+    <Compile Include="DUTs\Enums\E_MachineState.TcDUT">
+      <SubType>Code</SubType>
+    </Compile>
+    <Compile Include="DUTs\Enums\E_ObjectType.TcDUT">
+      <SubType>Code</SubType>
+    </Compile>
+    <Compile Include="DUTs\Enums\E_ErrorIdObjMgmt.TcDUT">
+      <SubType>Code</SubType>
+    </Compile>
+    <Compile Include="DUTs\Enums\E_TeachTrgtOption.TcDUT">
+      <SubType>Code</SubType>
+    </Compile>
+    <Compile Include="DUTs\Enums\E_TipCleaningMode.TcDUT">
+      <SubType>Code</SubType>
+    </Compile>
+    <Compile Include="DUTs\Enums\E_TransferTrayCtrl.TcDUT">
+      <SubType>Code</SubType>
+    </Compile>
+    <Compile Include="DUTs\Enums\E_TrayHollowSelection.TcDUT">
+      <SubType>Code</SubType>
+    </Compile>
+    <Compile Include="DUTs\Enums\E_TriggerOutput.TcDUT">
+      <SubType>Code</SubType>
+    </Compile>
+    <Compile Include="DUTs\Enums\E_WashMode.TcDUT">
+      <SubType>Code</SubType>
+    </Compile>
+    <Compile Include="DUTs\ERRORID.TcDUT">
+      <SubType>Code</SubType>
+    </Compile>
+    <Compile Include="DUTs\HARDWAREGRP.TcDUT">
+      <SubType>Code</SubType>
+    </Compile>
+    <Compile Include="DUTs\Structs\FB_Rectangle.TcPOU">
+      <SubType>Code</SubType>
+    </Compile>
+    <Compile Include="DUTs\Structs\ST_Action.TcDUT">
+      <SubType>Code</SubType>
+    </Compile>
+    <Compile Include="DUTs\Structs\ST_ActionStatus.TcDUT">
+      <SubType>Code</SubType>
+    </Compile>
+    <Compile Include="DUTs\Structs\ST_2DPoint.TcDUT">
+      <SubType>Code</SubType>
+    </Compile>
+    <Compile Include="DUTs\Structs\ST_3DDimension.TcDUT">
+      <SubType>Code</SubType>
+    </Compile>
+    <Compile Include="DUTs\Structs\ST_3DPoint.TcDUT">
+      <SubType>Code</SubType>
+    </Compile>
+    <Compile Include="DUTs\Structs\ST_ActionData.TcDUT">
+      <SubType>Code</SubType>
+    </Compile>
+    <Compile Include="DUTs\Structs\ST_ActionList.TcDUT">
+      <SubType>Code</SubType>
+    </Compile>
+    <Compile Include="DUTs\Structs\ST_AdsAdress.TcDUT">
+      <SubType>Code</SubType>
+    </Compile>
+    <Compile Include="DUTs\Structs\ST_CanMasterAddress.TcDUT">
+      <SubType>Code</SubType>
+    </Compile>
+    <Compile Include="DUTs\Structs\ST_Circle.TcDUT">
+      <SubType>Code</SubType>
+    </Compile>
+    <Compile Include="DUTs\Structs\ST_EtherCATMaster.TcDUT">
+      <SubType>Code</SubType>
+    </Compile>
+    <Compile Include="DUTs\Structs\ST_HardwareProcData.TcDUT">
+      <SubType>Code</SubType>
+    </Compile>
+    <Compile Include="DUTs\Structs\ST_HardwareId.TcDUT">
+      <SubType>Code</SubType>
+    </Compile>
+    <Compile Include="DUTs\Structs\ST_HardwareInfo.TcDUT">
+      <SubType>Code</SubType>
+    </Compile>
+    <Compile Include="DUTs\Structs\ST_Interaction.TcDUT">
+      <SubType>Code</SubType>
+    </Compile>
+    <Compile Include="DUTs\Structs\ST_Line.TcDUT">
+      <SubType>Code</SubType>
+    </Compile>
+    <Compile Include="DUTs\Structs\ST_MethResult.TcDUT">
+      <SubType>Code</SubType>
+    </Compile>
+    <Compile Include="DUTs\Structs\ST_ObjHasMoved.TcDUT">
+      <SubType>Code</SubType>
+    </Compile>
+    <Compile Include="DUTs\Structs\ST_PlcInfo.TcDUT">
+      <SubType>Code</SubType>
+    </Compile>
+    <Compile Include="DUTs\Structs\ST_ObjectProcData.TcDUT">
+      <SubType>Code</SubType>
+    </Compile>
+    <Compile Include="DUTs\Structs\ST_Rectangle.TcDUT">
+      <SubType>Code</SubType>
+    </Compile>
+    <Compile Include="DUTs\Structs\ST_CmdData.TcDUT">
+      <SubType>Code</SubType>
+    </Compile>
+    <Compile Include="DUTs\Structs\ST_Error.TcDUT">
+      <SubType>Code</SubType>
+    </Compile>
+    <Compile Include="DUTs\Structs\ST_StepStatus.TcDUT">
+      <SubType>Code</SubType>
+    </Compile>
+    <Compile Include="DUTs\Structs\ST_WashPoint.TcDUT">
+      <SubType>Code</SubType>
+    </Compile>
+    <Compile Include="DUTs\Structs\ST_WashStep.TcDUT">
+      <SubType>Code</SubType>
+    </Compile>
+    <Compile Include="DUTs\Structs\ST_WasteChannel.TcDUT">
+      <SubType>Code</SubType>
+    </Compile>
+    <Compile Include="DUTs\Structs\ST_LiquidChannel.TcDUT">
+      <SubType>Code</SubType>
+    </Compile>
+    <Compile Include="DUTs\Structs\ST_RinseChannel.TcDUT">
+      <SubType>Code</SubType>
+    </Compile>
+    <Compile Include="DUTs\Unions\U_AdsData.TcDUT">
+      <SubType>Code</SubType>
+    </Compile>
+    <Compile Include="DUTs\Unions\U_ByteArr4_DINT.TcDUT">
+      <SubType>Code</SubType>
+    </Compile>
+    <Compile Include="DUTs\Unions\U_SDO_DATA.TcDUT">
+      <SubType>Code</SubType>
+    </Compile>
+    <Compile Include="FirmwUpdate\E_FirmwUpdState.TcDUT">
+      <SubType>Code</SubType>
+    </Compile>
+    <Compile Include="FirmwUpdate\E_S19RecordState.TcDUT">
+      <SubType>Code</SubType>
+    </Compile>
+    <Compile Include="FirmwUpdate\FB_S19File.TcPOU">
+      <SubType>Code</SubType>
+    </Compile>
+    <Compile Include="FirmwUpdate\FB_S19Record.TcPOU">
+      <SubType>Code</SubType>
+    </Compile>
+    <Compile Include="FirmwUpdate\FirmwUpdate.TcPOU">
+      <SubType>Code</SubType>
+    </Compile>
+    <Compile Include="FirmwUpdate\ST_FirmwUpdInfo.TcDUT">
+      <SubType>Code</SubType>
+    </Compile>
+    <Compile Include="Functions\F_Add3DPoints.TcPOU">
+      <SubType>Code</SubType>
+    </Compile>
+    <Compile Include="Functions\F_CuboidInnerCuboid.TcPOU">
+      <SubType>Code</SubType>
+    </Compile>
+    <Compile Include="Functions\F_GET_GCODE_NCLINE.TcPOU">
+      <SubType>Code</SubType>
+    </Compile>
+    <Compile Include="Functions\F_Sub3DPoints.TcPOU">
+      <SubType>Code</SubType>
+    </Compile>
+    <Compile Include="Functions\F_SynchronizeSpeeds.TcPOU">
+      <SubType>Code</SubType>
+    </Compile>
+    <Compile Include="GCodeTask.TcTTO">
+      <SubType>Code</SubType>
+    </Compile>
+    <Compile Include="GCode\E_SAF_State.TcDUT">
+      <SubType>Code</SubType>
+    </Compile>
+    <Compile Include="GCode\FB_BuildGroup.TcPOU">
+      <SubType>Code</SubType>
+    </Compile>
+    <Compile Include="GCode\FB_ClearGroup.TcPOU">
+      <SubType>Code</SubType>
+    </Compile>
+    <Compile Include="GCode\FB_Cuboid.TcPOU">
+      <SubType>Code</SubType>
+    </Compile>
+    <Compile Include="GCode\FB_FastMFunc.TcPOU">
+      <SubType>Code</SubType>
+    </Compile>
+    <Compile Include="GCode\FB_HskMFunc.TcPOU">
+      <SubType>Code</SubType>
+    </Compile>
+    <Compile Include="GCode\FB_RestartPrintAction.TcPOU">
+      <SubType>Code</SubType>
+    </Compile>
+    <Compile Include="GCode\GCode.TcPOU">
+      <SubType>Code</SubType>
+    </Compile>
+    <Compile Include="GCode\ST_GCodeRef.TcDUT">
+      <SubType>Code</SubType>
+    </Compile>
+    <Compile Include="GCode\ST_GCodeTool.TcDUT">
+      <SubType>Code</SubType>
+    </Compile>
+    <Compile Include="GCode\ST_NciInfo.TcDUT">
+      <SubType>Code</SubType>
+    </Compile>
+    <Compile Include="GCode\ST_GCodeInfo.TcDUT">
+      <SubType>Code</SubType>
+    </Compile>
+    <Compile Include="GVLs\GVL_Hardware.TcGVL">
+      <SubType>Code</SubType>
+    </Compile>
+    <Compile Include="GVLs\GVL_RS232.TcGVL">
+      <SubType>Code</SubType>
+      <LinkAlways>true</LinkAlways>
+    </Compile>
+    <Compile Include="GVLs\GVL_Sm.TcGVL">
+      <SubType>Code</SubType>
+    </Compile>
+    <Compile Include="Hardware\4ChannelHeater\FB_HwRef4ChHeater.TcPOU">
+      <SubType>Code</SubType>
+    </Compile>
+    <Compile Include="Hardware\BottleRack\FB_HwRefBottleRack.TcPOU">
+      <SubType>Code</SubType>
+    </Compile>
+    <Compile Include="Hardware\CANInterfaceCom.TcPOU">
+      <SubType>Code</SubType>
+    </Compile>
+    <Compile Include="Hardware\Diluter\FB_Dil_GetValveConfig.TcPOU">
+      <SubType>Code</SubType>
+    </Compile>
+    <Compile Include="Hardware\Diluter\FB_Dil_GetValvePos.TcPOU">
+      <SubType>Code</SubType>
+    </Compile>
+    <Compile Include="Hardware\Diluter\FB_Dil_GetPlungerPos.TcPOU">
+      <SubType>Code</SubType>
+    </Compile>
+    <Compile Include="Hardware\Diluter\FB_Dil_Pump.TcPOU">
+      <SubType>Code</SubType>
+    </Compile>
+    <Compile Include="Hardware\Diluter\FB_Dil_MoveValve.TcPOU">
+      <SubType>Code</SubType>
+    </Compile>
+    <Compile Include="Hardware\Diluter\FB_Dil_MoveToPos.TcPOU">
+      <SubType>Code</SubType>
+    </Compile>
+    <Compile Include="Hardware\Diluter\FB_Dil_SendCmd.TcPOU">
+      <SubType>Code</SubType>
+    </Compile>
+    <Compile Include="Hardware\Diluter\FB_Dil_SetValveConfig.TcPOU">
+      <SubType>Code</SubType>
+    </Compile>
+    <Compile Include="Hardware\Diluter\FB_Dil_Transfer.TcPOU">
+      <SubType>Code</SubType>
+    </Compile>
+    <Compile Include="Hardware\Diluter\FB_Dil_Init.TcPOU">
+      <SubType>Code</SubType>
+    </Compile>
+    <Compile Include="Hardware\Diluter\FB_Dil_Stop.TcPOU">
+      <SubType>Code</SubType>
+    </Compile>
+    <Compile Include="Hardware\Diluter\FB_HwRefDiluter.TcPOU">
+      <SubType>Code</SubType>
+    </Compile>
+    <Compile Include="Hardware\Diluter\F_DilFlowToSpeed.TcPOU">
+      <SubType>Code</SubType>
+    </Compile>
+    <Compile Include="Hardware\Diluter\F_DilQuantityToMicroSteps.TcPOU">
+      <SubType>Code</SubType>
+    </Compile>
+    <Compile Include="Hardware\Diluter\F_GetChannelCodeTwin.TcPOU">
+      <SubType>Code</SubType>
+    </Compile>
+    <Compile Include="Hardware\Diluter\F_GetCheckSumByte.TcPOU">
+      <SubType>Code</SubType>
+    </Compile>
+    <Compile Include="Hardware\Diluter\F_GetCheckSumFromString.TcPOU">
+      <SubType>Code</SubType>
+    </Compile>
+    <Compile Include="Hardware\Diluter\F_GetPumpString.TcPOU">
+      <SubType>Code</SubType>
+    </Compile>
+    <Compile Include="Hardware\Diluter\F_GetValveCode.TcPOU">
+      <SubType>Code</SubType>
+    </Compile>
+    <Compile Include="Hardware\EL70xxDrive\E_EL70xx_EncoderType.TcDUT">
+      <SubType>Code</SubType>
+    </Compile>
+    <Compile Include="Hardware\EL70xxDrive\E_EL70xx_StartType.TcDUT">
+      <SubType>Code</SubType>
+    </Compile>
+    <Compile Include="Hardware\EL70xxDrive\FB_HWECtrl_EL70xx_Home.TcPOU">
+      <SubType>Code</SubType>
+    </Compile>
+    <Compile Include="Hardware\EL70xxDrive\FB_HWECtrl_EL70xx_Move.TcPOU">
+      <SubType>Code</SubType>
+    </Compile>
+    <Compile Include="Hardware\EL70xxDrive\FB_HWECtrl_EL70xx_Power.TcPOU">
+      <SubType>Code</SubType>
+    </Compile>
+    <Compile Include="Hardware\EL70xxDrive\FB_HwRefEL70xxDrive.TcPOU">
+      <SubType>Code</SubType>
+    </Compile>
+    <Compile Include="Hardware\EL70xxDrive\FB_HwRefEL70xxDriveExtEncoder.TcPOU">
+      <SubType>Code</SubType>
+    </Compile>
+    <Compile Include="Hardware\EL70xxDrive\ST_EL70xx_POS_Control.TcDUT">
+      <SubType>Code</SubType>
+    </Compile>
+    <Compile Include="Hardware\EL70xxDrive\ST_EL70xx_POS_Status.TcDUT">
+      <SubType>Code</SubType>
+    </Compile>
+    <Compile Include="Hardware\EL70xxDrive\ST_EL70xx_STM_Control.TcDUT">
+      <SubType>Code</SubType>
+    </Compile>
+    <Compile Include="Hardware\EL70xxDrive\ST_EL70xx_STM_Status.TcDUT">
+      <SubType>Code</SubType>
+    </Compile>
+    <Compile Include="Hardware\E_CoDS402HomingState.TcDUT">
+      <SubType>Code</SubType>
+    </Compile>
+    <Compile Include="Hardware\FBox\FB_HwRefMultiPurpIO.TcPOU">
+      <SubType>Code</SubType>
+    </Compile>
+    <Compile Include="Hardware\FBox\PneuChannels\FB_PneuChannelRef.TcPOU">
+      <SubType>Code</SubType>
+    </Compile>
+    <Compile Include="Hardware\FBox\PneuChannels\FB_SetPressure.TcPOU">
+      <SubType>Code</SubType>
+    </Compile>
+    <Compile Include="Hardware\HuberUnistat\E_UnistatState.TcDUT">
+      <SubType>Code</SubType>
+    </Compile>
+    <Compile Include="Hardware\HuberUnistat\E_Unitstat_Command.TcDUT">
+      <SubType>Code</SubType>
+    </Compile>
+    <Compile Include="Hardware\HuberUnistat\FB_HwRefUnistat.TcPOU">
+      <SubType>Code</SubType>
+    </Compile>
+    <Compile Include="Hardware\HuberUnistat\FB_UnistatControl.TcPOU">
+      <SubType>Code</SubType>
+    </Compile>
+    <Compile Include="Hardware\HuberUnistat\FB_Unistat_SendCmd.TcPOU">
+      <SubType>Code</SubType>
+    </Compile>
+    <Compile Include="Hardware\IOExpander\FB_PulseTrainControl.TcPOU">
+      <SubType>Code</SubType>
+    </Compile>
+    <Compile Include="Hardware\IOExpander\ST_PulseTrainChannel.TcDUT">
+      <SubType>Code</SubType>
+    </Compile>
+    <Compile Include="Hardware\MultiZ\Extruder\FB_EndlessExtruderTMCM_Control.TcPOU">
+      <SubType>Code</SubType>
+    </Compile>
+    <Compile Include="Hardware\MultiZ\Extruder\FB_EndlessExtruderTMCM_Ref.TcPOU">
+      <SubType>Code</SubType>
+    </Compile>
+    <Compile Include="Hardware\MultiZ\Extruder\FB_FDM_EL2521_Control.TcPOU">
+      <SubType>Code</SubType>
+    </Compile>
+    <Compile Include="Hardware\MultiZ\Extruder\FB_FDM_EL2521_Ref.TcPOU">
+      <SubType>Code</SubType>
+    </Compile>
+    <Compile Include="Hardware\MultiZ\Gripper\FB_GripperRef.TcPOU">
+      <SubType>Code</SubType>
+    </Compile>
+    <Compile Include="Hardware\MultiZ\Heater\E_MzHeaterType.TcDUT">
+      <SubType>Code</SubType>
+    </Compile>
+    <Compile Include="Hardware\MultiZ\PWM\FB_MultiZPWM.TcPOU">
+      <SubType>Code</SubType>
+    </Compile>
+    <Compile Include="Hardware\NanotecPanDrive\FB_HwRefNanotecPD.TcPOU">
+      <SubType>Code</SubType>
+    </Compile>
+    <Compile Include="Hardware\NanotecPanDrive\FB_NanotecPD_Home.TcPOU">
+      <SubType>Code</SubType>
+    </Compile>
+    <Compile Include="Hardware\NanotecPanDrive\FB_NanotecPD_Move.TcPOU">
+      <SubType>Code</SubType>
+    </Compile>
+    <Compile Include="Hardware\NanotecPanDrive\FB_NanotecPD_Power.TcPOU">
+      <SubType>Code</SubType>
+    </Compile>
+    <Compile Include="Hardware\RS232\FB_SerialComPort_Base.TcPOU">
+      <SubType>Code</SubType>
+    </Compile>
+    <Compile Include="Hardware\RS232\FB_SerialComPort_EL60xx.TcPOU">
+      <SubType>Code</SubType>
+    </Compile>
+    <Compile Include="Hardware\RS232\FB_SerialComPort_PC.TcPOU">
+      <SubType>Code</SubType>
+    </Compile>
+    <Compile Include="Hardware\RS232\FB_SerialComPort_USB.TcPOU">
+      <SubType>Code</SubType>
+    </Compile>
+    <Compile Include="Hardware\RS232\FB_SimpleFIFO_PVOID.TcPOU">
+      <SubType>Code</SubType>
+    </Compile>
+    <Compile Include="Hardware\RS232\SerialBackCom.TcPOU">
+      <SubType>Code</SubType>
+    </Compile>
+    <Compile Include="Hardware\Safety\E_SafetyCtrl.TcDUT">
+      <SubType>Code</SubType>
+    </Compile>
+    <Compile Include="Hardware\Safety\E_SafetyState.TcDUT">
+      <SubType>Code</SubType>
+    </Compile>
+    <Compile Include="Hardware\Safety\FB_Safety.TcPOU">
+      <SubType>Code</SubType>
+    </Compile>
+    <Compile Include="Hardware\Safety\FB_SafetyPseudo.TcPOU">
+      <SubType>Code</SubType>
+    </Compile>
+    <Compile Include="Hardware\Safety\FB_SafetyBase.TcPOU">
+      <SubType>Code</SubType>
+    </Compile>
+    <Compile Include="Hardware\Safety\FB_HwRefStopButton.TcPOU">
+      <SubType>Code</SubType>
+    </Compile>
+    <Compile Include="Hardware\E_CoDS402States.TcDUT">
+      <SubType>Code</SubType>
+    </Compile>
+    <Compile Include="Hardware\FBox\FB_PCV.TcPOU">
+      <SubType>Code</SubType>
+    </Compile>
+    <Compile Include="Hardware\FBox\FB_Pump.TcPOU">
+      <SubType>Code</SubType>
+    </Compile>
+    <Compile Include="Hardware\FBox\FB_HwRefTripleTrigger.TcPOU">
+      <SubType>Code</SubType>
+    </Compile>
+    <Compile Include="Hardware\FBox\FB_Valve.TcPOU">
+      <SubType>Code</SubType>
+    </Compile>
+    <Compile Include="Hardware\FBox\F_YFuncX.TcPOU">
+      <SubType>Code</SubType>
+    </Compile>
+    <Compile Include="Hardware\FB_CanNodeBase.TcPOU">
+      <SubType>Code</SubType>
+    </Compile>
+    <Compile Include="Hardware\FB_CANOpenMotionPower.TcPOU">
+      <SubType>Code</SubType>
+    </Compile>
+    <Compile Include="Hardware\FB_HwModule.TcPOU">
+      <SubType>Code</SubType>
+    </Compile>
+    <Compile Include="Hardware\FB_HwModuleList.TcPOU">
+      <SubType>Code</SubType>
+    </Compile>
+    <Compile Include="Hardware\FB_SendCanMessage.TcPOU">
+      <SubType>Code</SubType>
+    </Compile>
+    <Compile Include="Hardware\F_GetCoDS402State.TcPOU">
+      <SubType>Code</SubType>
+    </Compile>
+    <Compile Include="Hardware\F_CompVersion.TcPOU">
+      <SubType>Code</SubType>
+    </Compile>
+    <Compile Include="Hardware\HighVoltSupply\FB_HighVoltSupply.TcPOU">
+      <SubType>Code</SubType>
+    </Compile>
+    <Compile Include="Hardware\HwInfoList.TcPOU">
+      <SubType>Code</SubType>
+    </Compile>
+    <Compile Include="Hardware\InkStation\FB_HwRefInkStatDriveCover.TcPOU">
+      <SubType>Code</SubType>
+    </Compile>
+    <Compile Include="Hardware\InkStation\FB_HwRefInkStatDriveSpin.TcPOU">
+      <SubType>Code</SubType>
+    </Compile>
+    <Compile Include="Hardware\InkStation\FB_InkStationInitSpinDrive.TcPOU">
+      <SubType>Code</SubType>
+    </Compile>
+    <Compile Include="Hardware\InkStation\FB_InkStationInitCoverDrive.TcPOU">
+      <SubType>Code</SubType>
+    </Compile>
+    <Compile Include="Hardware\InkStation\FB_InkStationOpenClose.TcPOU">
+      <SubType>Code</SubType>
+    </Compile>
+    <Compile Include="Hardware\IOExpander\FB_HwRefIOExpander.TcPOU">
+      <SubType>Code</SubType>
+    </Compile>
+    <Compile Include="Hardware\LiquidReserve\E_TMCMCommand.TcDUT">
+      <SubType>Code</SubType>
+    </Compile>
+    <Compile Include="Hardware\LiquidReserve\FB_GearPump.TcPOU">
+      <SubType>Code</SubType>
+    </Compile>
+    <Compile Include="Hardware\LiquidReserve\FB_TMCM6110.TcPOU">
+      <SubType>Code</SubType>
+    </Compile>
+    <Compile Include="Hardware\MultiZ\Extruder\FB_ExtruderControl.TcPOU">
+      <SubType>Code</SubType>
+    </Compile>
+    <Compile Include="Hardware\MultiZ\Extruder\FB_ExtruderRef.TcPOU">
+      <SubType>Code</SubType>
+    </Compile>
+    <Compile Include="Hardware\MultiZ\Extruder\FB_PistonExtruderControl.TcPOU">
+      <SubType>Code</SubType>
+    </Compile>
+    <Compile Include="Hardware\MultiZ\Extruder\FB_PistonExtruderRef.TcPOU">
+      <SubType>Code</SubType>
+    </Compile>
+    <Compile Include="Hardware\MultiZ\E_MzToolType.TcDUT">
+      <SubType>Code</SubType>
+    </Compile>
+    <Compile Include="Hardware\MultiZ\FB_MultiZRef.TcPOU">
+      <SubType>Code</SubType>
+    </Compile>
+    <Compile Include="Hardware\MultiZ\FB_MultiZStamp.TcPOU">
+      <SubType>Code</SubType>
+    </Compile>
+    <Compile Include="Hardware\MultiZ\FB_MultiZTipEjector.TcPOU">
+      <SubType>Code</SubType>
+    </Compile>
+    <Compile Include="Hardware\MultiZ\FB_ZAxisRef.TcPOU">
+      <SubType>Code</SubType>
+    </Compile>
+    <Compile Include="Hardware\MultiZ\FB_ZM_Home.TcPOU">
+      <SubType>Code</SubType>
+    </Compile>
+    <Compile Include="Hardware\MultiZ\FB_ZM_Jog.TcPOU">
+      <SubType>Code</SubType>
+    </Compile>
+    <Compile Include="Hardware\MultiZ\FB_ZM_Move.TcPOU">
+      <SubType>Code</SubType>
+    </Compile>
+    <Compile Include="Hardware\MultiZ\FB_ZM_ReadZSensorID.TcPOU">
+      <SubType>Code</SubType>
+    </Compile>
+    <Compile Include="Hardware\MultiZ\FB_ZM_Stop.TcPOU">
+      <SubType>Code</SubType>
+    </Compile>
+    <Compile Include="Hardware\MultiZ\F_MultiZError_TO_ErrorId.TcPOU">
+      <SubType>Code</SubType>
+    </Compile>
+    <Compile Include="Hardware\MultiZ\GPIO\E_GPInputMode.TcDUT">
+      <SubType>Code</SubType>
+    </Compile>
+    <Compile Include="Hardware\MultiZ\GPIO\FB_GPInputRef.TcPOU">
+      <SubType>Code</SubType>
+    </Compile>
+    <Compile Include="Hardware\MultiZ\GVL_MultiZObjects.TcGVL">
+      <SubType>Code</SubType>
+    </Compile>
+    <Compile Include="Hardware\MultiZ\Heater\FB_MzHeaterControl.TcPOU">
+      <SubType>Code</SubType>
+    </Compile>
+    <Compile Include="Hardware\MultiZ\Heater\FB_MZHeaterRef.TcPOU">
+      <SubType>Code</SubType>
+    </Compile>
+    <Compile Include="Hardware\MultiZ\Piezo\E_DispenserMode.TcDUT">
+      <SubType>Code</SubType>
+    </Compile>
+    <Compile Include="Hardware\MultiZ\Piezo\FB_PiezoControl.TcPOU">
+      <SubType>Code</SubType>
+    </Compile>
+    <Compile Include="Hardware\MultiZ\Piezo\FB_PiezoRef.TcPOU">
+      <SubType>Code</SubType>
+    </Compile>
+    <Compile Include="Hardware\MultiZ\ST_CANopenObject.TcDUT">
+      <SubType>Code</SubType>
+    </Compile>
+    <Compile Include="Hardware\MultiZ\ST_StampSupport.TcDUT">
+      <SubType>Code</SubType>
+    </Compile>
+    <Compile Include="Hardware\MultiZ\ST_StrobTrigger.TcDUT">
+      <SubType>Code</SubType>
+    </Compile>
+    <Compile Include="Hardware\MultiZ\ST_ZAxisRef_In.TcDUT">
+      <SubType>Code</SubType>
+    </Compile>
+    <Compile Include="Hardware\MultiZ\ST_ZAxisRef_Out.TcDUT">
+      <SubType>Code</SubType>
+    </Compile>
+    <Compile Include="Hardware\MultiZ\ST_ZAxisStatus.TcDUT">
+      <SubType>Code</SubType>
+    </Compile>
+    <Compile Include="Hardware\MultiZ\ST_ZGPIO_AnaIn.TcDUT">
+      <SubType>Code</SubType>
+    </Compile>
+    <Compile Include="Hardware\MultiZ\ST_ZGPIO_PWM_ANA.TcDUT">
+      <SubType>Code</SubType>
+    </Compile>
+    <Compile Include="Hardware\MultiZ\ST_ZSensorCalibration.TcDUT">
+      <SubType>Code</SubType>
+    </Compile>
+    <Compile Include="Hardware\PerformHardware.TcPOU">
+      <SubType>Code</SubType>
+    </Compile>
+    <Compile Include="Hardware\PTOStepper\FB_PTOStepperMoveRel.TcPOU">
+      <SubType>Code</SubType>
+    </Compile>
+    <Compile Include="Hardware\PTOStepper\FB_PTOStepperRotate.TcPOU">
+      <SubType>Code</SubType>
+    </Compile>
+    <Compile Include="Hardware\PowderStation\FB_HwRefPowderStat.TcPOU">
+      <SubType>Code</SubType>
+    </Compile>
+    <Compile Include="Hardware\PTOStepper\ST_PTOStepperRef.TcDUT">
+      <SubType>Code</SubType>
+    </Compile>
+    <Compile Include="Hardware\Reactor\E_ReactDrive.TcDUT">
+      <SubType>Code</SubType>
+    </Compile>
+    <Compile Include="Hardware\Reactor\FB_ReactDriveInit.TcPOU">
+      <SubType>Code</SubType>
+    </Compile>
+    <Compile Include="Hardware\Reactor\FB_ReactDriveMove.TcPOU">
+      <SubType>Code</SubType>
+    </Compile>
+    <Compile Include="Hardware\Reactor\FB_HwRefReactDrive.TcPOU">
+      <SubType>Code</SubType>
+    </Compile>
+    <Compile Include="Hardware\Reactor\FB_HwRefReactHeater.TcPOU">
+      <SubType>Code</SubType>
+    </Compile>
+    <Compile Include="Hardware\Safety\FB_SafetyStacker.TcPOU">
+      <SubType>Code</SubType>
+    </Compile>
+    <Compile Include="Hardware\Safety\FB_SignalLight.TcPOU">
+      <SubType>Code</SubType>
+    </Compile>
+    <Compile Include="Hardware\ScanHwModules.TcPOU">
+      <SubType>Code</SubType>
+    </Compile>
+    <Compile Include="Hardware\SDO_Com\FB_SDO_READ.TcPOU">
+      <SubType>Code</SubType>
+    </Compile>
+    <Compile Include="Hardware\SDO_Com\FB_SDO_WRITE.TcPOU">
+      <SubType>Code</SubType>
+    </Compile>
+    <Compile Include="Hardware\SDO_Com\F_AdsError_TO_SdoError.TcPOU">
+      <SubType>Code</SubType>
+    </Compile>
+    <Compile Include="Hardware\Settings\FB_Settings.TcPOU">
+      <SubType>Code</SubType>
+    </Compile>
+    <Compile Include="Hardware\SimutateHwModules.TcPOU">
+      <SubType>Code</SubType>
+    </Compile>
+    <Compile Include="Hardware\ST_CANInterfaceBuffer.TcDUT">
+      <SubType>Code</SubType>
+    </Compile>
+    <Compile Include="Hardware\TipCalibrator\ST_TipCalibrator.TcDUT">
+      <SubType>Code</SubType>
+    </Compile>
+    <Compile Include="Hardware\TipCleaner\FB_TipCleanerInit.TcPOU">
+      <SubType>Code</SubType>
+    </Compile>
+    <Compile Include="Hardware\TipCleaner\ST_TipCleanerRef.TcDUT">
+      <SubType>Code</SubType>
+    </Compile>
+    <Compile Include="Hardware\TMCM-1140\E_TMCM_HomingMethode.TcDUT">
+      <SubType>Code</SubType>
+    </Compile>
+    <Compile Include="Hardware\TMCM-1140\E_TMCM_SwitchConfig.TcDUT">
+      <SubType>Code</SubType>
+    </Compile>
+    <Compile Include="Hardware\TMCM-1140\E_TMCM_VeloDim.TcDUT">
+      <SubType>Code</SubType>
+    </Compile>
+    <Compile Include="Hardware\TMCM-1140\FB_HwRefTMCM1140.TcPOU">
+      <SubType>Code</SubType>
+    </Compile>
+    <Compile Include="Hardware\TMCM-1140\FB_TMCM1140_Home.TcPOU">
+      <SubType>Code</SubType>
+    </Compile>
+    <Compile Include="Hardware\TMCM-1140\FB_TMCM1140_Move.TcPOU">
+      <SubType>Code</SubType>
+    </Compile>
+    <Compile Include="Hardware\TMCM-1140\FB_TMCM1140_Power.TcPOU">
+      <SubType>Code</SubType>
+    </Compile>
+    <Compile Include="Hardware\TMCM-1140\FB_TMCM1140_Rotate.TcPOU">
+      <SubType>Code</SubType>
+    </Compile>
+    <Compile Include="Hardware\TrayLock\FB_HwRefTrayLock.TcPOU">
+      <SubType>Code</SubType>
+    </Compile>
+    <Compile Include="Hardware\TrayLock\FB_HwTrayLockControl.TcPOU">
+      <SubType>Code</SubType>
+    </Compile>
+    <Compile Include="Hardware\Trigger\FB_TriggerOut.TcPOU">
+      <SubType>Code</SubType>
+    </Compile>
+    <Compile Include="Hardware\Trigger\GVL_HwRefIO.TcGVL">
+      <SubType>Code</SubType>
+    </Compile>
+    <Compile Include="Hardware\Trigger\OutDistributor.TcPOU">
+      <SubType>Code</SubType>
+    </Compile>
+    <Compile Include="Hardware\XYDrive\CoupleYY.TcPOU">
+      <SubType>Code</SubType>
+    </Compile>
+    <Compile Include="Hardware\XYDrive\E_XYOrientation.TcDUT">
+      <SubType>Code</SubType>
+    </Compile>
+    <Compile Include="Hardware\XYDrive\FB_LmtChangePID.TcPOU">
+      <SubType>Code</SubType>
+    </Compile>
+    <Compile Include="Hardware\XYDrive\FB_XYDriveBase.TcPOU">
+      <SubType>Code</SubType>
+    </Compile>
+    <Compile Include="Hardware\XYDrive\FB_XYDriveNC.TcPOU">
+      <SubType>Code</SubType>
+    </Compile>
+    <Compile Include="Hardware\XYDrive\FB_XYDrive_Beck_Twin.TcPOU">
+      <SubType>Code</SubType>
+    </Compile>
+    <Compile Include="Hardware\XYDrive\FB_XYDrive_Beck.TcPOU">
+      <SubType>Code</SubType>
+    </Compile>
+    <Compile Include="Hardware\XYDrive\FB_XYDrive_Lmt_DS.TcPOU">
+      <SubType>Code</SubType>
+    </Compile>
+    <Compile Include="Hardware\XYDrive\FB_XYDrive_Lmt_EC.TcPOU">
+      <SubType>Code</SubType>
+    </Compile>
+    <Compile Include="MainProgs\MainDispacher.TcPOU">
+      <SubType>Code</SubType>
+    </Compile>
+    <Compile Include="MainProgs\PC_Control.TcPOU">
+      <SubType>Code</SubType>
+    </Compile>
+    <Compile Include="Objects\Devices\FB_Diluter.TcPOU">
+      <SubType>Code</SubType>
+    </Compile>
+    <Compile Include="Objects\Devices\FB_Diluter3Inputs.TcPOU">
+      <SubType>Code</SubType>
+    </Compile>
+    <Compile Include="Objects\Devices\FB_Stacker.TcPOU">
+      <SubType>Code</SubType>
+    </Compile>
+    <Compile Include="Objects\FB_DimSlot.TcPOU">
+      <SubType>Code</SubType>
+    </Compile>
+    <Compile Include="Objects\FB_Object.TcPOU">
+      <SubType>Code</SubType>
+    </Compile>
+    <Compile Include="Objects\FB_PieceSlot.TcPOU">
+      <SubType>Code</SubType>
+    </Compile>
+    <Compile Include="Objects\FB_Slot.TcPOU">
+      <SubType>Code</SubType>
+    </Compile>
+    <Compile Include="Objects\FB_SlotList.TcPOU">
+      <SubType>Code</SubType>
+    </Compile>
+    <Compile Include="Objects\F_GetTwoLineAngle.TcPOU">
+      <SubType>Code</SubType>
+    </Compile>
+    <Compile Include="Objects\F_LinesIntersect.TcPOU">
+      <SubType>Code</SubType>
+    </Compile>
+    <Compile Include="Objects\F_PointInnerRect.TcPOU">
+      <SubType>Code</SubType>
+    </Compile>
+    <Compile Include="Objects\F_RectInnerCircle.TcPOU">
+      <SubType>Code</SubType>
+    </Compile>
+    <Compile Include="Objects\F_RectInnerRect.TcPOU">
+      <SubType>Code</SubType>
+    </Compile>
+    <Compile Include="Objects\F_RectIntersectRect.TcPOU">
+      <SubType>Code</SubType>
+    </Compile>
+    <Compile Include="Objects\F_RotatePoint.TcPOU">
+      <SubType>Code</SubType>
+    </Compile>
+    <Compile Include="Objects\Interfaces\I_Dispenser.TcIO">
+      <SubType>Code</SubType>
+    </Compile>
+    <Compile Include="Objects\Interfaces\I_SlotTarget.TcIO">
+      <SubType>Code</SubType>
+    </Compile>
+    <Compile Include="Objects\Pieces\FB_Cartridge.TcPOU">
+      <SubType>Code</SubType>
+    </Compile>
+    <Compile Include="Objects\Pieces\FB_Needle.TcPOU">
+      <SubType>Code</SubType>
+    </Compile>
+    <Compile Include="Objects\Pieces\FB_Nozzle.TcPOU">
+      <SubType>Code</SubType>
+    </Compile>
+    <Compile Include="Objects\Pieces\FB_pHElectrodeCap.TcPOU">
+      <SubType>Code</SubType>
+    </Compile>
+    <Compile Include="Objects\Pieces\FB_PieceBase.TcPOU">
+      <SubType>Code</SubType>
+    </Compile>
+    <Compile Include="Objects\Pieces\FB_Port.TcPOU">
+      <SubType>Code</SubType>
+    </Compile>
+    <Compile Include="Objects\Pieces\FB_Tip.TcPOU">
+      <SubType>Code</SubType>
+    </Compile>
+    <Compile Include="Objects\Pieces\FB_VialClosed.TcPOU">
+      <SubType>Code</SubType>
+    </Compile>
+    <Compile Include="Objects\ST_Shelf.TcDUT">
+      <SubType>Code</SubType>
+    </Compile>
+    <Compile Include="Objects\Targets\Active\FB_ActiveTarget.TcPOU">
+      <SubType>Code</SubType>
+    </Compile>
+    <Compile Include="Objects\Targets\Active\FB_CustomUnitType1.TcPOU">
+      <SubType>Code</SubType>
+    </Compile>
+    <Compile Include="Objects\Targets\Active\FB_CustomUnitType2.TcPOU">
+      <SubType>Code</SubType>
+    </Compile>
+    <Compile Include="Objects\Targets\Active\FB_HighVoltTray.TcPOU">
+      <SubType>Code</SubType>
+    </Compile>
+    <Compile Include="Objects\Targets\Active\FB_InkStation.TcPOU">
+      <SubType>Code</SubType>
+    </Compile>
+    <Compile Include="Objects\Targets\Active\FB_LiquidReserve.TcPOU">
+      <SubType>Code</SubType>
+    </Compile>
+    <Compile Include="Objects\Targets\Active\FB_MtpHolder.TcPOU">
+      <SubType>Code</SubType>
+    </Compile>
+    <Compile Include="Objects\Targets\Active\FB_PowderStation.TcPOU">
+      <SubType>Code</SubType>
+    </Compile>
+    <Compile Include="Objects\Targets\Active\FB_Reactor.TcPOU">
+      <SubType>Code</SubType>
+    </Compile>
+    <Compile Include="Objects\Targets\Active\FB_Stroboscope.TcPOU">
+      <SubType>Code</SubType>
+    </Compile>
+    <Compile Include="Objects\Targets\Active\FB_SubstHolder.TcPOU">
+      <SubType>Code</SubType>
+    </Compile>
+    <Compile Include="Objects\Targets\Active\FB_SubstHolderUnistat.TcPOU">
+      <SubType>Code</SubType>
+    </Compile>
+    <Compile Include="Objects\Targets\Active\FB_TipCalibrator.TcPOU">
+      <SubType>Code</SubType>
+    </Compile>
+    <Compile Include="Objects\Targets\Active\FB_TipCleaner.TcPOU">
+      <SubType>Code</SubType>
+    </Compile>
+    <Compile Include="Objects\Targets\Active\FB_TrayTransporter.TcPOU">
+      <SubType>Code</SubType>
+    </Compile>
+    <Compile Include="Objects\Targets\Active\FB_WashStation.TcPOU">
+      <SubType>Code</SubType>
+    </Compile>
+    <Compile Include="Objects\Targets\Active\FB_WorkplateCamera.TcPOU">
+      <SubType>Code</SubType>
+    </Compile>
+    <Compile Include="Objects\Targets\FB_TargetBase.TcPOU">
+      <SubType>Code</SubType>
+    </Compile>
+    <Compile Include="Objects\Targets\Passive\FB_Array.TcPOU">
+      <SubType>Code</SubType>
+    </Compile>
+    <Compile Include="Objects\Targets\Passive\FB_CleaningBrush.TcPOU">
+      <SubType>Code</SubType>
+    </Compile>
+    <Compile Include="Objects\Targets\Passive\FB_DryPad.TcPOU">
+      <SubType>Code</SubType>
+    </Compile>
+    <Compile Include="Objects\Targets\Passive\FB_FlipTubeRack.TcPOU">
+      <SubType>Code</SubType>
+    </Compile>
+    <Compile Include="Objects\Targets\Passive\FB_Mtp.TcPOU">
+      <SubType>Code</SubType>
+    </Compile>
+    <Compile Include="Objects\Targets\Passive\FB_NeedleRack.TcPOU">
+      <SubType>Code</SubType>
+    </Compile>
+    <Compile Include="Objects\Targets\Passive\FB_pHElectrodeCapRack.TcPOU">
+      <SubType>Code</SubType>
+    </Compile>
+    <Compile Include="Objects\Targets\Passive\FB_Point.TcPOU">
+      <SubType>Code</SubType>
+    </Compile>
+    <Compile Include="Objects\Targets\Passive\FB_PortRack.TcPOU">
+      <SubType>Code</SubType>
+    </Compile>
+    <Compile Include="Objects\Targets\Passive\FB_Rack.TcPOU">
+      <SubType>Code</SubType>
+    </Compile>
+    <Compile Include="Objects\Targets\Passive\FB_SeptumRack.TcPOU">
+      <SubType>Code</SubType>
+    </Compile>
+    <Compile Include="Objects\Targets\Passive\FB_SeptumWaste.TcPOU">
+      <SubType>Code</SubType>
+    </Compile>
+    <Compile Include="Objects\Targets\Passive\FB_Slide.TcPOU">
+      <SubType>Code</SubType>
+    </Compile>
+    <Compile Include="Objects\Targets\Passive\FB_SlotTarget.TcPOU">
+      <SubType>Code</SubType>
+    </Compile>
+    <Compile Include="Objects\Targets\Passive\FB_SpotArray.TcPOU">
+      <SubType>Code</SubType>
+    </Compile>
+    <Compile Include="Objects\Targets\Passive\FB_SpotPattern.TcPOU">
+      <SubType>Code</SubType>
+    </Compile>
+    <Compile Include="Objects\Targets\Passive\FB_StampMagazine.TcPOU">
+      <SubType>Code</SubType>
+    </Compile>
+    <Compile Include="Objects\Targets\Passive\FB_TargetTray.TcPOU">
+      <SubType>Code</SubType>
+    </Compile>
+    <Compile Include="Objects\Targets\Passive\FB_TipCleanerGen2.TcPOU">
+      <SubType>Code</SubType>
+    </Compile>
+    <Compile Include="Objects\Targets\Passive\FB_TipRack.TcPOU">
+      <SubType>Code</SubType>
+    </Compile>
+    <Compile Include="Objects\Targets\Passive\FB_VialRack.TcPOU">
+      <SubType>Code</SubType>
+    </Compile>
+    <Compile Include="Objects\Targets\Passive\FB_Wafer.TcPOU">
+      <SubType>Code</SubType>
+    </Compile>
+    <Compile Include="Objects\Targets\Passive\FB_Workplate.TcPOU">
+      <SubType>Code</SubType>
+    </Compile>
+    <Compile Include="Objects\Tools\FB_Camera.TcPOU">
+      <SubType>Code</SubType>
+    </Compile>
+    <Compile Include="Objects\Tools\FB_CartDispenser.TcPOU">
+      <SubType>Code</SubType>
+    </Compile>
+    <Compile Include="Objects\Tools\FB_CartDispStirrer.TcPOU">
+      <SubType>Code</SubType>
+    </Compile>
+    <Compile Include="Objects\Tools\FB_CartHolder.TcPOU">
+      <SubType>Code</SubType>
+    </Compile>
+    <Compile Include="Objects\Tools\FB_DummyTool.TcPOU">
+      <SubType>Code</SubType>
+    </Compile>
+    <Compile Include="Objects\Tools\FB_Extruder.TcPOU">
+      <SubType>Code</SubType>
+    </Compile>
+    <Compile Include="Objects\Tools\FB_DeloDot.TcPOU">
+      <SubType>Code</SubType>
+    </Compile>
+    <Compile Include="Objects\Tools\FB_Exposure.TcPOU">
+      <SubType>Code</SubType>
+    </Compile>
+    <Compile Include="Objects\Tools\FB_FlipTubeHandler.TcPOU">
+      <SubType>Code</SubType>
+    </Compile>
+    <Compile Include="Objects\Tools\FB_GCodeTool.TcPOU">
+      <SubType>Code</SubType>
+    </Compile>
+    <Compile Include="Objects\Tools\FB_Gripper.TcPOU">
+      <SubType>Code</SubType>
+    </Compile>
+    <Compile Include="Objects\Tools\FB_HybridDispenser.TcPOU">
+      <SubType>Code</SubType>
+    </Compile>
+    <Compile Include="Objects\Tools\FB_MultiCartHolder.TcPOU">
+      <SubType>Code</SubType>
+    </Compile>
+    <Compile Include="Objects\Tools\FB_pHElectrode.TcPOU">
+      <SubType>Code</SubType>
+    </Compile>
+    <Compile Include="Objects\Tools\FB_PickPlacePip.TcPOU">
+      <SubType>Code</SubType>
+    </Compile>
+    <Compile Include="Objects\Tools\FB_SingelPiezoHolder.TcPOU">
+      <SubType>Code</SubType>
+    </Compile>
+    <Compile Include="Objects\Tools\FB_SolenoidPip.TcPOU">
+      <SubType>Code</SubType>
+    </Compile>
+    <Compile Include="Objects\Tools\FB_TitrationTool.TcPOU">
+      <SubType>Code</SubType>
+    </Compile>
+    <Compile Include="Objects\Tools\FB_TwinExtruder.TcPOU">
+      <SubType>Code</SubType>
+    </Compile>
+    <Compile Include="Objects\Tools\FB_TwinPiezoHolder.TcPOU">
+      <SubType>Code</SubType>
+    </Compile>
+    <Compile Include="Objects\Tools\FB_MzBase.TcPOU">
+      <SubType>Code</SubType>
+    </Compile>
+    <Compile Include="Objects\Tools\FB_MzHead.TcPOU">
+      <SubType>Code</SubType>
+    </Compile>
+    <Compile Include="Objects\Tools\FB_MzTool.TcPOU">
+      <SubType>Code</SubType>
+    </Compile>
+    <Compile Include="Objects\Tools\FB_PassivPip.TcPOU">
+      <SubType>Code</SubType>
+    </Compile>
+    <Compile Include="Objects\Tools\FB_Luer.TcPOU">
+      <SubType>Code</SubType>
+    </Compile>
+    <Compile Include="Objects\Tools\FB_TriplePip.TcPOU">
+      <SubType>Code</SubType>
+    </Compile>
+    <Compile Include="Objects\Tools\FB_PiezoPip.TcPOU">
+      <SubType>Code</SubType>
+    </Compile>
+    <Compile Include="Objects\Tools\FB_PowderPip.TcPOU">
+      <SubType>Code</SubType>
+    </Compile>
+    <Compile Include="Objects\Tools\FB_StampSupport.TcPOU">
+      <SubType>Code</SubType>
+    </Compile>
+    <Compile Include="Objects\Tools\FB_VacuumHandler.TcPOU">
+      <SubType>Code</SubType>
+    </Compile>
+    <Compile Include="Objects\Tools\FB_VermesDisp.TcPOU">
+      <SubType>Code</SubType>
+    </Compile>
+    <Compile Include="Objects\Tools\FB_ZLevelSensor.TcPOU">
+      <SubType>Code</SubType>
+    </Compile>
+    <Compile Include="Objects\Interfaces\I_Device.TcIO">
+      <SubType>Code</SubType>
+    </Compile>
+    <Compile Include="Objects\Interfaces\I_TargetZSensor.TcIO">
+      <SubType>Code</SubType>
+    </Compile>
+    <Compile Include="Objects\Interfaces\I_UsingDryPad.TcIO">
+      <SubType>Code</SubType>
+    </Compile>
+    <Compile Include="Objects\Pieces\FB_FlipTube.TcPOU">
+      <SubType>Code</SubType>
+    </Compile>
+    <Compile Include="Objects\Pieces\FB_Stamp.TcPOU">
+      <SubType>Code</SubType>
+    </Compile>
+    <Compile Include="Objects\Pieces\FB_Septum.TcPOU">
+      <SubType>Code</SubType>
+    </Compile>
+    <Compile Include="Objects\Pieces\FB_UsingPiece.TcPOU">
+      <SubType>Code</SubType>
+    </Compile>
+    <Compile Include="Objects\Pieces\FB_Vial.TcPOU">
+      <SubType>Code</SubType>
+    </Compile>
+    <Compile Include="Objects\ST_POINTER2.TcDUT">
+      <SubType>Code</SubType>
+    </Compile>
+    <Compile Include="Error\FB_ErrorList.TcPOU">
+      <SubType>Code</SubType>
+    </Compile>
+    <Compile Include="PlcTask.TcTTO">
+      <SubType>Code</SubType>
+    </Compile>
+    <Compile Include="MainProgs\MAIN.TcPOU">
+      <SubType>Code</SubType>
+    </Compile>
+    <Compile Include="Sequence\E_SequenceState.TcDUT">
+      <SubType>Code</SubType>
+    </Compile>
+    <Compile Include="Sequence\E_StepState.TcDUT">
+      <SubType>Code</SubType>
+    </Compile>
+    <Compile Include="Sequence\FB_CondiBase.TcPOU">
+      <SubType>Code</SubType>
+    </Compile>
+    <Compile Include="Sequence\FB_CondiStepResult.TcPOU">
+      <SubType>Code</SubType>
+    </Compile>
+    <Compile Include="Sequence\FB_CondiStepReady.TcPOU">
+      <SubType>Code</SubType>
+    </Compile>
+    <Compile Include="Sequence\FB_CondiProcessData.TcPOU">
+      <SubType>Code</SubType>
+    </Compile>
+    <Compile Include="Sequence\FB_ProcessingQueue.TcPOU">
+      <SubType>Code</SubType>
+    </Compile>
+    <Compile Include="Sequence\FB_SequenceInfo.TcPOU">
+      <SubType>Code</SubType>
+    </Compile>
+    <Compile Include="Sequence\FB_SequenceList.TcPOU">
+      <SubType>Code</SubType>
+    </Compile>
+    <Compile Include="Sequence\FB_StepList.TcPOU">
+      <SubType>Code</SubType>
+    </Compile>
+    <Compile Include="Sequence\FB_Sequence.TcPOU">
+      <SubType>Code</SubType>
+    </Compile>
+    <Compile Include="Sequence\F_SetFollowerStep.TcPOU">
+      <SubType>Code</SubType>
+    </Compile>
+    <Compile Include="Sequence\ST_Pointer.TcDUT">
+      <SubType>Code</SubType>
+    </Compile>
+    <Compile Include="Sequence\ST_SequenceInfo.TcDUT">
+      <SubType>Code</SubType>
+    </Compile>
+    <Compile Include="Sequence\ST_Step.TcDUT">
+      <SubType>Code</SubType>
+    </Compile>
+    <Compile Include="OperatingModes\FB_OM_Auto.TcPOU">
+      <SubType>Code</SubType>
+    </Compile>
+    <Compile Include="OperatingModes\FB_OM_Config.TcPOU">
+      <SubType>Code</SubType>
+    </Compile>
+    <Compile Include="OperatingModes\FB_OM_Init.TcPOU">
+      <SubType>Code</SubType>
+    </Compile>
+    <Compile Include="OperatingModes\FB_OM_Maintenance.TcPOU">
+      <SubType>Code</SubType>
+    </Compile>
+    <Compile Include="OperatingModes\FB_OM_Manu.TcPOU">
+      <SubType>Code</SubType>
+    </Compile>
+    <Compile Include="OperatingModes\FB_OM_SemiAuto.TcPOU">
+      <SubType>Code</SubType>
+    </Compile>
+    <Compile Include="Version\Global_Version.TcGVL">
+      <SubType>Code</SubType>
+    </Compile>
+  </ItemGroup>
+  <ItemGroup>
+    <Folder Include="DUTs" />
+    <Folder Include="DUTs\Enums" />
+    <Folder Include="DUTs\Unions" />
+    <Folder Include="DUTs\Structs" />
+    <Folder Include="Functions" />
+    <Folder Include="GVLs" />
+    <Folder Include="Hardware\4ChannelHeater" />
+    <Folder Include="Hardware\Diluter" />
+    <Folder Include="Hardware\EL70xxDrive" />
+    <Folder Include="Hardware\FBox\PneuChannels" />
+    <Folder Include="Hardware\HuberUnistat" />
+    <Folder Include="Hardware\MultiZ\Gripper" />
+    <Folder Include="Hardware\MultiZ\PWM" />
+    <Folder Include="Hardware\NanotecPanDrive" />
+    <Folder Include="Hardware\RS232" />
+    <Folder Include="Hardware\Safety" />
+    <Folder Include="Hardware\MultiZ" />
+    <Folder Include="Hardware\InkStation" />
+    <Folder Include="Hardware\FBox" />
+    <Folder Include="Hardware\LiquidReserve" />
+    <Folder Include="Hardware\IOExpander" />
+    <Folder Include="Hardware\BottleRack" />
+    <Folder Include="Hardware\HighVoltSupply" />
+    <Folder Include="Hardware\MultiZ\Extruder" />
+    <Folder Include="Hardware\MultiZ\GPIO" />
+    <Folder Include="Hardware\MultiZ\Heater" />
+    <Folder Include="Hardware\MultiZ\Piezo" />
+    <Folder Include="Hardware\PTOStepper" />
+    <Folder Include="Hardware\Reactor" />
+    <Folder Include="Hardware\Settings" />
+    <Folder Include="Hardware\TipCalibrator" />
+    <Folder Include="Hardware\TipCleaner" />
+    <Folder Include="Hardware\PowderStation" />
+    <Folder Include="Hardware\TMCM-1140" />
+    <Folder Include="Hardware\TrayLock" />
+    <Folder Include="Hardware\Trigger" />
+    <Folder Include="Hardware\XYDrive" />
+    <Folder Include="Hardware\SDO_Com" />
+    <Folder Include="Configuration" />
+    <Folder Include="FirmwUpdate" />
+    <Folder Include="GCode" />
+    <Folder Include="Actions" />
+    <Folder Include="Objects\Targets\Active" />
+    <Folder Include="Objects\Targets\Passive" />
+    <Folder Include="Sequence" />
+    <Folder Include="Objects\Tools" />
+    <Folder Include="Objects\Pieces" />
+    <Folder Include="OperatingModes" />
+    <Folder Include="Hardware" />
+    <Folder Include="Objects" />
+    <Folder Include="Objects\Devices" />
+    <Folder Include="Objects\Interfaces" />
+    <Folder Include="Objects\Targets" />
+    <Folder Include="Error" />
+    <Folder Include="MainProgs" />
+    <Folder Include="Version" />
+  </ItemGroup>
+  <ItemGroup>
+    <PlaceholderReference Include="Tc2_MC2">
+      <DefaultResolution>Tc2_MC2, * (Beckhoff Automation GmbH)</DefaultResolution>
+      <Namespace>Tc2_MC2</Namespace>
+    </PlaceholderReference>
+    <PlaceholderReference Include="Tc2_NCI">
+      <DefaultResolution>Tc2_NCI, * (Beckhoff Automation GmbH)</DefaultResolution>
+      <Namespace>Tc2_NCI</Namespace>
+    </PlaceholderReference>
+    <PlaceholderReference Include="Tc2_Standard">
+      <DefaultResolution>Tc2_Standard, * (Beckhoff Automation GmbH)</DefaultResolution>
+      <Namespace>Tc2_Standard</Namespace>
+    </PlaceholderReference>
+    <PlaceholderReference Include="Tc2_System">
+      <DefaultResolution>Tc2_System, * (Beckhoff Automation GmbH)</DefaultResolution>
+      <Namespace>Tc2_System</Namespace>
+    </PlaceholderReference>
+    <PlaceholderReference Include="Tc3_Interfaces">
+      <DefaultResolution>Tc3_Interfaces, * (Beckhoff Automation GmbH)</DefaultResolution>
+      <Namespace>Tc3_Interfaces</Namespace>
+    </PlaceholderReference>
+    <PlaceholderReference Include="Tc3_Module">
+      <DefaultResolution>Tc3_Module, * (Beckhoff Automation GmbH)</DefaultResolution>
+      <Namespace>Tc3_Module</Namespace>
+    </PlaceholderReference>
+  </ItemGroup>
+  <ItemGroup>
+    <Content Include="SPS1.tmc">
+      <SubType>Content</SubType>
+    </Content>
+  </ItemGroup>
+  <ItemGroup>
+    <LibraryReference Include="Tc2_EtherCAT,newest,Beckhoff Automation GmbH">
+      <Namespace>Tc2_EtherCAT</Namespace>
+    </LibraryReference>
+    <LibraryReference Include="Tc2_IoFunctions,newest,Beckhoff Automation GmbH">
+      <Namespace>Tc2_IoFunctions</Namespace>
+    </LibraryReference>
+    <LibraryReference Include="Tc2_SerialCom,newest,Beckhoff Automation GmbH">
+      <Namespace>Tc2_SerialCom</Namespace>
+    </LibraryReference>
+    <LibraryReference Include="Tc2_SUPS,newest,Beckhoff Automation GmbH">
+      <Namespace>Tc2_SUPS</Namespace>
+    </LibraryReference>
+    <LibraryReference Include="Tc2_SystemCX,newest,Beckhoff Automation GmbH">
+      <Namespace>Tc2_SystemCX</Namespace>
+    </LibraryReference>
+    <LibraryReference Include="Tc2_Utilities,newest,Beckhoff Automation GmbH">
+      <Namespace>Tc2_Utilities</Namespace>
+    </LibraryReference>
+    <LibraryReference Include="Tc3_LinMot,1.0.0.3,NTI AG">
+      <Namespace>Tc3_LinMot</Namespace>
+    </LibraryReference>
+    <LibraryReference Include="Tc3_MemMan,newest,Beckhoff Automation GmbH">
+      <Namespace>Tc3_MemMan</Namespace>
+    </LibraryReference>
+  </ItemGroup>
+  <ItemGroup>
+    <PlaceholderResolution Include="Tc2_Math">
+      <Resolution>Tc2_Math, 3.3.0.0 (Beckhoff Automation GmbH)</Resolution>
+    </PlaceholderResolution>
+    <PlaceholderResolution Include="Tc2_Standard">
+      <Resolution>Tc2_Standard, * (Beckhoff Automation GmbH)</Resolution>
+    </PlaceholderResolution>
+    <PlaceholderResolution Include="Tc2_System">
+      <Resolution>Tc2_System, * (Beckhoff Automation GmbH)</Resolution>
+    </PlaceholderResolution>
+    <PlaceholderResolution Include="Tc2_Utilities">
+      <Resolution>Tc2_Utilities, 3.3.17.0 (Beckhoff Automation GmbH)</Resolution>
+    </PlaceholderResolution>
+    <PlaceholderResolution Include="Tc3_Interfaces">
+      <Resolution>Tc3_Interfaces, * (Beckhoff Automation GmbH)</Resolution>
+    </PlaceholderResolution>
+    <PlaceholderResolution Include="Tc3_Module">
+      <Resolution>Tc3_Module, * (Beckhoff Automation GmbH)</Resolution>
+    </PlaceholderResolution>
+  </ItemGroup>
+  <ItemGroup>
+    <SubObject Include="FB_TrayTransporter.P_bReadyForDeliveringLeft">
+      <ExcludeFromBuild>true</ExcludeFromBuild>
+    </SubObject>
+    <SubObject Include="FB_TrayTransporter.P_bReadyForDeliveringRight">
+      <ExcludeFromBuild>true</ExcludeFromBuild>
+    </SubObject>
+    <SubObject Include="FB_TrayTransporter.P_bReadyForTakingLeft">
+      <ExcludeFromBuild>true</ExcludeFromBuild>
+    </SubObject>
+    <SubObject Include="FB_TrayTransporter.P_bReadyForTakingRight">
+      <ExcludeFromBuild>true</ExcludeFromBuild>
+    </SubObject>
+  </ItemGroup>
+  <ProjectExtensions>
+    <PlcProjectOptions>
+      <XmlArchive>
+        <Data>
+          <o xml:space="preserve" t="OptionKey">
+      <v n="Name">"&lt;ProjectRoot&gt;"</v>
+      <d n="SubKeys" t="Hashtable" ckt="String" cvt="OptionKey">
+        <v>{192FAD59-8248-4824-A8DE-9177C94C195A}</v>
+        <o>
+          <v n="Name">"{192FAD59-8248-4824-A8DE-9177C94C195A}"</v>
+          <d n="SubKeys" t="Hashtable" />
+          <d n="Values" t="Hashtable" ckt="String" cvt="String">
+            <v>CurrentUmlCompilerVersion</v>
+            <v>4.0.1.1</v>
+          </d>
+        </o>
+        <v>{8F99A816-E488-41E4-9FA3-846536012284}</v>
+        <o>
+          <v n="Name">"{8F99A816-E488-41E4-9FA3-846536012284}"</v>
+          <d n="SubKeys" t="Hashtable" />
+          <d n="Values" t="Hashtable" ckt="String" cvt="String">
+            <v>DisabledWarningIds</v>
+            <v>371</v>
+          </d>
+        </o>
+        <v>{29BD8D0C-3586-4548-BB48-497B9A01693F}</v>
+        <o>
+          <v n="Name">"{29BD8D0C-3586-4548-BB48-497B9A01693F}"</v>
+          <d n="SubKeys" t="Hashtable" ckt="String" cvt="OptionKey">
+            <v>Rules</v>
+            <o>
+              <v n="Name">"Rules"</v>
+              <d n="SubKeys" t="Hashtable" ckt="String" cvt="OptionKey">
+                <v>28</v>
+                <o>
+                  <v n="Name">"28"</v>
+                  <d n="SubKeys" t="Hashtable" />
+                  <d n="Values" t="Hashtable" ckt="String" cvt="Boolean">
+                    <v>bActive</v>
+                    <v>False</v>
+                  </d>
+                </o>
+                <v>33</v>
+                <o>
+                  <v n="Name">"33"</v>
+                  <d n="SubKeys" t="Hashtable" />
+                  <d n="Values" t="Hashtable" ckt="String" cvt="Boolean">
+                    <v>bActive</v>
+                    <v>False</v>
+                  </d>
+                </o>
+                <v>4</v>
+                <o>
+                  <v n="Name">"4"</v>
+                  <d n="SubKeys" t="Hashtable" />
+                  <d n="Values" t="Hashtable" ckt="String" cvt="Boolean">
+                    <v>bActive</v>
+                    <v>False</v>
+                  </d>
+                </o>
+                <v>6</v>
+                <o>
+                  <v n="Name">"6"</v>
+                  <d n="SubKeys" t="Hashtable" />
+                  <d n="Values" t="Hashtable" ckt="String" cvt="Boolean">
+                    <v>bActive</v>
+                    <v>False</v>
+                  </d>
+                </o>
+                <v>27</v>
+                <o>
+                  <v n="Name">"27"</v>
+                  <d n="SubKeys" t="Hashtable" />
+                  <d n="Values" t="Hashtable" ckt="String" cvt="Boolean">
+                    <v>bActive</v>
+                    <v>False</v>
+                  </d>
+                </o>
+              </d>
+              <d n="Values" t="Hashtable" />
+            </o>
+          </d>
+          <d n="Values" t="Hashtable" />
+        </o>
+        <v>{40450F57-0AA3-4216-96F3-5444ECB29763}</v>
+        <o>
+          <v n="Name">"{40450F57-0AA3-4216-96F3-5444ECB29763}"</v>
+          <d n="SubKeys" t="Hashtable" />
+          <d n="Values" t="Hashtable" ckt="String">
+            <v>ActiveVisuExtensionsLength</v>
+            <v>0</v>
+            <v>ActiveVisuProfile</v>
+            <v>"IR0whWr8bwfyBwAAHf+pawAAAABVAgAADnffSgAAAAABAAAAAAAAAAEaUwB5AHMAdABlAG0ALgBTAHQAcgBpAG4AZwACTHsAZgA5ADUAYgBiADQAMgA2AC0ANQA1ADIANAAtADQAYgA0ADUALQA5ADQAMAAwAC0AZgBiADAAZgAyAGUANwA3AGUANQAxAGIAfQADCE4AYQBtAGUABDJUAHcAaQBuAEMAQQBUACAAMwAuADEAIABCAHUAaQBsAGQAIAA0ADAAMgAyAC4AMQAwAAUWUAByAG8AZgBpAGwAZQBEAGEAdABhAAZMewAxADYAZQA1ADUAYgA2ADAALQA3ADAANAAzAC0ANABhADYAMwAtAGIANgA1AGIALQA2ADEANAA3ADEAMwA4ADcAOABkADQAMgB9AAcSTABpAGIAcgBhAHIAaQBlAHMACEx7ADMAYgBmAGQANQA0ADUAOQAtAGIAMAA3AGYALQA0AGQANgBlAC0AYQBlADEAYQAtAGEAOAAzADMANQA2AGEANQA1ADEANAAyAH0ACUx7ADkAYwA5ADUAOAA5ADYAOAAtADIAYwA4ADUALQA0ADEAYgBiAC0AOAA4ADcAMQAtADgAOQA1AGYAZgAxAGYAZQBkAGUAMQBhAH0ACg5WAGUAcgBzAGkAbwBuAAsGaQBuAHQADApVAHMAYQBnAGUADQpUAGkAdABsAGUADhpWAGkAcwB1AEUAbABlAG0ATQBlAHQAZQByAA8OQwBvAG0AcABhAG4AeQAQDFMAeQBzAHQAZQBtABESVgBpAHMAdQBFAGwAZQBtAHMAEjBWAGkAcwB1AEUAbABlAG0AcwBTAHAAZQBjAGkAYQBsAEMAbwBuAHQAcgBvAGwAcwATKFYAaQBzAHUARQBsAGUAbQBzAFcAaQBuAEMAbwBuAHQAcgBvAGwAcwAUJFYAaQBzAHUARQBsAGUAbQBUAGUAeAB0AEUAZABpAHQAbwByABUiVgBpAHMAdQBOAGEAdABpAHYAZQBDAG8AbgB0AHIAbwBsABYUdgBpAHMAdQBpAG4AcAB1AHQAcwAXDHMAeQBzAHQAZQBtABgYVgBpAHMAdQBFAGwAZQBtAEIAYQBzAGUAGSZEAGUAdgBQAGwAYQBjAGUAaABvAGwAZABlAHIAcwBVAHMAZQBkABoIYgBvAG8AbAAbIlAAbAB1AGcAaQBuAEMAbwBuAHMAdAByAGEAaQBuAHQAcwAcTHsANAAzAGQANQAyAGIAYwBlAC0AOQA0ADIAYwAtADQANABkADcALQA5AGUAOQA0AC0AMQBiAGYAZABmADMAMQAwAGUANgAzAGMAfQAdHEEAdABMAGUAYQBzAHQAVgBlAHIAcwBpAG8AbgAeFFAAbAB1AGcAaQBuAEcAdQBpAGQAHxZTAHkAcwB0AGUAbQAuAEcAdQBpAGQAIEhhAGYAYwBkADUANAA0ADYALQA0ADkAMQA0AC0ANABmAGUANwAtAGIAYgA3ADgALQA5AGIAZgBmAGUAYgA3ADAAZgBkADEANwAhFFUAcABkAGEAdABlAEkAbgBmAG8AIkx7AGIAMAAzADMANgA2AGEAOAAtAGIANQBjADAALQA0AGIAOQBhAC0AYQAwADAAZQAtAGUAYgA4ADYAMAAxADEAMQAwADQAYwAzAH0AIw5VAHAAZABhAHQAZQBzACRMewAxADgANgA4AGYAZgBjADkALQBlADQAZgBjAC0ANAA1ADMAMgAtAGEAYwAwADYALQAxAGUAMwA5AGIAYgA1ADUANwBiADYAOQB9ACVMewBhADUAYgBkADQAOABjADMALQAwAGQAMQA3AC0ANAAxAGIANQAtAGIAMQA2ADQALQA1AGYAYwA2AGEAZAAyAGIAOQA2AGIANwB9ACYWTwBiAGoAZQBjAHQAcwBUAHkAcABlACdUVQBwAGQAYQB0AGUATABhAG4AZwB1AGEAZwBlAE0AbwBkAGUAbABGAG8AcgBDAG8AbgB2AGUAcgB0AGkAYgBsAGUATABpAGIAcgBhAHIAaQBlAHMAKBBMAGkAYgBUAGkAdABsAGUAKRRMAGkAYgBDAG8AbQBwAGEAbgB5ACoeVQBwAGQAYQB0AGUAUAByAG8AdgBpAGQAZQByAHMAKzhTAHkAcwB0AGUAbQAuAEMAbwBsAGwAZQBjAHQAaQBvAG4AcwAuAEgAYQBzAGgAdABhAGIAbABlACwSdgBpAHMAdQBlAGwAZQBtAHMALUg2AGMAYgAxAGMAZABlADEALQBkADUAZABjAC0ANABhADMAYgAtADkAMAA1ADQALQAyADEAZgBhADcANQA2AGEAMwBmAGEANAAuKEkAbgB0AGUAcgBmAGEAYwBlAFYAZQByAHMAaQBvAG4ASQBuAGYAbwAvTHsAYwA2ADEAMQBlADQAMAAwAC0ANwBmAGIAOQAtADQAYwAzADUALQBiADkAYQBjAC0ANABlADMAMQA0AGIANQA5ADkANgA0ADMAfQAwGE0AYQBqAG8AcgBWAGUAcgBzAGkAbwBuADEYTQBpAG4AbwByAFYAZQByAHMAaQBvAG4AMgxMAGUAZwBhAGMAeQAzMEwAYQBuAGcAdQBhAGcAZQBNAG8AZABlAGwAVgBlAHIAcwBpAG8AbgBJAG4AZgBvADQwTABvAGEAZABMAGkAYgByAGEAcgBpAGUAcwBJAG4AdABvAFAAcgBvAGoAZQBjAHQANRpDAG8AbQBwAGEAdABpAGIAaQBsAGkAdAB5ANAAAhoD0AMBLQTQBQYaB9AHCBoBRQcJCNAACRoERQoLBAMAAAAFAAAACgAAAAAAAADQDAutAgAAANANAS0O0A8BLRDQAAkaBEUKCwQDAAAABQAAAAoAAAAoAAAA0AwLrQEAAADQDQEtEdAPAS0Q0AAJGgRFCgsEAwAAAAUAAAAKAAAAAAAAANAMC60CAAAA0A0BLRLQDwEtENAACRoERQoLBAMAAAAFAAAACgAAACgAAADQDAutAgAAANANAS0T0A8BLRDQAAkaBEUKCwQDAAAABQAAAAoAAAAKAAAA0AwLrQIAAADQDQEtFNAPAS0Q0AAJGgRFCgsEAwAAAAUAAAAKAAAAKAAAANAMC60CAAAA0A0BLRXQDwEtENAACRoERQoLBAMAAAAFAAAACgAAAAAAAADQDAutAgAAANANAS0W0A8BLRfQAAkaBEUKCwQDAAAABQAAAAoAAAAoAAAA0AwLrQQAAADQDQEtGNAPAS0Q0BkarQFFGxwB0AAcGgJFHQsEAwAAAAUAAAAKAAAAAAAAANAeHy0g0CEiGgJFIyQC0AAlGgVFCgsEAwAAAAMAAAAAAAAACgAAANAmC60AAAAA0AMBLSfQKAEtEdApAS0Q0AAlGgVFCgsEAwAAAAMAAAAAAAAACgAAANAmC60BAAAA0AMBLSfQKAEtEdApAS0QmiorAUUAAQLQAAEtLNAAAS0X0AAfLS3QLi8aA9AwC60BAAAA0DELrRMAAADQMhqtANAzLxoD0DALrQIAAADQMQutAwAAANAyGq0A0DQarQDQNRqtAA=="</v>
+          </d>
+        </o>
+        <v>{535658C0-5AF5-460d-99A4-BFFB984A829A}</v>
+        <o>
+          <v n="Name">"{535658C0-5AF5-460d-99A4-BFFB984A829A}"</v>
+          <d n="SubKeys" t="Hashtable" />
+          <d n="Values" t="Hashtable" ckt="String" cvt="ExactVersionConstraintToSave">
+            <v>VersionConstraint</v>
+            <o>
+              <v n="TheVersion">"3.1.4022.22"</v>
+            </o>
+          </d>
+        </o>
+        <v>{246001F4-279D-43AC-B241-948EB31120E1}</v>
+        <o>
+          <v n="Name">"{246001F4-279D-43AC-B241-948EB31120E1}"</v>
+          <d n="SubKeys" t="Hashtable" />
+          <d n="Values" t="Hashtable" />
+        </o>
+      </d>
+      <d n="Values" t="Hashtable" />
+    </o>
+        </Data>
+        <TypeList>
+          <Type n="Boolean">System.Boolean</Type>
+          <Type n="ExactVersionConstraintToSave">{f9079115-a4ba-4f30-bf7c-9e76613146fc}</Type>
+          <Type n="Hashtable">System.Collections.Hashtable</Type>
+          <Type n="Int32">System.Int32</Type>
+          <Type n="OptionKey">{54dd0eac-a6d8-46f2-8c27-2f43c7e49861}</Type>
+          <Type n="String">System.String</Type>
+        </TypeList>
+      </XmlArchive>
+    </PlcProjectOptions>
+  </ProjectExtensions>
+</Project>

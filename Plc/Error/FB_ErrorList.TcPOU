@@ -1,0 +1,151 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<TcPlcObject Version="1.1.0.1" ProductVersion="3.1.4022.7">
+  <POU Name="FB_ErrorList" Id="{f91eb4e6-3a48-4b25-b616-2a637255d9c1}" SpecialFunc="None">
+    <Declaration><![CDATA[FUNCTION_BLOCK FB_ErrorList
+VAR_INPUT
+	putPosPtr	: POINTER TO T_LinkedListEntry := 0;(* Linked list node position pointer (used by A_Find, A_GetNext, A_GetPrev) *)
+	putValue 	: ST_Error;(* Linked list nod value (used by A_AddHead, A_AddTail, A_Find )*)
+END_VAR
+VAR_OUTPUT
+	bOk			: BOOL := FALSE;(* TRUE = Success, FALSE = Failed *)
+	getPosPtr	: POINTER TO T_LinkedListEntry := 0;(* Returned linked list node position pointer *)
+	getValue 	: ST_Error;(* Returned linked list node value *)
+	nCount		: UDINT := 0;(* Linked list size (number of used nodes, used by A_Count) *)	
+END_VAR
+VAR
+	dataPool		: ARRAY[0..10] OF ST_Error;(* Structured data element pool *)
+	nodes			: ARRAY[0..10] OF T_LinkedListEntry;(* Max. number of linked list nodes. The value of list node = 32 bit integer (pointer to dataPool-array-entry) *)
+	fbList 			: FB_LinkedListCtrl;(* basic linked list control function block *)
+	hList 			: T_HLINKEDLIST;(* linked list handle *)
+	pRefPtr			: POINTER TO ST_Error := 0;
+	indexOfElem		: PVOID;
+	nSumCount		: UINT;
+END_VAR
+]]></Declaration>
+    <Implementation>
+      <ST><![CDATA[]]></ST>
+    </Implementation>
+    <Action Name="A_Add" Id="{60a61898-c615-4159-b3cb-ed9ebb26326e}">
+      <Implementation>
+        <ST><![CDATA[putValue.MachineMode := MainDispacher.eCurrentMode;
+putValue.MachineState := MainDispacher.P_eCurrentState;
+putValue.TimeStamp := timeStamp;
+(* Adds head to the node list *)
+MEMSET( ADR( getValue ), 0, SIZEOF( getValue ) );
+getPosPtr := 0;
+
+fbList.A_AddHeadValue( hList := hList, putValue := 16#00000000(* we will set this value later *), getPosPtr=>getPosPtr, bOk=>bOk );(* Add new element to the list, getPosPtr points to the new list node *)
+IF fbList.bOk THEN(* Success *)
+	fbList.A_GetIndexAtPosPtr( hList := hList, putPosPtr := getPosPtr, getValue =>indexOfElem, bOk=>bOk );(* Get array index of getPosPtr *)
+	IF fbList.bOk THEN(* Success *)
+		pRefPtr 	:= ADR( dataPool[indexOfElem] );(* Get pointer to the data element *)
+		pRefPtr^ := putValue;(* set element value *)
+
+		fbList.A_SetValueAtPosPtr( hList := hList, putPosPtr := getPosPtr, putValue := pRefPtr, bOk=>bOk );(* Assign the node value = pointer to the data element *)
+		IF fbList.bOk THEN(* Success *)
+			getValue := putValue;
+		END_IF
+	END_IF
+END_IF
+
+nCount := hList.nCount;]]></ST>
+      </Implementation>
+    </Action>
+    <Action Name="A_Get" Id="{b26bd074-be68-46c8-840d-be2438e98006}">
+      <Implementation>
+        <ST><![CDATA[(* Gets tail node position pointer and value *)
+MEMSET( ADR( getValue ), 0, SIZEOF( getValue ) );
+getPosPtr := 0;
+
+fbList.A_GetTail( hList := hList, getValue=>pRefPtr, getPosPtr=>getPosPtr, bOk=>bOk );
+IF fbList.bOk THEN
+	getValue := pRefPtr^;
+END_IF]]></ST>
+      </Implementation>
+    </Action>
+    <Action Name="A_Remove" Id="{79738955-2ee8-4dea-8034-84c741994bdf}">
+      <Implementation>
+        <ST><![CDATA[(* Remove tail node from node list *)
+MEMSET( ADR( getValue ), 0, SIZEOF( getValue ) );
+getPosPtr := 0;
+
+fbList.A_RemoveTailValue( hList := hList, getValue=>pRefPtr, getPosPtr=>getPosPtr, bOk=>bOk );
+IF fbList.bOk THEN
+	getValue := pRefPtr^;
+END_IF
+
+nCount := hList.nCount;]]></ST>
+      </Implementation>
+    </Action>
+    <Action Name="A_Reset" Id="{c66ed07f-e876-41c3-82c6-b4af09e6fecb}">
+      <Implementation>
+        <ST><![CDATA[(* Reset/initialize linked list *)
+MEMSET( ADR( getValue ), 0, SIZEOF( getValue ) );
+getPosPtr := 0;
+bOk := F_CreateLinkedListHnd( ADR( nodes ), SIZEOF( nodes ), hList );(* Intialize list handle *)
+fbList.A_Reset( hList := hList, bOk=>bOk );
+nCount := 0;]]></ST>
+      </Implementation>
+    </Action>
+    <Method Name="M_Add" Id="{ea26c82c-08c0-4411-8772-d93fe1689063}">
+      <Declaration><![CDATA[METHOD M_Add
+VAR_INPUT
+	stError	: ST_Error;
+END_VAR]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[A_Add(putValue := stError);]]></ST>
+      </Implementation>
+    </Method>
+    <Method Name="M_AddExt" Id="{463fd9e7-3500-45f5-81aa-a4b576027511}">
+      <Declaration><![CDATA[METHOD M_AddExt
+VAR_INPUT
+	nErrorId	: ERRORID;
+	nErrorId2	: UDINT;
+	HardwareGrp	: HARDWAREGRP;		//Hardwaregruppe, bei der der Fehler aufgetaucht ist
+	HardwareNr	: UINT;				//Hardwarenummer, bei der der Fehler aufgetaucht ist
+	POU			: E_POU;			//Baustein, in dem der Fehler aufgetreten ist
+	POUAction	: E_POUACT;			//Methode bzw. Action, in der der Fehler aufgetreten ist
+	POUState	: UINT;				//State der Statemachine, in der der Fehler aufgetreten ist
+END_VAR
+VAR
+	stError : ST_Error;
+END_VAR]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[stError.ErrorId := nErrorId;
+stError.ErrorId2 := nErrorId2;
+stError.HardwareGrp := HardwareGrp;
+stError.HardwareNr := HardwareNr;
+stError.POU := POU;
+stError.POUAction := POUAction;
+stError.POUState := POUState;
+A_Add(putValue := stError);]]></ST>
+      </Implementation>
+    </Method>
+    <LineIds Name="FB_ErrorList">
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="FB_ErrorList.A_Add">
+      <LineId Id="2" Count="20" />
+      <LineId Id="1" Count="0" />
+    </LineIds>
+    <LineIds Name="FB_ErrorList.A_Get">
+      <LineId Id="2" Count="6" />
+      <LineId Id="1" Count="0" />
+    </LineIds>
+    <LineIds Name="FB_ErrorList.A_Remove">
+      <LineId Id="2" Count="8" />
+      <LineId Id="1" Count="0" />
+    </LineIds>
+    <LineIds Name="FB_ErrorList.A_Reset">
+      <LineId Id="2" Count="4" />
+      <LineId Id="1" Count="0" />
+    </LineIds>
+    <LineIds Name="FB_ErrorList.M_Add">
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="FB_ErrorList.M_AddExt">
+      <LineId Id="3" Count="6" />
+      <LineId Id="2" Count="0" />
+    </LineIds>
+  </POU>
+</TcPlcObject>

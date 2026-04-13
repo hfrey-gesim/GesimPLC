@@ -1,0 +1,1281 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<TcPlcObject Version="1.1.0.1" ProductVersion="3.1.4024.9">
+  <POU Name="FB_PassivPip" Id="{c2d6788f-c98a-442c-a84a-6ab0a78f4745}" SpecialFunc="None">
+    <Declaration><![CDATA[FUNCTION_BLOCK FB_PassivPip EXTENDS FB_GCodeTool IMPLEMENTS I_UsingDryPad, I_Dispenser
+VAR_INPUT
+END_VAR
+VAR_OUTPUT
+END_VAR
+VAR
+	//SpecProperties
+	nDiluterObjId		: UINT;
+	pDiluter			: POINTER TO FB_Diluter;
+	pDiluter3Inputs		: POINTER TO FB_Diluter3Inputs;
+	nDrypadArea			: USINT;
+	tDryTime			: TIME;
+	nDispFlowFix		: DINT;	//wird für das Dispensen benutzt, wenn Tool am HybridDispenser oder M127 (UniDispense)
+
+	//****************************************Aktionvariablen****************************************************
+	stActionDataSpec	: ST_ActionData;
+	
+	//Action: "Aspirate"
+	bAspirate			: BOOL;
+	nStateA_Aspirate	: USINT;
+	nQuantity			: DINT;
+	nFlow				: DINT;
+	
+	//Action: "Dispense"
+	bDispense			: BOOL;
+	nStateA_Dispense	: USINT;
+	nDilInput			: USINT;
+	bEndless			: BOOL;
+	
+	//Action: "DilMovePlunger"
+	bDilMovePlunger		: BOOL;
+	nStateA_DilMovePlunger	: USINT;
+	nDilMovePlungerPos	: DINT;
+	nDilMovePlungerSpeed: DINT;
+	nDilMovePlungerValve: DINT;
+	
+	
+	//Action: "Mix"
+	bMix				: BOOL;
+	nStateA_Mix			: USINT;
+	nFlowAsp			: DINT;
+	nFlowDisp			: DINT;
+	nMixRepeats			: UINT;
+	nCurrMixRepeats		: UINT;
+	tMixDelay1			: TIME; //Delay zwischen Asp und Disp
+	tMixDelay2			: TIME; //Delay nach jedem Zyklus
+	timerMix			: TON;
+	
+	//Action: "Eject"
+	bEject				: BOOL;
+	nStateA_Eject		: USINT;
+	fbMultiZTipEjector	: FB_MultiZTipEjector;
+	
+END_VAR]]></Declaration>
+    <Implementation>
+      <ST><![CDATA[IF eCurrentState = E_MachineState.MACHINESTATE_Active THEN
+	
+	IF bAspirate THEN
+		A_Aspirate();
+		IF nStateA_Aspirate >= 80 THEN
+			IF nStateA_Aspirate >= 99 THEN
+				fbErrorList.M_Add(stError);
+				bError := TRUE;	
+			END_IF
+			bAspirate := FALSE;
+			nStateA_Aspirate := 0;
+			M_RemoveListEntry(nSearchValue:= E_Action.ACTION_Aspirate);
+		END_IF
+	END_IF
+
+	IF bDispense THEN
+		A_Dispense();
+		IF nStateA_Dispense >= 80 THEN
+			IF nStateA_Dispense >= 99 THEN
+				stError.Cmd := E_Action.ACTION_Dispense;
+				fbErrorList.M_Add(stError);
+				bError := TRUE;	
+			END_IF
+			bDispense := FALSE;
+			nStateA_Dispense := 0;
+			M_RemoveListEntry(nSearchValue:= E_Action.ACTION_Dispense);
+		END_IF
+	END_IF
+	
+	IF bMix THEN
+		A_Mix();
+		IF nStateA_Mix >= 80 THEN
+			IF nStateA_Mix >= 99 THEN
+				stError.Cmd := E_Action.ACTION_Mix;
+				fbErrorList.M_Add(stError);
+				bError := TRUE;	
+			END_IF
+			bMix := FALSE;
+			nStateA_Mix := 0;
+			M_RemoveListEntry(nSearchValue:= E_Action.ACTION_Mix);
+		END_IF
+	END_IF
+	
+	IF bEject THEN
+		A_Eject();
+		IF nStateA_Eject >= 80 THEN
+			IF nStateA_Eject >= 99 THEN
+				stError.Cmd := E_Action.ACTION_Eject;
+				fbErrorList.M_Add(stError);
+				bError := TRUE;	
+			END_IF
+			bEject := FALSE;
+			nStateA_Eject := 0;
+			M_RemoveListEntry(nSearchValue:= E_Action.ACTION_Eject);
+		END_IF
+	END_IF
+	
+	IF bDilMovePlunger THEN
+		A_DilMovePlunger();
+		IF nStateA_DilMovePlunger >= 80 THEN
+			IF nStateA_DilMovePlunger >= 99 THEN
+				stError.Cmd := E_Action.ACTION_DilMovePlunger;
+				fbErrorList.M_Add(stError);
+				bError := TRUE;	
+			END_IF
+			bDilMovePlunger := FALSE;
+			nStateA_DilMovePlunger := 0;
+			M_RemoveListEntry(nSearchValue:= E_Action.ACTION_DilMovePlunger);
+		END_IF
+	END_IF
+
+END_IF
+
+SUPER^();	//FB_MzTool aufrufen
+
+aObjProcData[nNotifyId] := stProcessData;
+stProcessData.n32Data[7] := BOOL_TO_DINT(bAspirate OR bDispense);
+]]></ST>
+    </Implementation>
+    <Action Name="A_Aspirate" Id="{f38462c0-62f8-4e1d-9cd4-97b14c692d8c}">
+      <Implementation>
+        <ST><![CDATA[IF pDiluter^.P_bError THEN
+	stError.ErrorId := pDiluter^.P_nErrorId;
+	stError.POUState := nStateA_Aspirate;
+	nStateA_Aspirate := 99;
+END_IF
+
+CASE nStateA_Aspirate OF
+	0:	MEMSET(ADR(stActionDataSpec),0,SIZEOF(stActionDataSpec));
+		stActionDataSpec.eAction := E_Action.ACTION_DilPump;
+		stActionDataSpec.aParams[1] := E_DilPumpMode.MODE_Suck;
+		stActionDataSpec.aParams[2] := nQuantity; 
+		stActionDataSpec.aParams[3] := nFlow;
+		//stActionDataSpec.aParams[4]  //ReloadSpeed wird von DilConfig übernommen
+		(*Beim normalen Diluter wird ValvePosReload aus der DilConfig übernommen, beim Diluter3Inputs wird
+		die ValvePos über die InputNr ermittelt.*)
+		IF pDiluter3Inputs > 0 THEN
+			stActionDataSpec.aParams[6] := pDiluter3Inputs^.M_GetValvePosInput(nDilInput);
+		END_IF
+		
+		stError.ErrorId := pDiluter^.M_ExeAction(stActionDataSpec);
+		IF stError.ErrorId > 0 THEN
+			stError.POUState := nStateA_Aspirate;
+			nStateA_Aspirate := 99;
+		ELSE
+			nStateA_Aspirate := 1;	
+		END_IF
+		
+	1:	//Warten bis Aspiration fertig
+		IF NOT pDiluter^.M_GetActionBusy(E_Action.ACTION_DilPump) THEN
+			nStateA_Aspirate := 80;
+		END_IF
+		
+	70:	//Abbrechen
+		MEMSET(ADR(stActionDataSpec),0,SIZEOF(stActionDataSpec));
+		stActionDataSpec.eAction := E_Action.ACTION_Stop;
+		
+		pDiluter^.M_ExeAction(stActionDataSpec);
+		nStateA_Aspirate := 71;
+		
+	71:	
+		IF NOT pDiluter^.P_bBusy THEN
+			nStateA_Aspirate := 80;
+		END_IF
+END_CASE
+
+//Errorhandling
+IF nStateA_Aspirate = 99 THEN
+	stError.Cmd := E_Action.ACTION_Aspirate;
+	stError.POU := E_POU.POU_FB_PassivPip;
+	stError.POUAction := E_POUACT.POUACT_A_Aspirate;
+	fbErrorList.M_Add(stError);
+END_IF]]></ST>
+      </Implementation>
+    </Action>
+    <Action Name="A_DilMovePlunger" Id="{40eeea6e-6aae-4502-949d-cc23ea3fb8b9}">
+      <Implementation>
+        <ST><![CDATA[IF pDiluter^.P_bError THEN
+	stError.ErrorId := pDiluter^.P_nErrorId;
+	stError.POUState := nStateA_DilMovePlunger;
+	nStateA_DilMovePlunger := 99;
+END_IF
+
+CASE nStateA_DilMovePlunger OF
+	0:	MEMSET(ADR(stActionDataSpec),0,SIZEOF(stActionDataSpec));
+		stActionDataSpec.eAction := E_Action.ACTION_DilMovePlunger;
+		stActionDataSpec.aParams[1] := nDilMovePlungerPos;
+		stActionDataSpec.aParams[2] := nDilMovePlungerSpeed;
+		stActionDataSpec.aParams[3] := nDilMovePlungerValve;
+		stError.ErrorId := pDiluter^.M_ExeAction(stActionDataSpec);
+		IF stError.ErrorId > 0 THEN
+			nStateA_DilMovePlunger := 99;
+		ELSE
+			nStateA_DilMovePlunger := 1;	
+		END_IF
+	
+	1:	IF NOT pDiluter^.M_GetActionBusy(E_Action.ACTION_DilMovePlunger) THEN
+			nStateA_DilMovePlunger := 80;
+		END_IF
+ 		
+	70: //Abrechen
+		MEMSET(ADR(stActionDataSpec),0,SIZEOF(stActionDataSpec));
+		stActionDataSpec.eAction := E_Action.ACTION_Stop;
+		
+		pDiluter^.M_ExeAction(stActionDataSpec);
+		nStateA_DilMovePlunger := 71;
+		
+	71:	IF NOT pDiluter^.P_bBusy THEN
+			nStateA_DilMovePlunger := 80;
+		END_IF	
+END_CASE
+
+//Errorhandling
+IF nStateA_DilMovePlunger = 99 THEN
+	stError.Cmd := E_Action.ACTION_DilMovePlunger;
+	stError.POU := E_POU.POU_FB_PassivPip;
+	stError.POUAction := E_POUACT.POUACT_A_MovePlunger;
+	fbErrorList.M_Add(stError);
+END_IF]]></ST>
+      </Implementation>
+    </Action>
+    <Action Name="A_Dispense" Id="{2ca4d229-8b23-4ade-9670-24d11fae4862}">
+      <Implementation>
+        <ST><![CDATA[IF pDiluter^.P_bError THEN
+	stError.ErrorId := pDiluter^.P_nErrorId;
+	stError.POUState := nStateA_Dispense;
+	nStateA_Dispense := 99;
+END_IF
+
+CASE nStateA_Dispense OF
+	0:	MEMSET(ADR(stActionDataSpec),0,SIZEOF(stActionDataSpec));
+		stActionDataSpec.eAction := E_Action.ACTION_DilPump;
+		stActionDataSpec.aParams[1] := E_DilPumpMode.MODE_Press;
+		stActionDataSpec.aParams[2] := nQuantity; 
+		stActionDataSpec.aParams[3] := nFlow;
+		//stActionDataSpec.aParams[4]  //ReloadSpeed wird von DilConfig übernommen
+		(*Beim normalen Diluter wird ValvePosReload aus der DilConfig übernommen, beim Diluter3Inputs wird
+		die ValvePos über die InputNr ermittelt.*)
+		IF pDiluter3Inputs > 0 THEN
+			stActionDataSpec.aParams[6] := pDiluter3Inputs^.M_GetValvePosInput(nDilInput);
+		END_IF
+		stActionDataSpec.aParams[7] := BOOL_TO_DINT(bEndless);
+		bEndless := FALSE;
+		
+		stError.ErrorId := pDiluter^.M_ExeAction(stActionDataSpec);
+		IF stError.ErrorId > 0 THEN
+			stError.POUState := nStateA_Dispense;
+			nStateA_Dispense := 99;
+		ELSE
+			nStateA_Dispense := 1;	
+		END_IF
+		
+	1:	//Warten bis Dispensen fertig
+		IF NOT pDiluter^.M_GetActionBusy(E_Action.ACTION_DilPump) THEN
+			nStateA_Dispense := 80;
+		END_IF
+		
+	70:	//Abbrechen
+		MEMSET(ADR(stActionDataSpec),0,SIZEOF(stActionDataSpec));
+		stActionDataSpec.eAction := E_Action.ACTION_Stop;
+		
+		pDiluter^.M_ExeAction(stActionDataSpec);
+		nStateA_Dispense := 71;
+		
+	71:	
+		IF NOT pDiluter^.P_bBusy THEN
+			nStateA_Dispense := 80;
+		END_IF
+END_CASE
+
+//Errorhandling
+IF nStateA_Dispense = 99 THEN
+	stError.Cmd := E_Action.ACTION_Dispense;
+	stError.POU := E_POU.POU_FB_PassivPip;
+	stError.POUAction := E_POUACT.POUACT_A_Dispense;
+	fbErrorList.M_Add(stError);
+END_IF]]></ST>
+      </Implementation>
+    </Action>
+    <Action Name="A_Eject" Id="{ded2f7c9-86ff-4157-8c8d-14fb8bf1b724}">
+      <Implementation>
+        <ST><![CDATA[fbMultiZTipEjector(pfbZAxisRef:= pZAxisRef, bExecute:= TRUE);
+
+IF NOT fbMultiZTipEjector.bBusy THEN
+	IF fbMultiZTipEjector.bError THEN
+		stError.Cmd := E_Action.ACTION_Eject;
+		stError.ErrorId := fbMultiZTipEjector.nErrorId;
+		stError.POUState := nStateA_Eject;
+		stError.POU := E_POU.POU_FB_PassivPip;
+		stError.POUAction := E_POUACT.POUACT_A_Eject;
+		fbErrorList.M_Add(stError);
+		nStateA_Eject := 99;
+	ELSE
+		nStateA_Eject := 80;
+	END_IF
+	fbMultiZTipEjector(bExecute:= FALSE);
+END_IF		]]></ST>
+      </Implementation>
+    </Action>
+    <Action Name="A_Mix" Id="{814ff8f9-d3f8-4c9f-8164-02065ebf87c5}">
+      <Implementation>
+        <ST><![CDATA[IF pDiluter^.P_bError THEN
+	stError.ErrorId := pDiluter^.P_nErrorId;
+	stError.POUState := nStateA_Mix;
+	nStateA_Mix := 99;
+END_IF
+
+CASE nStateA_Mix OF
+	0:	//Aspirieren
+		MEMSET(ADR(stActionDataSpec),0,SIZEOF(stActionDataSpec));
+		stActionDataSpec.eAction := E_Action.ACTION_DilPump;
+		stActionDataSpec.aParams[1] := E_DilPumpMode.MODE_Suck;
+		stActionDataSpec.aParams[2] := nQuantity; 
+		stActionDataSpec.aParams[3] := nFlowAsp;
+		//stActionDataSpec.aParams[4]  //ReloadSpeed wird von DilConfig übernommen
+		(*Beim normalen Diluter wird ValvePosReload aus der DilConfig übernommen, beim Diluter3Inputs wird
+		die ValvePos über die InputNr ermittelt.*)
+		IF pDiluter3Inputs > 0 THEN
+			stActionDataSpec.aParams[6] := pDiluter3Inputs^.M_GetValvePosInput(nDilInput);
+		END_IF
+		
+		stError.ErrorId := pDiluter^.M_ExeAction(stActionDataSpec);
+		IF stError.ErrorId > 0 THEN
+			stError.POUState := nStateA_Mix;
+			nStateA_Mix := 99;
+		ELSE
+			nStateA_Mix := 1;	
+		END_IF
+		
+	1:	//Aspirieren fertig?
+		IF NOT pDiluter^.M_GetActionBusy(E_Action.ACTION_DilPump) THEN
+			timerMix(IN:= TRUE, PT:= tMixDelay1);
+			nStateA_Mix := 2;
+		END_IF
+		
+	2:	//Timer?
+		timerMix();
+		IF timerMix.Q THEN
+			timerMix(IN:= FALSE);
+			nStateA_Mix := 3;
+		END_IF
+		
+	3:	//Dispensen
+		MEMSET(ADR(stActionDataSpec),0,SIZEOF(stActionDataSpec));
+		stActionDataSpec.eAction := E_Action.ACTION_DilPump;
+		stActionDataSpec.aParams[1] := E_DilPumpMode.MODE_Press;
+		stActionDataSpec.aParams[2] := nQuantity; 
+		stActionDataSpec.aParams[3] := nFlowDisp;
+		//stActionDataSpec.aParams[4]  //ReloadSpeed wird von DilConfig übernommen
+		(*Beim normalen Diluter wird ValvePosReload aus der DilConfig übernommen, beim Diluter3Inputs wird
+		die ValvePos über die InputNr ermittelt.*)
+		IF pDiluter3Inputs > 0 THEN
+			stActionDataSpec.aParams[6] := pDiluter3Inputs^.M_GetValvePosInput(nDilInput);
+		END_IF
+		
+		
+		stError.ErrorId := pDiluter^.M_ExeAction(stActionDataSpec);
+		IF stError.ErrorId > 0 THEN
+			stError.POUState := nStateA_Mix;
+			nStateA_Mix := 99;
+		ELSE
+			nStateA_Mix := 4;
+		END_IF
+		
+	4:	//Dispensen fertig?
+		IF NOT pDiluter^.M_GetActionBusy(E_Action.ACTION_DilPump) THEN
+			nCurrMixRepeats := nCurrMixRepeats + 1;
+			IF nCurrMixRepeats = nMixRepeats THEN
+				nStateA_Mix := 80;
+			ELSE
+				timerMix(IN:= TRUE, PT:= tMixDelay2);
+				nStateA_Mix := 5;
+			END_IF
+		END_IF
+		
+	5:	//Timer?
+		timerMix();
+		IF timerMix.Q THEN
+			timerMix(IN:= FALSE);
+			nStateA_Mix := 0;
+		END_IF
+
+	70:	//Abbrechen
+		timerMix(IN:= FALSE);
+		MEMSET(ADR(stActionDataSpec),0,SIZEOF(stActionDataSpec));
+		stActionDataSpec.eAction := E_Action.ACTION_Stop;
+		pDiluter^.M_ExeAction(stActionDataSpec);
+		nStateA_Mix := 71;
+		
+	71:	IF NOT pDiluter^.P_bBusy THEN
+			nStateA_Mix := 80;
+		END_IF		
+END_CASE
+
+//Errorhandling
+IF nStateA_Mix = 99 THEN
+	stError.Cmd := E_Action.ACTION_Mix;
+	stError.POU := E_POU.POU_FB_PassivPip;
+	stError.POUAction := E_POUACT.POUACT_A_Mix;
+	fbErrorList.M_Add(stError);
+END_IF
+]]></ST>
+      </Implementation>
+    </Action>
+    <Action Name="A_Reset" Id="{b6564eec-db07-4e79-b68a-b1775ab2b5d6}">
+      <Implementation>
+        <ST><![CDATA[//Ist noch eine Aktion aktiv?
+IF nStateA_ResetSpec = 0 THEN 
+	IF bAspirate THEN
+		bAspirate := FALSE;
+		nStateA_Aspirate := 0;
+	END_IF
+
+	IF bDispense THEN
+		bDispense := FALSE;
+		nStateA_Dispense := 0;
+	END_IF
+	
+	IF bEject THEN
+		bEject := FALSE;
+		nStateA_Eject := 0;
+	END_IF
+	
+	nStateA_ResetSpec := 80;
+END_IF
+
+SUPER^.A_Reset();]]></ST>
+      </Implementation>
+    </Action>
+    <Action Name="A_Stop" Id="{e92c9919-d053-41d5-ad04-2374082dc31a}">
+      <Implementation>
+        <ST><![CDATA[IF nStateA_Stop = 0 THEN
+	
+	IF bAspirate AND nStateA_Aspirate < 70 THEN
+		nStateA_Aspirate := 70;
+	END_IF
+	
+	IF bDispense AND nStateA_Dispense < 70 THEN
+		nStateA_Dispense := 70;
+	END_IF
+	
+	IF bMix AND nStateA_Mix < 70 THEN
+		nStateA_Mix := 70;
+	END_IF
+	
+	nStateA_Stop := 1;
+END_IF
+
+SUPER^.A_Stop();]]></ST>
+      </Implementation>
+    </Action>
+    <Method Name="FB_init" Id="{2dbaab0a-c2d0-4335-9e5b-4fcff85a47a1}">
+      <Declaration><![CDATA[METHOD FB_init : BOOL
+VAR_INPUT
+	bInitRetains : BOOL; // if TRUE, the retain variables are initialized (warm start / cold start)
+	bInCopyCode : BOOL;  // if TRUE, the instance afterwards gets moved into the copy code (online change)
+END_VAR
+]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[eObjectType := E_ObjectType.OBJECTTYPE_PassivPip;
+eObjectGroup := E_ObjectGroup.OBJECTGROUP_MzTool OR E_ObjectGroup.OBJECTGROUP_Device;]]></ST>
+      </Implementation>
+    </Method>
+    <Method Name="M_AddChild" Id="{6bf4f137-8a16-4ea8-b8dc-b17cfd58f05c}">
+      <Declaration><![CDATA[METHOD M_AddChild : ERRORID
+VAR_INPUT
+	pObject : POINTER TO FB_Object;
+	nSlotNr	: UINT;
+	nIndex 	: INT;
+END_VAR
+]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[//PassivePip kann folgende Objekt-Typen aufnehmen
+//Needle, Tip, Nozzle
+IF pObject > 0 THEN
+	IF pObject^.P_eObjectType = E_ObjectType.OBJECTTYPE_Needle OR
+		pObject^.P_eObjectType = E_ObjectType.OBJECTTYPE_Nozzle OR
+		pObject^.P_eObjectType = E_ObjectType.OBJECTTYPE_Tip THEN
+		M_AddChild := SUPER^.M_AddChild(pObject,nSlotNr,nIndex);
+	ELSE
+		M_AddChild := E_ErrorIdObjMgmt.ERRORID_InvalidParentObject;
+	END_IF
+ELSE
+	M_AddChild := E_ErrorIdObjMgmt.ERRORID_InvalidParentObject;
+END_IF
+]]></ST>
+      </Implementation>
+    </Method>
+    <Method Name="M_CancelAction" Id="{a0491fdb-8539-4530-8619-bce99a0dfdfa}">
+      <Declaration><![CDATA[METHOD M_CancelAction
+VAR_INPUT
+	eAction : E_Action;
+END_VAR
+]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[CASE eAction OF
+	E_Action.ACTION_Aspirate:
+		IF bAspirate AND nStateA_Aspirate < 70 THEN
+			nStateA_Aspirate := 70;
+		END_IF
+	E_Action.ACTION_Dispense:
+		IF bDispense AND nStateA_Dispense < 70 THEN
+			nStateA_Dispense := 70;
+		END_IF
+	E_Action.ACTION_Mix:
+		IF bMix AND nStateA_Mix < 70 THEN
+			nStateA_Mix := 70;
+		END_IF	
+ELSE
+	SUPER^.M_CancelAction(eAction);
+END_CASE]]></ST>
+      </Implementation>
+    </Method>
+    <Method Name="M_CheckAction" Id="{ec3abc9b-94bf-4490-8a3c-13d1f534eebc}">
+      <Declaration><![CDATA[METHOD M_CheckAction : ERRORID
+VAR_INPUT
+	refActionData 	: REFERENCE TO ST_ActionData;
+	pCorrelObject	: POINTER TO FB_Object;
+END_VAR
+
+VAR
+	pTarget : POINTER TO FB_TargetBase;
+	pRack	: POINTER TO FB_Rack;
+	pSlot	: POINTER TO FB_PieceSlot;	
+END_VAR
+]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[CASE refActionData.eAction OF
+	E_Action.ACTION_GetPipSample,
+	E_Action.ACTION_MeasureTool,
+	E_Action.ACTION_Dispense, //BasicAction für ActionOnArray
+	E_Action.ACTION_Aspirate, //BasicAction für ActionOnArray
+	E_Action.ACTION_Mix, //BasicAction für ActionOnArray
+	E_Action.ACTION_TeachTarget:
+		RETURN;
+	E_Action.ACTION_WashTool:
+		//Washmode checken
+		IF refActionData.aParams[2] = E_WashMode.MODE_WashInside THEN
+			M_CheckAction := M_CheckBottles();
+		ELSIF refActionData.aParams[2] = E_WashMode.MODE_WashOutside THEN
+			;
+		ELSIF refActionData.aParams[2] = E_WashMode.MODE_WashInOutside THEN
+			M_CheckAction := M_CheckBottles();
+		ELSIF refActionData.aParams[2] = E_WashMode.MODE_DryOutside THEN
+			;
+		ELSE
+			M_CheckAction := E_ErrorIdCmd.ERRORID_InvalidWashMode;	
+		END_IF
+	E_Action.ACTION_InsertTool:
+		//PassivPip darf nur in offene Vials eintauchen
+		//-> Target muss also ein VialRack sein (Reaktor nicht möglich, da Pip nicht von der Tiefe hinein passt)
+		pTarget := pCorrelObject;
+		IF pTarget > 0 THEN
+			IF (pTarget^.P_eObjectGroup AND E_ObjectGroup.OBJECTGROUP_Rack) = E_ObjectGroup.OBJECTGROUP_Rack THEN
+				pRack := pTarget;
+				pSlot := pRack^.M_GetSlot(DINT_TO_UINT(refActionData.aParams[2]));
+				IF pSlot > 0 THEN
+					IF pSlot^.P_pPiece = 0 THEN
+						M_CheckAction := E_ErrorIdCmd.ERRORID_NoPieceInSlot;
+						RETURN;
+					ELSIF NOT (pSlot^.P_pPiece^.P_eObjectType = E_ObjectType.OBJECTTYPE_Vial OR pSlot^.P_pPiece^.P_eObjectType = E_ObjectType.OBJECTTYPE_FlipTube) THEN
+						M_CheckAction := E_ErrorIdCmd.ERRORID_InvalidPieceType;
+					END_IF
+				ELSE
+					M_CheckAction := E_ErrorIdCmd.ERRORID_InvalidTargetSlot;
+					RETURN;
+				END_IF	
+			ELSE
+				M_CheckAction := E_ErrorIdCmd.ERRORID_UnsuitableTarget;	
+			END_IF
+		ELSE
+			M_CheckAction := E_ErrorIdCmd.ERRORID_UnsuitableTarget;	
+		END_IF	
+ELSE
+	M_CheckAction := SUPER^.M_CheckAction(refActionData, pCorrelObject);
+END_CASE
+]]></ST>
+      </Implementation>
+    </Method>
+    <Method Name="M_CheckBottles" Id="{1667789f-fda6-4655-9b2d-650616eb0434}">
+      <Declaration><![CDATA[METHOD M_CheckBottles : ERRORID
+VAR_INPUT
+END_VAR
+]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[IF pDiluter > 0 THEN
+	M_CheckBottles := pDiluter^.M_CheckBottles(0);
+END_IF]]></ST>
+      </Implementation>
+    </Method>
+    <Method Name="M_CheckGCodeStart" Id="{a5d6f607-e26f-4a80-ae64-60fcc3e59af9}">
+      <Declaration><![CDATA[METHOD M_CheckGCodeStart : ERRORID
+VAR_INPUT
+END_VAR
+]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[IF NOT (P_bIsInit AND pDiluter^.P_bIsInit) THEN
+	M_CheckGCodeStart := E_ErrorIdCmd.ERRORID_DeviceNotInitialized;
+END_IF]]></ST>
+      </Implementation>
+    </Method>
+    <Method Name="M_CheckProps" Id="{34ac3048-d80d-4cef-903e-30b61760bdd8}">
+      <Declaration><![CDATA[METHOD M_CheckProps : ERRORID
+VAR_INPUT
+END_VAR
+]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[M_CheckProps := SUPER^.M_CheckProps();
+IF M_CheckProps > 0 THEN
+	RETURN;
+END_IF
+//Konfigurierte Properties checken
+//zugeordneter Diluter
+IF pDiluter = 0 THEN
+	M_CheckProps := E_ErrorIdObjMgmt.ERRORID_InvalidDiluterObjId; //Error
+	RETURN;
+END_IF
+
+IF nNumberOfSlots > 0 AND_THEN pPiece = 0 THEN
+	M_CheckProps := E_ErrorIdObjMgmt.ERRORID_NoNozzleOnTool;
+END_IF
+
+ ]]></ST>
+      </Implementation>
+    </Method>
+    <Method Name="M_DispenserPrepare" Id="{dabcf111-d971-434d-ad2b-0da059ea8750}">
+      <Declaration><![CDATA[METHOD M_DispenserPrepare : ERRORID
+VAR_INPUT
+END_VAR
+]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[IF NOT (eCurrentState = E_MachineState.MACHINESTATE_Idle OR
+	eCurrentState = E_MachineState.MACHINESTATE_Active OR
+	eCurrentState = E_MachineState.MACHINESTATE_Ready) THEN
+	M_DispenserPrepare := E_ErrorIdCmd.ERRORID_InvalidState;
+	RETURN;
+END_IF
+
+IF bAspirate OR bDispense OR bMix OR bDilMovePlunger THEN
+	M_DispenserPrepare := E_ErrorIdCmd.ERRORID_BasicActionActive;
+ELSE
+	//Welche Bottle muss den hier überprüft werden?
+	M_DispenserPrepare := pDiluter^.M_CheckBottles(0);
+	IF M_DispenserPrepare > 0 THEN
+		RETURN;
+	END_IF
+	//Diluter auf Ausgangsposition (unten) fahren
+	nDilMovePlungerPos := 24000;
+	nDilMovePlungerSpeed := pDiluter^.P_nConfigReloadSpeed;
+	nDilMovePlungerValve := pDiluter^.P_nValvePosInput;
+	fbList.A_AddHeadValue(hList := hList, putValue := E_Action.ACTION_DilMovePlunger);
+	bDilMovePlunger := TRUE;
+	bBusy := TRUE;
+	eCurrentState := E_MachineState.MACHINESTATE_Active;
+END_IF]]></ST>
+      </Implementation>
+    </Method>
+    <Method Name="M_DispenserStart" Id="{6bb41318-be50-49aa-b7d5-5c2290a9f72f}">
+      <Declaration><![CDATA[METHOD M_DispenserStart : ERRORID
+VAR_INPUT
+END_VAR]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[IF NOT (eCurrentState = E_MachineState.MACHINESTATE_Idle OR
+	eCurrentState = E_MachineState.MACHINESTATE_Active OR
+	eCurrentState = E_MachineState.MACHINESTATE_Ready) THEN
+	M_DispenserStart := E_ErrorIdCmd.ERRORID_InvalidState;
+	RETURN;
+END_IF
+
+IF bAspirate OR bDispense OR bMix THEN
+	M_DispenserStart := E_ErrorIdCmd.ERRORID_BasicActionActive;
+ELSE //Ein
+	nFlow := nDispFlowFix;
+	nQuantity := 0;
+	bEndless := TRUE;
+	fbList.A_AddHeadValue(hList := hList, putValue := E_Action.ACTION_Dispense);
+	bDispense := TRUE;
+	bBusy := TRUE;
+	eCurrentState := E_MachineState.MACHINESTATE_Active;		
+END_IF]]></ST>
+      </Implementation>
+    </Method>
+    <Method Name="M_DispenserStop" Id="{549e82b1-0682-49a3-8e00-f6808b3826ad}">
+      <Declaration><![CDATA[METHOD M_DispenserStop : ERRORID
+VAR_INPUT
+END_VAR
+]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[//Achtung, hier kann es sein, dass noch im PrepareModus!
+M_CancelAction(E_Action.ACTION_Dispense);]]></ST>
+      </Implementation>
+    </Method>
+    <Method Name="M_ExeAction" Id="{f2a66538-6793-4da8-98ae-d08310634843}">
+      <Declaration><![CDATA[METHOD M_ExeAction : ERRORID
+VAR_INPUT
+	refActionData : REFERENCE TO ST_ActionData;	
+END_VAR]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[IF NOT (eCurrentState = E_MachineState.MACHINESTATE_Idle OR
+	eCurrentState = E_MachineState.MACHINESTATE_Active OR
+	eCurrentState = E_MachineState.MACHINESTATE_Ready) THEN
+	M_ExeAction := E_ErrorIdCmd.ERRORID_InvalidState;
+	RETURN;
+END_IF
+
+CASE refActionData.eAction OF
+		
+	E_Action.ACTION_Aspirate:
+		IF NOT bAspirate THEN
+			nQuantity := refActionData.aParams[1];
+			nFlow := refActionData.aParams[2];
+			IF pDiluter3Inputs > 0 THEN //Beim Diluter3Inputs wird die ValvePos für den entsprechnenden Input aus dem Diluter geholt.
+				nDilInput := DINT_TO_USINT(refActionData.aParams[3]);
+				IF nDilInput < 1 OR nDilInput > 3 THEN
+					M_ExeAction := E_ErrorIdCmd.ERRORID_InvalidDiluterInput;
+					RETURN;
+				END_IF
+			ELSE
+				nDilInput := 0;
+			END_IF
+			M_ExeAction := pDiluter^.M_CheckBottles(nDilInput); //Checken, ob Bottles OK
+			IF M_ExeAction > 0 THEN
+				RETURN;
+			END_IF			
+			fbList.A_AddHeadValue( hList := hList, putValue := E_Action.ACTION_Aspirate);
+			bAspirate := TRUE;
+		END_IF
+		
+	E_Action.ACTION_Dispense:
+		IF NOT bDispense THEN
+			nQuantity := refActionData.aParams[1];
+			nFlow := refActionData.aParams[2];
+			IF pDiluter3Inputs > 0 THEN //Beim Diluter3Inputs wird die ValvePos für den entsprechnenden Input aus dem Diluter geholt.
+				nDilInput := DINT_TO_USINT(refActionData.aParams[3]);
+				IF nDilInput < 1 OR nDilInput > 3 THEN
+					M_ExeAction := E_ErrorIdCmd.ERRORID_InvalidDiluterInput;
+					RETURN;
+				END_IF
+			ELSE
+				nDilInput := 0;
+			END_IF
+			M_ExeAction := pDiluter^.M_CheckBottles(nDilInput); //Checken, ob Bottles OK
+			IF M_ExeAction > 0 THEN
+				RETURN;
+			END_IF			
+			fbList.A_AddHeadValue(hList := hList, putValue := E_Action.ACTION_Dispense);
+			bDispense := TRUE;
+		END_IF
+		
+	E_Action.ACTION_Mix:
+		IF NOT bMix THEN
+			M_ExeAction := pDiluter^.M_CheckBottles(0); //Checken, ob Bottles OK
+			IF M_ExeAction > 0 THEN
+				RETURN;
+			END_IF			
+			nQuantity := refActionData.aParams[1];
+			nFlowAsp := refActionData.aParams[2];
+			nFlowDisp := refActionData.aParams[3];
+			nMixRepeats := DINT_TO_UINT(refActionData.aParams[4]);
+			nCurrMixRepeats := 0;
+			tMixDelay1 := DINT_TO_TIME(refActionData.aParams[5]);
+			tMixDelay2 := DINT_TO_TIME(refActionData.aParams[6]);
+			nDilInput := DINT_TO_USINT(refActionData.aParams[7]);
+			fbList.A_AddHeadValue(hList := hList, putValue := E_Action.ACTION_Mix);
+			bMix := TRUE;
+		END_IF
+		
+	E_Action.ACTION_Eject:
+		//TipEjector vorhanden??
+		IF pZAxisRef^.eFixedToolType <> E_MzToolType.TOOL_TYPE_TipEjector THEN
+			M_ExeAction := E_ErrorIdCmd.ERRORID_ToolHasNoEjector;
+			RETURN;	
+		END_IF
+		
+		IF NOT bEject THEN
+			fbList.A_AddHeadValue(hList := hList, putValue := E_Action.ACTION_Eject);
+			bEject := TRUE;
+		END_IF
+			
+	E_Action.ACTION_MoveX,E_Action.ACTION_MoveY,E_Action.ACTION_MoveXY:
+		IF pZAxisRef^.stInput.nToolState.1 THEN
+			M_ExeAction := ERRORID_PipMoveWithZSensor;  //Error
+		ELSE
+			M_ExeAction := SUPER^.M_ExeAction(refActionData);
+			RETURN;	
+		END_IF
+
+	E_Action.ACTION_MoveZ:
+		IF pZAxisRef^.stInput.nToolState.1 THEN
+			eMoveModeZ := DINT_TO_USINT(refActionData.aParams[1]);
+			IF NOT(eMoveModeZ = E_MoveMode.MODE_Free OR eMoveModeZ = E_MoveMode.MODE_Home) THEN
+				M_ExeAction := ERRORID_PipMoveWithZSensor;  //Error
+			END_IF
+		ELSE
+			M_ExeAction := SUPER^.M_ExeAction(refActionData);
+			RETURN;	
+		END_IF
+		
+	ELSE
+		M_ExeAction := SUPER^.M_ExeAction(refActionData);
+		RETURN;
+END_CASE
+
+bBusy := TRUE;
+eCurrentState := E_MachineState.MACHINESTATE_Active;]]></ST>
+      </Implementation>
+    </Method>
+    <Method Name="M_GetAllProps" Id="{f9399099-60fb-440e-841a-0244b0851927}">
+      <Declaration><![CDATA[METHOD M_GetAllProps : ERRORID
+VAR_INPUT
+	refCmdData : REFERENCE TO  ST_CmdData;
+END_VAR
+]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[//BaseProperties lesen
+SUPER^.M_GetAllProps(refCmdData);
+
+nCurrentPropIndex := nCurrentPropIndex + 1;
+refCmdData.n32Data[nCurrentPropIndex] := nDiluterObjId;
+nCurrentPropIndex := nCurrentPropIndex + 1;
+refCmdData.n32Data[nCurrentPropIndex] := nDrypadArea;
+nCurrentPropIndex := nCurrentPropIndex + 1;
+refCmdData.n32Data[nCurrentPropIndex] := TIME_TO_DINT(tDryTime);
+//TipEjector exist
+nCurrentPropIndex := nCurrentPropIndex + 1;
+IF pZAxisRef^.eFixedToolType = E_MzToolType.TOOL_TYPE_TipEjector THEN
+	refCmdData.n32Data[nCurrentPropIndex] := 1;
+ELSE
+	refCmdData.n32Data[nCurrentPropIndex] := 0;
+END_IF
+nCurrentPropIndex := nCurrentPropIndex + 1;
+refCmdData.n32Data[nCurrentPropIndex] := nDispFlowFix;]]></ST>
+      </Implementation>
+    </Method>
+    <Method Name="M_SetAllProps" Id="{755eebdc-9523-4720-bcef-1f0f128d0614}">
+      <Declaration><![CDATA[METHOD M_SetAllProps : ERRORID
+VAR_INPUT
+	refCmdData : REFERENCE TO  ST_CmdData;
+END_VAR
+
+VAR
+	pObject : POINTER TO FB_Object;
+END_VAR
+]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[M_SetAllProps := SUPER^.M_SetAllProps(refCmdData);
+
+IF M_SetAllProps > 0 THEN
+	RETURN;
+END_IF
+
+pDiluter := 0;
+pDiluter3Inputs := 0;
+//Diluter
+nCurrentPropIndex := nCurrentPropIndex + 1;
+nSpecPropIndex := nCurrentPropIndex;
+nDiluterObjId :=  DINT_TO_UINT(refCmdData.n32Data[nCurrentPropIndex]);
+pObject := fbObjectDirectory.M_GetObjPointer(nDiluterObjId);
+IF pObject > 0 THEN
+	IF pObject^.P_eObjectType = E_ObjectType.OBJECTTYPE_Diluter THEN
+		pDiluter := pObject;
+	ELSIF pObject^.P_eObjectType = E_ObjectType.OBJECTTYPE_Diluter3Inputs THEN
+		pDiluter := pObject;
+		pDiluter3Inputs := pObject;
+	ELSE
+		M_SetAllProps := E_ErrorIdObjMgmt.ERRORID_InvalidDiluterObjId;
+		RETURN;		
+	END_IF
+ELSE
+	M_SetAllProps := E_ErrorIdObjMgmt.ERRORID_InvalidDiluterObjId;
+	RETURN;	
+END_IF
+
+//DrypadArea
+nCurrentPropIndex := nCurrentPropIndex + 1;
+nDrypadArea := DINT_TO_USINT(refCmdData.n32Data[nCurrentPropIndex]);
+
+//DryTime
+nCurrentPropIndex := nCurrentPropIndex + 1;
+tDryTime := DINT_TO_TIME(refCmdData.n32Data[nCurrentPropIndex]);
+
+//TipEjector
+nCurrentPropIndex := nCurrentPropIndex + 1;
+IF refCmdData.n32Data[nCurrentPropIndex].0 THEN
+	pZAxisRef^.eFixedToolType := E_MzToolType.TOOL_TYPE_TipEjector;
+END_IF
+
+//HybridDispFlow
+nCurrentPropIndex := nCurrentPropIndex + 1;
+nDispFlowFix := refCmdData.n32Data[nCurrentPropIndex];
+
+nNoOfProps := nCurrentPropIndex + 1;]]></ST>
+      </Implementation>
+    </Method>
+    <Method Name="M_SetPrintParams" Id="{705a6d25-1ac2-42ca-af62-b307f1ed1fd2}">
+      <Declaration><![CDATA[METHOD M_SetPrintParams : ST_MethResult
+VAR_INPUT
+	eType 		: E_PrintParamType;
+	nNumerator	: USINT;
+	nValue		: DINT;
+END_VAR
+]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[IF eType = E_PrintParamType.Flow THEN
+	IF nNumerator <> 1 THEN
+		M_SetPrintParams.bError := TRUE;
+		M_SetPrintParams.nErrorId := E_ErrorIdCmd.ERRORID_InvalidPrintParamNumerator;
+		RETURN;
+	END_IF
+	fbObjectDirectory.M_SetObjChange(nObjectID); //Info an GUI
+	nDispFlowFix := nValue;
+ELSE
+	M_SetPrintParams.bError := TRUE;
+	M_SetPrintParams.nErrorId := E_ErrorIdCmd.ERRORID_InvalidPrintParamType;
+END_IF]]></ST>
+      </Implementation>
+    </Method>
+    <Method Name="M_SetSingleProp" Id="{83472de7-191e-4ede-99a3-04d6d169c22c}">
+      <Declaration><![CDATA[METHOD M_SetSingleProp : ERRORID
+VAR_INPUT
+	refCmdData : REFERENCE TO  ST_CmdData;
+END_VAR]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[IF (nSpecPropIndex + 1) = refCmdData.aHeader[1] THEN	//DryPadArea
+	nDrypadArea := DINT_TO_USINT(refCmdData.n32Data[0]);
+ELSIF (nSpecPropIndex + 2) = refCmdData.aHeader[1] THEN //DryTime
+	tDryTime := DINT_TO_TIME(refCmdData.n32Data[0]);
+ELSIF (nSpecPropIndex + 4) = refCmdData.aHeader[1] THEN	//HybridDispFlow
+	nDispFlowFix := refCmdData.n32Data[0];
+ELSE
+	M_SetSingleProp := SUPER^.M_SetSingleProp(refCmdData);
+END_IF]]></ST>
+      </Implementation>
+    </Method>
+    <Method Name="M_StartUniDispense" Id="{e6b4885a-1cd0-43ec-ba33-712842d23db1}">
+      <Declaration><![CDATA[METHOD M_StartUniDispense : ERRORID
+VAR_INPUT
+	nParam1 : DINT; //Quantity
+	nParam2 : DINT; //unused
+END_VAR
+
+VAR_OUTPUT
+	bIsContinous : BOOL;
+END_VAR
+
+VAR
+	stActionData : ST_ActionData;
+END_VAR
+]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[IF nParam1 = 0 THEN
+	bIsContinous := TRUE;
+	bEndless := TRUE;
+ELSE
+	bEndless := FALSE;
+END_IF
+
+stActionData.aParams[1] := nParam1; //Quantitiy
+stActionData.aParams[2] := nDispFlowFix;
+stActionData.eAction := E_Action.ACTION_Dispense;
+M_StartUniDispense := M_ExeAction(stActionData);]]></ST>
+      </Implementation>
+    </Method>
+    <Method Name="M_StopUniDispense" Id="{82946820-dfeb-4860-b9de-6c17bf6b0741}">
+      <Declaration><![CDATA[METHOD M_StopUniDispense : ERRORID
+VAR_INPUT
+END_VAR
+]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[M_CancelAction(E_Action.ACTION_Dispense);]]></ST>
+      </Implementation>
+    </Method>
+    <Property Name="P_bSensorMounted" Id="{4922e4b2-2e2b-4efe-afa3-947db1d893ad}">
+      <Declaration><![CDATA[PROPERTY P_bSensorMounted : BOOL]]></Declaration>
+      <Get Name="Get" Id="{b603c9a0-92cf-49b6-9e3b-a403ac7c144b}">
+        <Declaration><![CDATA[VAR
+END_VAR
+]]></Declaration>
+        <Implementation>
+          <ST><![CDATA[P_bSensorMounted := pZAxisRef^.stInput.nToolState.1;]]></ST>
+        </Implementation>
+      </Get>
+    </Property>
+    <Property Name="P_eDispenserState" Id="{615f075f-09cf-4b18-b1d5-d5e30ba1f4ec}">
+      <Declaration><![CDATA[PROPERTY P_eDispenserState : E_DispenserState]]></Declaration>
+      <Get Name="Get" Id="{d3980102-2913-49c8-91c7-61951db89b32}">
+        <Declaration><![CDATA[VAR
+END_VAR
+]]></Declaration>
+        <Implementation>
+          <ST><![CDATA[IF bDilMovePlunger THEN
+	P_eDispenserState := E_DispenserState.Preparing;	
+ELSIF bDispense THEN
+	P_eDispenserState := E_DispenserState.Dispensing;
+END_IF
+]]></ST>
+        </Implementation>
+      </Get>
+    </Property>
+    <Property Name="P_nDrypadArea" Id="{6db4acca-bd48-4eea-91ce-c1b53d23772c}">
+      <Declaration><![CDATA[PROPERTY P_nDrypadArea : USINT]]></Declaration>
+      <Get Name="Get" Id="{939ce51b-d524-4808-8a14-6533b50b7e4e}">
+        <Declaration><![CDATA[VAR
+END_VAR
+]]></Declaration>
+        <Implementation>
+          <ST><![CDATA[P_nDrypadArea := nDrypadArea;]]></ST>
+        </Implementation>
+      </Get>
+    </Property>
+    <Property Name="P_pDiluter" Id="{eb6733ff-22eb-4ee4-8705-58fb9ff14dda}">
+      <Declaration><![CDATA[PROPERTY P_pDiluter : POINTER TO FB_Diluter]]></Declaration>
+      <Get Name="Get" Id="{3508f33d-6bf5-4daf-8613-6bd0bf548931}">
+        <Declaration><![CDATA[VAR
+END_VAR
+]]></Declaration>
+        <Implementation>
+          <ST><![CDATA[P_pDiluter := pDiluter;]]></ST>
+        </Implementation>
+      </Get>
+    </Property>
+    <Property Name="P_rToolRadius" Id="{ba495372-bd06-49bf-b733-d864430094f2}">
+      <Declaration><![CDATA[PROPERTY P_rToolRadius : REAL]]></Declaration>
+      <Get Name="Get" Id="{1a88fa12-3bb0-4ca3-a3e9-096c6236ab24}">
+        <Declaration><![CDATA[VAR
+	stDim : ST_3DDimension;
+END_VAR
+]]></Declaration>
+        <Implementation>
+          <ST><![CDATA[P_rToolRadius := 1500.0;]]></ST>
+        </Implementation>
+      </Get>
+    </Property>
+    <Property Name="P_tDryTime" Id="{824bfee9-e625-4558-a9cb-910d12a09813}">
+      <Declaration><![CDATA[PROPERTY P_tDryTime : TIME]]></Declaration>
+      <Get Name="Get" Id="{f59dbb29-0815-41bb-988f-aac9c60dd5d4}">
+        <Declaration><![CDATA[VAR
+END_VAR
+]]></Declaration>
+        <Implementation>
+          <ST><![CDATA[P_tDryTime := tDryTime;]]></ST>
+        </Implementation>
+      </Get>
+    </Property>
+    <LineIds Name="FB_PassivPip">
+      <LineId Id="334" Count="76" />
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="FB_PassivPip.A_Aspirate">
+      <LineId Id="2" Count="7" />
+      <LineId Id="11" Count="4" />
+      <LineId Id="55" Count="1" />
+      <LineId Id="52" Count="2" />
+      <LineId Id="18" Count="15" />
+      <LineId Id="35" Count="16" />
+      <LineId Id="1" Count="0" />
+    </LineIds>
+    <LineIds Name="FB_PassivPip.A_DilMovePlunger">
+      <LineId Id="2" Count="40" />
+      <LineId Id="1" Count="0" />
+    </LineIds>
+    <LineIds Name="FB_PassivPip.A_Dispense">
+      <LineId Id="65" Count="52" />
+      <LineId Id="1" Count="0" />
+    </LineIds>
+    <LineIds Name="FB_PassivPip.A_Eject">
+      <LineId Id="2" Count="14" />
+      <LineId Id="1" Count="0" />
+    </LineIds>
+    <LineIds Name="FB_PassivPip.A_Mix">
+      <LineId Id="2" Count="3" />
+      <LineId Id="1" Count="0" />
+      <LineId Id="9" Count="0" />
+      <LineId Id="8" Count="0" />
+      <LineId Id="10" Count="0" />
+      <LineId Id="12" Count="0" />
+      <LineId Id="15" Count="2" />
+      <LineId Id="14" Count="0" />
+      <LineId Id="112" Count="5" />
+      <LineId Id="19" Count="0" />
+      <LineId Id="21" Count="5" />
+      <LineId Id="20" Count="0" />
+      <LineId Id="74" Count="1" />
+      <LineId Id="27" Count="0" />
+      <LineId Id="76" Count="0" />
+      <LineId Id="79" Count="0" />
+      <LineId Id="77" Count="0" />
+      <LineId Id="80" Count="1" />
+      <LineId Id="108" Count="0" />
+      <LineId Id="82" Count="0" />
+      <LineId Id="85" Count="0" />
+      <LineId Id="83" Count="1" />
+      <LineId Id="86" Count="6" />
+      <LineId Id="119" Count="5" />
+      <LineId Id="118" Count="0" />
+      <LineId Id="93" Count="7" />
+      <LineId Id="78" Count="0" />
+      <LineId Id="43" Count="0" />
+      <LineId Id="45" Count="1" />
+      <LineId Id="49" Count="1" />
+      <LineId Id="52" Count="0" />
+      <LineId Id="110" Count="0" />
+      <LineId Id="53" Count="0" />
+      <LineId Id="51" Count="0" />
+      <LineId Id="47" Count="0" />
+      <LineId Id="54" Count="0" />
+      <LineId Id="102" Count="0" />
+      <LineId Id="109" Count="0" />
+      <LineId Id="103" Count="3" />
+      <LineId Id="101" Count="0" />
+      <LineId Id="55" Count="0" />
+      <LineId Id="107" Count="0" />
+      <LineId Id="57" Count="1" />
+      <LineId Id="60" Count="1" />
+      <LineId Id="59" Count="0" />
+      <LineId Id="63" Count="0" />
+      <LineId Id="66" Count="0" />
+      <LineId Id="64" Count="0" />
+      <LineId Id="11" Count="0" />
+      <LineId Id="67" Count="6" />
+      <LineId Id="7" Count="0" />
+      <LineId Id="6" Count="0" />
+    </LineIds>
+    <LineIds Name="FB_PassivPip.A_Reset">
+      <LineId Id="2" Count="19" />
+      <LineId Id="1" Count="0" />
+    </LineIds>
+    <LineIds Name="FB_PassivPip.A_Stop">
+      <LineId Id="2" Count="9" />
+      <LineId Id="15" Count="0" />
+      <LineId Id="17" Count="1" />
+      <LineId Id="16" Count="0" />
+      <LineId Id="12" Count="2" />
+      <LineId Id="1" Count="0" />
+    </LineIds>
+    <LineIds Name="FB_PassivPip.FB_init">
+      <LineId Id="7" Count="1" />
+    </LineIds>
+    <LineIds Name="FB_PassivPip.M_AddChild">
+      <LineId Id="27" Count="11" />
+      <LineId Id="12" Count="0" />
+      <LineId Id="5" Count="0" />
+    </LineIds>
+    <LineIds Name="FB_PassivPip.M_CancelAction">
+      <LineId Id="3" Count="8" />
+      <LineId Id="18" Count="0" />
+      <LineId Id="20" Count="1" />
+      <LineId Id="19" Count="0" />
+      <LineId Id="12" Count="1" />
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="FB_PassivPip.M_CheckAction">
+      <LineId Id="131" Count="3" />
+      <LineId Id="201" Count="0" />
+      <LineId Id="213" Count="0" />
+      <LineId Id="135" Count="9" />
+      <LineId Id="188" Count="1" />
+      <LineId Id="145" Count="30" />
+      <LineId Id="24" Count="0" />
+    </LineIds>
+    <LineIds Name="FB_PassivPip.M_CheckBottles">
+      <LineId Id="3" Count="1" />
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="FB_PassivPip.M_CheckGCodeStart">
+      <LineId Id="5" Count="2" />
+    </LineIds>
+    <LineIds Name="FB_PassivPip.M_CheckProps">
+      <LineId Id="14" Count="2" />
+      <LineId Id="13" Count="0" />
+      <LineId Id="17" Count="0" />
+      <LineId Id="4" Count="3" />
+      <LineId Id="2" Count="0" />
+      <LineId Id="24" Count="2" />
+      <LineId Id="23" Count="0" />
+      <LineId Id="22" Count="0" />
+      <LineId Id="21" Count="0" />
+    </LineIds>
+    <LineIds Name="FB_PassivPip.M_DispenserPrepare">
+      <LineId Id="3" Count="9" />
+      <LineId Id="30" Count="0" />
+      <LineId Id="13" Count="11" />
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="FB_PassivPip.M_DispenserStart">
+      <LineId Id="22" Count="16" />
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="FB_PassivPip.M_DispenserStop">
+      <LineId Id="3" Count="0" />
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="FB_PassivPip.M_ExeAction">
+      <LineId Id="3" Count="10" />
+      <LineId Id="18" Count="1" />
+      <LineId Id="121" Count="2" />
+      <LineId Id="125" Count="9" />
+      <LineId Id="20" Count="5" />
+      <LineId Id="30" Count="1" />
+      <LineId Id="96" Count="1" />
+      <LineId Id="101" Count="0" />
+      <LineId Id="104" Count="1" />
+      <LineId Id="103" Count="0" />
+      <LineId Id="113" Count="1" />
+      <LineId Id="98" Count="0" />
+      <LineId Id="109" Count="3" />
+      <LineId Id="32" Count="16" />
+      <LineId Id="144" Count="0" />
+      <LineId Id="49" Count="40" />
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="FB_PassivPip.M_GetAllProps">
+      <LineId Id="49" Count="16" />
+      <LineId Id="23" Count="0" />
+    </LineIds>
+    <LineIds Name="FB_PassivPip.M_SetAllProps">
+      <LineId Id="134" Count="45" />
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="FB_PassivPip.M_SetPrintParams">
+      <LineId Id="3" Count="0" />
+      <LineId Id="15" Count="4" />
+      <LineId Id="4" Count="4" />
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="FB_PassivPip.M_SetSingleProp">
+      <LineId Id="3" Count="7" />
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="FB_PassivPip.M_StartUniDispense">
+      <LineId Id="30" Count="0" />
+      <LineId Id="35" Count="0" />
+      <LineId Id="39" Count="1" />
+      <LineId Id="42" Count="0" />
+      <LineId Id="36" Count="0" />
+      <LineId Id="31" Count="1" />
+      <LineId Id="37" Count="0" />
+      <LineId Id="28" Count="1" />
+    </LineIds>
+    <LineIds Name="FB_PassivPip.M_StopUniDispense">
+      <LineId Id="5" Count="0" />
+    </LineIds>
+    <LineIds Name="FB_PassivPip.P_bSensorMounted.Get">
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="FB_PassivPip.P_eDispenserState.Get">
+      <LineId Id="3" Count="4" />
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="FB_PassivPip.P_nDrypadArea.Get">
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="FB_PassivPip.P_pDiluter.Get">
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="FB_PassivPip.P_rToolRadius.Get">
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="FB_PassivPip.P_tDryTime.Get">
+      <LineId Id="2" Count="0" />
+    </LineIds>
+  </POU>
+</TcPlcObject>

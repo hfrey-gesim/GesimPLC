@@ -1,0 +1,366 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<TcPlcObject Version="1.1.0.1" ProductVersion="3.1.4022.18">
+  <POU Name="FB_TipCalibrator" Id="{dbe73a91-594a-4478-8c1f-3a0c70e1d3c1}" SpecialFunc="None">
+    <Declaration><![CDATA[FUNCTION_BLOCK FB_TipCalibrator EXTENDS FB_ActiveTarget
+VAR_INPUT
+END_VAR
+
+VAR
+	bNumberOfSpecPoints	: USINT;
+	stPassIntersectPoint: ST_3DPoint;
+	stCalibPoint		: ST_3DPoint;
+	bLegacy				: BOOL;	
+END_VAR
+]]></Declaration>
+    <Implementation>
+      <ST><![CDATA[//Prozessdaten aktualisieren
+stProcessData.nObjId := nObjectID;
+stProcessData.n32Data[0] := BOOL_TO_DINT(bIsInit);
+stProcessData.n32Data[1] := E_MachineState.MACHINESTATE_Idle;
+stProcessData.n32Data[2] := 0;
+stProcessData.n32Data[3] := BOOL_TO_DINT(P_bXSensor);
+stProcessData.n32Data[4] := BOOL_TO_DINT(P_bYSensor); 
+
+aObjProcData[nNotifyId] := stProcessData;]]></ST>
+    </Implementation>
+    <Method Name="FB_init" Id="{7758faf0-4c94-4ed0-be35-0068a0cb73ae}">
+      <Declaration><![CDATA[METHOD FB_init : BOOL
+VAR_INPUT
+	bInitRetains : BOOL; // if TRUE, the retain variables are initialized (warm start / cold start)
+	bInCopyCode : BOOL;  // if TRUE, the instance afterwards gets moved into the copy code (online change)
+END_VAR
+]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[eObjectType := E_ObjectType.OBJECTTYPE_TipCalibrator;
+eObjectGroup := E_ObjectGroup.OBJECTGROUP_Target OR E_ObjectGroup.OBJECTGROUP_Device;]]></ST>
+      </Implementation>
+    </Method>
+    <Method Name="M_CancelAction" Id="{ad9aaaf9-0ed7-471d-a369-b5755394ee9f}">
+      <Declaration><![CDATA[METHOD M_CancelAction
+VAR_INPUT
+	eAction : E_Action;
+END_VAR
+]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[]]></ST>
+      </Implementation>
+    </Method>
+    <Method Name="M_CheckAction" Id="{23ffbc94-5e6e-432a-93bf-35b499532a58}">
+      <Declaration><![CDATA[METHOD M_CheckAction : ERRORID
+VAR_INPUT
+	refActionData 	: REFERENCE TO ST_ActionData;
+	pCorrelObject	: POINTER TO FB_Object;
+END_VAR
+]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[IF refActionData.eAction <> E_Action.ACTION_MoveToTarget THEN
+	M_CheckAction := 8989;	
+END_IF
+]]></ST>
+      </Implementation>
+    </Method>
+    <Method Name="M_CheckProcDataType" Id="{9dada193-8e0e-4981-96fd-1a980e977a04}">
+      <Declaration><![CDATA[METHOD M_CheckProcDataType : BOOL
+VAR_INPUT
+	eProcDataType : E_ProcDataType;
+END_VAR
+]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[]]></ST>
+      </Implementation>
+    </Method>
+    <Method Name="M_ExeAction" Id="{51d60131-a9e9-4398-8310-eba7111353b2}">
+      <Declaration><![CDATA[METHOD M_ExeAction : ERRORID
+VAR_INPUT
+	refActionData : REFERENCE TO ST_ActionData;	
+END_VAR
+]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[IF refActionData.eAction = E_Action.ACTION_Init THEN
+	bIsInit := TRUE;
+END_IF
+	
+	]]></ST>
+      </Implementation>
+    </Method>
+    <Method Name="M_GetAbsPos" Id="{2209e362-8237-4c57-a75e-c33da6b4ad8b}">
+      <Declaration><![CDATA[METHOD M_GetAbsPos : ST_3DPoint
+VAR_INPUT
+	pChildPos	: POINTER TO ST_3DPoint;
+	eTargetRef 	: E_TargetRef;
+	nParam1		: UINT;
+ 	nParam2		: UINT;
+	nParam3		: USINT;
+	nZLevel		: USINT;
+END_VAR
+VAR_OUTPUT
+	nErrorId 	: ERRORID;
+	lrAngle		: LREAL;
+END_VAR
+VAR
+	stLocPosLB : ST_3DPoint;
+END_VAR
+]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[IF eTargetRef = E_TargetRef.TARGETREF_SpecPoint THEN
+	stLocPosLB := P_stRelPosLB;
+	IF nParam1 = 1 THEN
+		stLocPosLB := F_Add3DPoints(stLocPosLB,stPassIntersectPoint);
+	ELSIF nParam1 = 2 THEN
+		stLocPosLB := F_Add3DPoints(stLocPosLB,stCalibPoint);
+	ELSE
+		nErrorId := E_ErrorIdCmd.ERRORID_InvalidTargetPointNr;
+		RETURN;
+	END_IF
+	M_GetAbsPos := pParentTarget^.M_GetAbsPos(pChildPos := ADR(stLocPosLB), eTargetRef:= E_TargetRef.TARGETREF_LeftBottom,
+												nParam1:= 0,
+												nParam2:= 0, nParam3:= 0,nZLevel:= 0,
+												lrAngle => lrAngle, nErrorId=> nErrorId);
+ELSE
+	M_GetAbsPos := SUPER^.M_GetAbsPos(pChildPos := pChildPos, eTargetRef:= eTargetRef,
+													nParam1:= nParam1,
+													nParam2:= nParam2, nParam3:= nParam3, nZLevel:= nZLevel,
+													lrAngle => lrAngle, nErrorId=> nErrorId);	
+END_IF]]></ST>
+      </Implementation>
+    </Method>
+    <Method Name="M_GetActionBusy" Id="{b4178a38-7202-453a-b312-a84590209396}">
+      <Declaration><![CDATA[METHOD M_GetActionBusy : BOOL
+VAR_INPUT
+	eAction : E_Action;
+END_VAR
+]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[]]></ST>
+      </Implementation>
+    </Method>
+    <Method Name="M_GetAllProps" Id="{95eb4e16-06cf-48da-8ad4-9bb754b89a27}">
+      <Declaration><![CDATA[METHOD M_GetAllProps : ERRORID
+VAR_INPUT
+	refCmdData : REFERENCE TO  ST_CmdData;
+END_VAR
+]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[SUPER^.M_GetAllProps(refCmdData);
+
+nCurrentPropIndex := nCurrentPropIndex + 1;
+refCmdData.n32Data[nCurrentPropIndex] := bNumberOfSpecPoints;
+nCurrentPropIndex := nCurrentPropIndex + 1;
+refCmdData.n32Data[nCurrentPropIndex] := REAL_TO_DINT(stPassIntersectPoint.X);
+nCurrentPropIndex := nCurrentPropIndex + 1;
+refCmdData.n32Data[nCurrentPropIndex] := REAL_TO_DINT(stPassIntersectPoint.Y);
+nCurrentPropIndex := nCurrentPropIndex + 1;
+refCmdData.n32Data[nCurrentPropIndex] := REAL_TO_DINT(stPassIntersectPoint.Z);
+nCurrentPropIndex := nCurrentPropIndex + 1;
+refCmdData.n32Data[nCurrentPropIndex] := REAL_TO_DINT(stCalibPoint.X);
+nCurrentPropIndex := nCurrentPropIndex + 1;
+refCmdData.n32Data[nCurrentPropIndex] := REAL_TO_DINT(stCalibPoint.Y);
+nCurrentPropIndex := nCurrentPropIndex + 1;
+refCmdData.n32Data[nCurrentPropIndex] := REAL_TO_DINT(stCalibPoint.Z);
+nCurrentPropIndex := nCurrentPropIndex + 1;
+refCmdData.n32Data[nCurrentPropIndex] := BOOL_TO_DINT(bLegacy);
+]]></ST>
+      </Implementation>
+    </Method>
+    <Method Name="M_GetProcData" Id="{2b3875f5-0388-4822-b46f-f1e118138aab}">
+      <Declaration><![CDATA[METHOD M_GetProcData : DINT
+VAR_INPUT
+	eProcDataType : E_ProcDataType;
+END_VAR
+]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[]]></ST>
+      </Implementation>
+    </Method>
+    <Method Name="M_SetAllProps" Id="{5ea0493f-fade-4dd0-a7ac-ccc2d09a4a5d}">
+      <Declaration><![CDATA[METHOD M_SetAllProps : ERRORID
+VAR_INPUT
+	refCmdData : REFERENCE TO  ST_CmdData;
+END_VAR
+]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[M_SetAllProps := SUPER^.M_SetAllProps(refCmdData);
+
+IF M_SetAllProps > 0 THEN
+	RETURN;
+END_IF
+
+nCurrentPropIndex := nCurrentPropIndex + 1;
+nSpecPropIndex := nCurrentPropIndex;
+bNumberOfSpecPoints := DINT_TO_USINT(refCmdData.n32Data[nCurrentPropIndex]);
+IF bNumberOfSpecPoints <> 2 THEN
+	M_SetAllProps := E_ErrorIdObjMgmt.ERRORID_InvalidNoOfSpecPoints;
+	RETURN;
+END_IF
+nCurrentPropIndex := nCurrentPropIndex + 1;
+stPassIntersectPoint.X := DINT_TO_REAL(refCmdData.n32Data[nCurrentPropIndex]);
+nCurrentPropIndex := nCurrentPropIndex + 1; 
+stPassIntersectPoint.Y := DINT_TO_REAL(refCmdData.n32Data[nCurrentPropIndex]);
+nCurrentPropIndex := nCurrentPropIndex + 1;
+stPassIntersectPoint.Z := DINT_TO_REAL(refCmdData.n32Data[nCurrentPropIndex]);
+nCurrentPropIndex := nCurrentPropIndex + 1;
+stCalibPoint.X := DINT_TO_REAL(refCmdData.n32Data[nCurrentPropIndex]);
+nCurrentPropIndex := nCurrentPropIndex + 1;
+stCalibPoint.Y := DINT_TO_REAL(refCmdData.n32Data[nCurrentPropIndex]);
+nCurrentPropIndex := nCurrentPropIndex + 1;
+stCalibPoint.Z := DINT_TO_REAL(refCmdData.n32Data[nCurrentPropIndex]);
+nCurrentPropIndex := nCurrentPropIndex + 1;
+bLegacy := DINT_TO_BOOL(refCmdData.n32Data[nCurrentPropIndex]);
+nNoOfProps := nCurrentPropIndex + 1;]]></ST>
+      </Implementation>
+    </Method>
+    <Method Name="M_SetSingleProp" Id="{462c9b8d-8493-41d2-80a2-520634a5565d}">
+      <Declaration><![CDATA[METHOD M_SetSingleProp : ERRORID
+VAR_INPUT
+	refCmdData : REFERENCE TO  ST_CmdData;
+END_VAR
+]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[IF nSpecPropIndex = refCmdData.aHeader[1] THEN
+	M_SetSingleProp := E_ErrorIdCmd.ERRORID_InvalidProperty; //Anzahl Specpoints darf nicht verändert werden
+ELSIF (nSpecPropIndex + 1) = refCmdData.aHeader[1] THEN
+	stPassIntersectPoint.X := DINT_TO_REAL(refCmdData.n32Data[0]);
+ELSIF (nSpecPropIndex + 2) = refCmdData.aHeader[1] THEN
+	stPassIntersectPoint.Y := DINT_TO_REAL(refCmdData.n32Data[0]);
+ELSIF (nSpecPropIndex + 3) = refCmdData.aHeader[1] THEN
+	stPassIntersectPoint.Z := DINT_TO_REAL(refCmdData.n32Data[0]);
+ELSIF (nSpecPropIndex + 4) = refCmdData.aHeader[1] THEN
+	stCalibPoint.X := DINT_TO_REAL(refCmdData.n32Data[0]);
+ELSIF (nSpecPropIndex + 5) = refCmdData.aHeader[1] THEN
+	stCalibPoint.Y := DINT_TO_REAL(refCmdData.n32Data[0]);
+ELSIF (nSpecPropIndex + 6) = refCmdData.aHeader[1] THEN
+	stCalibPoint.Z := DINT_TO_REAL(refCmdData.n32Data[0]);
+ELSE
+	M_SetSingleProp := SUPER^.M_SetSingleProp(refCmdData);
+END_IF]]></ST>
+      </Implementation>
+    </Method>
+    <Method Name="M_Stop" Id="{13bf7aba-d5e3-433b-9c8b-7add5370c105}">
+      <Declaration><![CDATA[METHOD M_Stop : ERRORID
+VAR_INPUT
+END_VAR
+]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[]]></ST>
+      </Implementation>
+    </Method>
+    <Property Name="P_bLegacy" Id="{e519de1a-096f-4c2a-b5c1-94fbc9842711}">
+      <Declaration><![CDATA[PROPERTY P_bLegacy : BOOL]]></Declaration>
+      <Get Name="Get" Id="{84eb7848-2fb1-46ae-a0cc-f6d7757c7002}">
+        <Declaration><![CDATA[VAR
+END_VAR
+]]></Declaration>
+        <Implementation>
+          <ST><![CDATA[P_bLegacy := bLegacy;]]></ST>
+        </Implementation>
+      </Get>
+    </Property>
+    <Property Name="P_bXSensor" Id="{b6c1e2d0-60d5-423b-8e99-cbd4244bc909}">
+      <Declaration><![CDATA[PROPERTY P_bXSensor : BOOL]]></Declaration>
+      <Get Name="Get" Id="{c01a6cbf-6962-411f-af7e-4060d072f04c}">
+        <Declaration><![CDATA[VAR
+END_VAR
+]]></Declaration>
+        <Implementation>
+          <ST><![CDATA[P_bXSensor := stTipCalibrator.bXSensor XOR stTipCalibrator.bInvert;]]></ST>
+        </Implementation>
+      </Get>
+    </Property>
+    <Property Name="P_bYSensor" Id="{044ab980-9fc9-4b8b-a11c-c6d8e0a8806c}">
+      <Declaration><![CDATA[PROPERTY P_bYSensor : BOOL]]></Declaration>
+      <Get Name="Get" Id="{91d0a61a-45ff-474d-9fa2-392a72761741}">
+        <Declaration><![CDATA[VAR
+END_VAR
+]]></Declaration>
+        <Implementation>
+          <ST><![CDATA[P_bYSensor := stTipCalibrator.bYSensor XOR stTipCalibrator.bInvert;]]></ST>
+        </Implementation>
+      </Get>
+    </Property>
+    <Property Name="P_stCalibPoint" Id="{3739c9d6-63cd-48ab-9ba4-a3a0c408b6bc}">
+      <Declaration><![CDATA[PROPERTY P_stCalibPoint : ST_3DPoint]]></Declaration>
+      <Get Name="Get" Id="{f2babf0f-c1c6-4ab5-aa2a-02acff5ffa51}">
+        <Declaration><![CDATA[VAR
+END_VAR
+]]></Declaration>
+        <Implementation>
+          <ST><![CDATA[P_stCalibPoint := stCalibPoint;]]></ST>
+        </Implementation>
+      </Get>
+      <Set Name="Set" Id="{ba5746ce-a73c-4914-b69c-6da3491be0c0}">
+        <Declaration><![CDATA[VAR
+END_VAR
+]]></Declaration>
+        <Implementation>
+          <ST><![CDATA[stCalibPoint := P_stCalibPoint;]]></ST>
+        </Implementation>
+      </Set>
+    </Property>
+    <LineIds Name="FB_TipCalibrator">
+      <LineId Id="3" Count="7" />
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="FB_TipCalibrator.FB_init">
+      <LineId Id="7" Count="1" />
+    </LineIds>
+    <LineIds Name="FB_TipCalibrator.M_CancelAction">
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="FB_TipCalibrator.M_CheckAction">
+      <LineId Id="3" Count="2" />
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="FB_TipCalibrator.M_CheckProcDataType">
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="FB_TipCalibrator.M_ExeAction">
+      <LineId Id="3" Count="3" />
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="FB_TipCalibrator.M_GetAbsPos">
+      <LineId Id="18" Count="0" />
+      <LineId Id="26" Count="11" />
+      <LineId Id="21" Count="0" />
+      <LineId Id="19" Count="0" />
+      <LineId Id="23" Count="2" />
+      <LineId Id="22" Count="0" />
+      <LineId Id="20" Count="0" />
+    </LineIds>
+    <LineIds Name="FB_TipCalibrator.M_GetActionBusy">
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="FB_TipCalibrator.M_GetAllProps">
+      <LineId Id="3" Count="17" />
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="FB_TipCalibrator.M_GetProcData">
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="FB_TipCalibrator.M_SetAllProps">
+      <LineId Id="3" Count="26" />
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="FB_TipCalibrator.M_SetSingleProp">
+      <LineId Id="3" Count="15" />
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="FB_TipCalibrator.M_Stop">
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="FB_TipCalibrator.P_bLegacy.Get">
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="FB_TipCalibrator.P_bXSensor.Get">
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="FB_TipCalibrator.P_bYSensor.Get">
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="FB_TipCalibrator.P_stCalibPoint.Get">
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="FB_TipCalibrator.P_stCalibPoint.Set">
+      <LineId Id="2" Count="0" />
+    </LineIds>
+  </POU>
+</TcPlcObject>

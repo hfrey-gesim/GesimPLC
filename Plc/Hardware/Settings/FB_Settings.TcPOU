@@ -1,0 +1,693 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<TcPlcObject Version="1.1.0.1" ProductVersion="3.1.4024.11">
+  <POU Name="FB_Settings" Id="{828f4f49-3d0d-40db-91a1-bea58ec46c60}" SpecialFunc="None">
+    <Declaration><![CDATA[FUNCTION_BLOCK FB_Settings
+
+VAR
+	bWritePersData	: BOOL;
+	nStateA_WritePersData	: USINT := 80;
+	tmrWritePersData		: TON;
+	fbWritePersistentData	: WritePersistentData;
+END_VAR
+]]></Declaration>
+    <Implementation>
+      <ST><![CDATA[//Die persitenten Daten werden erst 100ms nach Anforderung geschrieben
+//jede erneute Anforderung setzt diesen Timer zurück, so dass nicht bei
+//schnellen hinteraeinanderfolgenden Anforderungen nicht ständig alle Daten
+//neu geschrieben werden
+IF bWritePersData THEN
+	IF nStateA_WritePersData = 0 THEN	//Timer zurücksetzen
+		tmrWritePersData(IN:= FALSE);
+		bWritePersData := FALSE;
+	ELSIF nStateA_WritePersData = 80 THEN
+		nStateA_WritePersData := 0;
+		bWritePersData := FALSE;
+	END_IF
+END_IF
+	
+IF nStateA_WritePersData = 0 THEN
+	tmrWritePersData(IN:= TRUE, PT:=T#100MS);
+	IF tmrWritePersData.Q THEN
+		nStateA_WritePersData := 1;
+	END_IF
+ELSIF nStateA_WritePersData = 1 THEN
+	fbWritePersistentData(PORT:= 851, START:= TRUE);
+	IF NOT fbWritePersistentData.BUSY THEN
+		IF fbWritePersistentData.ERR THEN
+			nStateA_WritePersData := 99;
+		ELSE
+			nStateA_WritePersData := 80;
+		END_IF
+		tmrWritePersData(IN:= FALSE);
+		fbWritePersistentData(START:= FALSE);
+	END_IF
+END_IF
+]]></ST>
+    </Implementation>
+    <Method Name="M_ReadProp" Id="{b3be907c-dcef-423e-854f-5736d6b937a1}">
+      <Declaration><![CDATA[METHOD M_ReadProp : ERRORID
+VAR_INPUT
+	stHardwareId : ST_HardwareId;
+	ePropType 	: E_HardwarePropType;
+END_VAR
+VAR_OUTPUT
+	nValue : DINT;
+END_VAR
+VAR
+	pXYDrive : POINTER TO FB_XYDriveBase;
+	pTMCM1140Stepper : POINTER TO FB_HwRefTMCM1140;
+END_VAR]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[CASE stHardwareId.eGroup OF
+	E_HardwareGrp.AxisX,E_HardwareGrp.AxisY:
+		pXYDrive := fbXYDriveList.M_GetByHwId(stHardwareId);
+		IF pXYDrive > 0 THEN
+			M_ReadProp := pXYDrive^.M_GetProperty(eType:= ePropType, nValue=> nValue);
+		ELSE
+			M_ReadProp := E_ErrorIdCmd.ERRORID_InvalidHwItem;
+		END_IF
+
+	E_HardwareGrp.AxisZ:
+		IF stHardwareId.nParentItem > 0 AND stHardwareId.nParentItem <= cMaxMzHeads THEN
+			IF stHardwareId.nItem >= 1 AND stHardwareId.nItem <= 7 THEN
+				CASE ePropType OF
+					E_HardwarePropType.RefPos1:
+						nValue := REAL_TO_DINT(aFbMultiZRef[stHardwareId.nParentItem].aFbZAxisRef[stHardwareId.nItem].P_rRefPos);
+					E_HardwarePropType.HomePos:
+						nValue := REAL_TO_DINT(aFbMultiZRef[stHardwareId.nParentItem].aFbZAxisRef[stHardwareId.nItem].P_rHomePos);
+					E_HardwarePropType.AxisLength:
+						nValue := REAL_TO_DINT(aFbMultiZRef[stHardwareId.nParentItem].aFbZAxisRef[stHardwareId.nItem].P_rAxisLength);
+					E_HardwarePropType.SliderLength:
+						nValue := REAL_TO_DINT(aFbMultiZRef[stHardwareId.nParentItem].aFbZAxisRef[stHardwareId.nItem].P_rSliderLength);
+					E_HardwarePropType.InvertInitDir:
+						nValue := BOOL_TO_DINT(aFbMultiZRef[stHardwareId.nParentItem].aFbZAxisRef[stHardwareId.nItem].P_bInvertInitDir);						
+					E_HardwarePropType.MinPos:
+						nValue := REAL_TO_DINT(aFbMultiZRef[stHardwareId.nParentItem].aFbZAxisRef[stHardwareId.nItem].P_rMinPos);
+					E_HardwarePropType.MaxPos:
+						nValue := REAL_TO_DINT(aFbMultiZRef[stHardwareId.nParentItem].aFbZAxisRef[stHardwareId.nItem].P_rMaxPos);
+					E_HardwarePropType.MaxSpeed:
+						nValue := REAL_TO_DINT(aFbMultiZRef[stHardwareId.nParentItem].aFbZAxisRef[stHardwareId.nItem].P_rMaxSpeed);
+				ELSE
+					M_ReadProp := E_ErrorIdCmd.ERRORID_InvalidHwProperty;					
+				END_CASE
+			ELSE
+				M_ReadProp := E_ErrorIdCmd.ERRORID_InvalidHwItem;	
+			END_IF
+ 		ELSE
+			M_ReadProp := E_ErrorIdCmd.ERRORID_InvalidHwItem;
+		END_IF	
+	
+	E_HardwareGrp.PneuChannel:
+		IF stHardwareId.nItem >= 1 AND stHardwareId.nItem <= cNoOfPneuChannels THEN
+			CASE ePropType OF
+				E_HardwarePropType.MinPress:
+					nValue:= aFbPneuChannel[stHardwareId.nItem].P_nMinPress;
+				E_HardwarePropType.MaxPress:
+					nValue:= aFbPneuChannel[stHardwareId.nItem].P_nMaxPress;
+				E_HardwarePropType.MinPressCV:
+					nValue:= aFbPneuChannel[stHardwareId.nItem].P_nMinPressCV;
+				E_HardwarePropType.MinPressMV:
+					nValue:= aFbPneuChannel[stHardwareId.nItem].P_nMinPressMV;
+				E_HardwarePropType.MaxPressCV:
+					nValue:= aFbPneuChannel[stHardwareId.nItem].P_nMaxPressCV;
+				E_HardwarePropType.MaxPressMV:
+					nValue:= aFbPneuChannel[stHardwareId.nItem].P_nMaxPressMV;
+				E_HardwarePropType.FactorSetPress:
+					nValue:= aFbPneuChannel[stHardwareId.nItem].P_nFactSetPress;
+				E_HardwarePropType.FactorCurrentPress:
+					nValue:= aFbPneuChannel[stHardwareId.nItem].P_nFactCurrPress;
+				E_HardwarePropType.OffsetSetPress:
+					nValue:= aFbPneuChannel[stHardwareId.nItem].P_nOffsetSetPress;
+				E_HardwarePropType.OffseCurrentPress:
+					nValue:= aFbPneuChannel[stHardwareId.nItem].P_nOffsetCurrPress;				
+			ELSE
+				M_ReadProp := E_ErrorIdCmd.ERRORID_InvalidHwProperty;
+			END_CASE			
+		ELSE
+			M_ReadProp := E_ErrorIdCmd.ERRORID_InvalidHwItem;
+		END_IF
+	E_HardwareGrp.StopButton:
+		IF stHardwareId.nItem = 1 THEN
+			IF ePropType = E_HardwarePropType.Disabled THEN
+				nValue := BOOL_TO_DINT(fbStopButton.P_bDisabled);
+			ELSE
+				M_ReadProp := E_ErrorIdCmd.ERRORID_InvalidHwProperty;
+			END_IF
+		ELSE
+			M_ReadProp := E_ErrorIdCmd.ERRORID_InvalidHwItem;
+		END_IF
+	E_HardwareGrp.HighVoltSupply:
+		{IF defined(variable:fbHighVoltSupplyRef)}
+		IF stHardwareId.nItem = 1 THEN
+			CASE ePropType OF
+				E_HardwarePropType.MinVoltage:
+					nValue := fbHighVoltSupplyRef.P_nMinVoltage;
+				E_HardwarePropType.MaxVoltage:
+					nValue := fbHighVoltSupplyRef.P_nMaxVoltage;
+				E_HardwarePropType.MinVoltageCV:
+					nValue := fbHighVoltSupplyRef.P_nMinVoltageCV;
+				E_HardwarePropType.MaxVoltageCV:
+					nValue := fbHighVoltSupplyRef.P_nMaxVoltageCV;
+				E_HardwarePropType.MinVoltageMV:
+					nValue := fbHighVoltSupplyRef.P_nMinVoltageMV;
+				E_HardwarePropType.MaxVoltageMV:
+					nValue := fbHighVoltSupplyRef.P_nMaxVoltageMV;
+				E_HardwarePropType.MinCurrent:
+					nValue := fbHighVoltSupplyRef.P_nMinCurrent;
+				E_HardwarePropType.MaxCurrent:
+					nValue := fbHighVoltSupplyRef.P_nMaxCurrent;
+				E_HardwarePropType.MinCurrentCV:
+					nValue := fbHighVoltSupplyRef.P_nMinCurrentCV;
+				E_HardwarePropType.MaxCurrentCV:
+					nValue := fbHighVoltSupplyRef.P_nMaxCurrentCV;
+				E_HardwarePropType.MinCurrentMV:
+					nValue := fbHighVoltSupplyRef.P_nMinCurrentMV;
+				E_HardwarePropType.MaxCurrentMV:
+					nValue := fbHighVoltSupplyRef.P_nMaxCurrentMV;
+				E_HardwarePropType.Legacy:
+					nValue := BOOL_TO_DINT(fbHighVoltSupplyRef.P_bLegacy);
+			ELSE
+				M_ReadProp := E_ErrorIdCmd.ERRORID_InvalidHwProperty;
+			END_CASE
+		ELSE
+			M_ReadProp := E_ErrorIdCmd.ERRORID_InvalidHwItem;
+		END_IF
+		{ELSE}
+		M_ReadProp := E_ErrorIdCmd.ERRORID_InvalidHwItem;
+		{END_IF}
+	E_HardwareGrp.NanotecPD:
+		{IF defined(variable:fbHwRefTrayTransSlider)}
+		IF stHardwareId.nItem = 1 THEN
+			CASE ePropType OF
+				E_HardwarePropType.DistPerMotorRev:	
+					nValue := fbHwRefTrayTransSlider.P_nDistPerMotorRev;
+				E_HardwarePropType.RefPos1:
+					nValue := fbHwRefTrayTransSlider.P_nRefPos;
+				E_HardwarePropType.HomePos:
+					nValue := fbHwRefTrayTransSlider.P_nHomePos;
+				E_HardwarePropType.SlowHomingSpeed:
+					nValue := fbHwRefTrayTransSlider.P_nSlowHomingSpeed;
+				E_HardwarePropType.FastHomingSpeed:
+					nValue := fbHwRefTrayTransSlider.P_nFastHomingSpeed;
+				E_HardwarePropType.InvertInitDir:
+					nValue := BOOL_TO_DINT(fbHwRefTrayTransSlider.P_bInvertInitDir);
+				E_HardwarePropType.MinPos:
+					nValue := fbHwRefTrayTransSlider.P_nMinPos;
+				E_HardwarePropType.MaxPos:
+					nValue := fbHwRefTrayTransSlider.P_nMaxPos;
+				E_HardwarePropType.MaxSpeed:
+					nValue := fbHwRefTrayTransSlider.P_nMaxSpeed;
+			ELSE
+				M_ReadProp := E_ErrorIdCmd.ERRORID_InvalidHwProperty;
+			END_CASE
+		ELSE
+			M_ReadProp := E_ErrorIdCmd.ERRORID_InvalidHwItem;	
+		END_IF
+		{ELSE}
+		M_ReadProp := E_ErrorIdCmd.ERRORID_InvalidHwItem;
+		{END_IF}
+	E_HardwareGrp.TMCM1140Stepper_Gen2:
+		pTMCM1140Stepper := fbCANOpenHwModuleList.M_GetByHwId(stHardwareId);
+		IF pTMCM1140Stepper > 0 THEN
+			CASE ePropType OF
+					E_HardwarePropType.DistPerMotorRev:	
+						nValue := pTMCM1140Stepper^.P_nDistPerMotorRev;
+					E_HardwarePropType.RefPos1:
+						nValue := pTMCM1140Stepper^.P_nRefPos;
+					E_HardwarePropType.HomePos:
+						nValue := pTMCM1140Stepper^.P_nHomePos;
+					E_HardwarePropType.SlowHomingSpeed:
+						nValue := pTMCM1140Stepper^.P_nSlowHomingSpeed;
+					E_HardwarePropType.FastHomingSpeed:
+						nValue := pTMCM1140Stepper^.P_nFastHomingSpeed;
+					(*E_HardwarePropType.InvertInitDir:
+						fbHwRefTrayTransSlider.P_bInvertInitDir := DINT_TO_BOOL(nValue);*)
+					E_HardwarePropType.MinPos:
+						nValue := pTMCM1140Stepper^.P_nMinPos;
+					E_HardwarePropType.MaxPos:
+						nValue := pTMCM1140Stepper^.P_nMaxPos;
+					E_HardwarePropType.MaxSpeed:
+						nValue := pTMCM1140Stepper^.P_nMaxSpeed;
+					E_HardwarePropType.MaxCurrent:
+						nValue := pTMCM1140Stepper^.P_nMaxCurrent;
+					E_HardwarePropType.HoldCurrent:
+						nValue := pTMCM1140Stepper^.P_nHoldCurrent;
+			END_CASE		
+		ELSE
+			M_ReadProp := E_ErrorIdCmd.ERRORID_InvalidHwItem;
+		END_IF
+	E_HardwareGrp.EL70xx:
+		IF stHardwareId.nItem = 1 THEN
+			{IF defined(variable:fbHwRefSpinDrive)}
+			CASE ePropType OF
+				E_HardwarePropType.DistPerMotorRev:	
+					nValue := fbHwRefSpinDrive.P_nDistPerMotorRev;
+				E_HardwarePropType.RefPos1:
+					nValue := fbHwRefSpinDrive.P_nRefPos;
+				E_HardwarePropType.InvertInitDir:
+					nValue := BOOL_TO_DINT(fbHwRefSpinDrive.P_bInvertInitDir);
+				E_HardwarePropType.MinPos:
+					nValue := fbHwRefSpinDrive.P_nMinPos;
+				E_HardwarePropType.MaxPos:
+					nValue := fbHwRefSpinDrive.P_nMaxPos;
+				E_HardwarePropType.MaxSpeed:
+					nValue := fbHwRefSpinDrive.P_nMaxSpeed;
+			ELSE
+				M_ReadProp := E_ErrorIdCmd.ERRORID_InvalidHwProperty;
+			END_CASE
+			{ELSE}
+			M_ReadProp := E_ErrorIdCmd.ERRORID_InvalidHwItem;
+			{END_IF}			
+		ELSIF stHardwareId.nItem = 2 THEN
+			{IF defined(variable:fbHwRefLiftDrive)}
+			CASE ePropType OF
+				E_HardwarePropType.DistPerMotorRev:	
+					nValue := fbHwRefLiftDrive.P_nDistPerMotorRev;
+				E_HardwarePropType.RefPos1:
+					nValue := fbHwRefLiftDrive.P_nRefPos;
+				E_HardwarePropType.InvertInitDir:
+					nValue := BOOL_TO_DINT(fbHwRefLiftDrive.P_bInvertInitDir);
+				E_HardwarePropType.MinPos:
+					nValue := fbHwRefLiftDrive.P_nMinPos;
+				E_HardwarePropType.MaxPos:
+					nValue := fbHwRefLiftDrive.P_nMaxPos;
+				E_HardwarePropType.MaxSpeed:
+					nValue := fbHwRefLiftDrive.P_nMaxSpeed;
+			ELSE
+				M_ReadProp := E_ErrorIdCmd.ERRORID_InvalidHwProperty;
+			END_CASE
+			{ELSE}
+			M_ReadProp := E_ErrorIdCmd.ERRORID_InvalidHwItem;
+			{END_IF}			
+		ELSIF stHardwareId.nItem = 3 THEN
+			{IF defined(variable:fbHwRefTrayStop)}
+			CASE ePropType OF
+				E_HardwarePropType.DistPerMotorRev:	
+					nValue := fbHwRefTrayStop.P_nDistPerMotorRev;
+				E_HardwarePropType.RefPos1:
+					nValue := fbHwRefTrayStop.P_nRefPos;
+				E_HardwarePropType.InvertInitDir:
+					nValue := BOOL_TO_DINT(fbHwRefTrayStop.P_bInvertInitDir);
+				E_HardwarePropType.MinPos:
+					nValue := fbHwRefTrayStop.P_nMinPos;
+				E_HardwarePropType.MaxPos:
+					nValue := fbHwRefTrayStop.P_nMaxPos;
+				E_HardwarePropType.MaxSpeed:
+					nValue := fbHwRefTrayStop.P_nMaxSpeed;
+			ELSE
+				M_ReadProp := E_ErrorIdCmd.ERRORID_InvalidHwProperty;
+			END_CASE
+			{ELSE}
+			M_ReadProp := E_ErrorIdCmd.ERRORID_InvalidHwItem;
+			{END_IF}			
+		ELSE
+			M_ReadProp := E_ErrorIdCmd.ERRORID_InvalidHwItem;
+		END_IF	
+ELSE
+	M_ReadProp := E_ErrorIdCmd.ERRORID_InvalidHwGroup;
+END_CASE]]></ST>
+      </Implementation>
+    </Method>
+    <Method Name="M_WritePersData" Id="{b565c3d4-ba8d-4dc2-91b8-1f170829084d}">
+      <Declaration><![CDATA[METHOD M_WritePersData
+VAR_INPUT
+END_VAR
+]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[bWritePersData := TRUE;]]></ST>
+      </Implementation>
+    </Method>
+    <Method Name="M_WriteProp" Id="{b14b2d23-0978-4066-8f37-9c9889c24403}">
+      <Declaration><![CDATA[METHOD M_WriteProp : ERRORID
+VAR_INPUT
+	stHardwareId : ST_HardwareId;
+	ePropType : E_HardwarePropType;	
+	nValue : DINT;
+END_VAR
+VAR
+	pXYDrive : POINTER TO FB_XYDriveBase;
+	pTMCM1140Stepper : POINTER TO FB_HwRefTMCM1140;
+END_VAR]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[CASE stHardwareId.eGroup OF
+	E_HardwareGrp.AxisX, E_HardwareGrp.AxisY:
+		pXYDrive := fbXYDriveList.M_GetByHwId(stHardwareId);
+		IF pXYDrive > 0 THEN
+			M_WriteProp := pXYDrive^.M_SetProperty(ePropType, nValue);
+		ELSE
+			M_WriteProp := E_ErrorIdCmd.ERRORID_InvalidHwItem;
+		END_IF		
+		
+	E_HardwareGrp.AxisZ:
+		IF stHardwareId.nParentItem > 0 AND stHardwareId.nParentItem <= cMaxMzHeads THEN
+			IF stHardwareId.nItem >= 1 AND stHardwareId.nItem <= 7 THEN
+				CASE ePropType OF
+					E_HardwarePropType.RefPos1:
+						aFbMultiZRef[stHardwareId.nParentItem].aFbZAxisRef[stHardwareId.nItem].P_rRefPos := DINT_TO_REAL(nValue);
+					E_HardwarePropType.HomePos:
+						aFbMultiZRef[stHardwareId.nParentItem].aFbZAxisRef[stHardwareId.nItem].P_rHomePos := DINT_TO_REAL(nValue);
+					E_HardwarePropType.AxisLength:
+						aFbMultiZRef[stHardwareId.nParentItem].aFbZAxisRef[stHardwareId.nItem].P_rAxisLength := DINT_TO_REAL(nValue);
+					E_HardwarePropType.SliderLength:
+						aFbMultiZRef[stHardwareId.nParentItem].aFbZAxisRef[stHardwareId.nItem].P_rSliderLength := DINT_TO_REAL(nValue);
+					E_HardwarePropType.InvertInitDir:
+						aFbMultiZRef[stHardwareId.nParentItem].aFbZAxisRef[stHardwareId.nItem].P_bInvertInitDir := DINT_TO_BOOL(nValue);
+					E_HardwarePropType.MinPos:
+						aFbMultiZRef[stHardwareId.nParentItem].aFbZAxisRef[stHardwareId.nItem].P_rMinPos := DINT_TO_REAL(nValue);
+					E_HardwarePropType.MaxPos:
+						aFbMultiZRef[stHardwareId.nParentItem].aFbZAxisRef[stHardwareId.nItem].P_rMaxPos := DINT_TO_REAL(nValue);
+					E_HardwarePropType.MaxSpeed:
+					aFbMultiZRef[stHardwareId.nParentItem].aFbZAxisRef[stHardwareId.nItem].P_rMaxSpeed := DINT_TO_REAL(nValue);
+				ELSE
+					M_WriteProp := E_ErrorIdCmd.ERRORID_InvalidHwProperty;					
+				END_CASE
+			ELSE
+				M_WriteProp := E_ErrorIdCmd.ERRORID_InvalidHwItem;	
+			END_IF
+ 		ELSE
+			M_WriteProp := E_ErrorIdCmd.ERRORID_InvalidHwItem;
+		END_IF
+		
+	E_HardwareGrp.PneuChannel:
+		IF stHardwareId.nItem >= 1 AND stHardwareId.nItem <= cNoOfPneuChannels THEN
+			CASE ePropType OF
+				E_HardwarePropType.MinPress:
+					aFbPneuChannel[stHardwareId.nItem].P_nMinPress := nValue;
+				E_HardwarePropType.MaxPress:
+					aFbPneuChannel[stHardwareId.nItem].P_nMaxPress := nValue;
+				E_HardwarePropType.MinPressCV:
+					aFbPneuChannel[stHardwareId.nItem].P_nMinPressCV := nValue;
+				E_HardwarePropType.MinPressMV:
+					aFbPneuChannel[stHardwareId.nItem].P_nMinPressMV := nValue;
+				E_HardwarePropType.MaxPressCV:
+					aFbPneuChannel[stHardwareId.nItem].P_nMaxPressCV := nValue;
+				E_HardwarePropType.MaxPressMV:
+					aFbPneuChannel[stHardwareId.nItem].P_nMaxPressMV := nValue;
+				E_HardwarePropType.FactorSetPress:
+						aFbPneuChannel[stHardwareId.nItem].P_nFactSetPress := nValue;
+				E_HardwarePropType.FactorCurrentPress:
+					aFbPneuChannel[stHardwareId.nItem].P_nFactCurrPress := nValue;
+				E_HardwarePropType.OffsetSetPress:
+					aFbPneuChannel[stHardwareId.nItem].P_nOffsetSetPress := nValue;
+				E_HardwarePropType.OffseCurrentPress:
+					aFbPneuChannel[stHardwareId.nItem].P_nOffsetCurrPress := nValue;
+			ELSE
+				M_WriteProp := E_ErrorIdCmd.ERRORID_InvalidHwProperty;
+			END_CASE
+		ELSE
+			M_WriteProp := E_ErrorIdCmd.ERRORID_InvalidHwItem;			
+		END_IF
+	E_HardwareGrp.StopButton:
+		IF stHardwareId.nItem = 1 THEN
+			IF ePropType = E_HardwarePropType.Disabled THEN
+				fbStopButton.P_bDisabled := DINT_TO_BOOL(nValue);
+			ELSE
+				M_WriteProp := E_ErrorIdCmd.ERRORID_InvalidHwProperty;
+			END_IF
+		ELSE
+			M_WriteProp := E_ErrorIdCmd.ERRORID_InvalidHwItem;
+		END_IF
+	E_HardwareGrp.HighVoltSupply:
+		{IF defined(variable:fbHighVoltSupplyRef)}
+		IF stHardwareId.nItem = 1 THEN
+			CASE ePropType OF
+				E_HardwarePropType.MinVoltage:
+					fbHighVoltSupplyRef.P_nMinVoltage := nValue;
+				E_HardwarePropType.MaxVoltage:
+					fbHighVoltSupplyRef.P_nMaxVoltage := nValue;
+				E_HardwarePropType.MinVoltageCV:
+					fbHighVoltSupplyRef.P_nMinVoltageCV := nValue;
+				E_HardwarePropType.MaxVoltageCV:
+					fbHighVoltSupplyRef.P_nMaxVoltageCV := nValue;
+				E_HardwarePropType.MinVoltageMV:
+					fbHighVoltSupplyRef.P_nMinVoltageMV := nValue;
+				E_HardwarePropType.MaxVoltageMV:
+					fbHighVoltSupplyRef.P_nMaxVoltageMV := nValue;
+				E_HardwarePropType.MinCurrent:
+					fbHighVoltSupplyRef.P_nMinCurrent := nValue;
+				E_HardwarePropType.MaxCurrent:
+					fbHighVoltSupplyRef.P_nMaxCurrent := nValue;
+				E_HardwarePropType.MinCurrentCV:
+					fbHighVoltSupplyRef.P_nMinCurrentCV := nValue;
+				E_HardwarePropType.MaxCurrentCV:
+					fbHighVoltSupplyRef.P_nMaxCurrentCV := nValue;
+				E_HardwarePropType.MinCurrentMV:
+					fbHighVoltSupplyRef.P_nMinCurrentMV := nValue;
+				E_HardwarePropType.MaxCurrentMV:
+					fbHighVoltSupplyRef.P_nMaxCurrentMV := nValue;
+				E_HardwarePropType.Legacy:
+					fbHighVoltSupplyRef.P_bLegacy := DINT_TO_BOOL(nValue);
+			ELSE
+				M_WriteProp := E_ErrorIdCmd.ERRORID_InvalidHwProperty;
+			END_CASE
+		ELSE
+			M_WriteProp := E_ErrorIdCmd.ERRORID_InvalidHwItem;
+		END_IF
+		{ELSE}
+		M_WriteProp := E_ErrorIdCmd.ERRORID_InvalidHwItem;
+		{END_IF}
+	E_HardwareGrp.NanotecPD:
+		{IF defined(variable:fbHwRefTrayTransSlider)}
+		IF stHardwareId.nItem = 1 THEN
+			CASE ePropType OF
+				E_HardwarePropType.DistPerMotorRev:	
+					fbHwRefTrayTransSlider.P_nDistPerMotorRev := nValue;
+				E_HardwarePropType.RefPos1:
+					fbHwRefTrayTransSlider.P_nRefPos := nValue;
+				E_HardwarePropType.HomePos:
+					fbHwRefTrayTransSlider.P_nHomePos := nValue;
+				E_HardwarePropType.SlowHomingSpeed:
+					fbHwRefTrayTransSlider.P_nSlowHomingSpeed := nValue;
+				E_HardwarePropType.FastHomingSpeed:
+					fbHwRefTrayTransSlider.P_nFastHomingSpeed := nValue;
+				E_HardwarePropType.InvertInitDir:
+					fbHwRefTrayTransSlider.P_bInvertInitDir := DINT_TO_BOOL(nValue);
+				E_HardwarePropType.MinPos:
+					fbHwRefTrayTransSlider.P_nMinPos := nValue;
+				E_HardwarePropType.MaxPos:
+					fbHwRefTrayTransSlider.P_nMaxPos := nValue;
+				E_HardwarePropType.MaxSpeed:
+					fbHwRefTrayTransSlider.P_nMaxSpeed := nValue;
+			ELSE
+				M_WriteProp := E_ErrorIdCmd.ERRORID_InvalidHwProperty;
+			END_CASE
+		ELSE
+			M_WriteProp := E_ErrorIdCmd.ERRORID_InvalidHwItem;
+		END_IF
+		{ELSE}
+		M_WriteProp := E_ErrorIdCmd.ERRORID_InvalidHwItem;
+		{END_IF}
+	E_HardwareGrp.TMCM1140Stepper_Gen2:
+		pTMCM1140Stepper := fbCANOpenHwModuleList.M_GetByHwId(stHardwareId);
+		IF pTMCM1140Stepper > 0 THEN
+			CASE ePropType OF
+					E_HardwarePropType.DistPerMotorRev:	
+						pTMCM1140Stepper^.P_nDistPerMotorRev := nValue;
+					E_HardwarePropType.RefPos1:
+						pTMCM1140Stepper^.P_nRefPos := nValue;
+					E_HardwarePropType.HomePos:
+						pTMCM1140Stepper^.P_nHomePos := nValue;
+					E_HardwarePropType.SlowHomingSpeed:
+						pTMCM1140Stepper^.P_nSlowHomingSpeed := nValue;
+					E_HardwarePropType.FastHomingSpeed:
+						pTMCM1140Stepper^.P_nFastHomingSpeed := nValue;
+					(*E_HardwarePropType.InvertInitDir:
+						fbHwRefTrayTransSlider.P_bInvertInitDir := DINT_TO_BOOL(nValue);*)
+					E_HardwarePropType.MinPos:
+						pTMCM1140Stepper^.P_nMinPos := nValue;
+					E_HardwarePropType.MaxPos:
+						pTMCM1140Stepper^.P_nMaxPos := nValue;
+					E_HardwarePropType.MaxSpeed:
+						pTMCM1140Stepper^.P_nMaxSpeed := nValue;
+					E_HardwarePropType.MaxCurrent:
+						pTMCM1140Stepper^.P_nMaxCurrent := DINT_TO_UINT(nValue);
+					E_HardwarePropType.HoldCurrent:
+						pTMCM1140Stepper^.P_nHoldCurrent := DINT_TO_UINT(nValue);
+			END_CASE		
+		ELSE
+			M_WriteProp := E_ErrorIdCmd.ERRORID_InvalidHwItem;
+		END_IF
+	E_HardwareGrp.EL70xx:
+		IF stHardwareId.nItem = 1 THEN
+			{IF defined(variable:fbHwRefSpinDrive)}
+			CASE ePropType OF
+				E_HardwarePropType.DistPerMotorRev:	
+					fbHwRefSpinDrive.P_nDistPerMotorRev := nValue;
+				E_HardwarePropType.RefPos1:
+					fbHwRefSpinDrive.P_nRefPos := nValue;
+				E_HardwarePropType.InvertInitDir:
+					fbHwRefSpinDrive.P_bInvertInitDir := DINT_TO_BOOL(nValue);
+				E_HardwarePropType.MinPos:
+					fbHwRefSpinDrive.P_nMinPos := nValue;
+				E_HardwarePropType.MaxPos:
+					fbHwRefSpinDrive.P_nMaxPos := nValue;
+				E_HardwarePropType.MaxSpeed:
+					fbHwRefSpinDrive.P_nMaxSpeed := nValue;
+			ELSE
+				M_WriteProp := E_ErrorIdCmd.ERRORID_InvalidHwProperty;
+			END_CASE
+			{ELSE}
+			M_WriteProp := E_ErrorIdCmd.ERRORID_InvalidHwItem;
+			{END_IF}			
+		ELSIF stHardwareId.nItem = 2 THEN
+			{IF defined(variable:fbHwRefLiftDrive)}
+			CASE ePropType OF
+				E_HardwarePropType.DistPerMotorRev:	
+					fbHwRefLiftDrive.P_nDistPerMotorRev := nValue;
+				E_HardwarePropType.RefPos1:
+					fbHwRefLiftDrive.P_nRefPos := nValue;
+				E_HardwarePropType.InvertInitDir:
+					fbHwRefLiftDrive.P_bInvertInitDir := DINT_TO_BOOL(nValue);
+				E_HardwarePropType.MinPos:
+					fbHwRefLiftDrive.P_nMinPos := nValue;
+				E_HardwarePropType.MaxPos:
+					fbHwRefLiftDrive.P_nMaxPos := nValue;
+				E_HardwarePropType.MaxSpeed:
+					fbHwRefLiftDrive.P_nMaxSpeed := nValue;
+			ELSE
+				M_WriteProp := E_ErrorIdCmd.ERRORID_InvalidHwProperty;
+			END_CASE
+			{ELSE}
+			M_WriteProp := E_ErrorIdCmd.ERRORID_InvalidHwItem;
+			{END_IF}			
+		ELSIF stHardwareId.nItem = 3 THEN
+			{IF defined(variable:fbHwRefTrayStop)}
+			CASE ePropType OF
+				E_HardwarePropType.DistPerMotorRev:	
+					fbHwRefTrayStop.P_nDistPerMotorRev := nValue;
+				E_HardwarePropType.RefPos1:
+					fbHwRefTrayStop.P_nRefPos := nValue;
+				E_HardwarePropType.InvertInitDir:
+					fbHwRefTrayStop.P_bInvertInitDir := DINT_TO_BOOL(nValue);
+				E_HardwarePropType.MinPos:
+					fbHwRefTrayStop.P_nMinPos := nValue;
+				E_HardwarePropType.MaxPos:
+					fbHwRefTrayStop.P_nMaxPos := nValue;
+				E_HardwarePropType.MaxSpeed:
+					fbHwRefTrayStop.P_nMaxSpeed := nValue;
+			ELSE
+				M_WriteProp := E_ErrorIdCmd.ERRORID_InvalidHwProperty;
+			END_CASE
+			{ELSE}
+			M_WriteProp := E_ErrorIdCmd.ERRORID_InvalidHwItem;
+			{END_IF}			
+		ELSE
+			M_WriteProp := E_ErrorIdCmd.ERRORID_InvalidHwItem;
+		END_IF
+ELSE
+	M_WriteProp := E_ErrorIdCmd.ERRORID_InvalidHwGroup;		
+END_CASE]]></ST>
+      </Implementation>
+    </Method>
+    <LineIds Name="FB_Settings">
+      <LineId Id="3" Count="30" />
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="FB_Settings.M_ReadProp">
+      <LineId Id="3" Count="0" />
+      <LineId Id="150" Count="0" />
+      <LineId Id="152" Count="1" />
+      <LineId Id="155" Count="1" />
+      <LineId Id="154" Count="0" />
+      <LineId Id="4" Count="0" />
+      <LineId Id="160" Count="0" />
+      <LineId Id="18" Count="43" />
+      <LineId Id="137" Count="1" />
+      <LineId Id="62" Count="1" />
+      <LineId Id="139" Count="3" />
+      <LineId Id="64" Count="43" />
+      <LineId Id="128" Count="1" />
+      <LineId Id="108" Count="9" />
+      <LineId Id="171" Count="1" />
+      <LineId Id="177" Count="0" />
+      <LineId Id="182" Count="6" />
+      <LineId Id="201" Count="3" />
+      <LineId Id="189" Count="10" />
+      <LineId Id="180" Count="1" />
+      <LineId Id="179" Count="0" />
+      <LineId Id="174" Count="0" />
+      <LineId Id="176" Count="0" />
+      <LineId Id="175" Count="0" />
+      <LineId Id="215" Count="1" />
+      <LineId Id="219" Count="0" />
+      <LineId Id="224" Count="23" />
+      <LineId Id="222" Count="1" />
+      <LineId Id="221" Count="0" />
+      <LineId Id="259" Count="0" />
+      <LineId Id="261" Count="7" />
+      <LineId Id="327" Count="0" />
+      <LineId Id="270" Count="19" />
+      <LineId Id="326" Count="0" />
+      <LineId Id="291" Count="19" />
+      <LineId Id="328" Count="0" />
+      <LineId Id="312" Count="13" />
+      <LineId Id="260" Count="0" />
+      <LineId Id="118" Count="2" />
+    </LineIds>
+    <LineIds Name="FB_Settings.M_WritePersData">
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="FB_Settings.M_WriteProp">
+      <LineId Id="3" Count="0" />
+      <LineId Id="144" Count="0" />
+      <LineId Id="148" Count="0" />
+      <LineId Id="152" Count="3" />
+      <LineId Id="149" Count="0" />
+      <LineId Id="17" Count="44" />
+      <LineId Id="133" Count="1" />
+      <LineId Id="62" Count="1" />
+      <LineId Id="135" Count="1" />
+      <LineId Id="132" Count="0" />
+      <LineId Id="137" Count="1" />
+      <LineId Id="65" Count="42" />
+      <LineId Id="125" Count="1" />
+      <LineId Id="108" Count="9" />
+      <LineId Id="164" Count="0" />
+      <LineId Id="166" Count="0" />
+      <LineId Id="170" Count="0" />
+      <LineId Id="193" Count="0" />
+      <LineId Id="195" Count="1" />
+      <LineId Id="194" Count="0" />
+      <LineId Id="185" Count="0" />
+      <LineId Id="179" Count="0" />
+      <LineId Id="186" Count="0" />
+      <LineId Id="197" Count="1" />
+      <LineId Id="200" Count="1" />
+      <LineId Id="180" Count="0" />
+      <LineId Id="187" Count="0" />
+      <LineId Id="181" Count="0" />
+      <LineId Id="188" Count="0" />
+      <LineId Id="183" Count="0" />
+      <LineId Id="189" Count="2" />
+      <LineId Id="182" Count="0" />
+      <LineId Id="184" Count="0" />
+      <LineId Id="177" Count="0" />
+      <LineId Id="174" Count="1" />
+      <LineId Id="173" Count="0" />
+      <LineId Id="169" Count="0" />
+      <LineId Id="171" Count="0" />
+      <LineId Id="168" Count="0" />
+      <LineId Id="210" Count="0" />
+      <LineId Id="214" Count="0" />
+      <LineId Id="242" Count="0" />
+      <LineId Id="247" Count="22" />
+      <LineId Id="243" Count="0" />
+      <LineId Id="245" Count="1" />
+      <LineId Id="244" Count="0" />
+      <LineId Id="279" Count="0" />
+      <LineId Id="285" Count="0" />
+      <LineId Id="316" Count="0" />
+      <LineId Id="286" Count="4" />
+      <LineId Id="297" Count="10" />
+      <LineId Id="318" Count="1" />
+      <LineId Id="317" Count="0" />
+      <LineId Id="312" Count="0" />
+      <LineId Id="320" Count="19" />
+      <LineId Id="314" Count="0" />
+      <LineId Id="340" Count="19" />
+      <LineId Id="308" Count="2" />
+      <LineId Id="118" Count="1" />
+      <LineId Id="2" Count="0" />
+    </LineIds>
+  </POU>
+</TcPlcObject>

@@ -1,0 +1,739 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<TcPlcObject Version="1.1.0.1" ProductVersion="3.1.4020.12">
+  <POU Name="FB_Slide" Id="{5b7a5dd9-2b33-43ad-bcd7-0fe06e1b5747}" SpecialFunc="None">
+    <Declaration><![CDATA[{attribute 'enable_dynamic_creation'}
+FUNCTION_BLOCK FB_Slide EXTENDS FB_TargetBase
+VAR_INPUT
+END_VAR
+VAR_OUTPUT
+END_VAR
+VAR
+	///Spec-Properties
+	nNoOfSpecPoints: USINT;
+	stMark1: ST_3DPoint;
+	stMark2: ST_3DPoint;
+	stMark1Act: ST_3DPoint;
+	stMark2Act: ST_3DPoint;
+	lrAngle: LREAL;
+	bIsAligned: BOOL;	
+END_VAR
+]]></Declaration>
+    <Implementation>
+      <ST><![CDATA[]]></ST>
+    </Implementation>
+    <Method Name="M_GetAllProps" Id="{08a89092-e3d0-4922-a9e7-445ae2dd7d3c}">
+      <Declaration><![CDATA[METHOD M_GetAllProps : ERRORID
+VAR_INPUT
+	refCmdData : REFERENCE TO ST_CmdData;
+END_VAR
+]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[SUPER^.M_GetAllProps(refCmdData);
+
+//Alignment-Marken
+nCurrentPropIndex := nCurrentPropIndex + 1;
+refCmdData.n32Data[nCurrentPropIndex] := nNoOfSpecPoints;
+IF nNoOfSpecPoints = 2 THEN
+	nCurrentPropIndex := nCurrentPropIndex + 1;
+	refCmdData.n32Data[nCurrentPropIndex] := REAL_TO_DINT(stMark1.X);
+	nCurrentPropIndex := nCurrentPropIndex + 1;
+	refCmdData.n32Data[nCurrentPropIndex] := REAL_TO_DINT(stMark1.Y);
+	nCurrentPropIndex := nCurrentPropIndex + 1;
+	refCmdData.n32Data[nCurrentPropIndex] := REAL_TO_DINT(stMark1.Z);		
+	nCurrentPropIndex := nCurrentPropIndex + 1;
+	refCmdData.n32Data[nCurrentPropIndex] := REAL_TO_DINT(stMark2.X);
+	nCurrentPropIndex := nCurrentPropIndex + 1;
+	refCmdData.n32Data[nCurrentPropIndex] := REAL_TO_DINT(stMark2.Y);
+	nCurrentPropIndex := nCurrentPropIndex + 1;
+	refCmdData.n32Data[nCurrentPropIndex] := REAL_TO_DINT(stMark2.Z);		
+END_IF
+
+nCurrentPropIndex := nCurrentPropIndex + 1;
+refCmdData.n32Data[nCurrentPropIndex] := REAL_TO_DINT(rZOffset);]]></ST>
+      </Implementation>
+    </Method>
+    <Property Name="P_rOffsetX" Id="{1fe7a835-31f8-42c7-a085-4e07fe2efb0e}">
+      <Declaration><![CDATA[PROPERTY P_rOffsetX : REAL
+]]></Declaration>
+      <Get Name="Get" Id="{1c603615-7fbf-4ad1-b6ed-911e1925acb8}">
+        <Declaration><![CDATA[]]></Declaration>
+        <Implementation>
+          <ST><![CDATA[IF bIsAligned THEN
+	P_rOffsetX := stMark1Act.X - stMark1.X;
+END_IF]]></ST>
+        </Implementation>
+      </Get>
+    </Property>
+    <Property Name="P_stMark1" Id="{314481a6-4a9b-49c9-9deb-1c39931a181c}">
+      <Declaration><![CDATA[PROPERTY P_stMark1 : ST_3DPoint
+]]></Declaration>
+      <Get Name="Get" Id="{6822c0bd-729a-4f75-9d59-2600da50857c}">
+        <Declaration><![CDATA[]]></Declaration>
+        <Implementation>
+          <ST><![CDATA[P_stMark1 := F_Add3DPoints(stMark1,P_stAbsPosLB);]]></ST>
+        </Implementation>
+      </Get>
+    </Property>
+    <Method Name="FB_init" Id="{56fc60b8-f4b3-4c41-b98a-b802f5fdf311}">
+      <Declaration><![CDATA[METHOD FB_init : BOOL
+VAR_INPUT
+	bInitRetains : BOOL; // if TRUE, the retain variables are initialized (warm start / cold start)
+	bInCopyCode : BOOL;  // if TRUE, the instance afterwards gets moved into the copy code (online change)
+END_VAR
+]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[eObjectType := E_ObjectType.OBJECTTYPE_Slide;
+eObjectGroup := E_ObjectGroup.OBJECTGROUP_Target;]]></ST>
+      </Implementation>
+    </Method>
+    <Method Name="M_SetMark1Act" Id="{834fad01-4418-45bf-b88c-d5d786bf8c4e}">
+      <Declaration><![CDATA[METHOD M_SetMark1Act
+VAR_INPUT
+	///ist eine absolute Position
+	stAbsPos: ST_3DPoint;
+END_VAR
+VAR
+	stLeftBottom : ST_3DPoint;
+	stNullPoint : ST_3DPoint;
+	lrAngle : LREAL;
+	bTempIsAligned : BOOL;
+END_VAR]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[//Den aktuellen Wert der Marke 1 setzen
+//Dieser bezieht sich auf die untere linke Ecke
+//Bei einem erneutem Einteachen dürfte es eigentlich kein Problem auftauchen, da hier ja der eigene vorher schon berechnete Winkel
+//noch nicht beachtet wird. Das könnte man bei einem Test mal beweisen
+//doch, in der Methode M_GetAbsPos() wird die bestehende Korrektur schon mit berücksichtigt.
+//es wäre gut, wenn die Methode noch einen Parameter hätte, der bewirkt, das die eigene Korrektur nicht berücksichtigt.
+//warum nicht das bIsAligned mal kurzfristig zurücksetzen?
+bTempIsAligned := bIsAligned;
+bIsAligned := FALSE;
+stLeftBottom := M_GetAbsPos(0, E_TargetRef.TARGETREF_LeftBottom, 0, 0, 0, 0,lrAngle=>lrAngle);
+bIsAligned := bTempIsAligned;
+stMark1Act.X := stAbsPos.X - stLeftBottom.X;
+stMark1Act.Y := stAbsPos.Y - stLeftBottom.Y;
+
+//Falls das ParentTarget gedreht ist, dann muss diese Marke um den kumulierten Drehwinkel der Parents zurückgedreht werden
+stMark1Act := F_RotatePoint(stMark1Act,stNullPoint,-lrAngle);]]></ST>
+      </Implementation>
+    </Method>
+    <Property Name="P_lrAngle" Id="{a68f91b2-ff26-4a97-9785-c4a79e07200d}">
+      <Declaration><![CDATA[PROPERTY P_lrAngle : LREAL
+]]></Declaration>
+      <Set Name="Set" Id="{4d3507b9-4903-4d65-9193-ab31d1a7be27}">
+        <Declaration><![CDATA[]]></Declaration>
+        <Implementation>
+          <ST><![CDATA[lrAngle := P_lrAngle;]]></ST>
+        </Implementation>
+      </Set>
+      <Get Name="Get" Id="{c70936ba-73d3-4a69-b12e-9e5bfce347f1}">
+        <Declaration><![CDATA[]]></Declaration>
+        <Implementation>
+          <ST><![CDATA[P_lrAngle := lrAngle;]]></ST>
+        </Implementation>
+      </Get>
+    </Property>
+    <Method Name="M_AddChild" Id="{b14ecd0a-f896-45de-b2d1-14af36895cbd}">
+      <Declaration><![CDATA[METHOD M_AddChild : ERRORID
+VAR_INPUT
+	pObject : POINTER TO FB_Object;
+	nSlotNr	: UINT;
+	nIndex 	: INT;
+END_VAR
+]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[//Kann folgende Objekte aufnehmen:
+IF pObject > 0 THEN
+	IF pObject^.P_eObjectType = E_ObjectType.OBJECTTYPE_Point OR
+		pObject^.P_eObjectType = E_ObjectType.OBJECTTYPE_Slide OR
+		pObject^.P_eObjectType = E_ObjectType.OBJECTTYPE_SpotPattern OR
+		pObject^.P_eObjectType = E_ObjectType.OBJECTTYPE_SpotArray OR
+		pObject^.P_eObjectType = E_ObjectType.OBJECTTYPE_TargetGroup OR
+		pObject^.P_eObjectType = E_ObjectType.OBJECTTYPE_Wafer THEN
+		M_AddChild := SUPER^.M_AddChild(pObject,nSlotNr,nIndex);
+	ELSE
+		M_AddChild := E_ErrorIdObjMgmt.ERRORID_InvalidParentObject;
+	END_IF
+ELSE
+	M_AddChild := E_ErrorIdObjMgmt.ERRORID_InvalidParentObject;
+END_IF]]></ST>
+      </Implementation>
+    </Method>
+    <Property Name="P_bIsAligned" Id="{ba0f386d-5d69-49c3-bfcb-7626f580487d}">
+      <Declaration><![CDATA[PROPERTY P_bIsAligned : BOOL
+]]></Declaration>
+      <Set Name="Set" Id="{2d9f6691-bf6c-46e1-84dc-9bca3a15456b}">
+        <Declaration><![CDATA[]]></Declaration>
+        <Implementation>
+          <ST><![CDATA[bIsAligned := P_bIsAligned;]]></ST>
+        </Implementation>
+      </Set>
+      <Get Name="Get" Id="{b262d45a-211a-4742-af8c-1f625bfdd7f3}">
+        <Declaration><![CDATA[]]></Declaration>
+        <Implementation>
+          <ST><![CDATA[P_bIsAligned := bIsAligned;]]></ST>
+        </Implementation>
+      </Get>
+    </Property>
+    <Method Name="M_Align" Id="{c40fc800-d5bf-4d61-bd1d-7a843145e0f0}">
+      <Declaration><![CDATA[METHOD M_Align : ST_3DPoint
+VAR_INPUT
+	stPos: ST_3DPoint;
+END_VAR
+VAR_OUTPUT
+	lrAngle: LREAL;
+END_VAR
+VAR
+	stPosTmp: ST_3DPoint;
+END_VAR]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[lrAngle := THIS^.lrAngle;]]></ST>
+      </Implementation>
+    </Method>
+    <Method Name="M_SetSingleProp" Id="{c5c11bee-3814-4093-9c74-828f9241e9ae}">
+      <Declaration><![CDATA[METHOD M_SetSingleProp : ERRORID
+VAR_INPUT
+	refCmdData: REFERENCE TO ST_CmdData;
+END_VAR
+VAR
+	rTemp: REAL;
+	bFlag: BOOL;
+END_VAR]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[IF nNoOfSpecPoints = 2 THEN
+	//Hier wird die Basisklasse ausgelassen, da auf Änderung der RelPos und Dimensionen für das Rücksetzen des Alignments gecheckt wird.
+	rTemp := DINT_TO_REAL(refCmdData.n32Data[0]);
+	CASE refCmdData.aHeader[1] OF
+		2:	//XPosRel
+			IF rTemp <> stRelPos.X THEN
+				stRelPos.X := rTemp;
+				bFlag := TRUE; 	
+			END_IF
+		3:	//YPosRel
+			IF rTemp <> stRelPos.Y THEN
+				stRelPos.Y := rTemp;
+				bFlag := TRUE; 	
+			END_IF
+		4:	//ZPosRel
+			IF rTemp <> stRelPos.Z THEN
+				stRelPos.Z := rTemp;
+				bFlag := TRUE;
+				P_pWorkplate^.P_bCalcCollisHeight := TRUE; 	
+			END_IF
+		5:	//Width
+			IF rTemp <> stDimension.Width THEN
+				stDimension.Width := rTemp;
+				bFlag := TRUE;
+			END_IF
+		6:	//Depth
+			IF rTemp <> stDimension.Depth THEN
+				stDimension.Depth := rTemp;
+				bFlag := TRUE;
+			END_IF
+		7:	//Height
+			IF rTemp <> stDimension.Height THEN
+				stDimension.Height := rTemp;
+				bFlag := TRUE;
+				P_pWorkplate^.P_bCalcCollisHeight := TRUE; 	
+			END_IF
+		8:	//Mark1.X
+			IF rTemp <> stMark1.X THEN
+				stMark1.X := rTemp;
+				bFlag := TRUE; 	
+			END_IF
+		9:	//Mark1.Y
+			IF rTemp <> stMark1.Y THEN
+				stMark1.Y := rTemp;
+				bFlag := TRUE; 	
+			END_IF
+		10:	//Mark1.Z
+			IF rTemp <> stMark1.Z THEN
+				stMark1.Z := rTemp;
+				bFlag := TRUE; 	
+			END_IF
+		11:	//Mark2.X
+			IF rTemp <> stMark2.X THEN
+				stMark2.X := rTemp;
+				bFlag := TRUE; 	
+			END_IF
+		12:	//Mark2.Y
+			IF rTemp <> stMark2.Y THEN
+				stMark2.Y := rTemp;
+				bFlag := TRUE; 	
+			END_IF		
+		13:	//Mark2.Z
+			IF rTemp <> stMark2.Z THEN
+				stMark2.Z := rTemp;
+				bFlag := TRUE; 	
+			END_IF
+		14:	//ZOffset
+			 rZOffset := rTemp;
+	END_CASE
+	IF bFlag AND bIsAligned THEN
+		bIsAligned := FALSE;
+		lrAngle := 0.0;
+	END_IF	
+ELSE
+	IF (nSpecPropIndex + 1) = refCmdData.aHeader[1] THEN
+		rZOffset := DINT_TO_REAL(refCmdData.n32Data[0]);
+	ELSE
+		M_SetSingleProp := SUPER^.M_SetSingleProp(refCmdData);
+	END_IF	
+END_IF]]></ST>
+      </Implementation>
+    </Method>
+    <Method Name="M_ClearAllProps" Id="{c718db61-3307-4bd2-9d9d-fb5f6ed22660}">
+      <Declaration><![CDATA[METHOD M_ClearAllProps
+VAR_INPUT
+	bIgnoreParent : BOOL; //Es wird das gesamte OD gelöscht. -> Zeiger auf Parent nicht mehr gültig!
+END_VAR
+]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[SUPER^.M_ClearAllProps(bIgnoreParent);
+bIsAligned:= FALSE;]]></ST>
+      </Implementation>
+    </Method>
+    <Method Name="M_SetAllProps" Id="{dd18b387-7fad-4b62-ac69-af937d567be9}">
+      <Declaration><![CDATA[METHOD M_SetAllProps : ERRORID
+VAR_INPUT
+	refCmdData : REFERENCE TO  ST_CmdData;
+END_VAR
+
+VAR
+	rTemp: REAL;
+	bFlag: BOOL;
+END_VAR]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[//Hier wird ausdrücklich nicht die Basisklasse aufgerufen, da nur hier gecheckt wird, ob sich die RelPos in XY und die Breite und
+//Tiefe geändert haben um das Alignment zurückzusetzen.
+nNoOfProps := 9;
+//Relative Koordinaten
+nCurrentPropIndex := 2;
+rTemp := DINT_TO_REAL(refCmdData.n32Data[nCurrentPropIndex]);
+IF rTemp <> stRelPos.X THEN
+	stRelPos.X := rTemp;
+	bFlag := TRUE;
+END_IF
+nCurrentPropIndex := nCurrentPropIndex + 1;
+rTemp := DINT_TO_REAL(refCmdData.n32Data[nCurrentPropIndex]);
+IF rTemp <> stRelPos.Y THEN
+	stRelPos.Y := rTemp;
+	bFlag := TRUE;
+END_IF
+nCurrentPropIndex := nCurrentPropIndex + 1;
+rTemp := DINT_TO_REAL(refCmdData.n32Data[nCurrentPropIndex]);
+IF rTemp <> stRelPos.Z THEN
+	stRelPos.Z := rTemp;
+	bFlag := TRUE;
+END_IF
+
+//Dimensionen
+nCurrentPropIndex := nCurrentPropIndex + 1;
+rTemp := DINT_TO_REAL(refCmdData.n32Data[nCurrentPropIndex]);
+IF rTemp <> stDimension.Width THEN
+	stDimension.Width := rTemp;
+	bFlag := TRUE;
+END_IF
+nCurrentPropIndex := nCurrentPropIndex + 1;
+rTemp := DINT_TO_REAL(refCmdData.n32Data[nCurrentPropIndex]);
+IF rTemp <> stDimension.Depth THEN
+	stDimension.Depth := rTemp;
+	bFlag := TRUE;
+END_IF
+nCurrentPropIndex := nCurrentPropIndex + 1;
+rTemp := DINT_TO_REAL(refCmdData.n32Data[nCurrentPropIndex]);
+IF rTemp <> stDimension.Height THEN
+	stDimension.Height := rTemp;
+	bFlag := TRUE;
+END_IF
+nCurrentPropIndex := nCurrentPropIndex + 1;
+rFreeHeight := DINT_TO_REAL(refCmdData.n32Data[nCurrentPropIndex]);
+
+//Alignment-Marken
+nCurrentPropIndex := nCurrentPropIndex + 1;
+nSpecPropIndex := nCurrentPropIndex;
+nNoOfSpecPoints := DINT_TO_USINT(refCmdData.n32Data[nCurrentPropIndex]);
+IF nNoOfSpecPoints = 0 THEN
+	;
+ELSIF nNoOfSpecPoints = 2 THEN
+	//Wenn sich eine Position (X oder Y) geändert hat, dann Alignment-Flag zurücksetzen
+	nCurrentPropIndex := nCurrentPropIndex + 1;
+	rTemp := DINT_TO_REAL(refCmdData.n32Data[nCurrentPropIndex]);
+	IF rTemp <> stMark1.X THEN
+		stMark1.X := rTemp;
+		bFlag := TRUE;
+ 	END_IF
+	nCurrentPropIndex := nCurrentPropIndex + 1;
+	rTemp := DINT_TO_REAL(refCmdData.n32Data[nCurrentPropIndex]);
+	IF rTemp <> stMark1.Y THEN
+		stMark1.Y := rTemp;
+		bFlag := TRUE;
+ 	END_IF
+	nCurrentPropIndex := nCurrentPropIndex + 1;
+	stMark1.Z := DINT_TO_REAL(refCmdData.n32Data[nCurrentPropIndex]);
+	nCurrentPropIndex := nCurrentPropIndex + 1;
+	rTemp := DINT_TO_REAL(refCmdData.n32Data[nCurrentPropIndex]);
+	IF rTemp <> stMark2.X THEN
+		stMark2.X := rTemp;
+		bFlag := TRUE;
+ 	END_IF
+	nCurrentPropIndex := nCurrentPropIndex + 1;
+	rTemp := DINT_TO_REAL(refCmdData.n32Data[nCurrentPropIndex]);
+	IF rTemp <> stMark2.Y THEN
+		stMark2.Y := rTemp;
+		bFlag := TRUE;
+ 	END_IF
+	nCurrentPropIndex := nCurrentPropIndex + 1;
+	stMark2.Z := DINT_TO_REAL(refCmdData.n32Data[nCurrentPropIndex]);
+	IF bFlag AND bIsAligned THEN
+		bIsAligned := FALSE;
+		lrAngle := 0.0;
+	END_IF
+ELSE
+	M_SetAllProps := E_ErrorIdObjMgmt.ERRORID_InvalidNoOfSpecPoints;
+END_IF
+
+P_pWorkplate^.P_bCalcCollisHeight := TRUE;
+
+nCurrentPropIndex := nCurrentPropIndex + 1;
+rZOffset := DINT_TO_REAL(refCmdData.n32Data[nCurrentPropIndex]);
+nNoOfProps := nCurrentPropIndex + 1;]]></ST>
+      </Implementation>
+    </Method>
+    <Method Name="M_GetAbsPos" Id="{e41b5210-d059-4b46-944c-cecba9bb6d01}">
+      <Declaration><![CDATA[METHOD M_GetAbsPos : ST_3DPoint
+VAR_INPUT
+	pChildPos	: POINTER TO ST_3DPoint;
+	eTargetRef 	: E_TargetRef;
+	nParam1		: UINT;
+ 	nParam2		: UINT;
+	nParam3		: USINT;
+	nZLevel		: USINT;
+END_VAR
+VAR_OUTPUT
+	nErrorId 	: ERRORID;
+	lrAngle		: LREAL;
+END_VAR
+VAR
+	stLocPos: ST_3DPoint;
+	stLocPosAligned: ST_3DPoint;
+	stNull: ST_3DPoint;
+END_VAR
+]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[stLocPos.Z := stLocPos.Z + stDimension.Height + rZOffset;
+CASE eTargetRef OF
+	E_TargetRef.TARGETREF_LeftBottom:
+		;
+	E_TargetRef.TARGETREF_LeftTop:
+		stLocPos.Y := stLocPos.Y + stDimension.Depth;
+	E_TargetRef.TARGETREF_RightBottom:
+		stLocPos.X := stLocPos.X + stDimension.Width;
+	E_TargetRef.TARGETREF_RightTop:
+		stLocPos.X := stLocPos.X + stDimension.Width;
+		stLocPos.Y := stLocPos.Y + stDimension.Depth;
+	E_TargetRef.TARGETREF_Center:
+		stLocPos.X := stLocPos.X + stDimension.Width / 2.0;
+		stLocPos.Y := stLocPos.Y + stDimension.Depth / 2.0;
+	E_TargetRef.TARGETREF_SpecPoint:
+		IF nNoOfSpecPoints = 2 THEN
+			IF nParam1 = 1 THEN	//Mark1
+				stLocPos := F_Add3DPoints(stLocPos,stMark1);
+			ELSIF nParam1 = 2 THEN	//Mark2
+				stLocPos := F_Add3DPoints(stLocPos,stMark2);
+			ELSE
+				nErrorId := E_ErrorIdCmd.ERRORID_InvalidTargetPointNr;
+			END_IF	
+		ELSE
+			nErrorId := E_ErrorIdCmd.ERRORID_InvalidTargetPointNr;	
+		END_IF
+	
+ELSE
+	nErrorId := E_ErrorIdCmd.ERRORID_InvalidTargetPointRef;
+END_CASE
+
+IF nErrorId > 0 THEN
+	RETURN;
+END_IF
+
+stLocPosAligned := stLocPos;
+
+IF bIsAligned THEN	//Im Grunde müssten sich die Marken genauso drehen lassen
+	//Offset
+	stLocPosAligned.X := stLocPosAligned.X + stMark1Act.X - stMark1.X;
+	stLocPosAligned.Y := stLocPosAligned.Y + stMark1Act.Y - stMark1.Y;
+	//Drehen
+	stLocPosAligned := F_RotatePoint(stLocPosAligned,stMark1Act,THIS^.lrAngle);
+END_IF
+
+stLocPos := F_Add3DPoints(stLocPos,stRelPos);
+stLocPosAligned := F_Add3DPoints(stLocPosAligned,stRelPos);
+
+IF pChildPos > 0 THEN
+	IF bIsAligned THEN
+		pChildPos^ := F_RotatePoint(pChildPos^,stNull,THIS^.lrAngle);
+	END_IF
+	
+	pChildPos^.X := pChildPos^.X + stLocPosAligned.X - stLocPos.X;
+	pChildPos^.Y := pChildPos^.Y + stLocPosAligned.Y - stLocPos.Y;
+
+	stLocPos.X := pChildPos^.X + stLocPos.X;
+	stLocPos.Y := pChildPos^.Y + stLocPos.Y;
+	stLocPos.Z := pChildPos^.Z + stLocPos.Z;
+ELSE
+	stLocPos := stLocPosAligned;
+END_IF
+
+IF pParentTarget > 0 THEN
+	IF pParentSlot > 0 THEN
+ 		stLocPos := pParentTarget^.M_GetAbsPos(pChildPos := ADR(stLocPos), eTargetRef:= E_TargetRef.TARGETREF_Slot,
+													nParam1:= pParentSlot^.P_nNr,
+													nParam2:= 0, nParam3:= 0,nZLevel:= 0,
+													lrAngle => lrAngle, nErrorId=> nErrorId);
+	ELSE
+ 		stLocPos := pParentTarget^.M_GetAbsPos(pChildPos := ADR(stLocPos), eTargetRef:= E_TargetRef.TARGETREF_LeftBottom,
+													nParam1:= 0,
+													nParam2:= 0, nParam3:= 0,nZLevel:= 0,
+													lrAngle => lrAngle, nErrorId=> nErrorId);
+	END_IF
+END_IF
+
+IF nErrorId > 0 THEN
+	RETURN;
+END_IF
+
+IF bIsAligned THEN
+	lrAngle := lrAngle + THIS^.lrAngle;	
+END_IF
+
+M_GetAbsPos := stLocPos;
+]]></ST>
+      </Implementation>
+    </Method>
+    <Method Name="M_CalcAngle" Id="{f03a70ae-8de6-4cc4-9319-0c6f68098416}">
+      <Declaration><![CDATA[METHOD M_CalcAngle : ERRORID
+VAR_INPUT
+END_VAR
+]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[IF bIsAligned THEN
+	//Falls ein Fehler bei der Berechnung auftritt, wird "bIsAligned" zurückgesetzt
+	lrAngle := F_GetTwoLineAngle(stMark1,stMark2,stMark1Act, stMark2Act);
+	IF lrAngle = 9999.9 THEN
+		bIsAligned := FALSE;
+		lrAngle := 0.0;
+	END_IF
+ELSE
+	lrAngle := 0.0;
+END_IF]]></ST>
+      </Implementation>
+    </Method>
+    <Method Name="M_SetMark2Act" Id="{f5c02cfe-44ff-4d77-afc9-a14140086438}">
+      <Declaration><![CDATA[METHOD M_SetMark2Act
+VAR_INPUT
+	///ist eine absolute Position
+	stAbsPos: ST_3DPoint;
+END_VAR
+VAR
+	stLeftBottom: ST_3DPoint;
+	stNullPoint : ST_3DPoint;
+	lrAngle : LREAL;
+	bTempIsAligned : BOOL;
+END_VAR]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[bTempIsAligned := bIsAligned;
+bIsAligned := FALSE;
+stLeftBottom := M_GetAbsPos(0, E_TargetRef.TARGETREF_LeftBottom, 0, 0, 0, 0,lrAngle=>lrAngle);
+bIsAligned := bTempIsAligned;
+stMark2Act.X := stAbsPos.X - stLeftBottom.X;
+stMark2Act.Y := stAbsPos.Y - stLeftBottom.Y;
+//Falls das ParentTarget gedreht ist, dann muss diese Marke um den kumulierten Drehwinkel der Parents zurückgedreht werden
+stMark2Act := F_RotatePoint(stMark2Act,stNullPoint,-lrAngle);]]></ST>
+      </Implementation>
+    </Method>
+    <Property Name="P_rOffsetY" Id="{fa7f0748-c6aa-4535-a70b-4c0d35e8484c}">
+      <Declaration><![CDATA[PROPERTY P_rOffsetY : REAL
+]]></Declaration>
+      <Get Name="Get" Id="{5fdaa1e3-958d-4285-9953-c629f5ba1108}">
+        <Declaration><![CDATA[]]></Declaration>
+        <Implementation>
+          <ST><![CDATA[IF bIsAligned THEN
+	P_rOffsetY := stMark1Act.Y - stMark1.Y;
+END_IF]]></ST>
+        </Implementation>
+      </Get>
+    </Property>
+    <Property Name="P_lrAbsAngle" Id="{fc6d8818-1f1e-4f74-b8ed-785bf728a881}">
+      <Declaration><![CDATA[PROPERTY P_lrAbsAngle : LREAL]]></Declaration>
+      <Get Name="Get" Id="{aa8a689c-0410-40f4-acf9-750142bb78b0}">
+        <Declaration><![CDATA[VAR
+END_VAR
+]]></Declaration>
+        <Implementation>
+          <ST><![CDATA[IF pParentTarget > 0 THEN
+	P_lrAbsAngle := pParentTarget^.P_lrAbsAngle + lrAngle;
+END_IF]]></ST>
+        </Implementation>
+      </Get>
+    </Property>
+    <LineIds Name="FB_Slide">
+      <LineId Id="9" Count="0" />
+    </LineIds>
+    <LineIds Name="FB_Slide.M_GetAllProps">
+      <LineId Id="7" Count="20" />
+      <LineId Id="6" Count="0" />
+    </LineIds>
+    <LineIds Name="FB_Slide.P_rOffsetX.Get">
+      <LineId Id="3" Count="1" />
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="FB_Slide.P_stMark1.Get">
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="FB_Slide.FB_init">
+      <LineId Id="7" Count="1" />
+    </LineIds>
+    <LineIds Name="FB_Slide.M_SetMark1Act">
+      <LineId Id="44" Count="0" />
+      <LineId Id="47" Count="1" />
+      <LineId Id="50" Count="0" />
+      <LineId Id="45" Count="0" />
+      <LineId Id="52" Count="0" />
+      <LineId Id="46" Count="0" />
+      <LineId Id="54" Count="1" />
+      <LineId Id="23" Count="0" />
+      <LineId Id="56" Count="0" />
+      <LineId Id="25" Count="0" />
+      <LineId Id="24" Count="0" />
+      <LineId Id="41" Count="0" />
+      <LineId Id="51" Count="0" />
+      <LineId Id="31" Count="0" />
+    </LineIds>
+    <LineIds Name="FB_Slide.P_lrAngle.Set">
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="FB_Slide.P_lrAngle.Get">
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="FB_Slide.M_AddChild">
+      <LineId Id="19" Count="0" />
+      <LineId Id="9" Count="0" />
+      <LineId Id="22" Count="4" />
+      <LineId Id="21" Count="0" />
+      <LineId Id="20" Count="0" />
+      <LineId Id="18" Count="0" />
+      <LineId Id="15" Count="0" />
+      <LineId Id="11" Count="0" />
+      <LineId Id="13" Count="0" />
+      <LineId Id="12" Count="0" />
+      <LineId Id="5" Count="0" />
+    </LineIds>
+    <LineIds Name="FB_Slide.P_bIsAligned.Set">
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="FB_Slide.P_bIsAligned.Get">
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="FB_Slide.M_Align">
+      <LineId Id="5" Count="0" />
+    </LineIds>
+    <LineIds Name="FB_Slide.M_SetSingleProp">
+      <LineId Id="83" Count="0" />
+      <LineId Id="141" Count="0" />
+      <LineId Id="75" Count="0" />
+      <LineId Id="81" Count="0" />
+      <LineId Id="97" Count="0" />
+      <LineId Id="99" Count="3" />
+      <LineId Id="86" Count="0" />
+      <LineId Id="104" Count="4" />
+      <LineId Id="110" Count="1" />
+      <LineId Id="114" Count="0" />
+      <LineId Id="112" Count="1" />
+      <LineId Id="129" Count="0" />
+      <LineId Id="119" Count="2" />
+      <LineId Id="123" Count="0" />
+      <LineId Id="130" Count="0" />
+      <LineId Id="124" Count="2" />
+      <LineId Id="128" Count="0" />
+      <LineId Id="95" Count="0" />
+      <LineId Id="132" Count="3" />
+      <LineId Id="137" Count="0" />
+      <LineId Id="140" Count="0" />
+      <LineId Id="142" Count="2" />
+      <LineId Id="146" Count="0" />
+      <LineId Id="145" Count="0" />
+      <LineId Id="147" Count="17" />
+      <LineId Id="139" Count="0" />
+      <LineId Id="165" Count="5" />
+      <LineId Id="172" Count="0" />
+      <LineId Id="177" Count="3" />
+      <LineId Id="76" Count="0" />
+      <LineId Id="54" Count="5" />
+      <LineId Id="6" Count="0" />
+    </LineIds>
+    <LineIds Name="FB_Slide.M_ClearAllProps">
+      <LineId Id="5" Count="1" />
+    </LineIds>
+    <LineIds Name="FB_Slide.M_SetAllProps">
+      <LineId Id="81" Count="1" />
+      <LineId Id="106" Count="0" />
+      <LineId Id="83" Count="1" />
+      <LineId Id="96" Count="1" />
+      <LineId Id="99" Count="0" />
+      <LineId Id="98" Count="0" />
+      <LineId Id="100" Count="1" />
+      <LineId Id="107" Count="3" />
+      <LineId Id="102" Count="0" />
+      <LineId Id="111" Count="5" />
+      <LineId Id="89" Count="0" />
+      <LineId Id="117" Count="18" />
+      <LineId Id="90" Count="0" />
+      <LineId Id="94" Count="0" />
+      <LineId Id="17" Count="1" />
+      <LineId Id="20" Count="35" />
+      <LineId Id="136" Count="0" />
+      <LineId Id="72" Count="0" />
+      <LineId Id="57" Count="2" />
+      <LineId Id="137" Count="0" />
+      <LineId Id="60" Count="0" />
+      <LineId Id="138" Count="0" />
+      <LineId Id="61" Count="2" />
+      <LineId Id="10" Count="0" />
+    </LineIds>
+    <LineIds Name="FB_Slide.M_GetAbsPos">
+      <LineId Id="20" Count="0" />
+      <LineId Id="22" Count="15" />
+      <LineId Id="43" Count="1" />
+      <LineId Id="50" Count="29" />
+      <LineId Id="150" Count="2" />
+      <LineId Id="149" Count="0" />
+      <LineId Id="80" Count="2" />
+      <LineId Id="88" Count="23" />
+      <LineId Id="174" Count="0" />
+      <LineId Id="171" Count="2" />
+      <LineId Id="112" Count="1" />
+      <LineId Id="17" Count="0" />
+    </LineIds>
+    <LineIds Name="FB_Slide.M_CalcAngle">
+      <LineId Id="6" Count="8" />
+      <LineId Id="5" Count="0" />
+    </LineIds>
+    <LineIds Name="FB_Slide.M_SetMark2Act">
+      <LineId Id="37" Count="0" />
+      <LineId Id="36" Count="0" />
+      <LineId Id="13" Count="0" />
+      <LineId Id="38" Count="0" />
+      <LineId Id="14" Count="1" />
+      <LineId Id="5" Count="0" />
+      <LineId Id="25" Count="0" />
+    </LineIds>
+    <LineIds Name="FB_Slide.P_rOffsetY.Get">
+      <LineId Id="3" Count="1" />
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="FB_Slide.P_lrAbsAngle.Get">
+      <LineId Id="3" Count="1" />
+      <LineId Id="2" Count="0" />
+    </LineIds>
+  </POU>
+</TcPlcObject>

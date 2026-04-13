@@ -1,0 +1,13 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<TcPlcObject Version="1.1.0.1" ProductVersion="3.1.0.25">
+  <DUT Name="ST_ZGPIO_PWM_ANA" Id="{5e625995-08df-4644-8bca-53295e812035}">
+    <Declaration><![CDATA[TYPE ST_ZGPIO_PWM_ANA :
+STRUCT
+	bEnable	: BOOL;	//wird per SDO gesetzt
+	nValue	: UINT;		//wird per SDO gesetzt
+END_STRUCT
+END_TYPE
+]]></Declaration>
+    <ObjectProperties />
+  </DUT>
+</TcPlcObject>

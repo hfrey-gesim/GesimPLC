@@ -1,0 +1,1332 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<TcPlcObject Version="1.1.0.1">
+  <POU Name="FB_StampSupport" Id="{5c6ee7fb-4895-402f-9322-4745241bd1df}" SpecialFunc="None">
+    <Declaration><![CDATA[FUNCTION_BLOCK FB_StampSupport EXTENDS FB_MzTool
+VAR_INPUT
+END_VAR
+VAR_OUTPUT
+END_VAR
+VAR
+	
+	//Specproperties
+	rZOffsetUnlocked		: REAL;
+	rZOffsetLocked			: REAL;
+	
+	pPneuChannelPress		: POINTER TO FB_PneuChannelRef;
+	pPneuChannelVac			: POINTER TO FB_PneuChannelRef;
+	
+	nDOutChanValvePress		: USINT;	//Digitaler Ausgangskanal MzHead Druckventil
+	nDOutChanValveVac		: USINT;	//Digitaler Ausgangskanal MzHead Vakuumventil
+	fbMultiZStamp			: FB_MultiZStamp;
+	
+	//****************************************Aktionsvariablen****************************************************
+	
+	//Action: "InitTool"
+	bInitTool			: BOOL;
+	bInitSpecFlag		: BOOL := TRUE;
+	nStateA_InitTool	: USINT;
+	
+	//Action: "SetPressure"
+	bSetPress			: BOOL;
+	fbSetPress			: FB_SetPressure;
+
+	//Action: "SetVacuum"
+	bSetVacuum			: BOOL;
+	fbSetVacuum			: FB_SetPressure;
+	
+	//Action: "SwitchPressure"
+	bSwitchPress		: BOOL;
+	nStateA_SwitchPress	: USINT;		//State von A_SwitchPress()
+	bPressOn			: BOOL;			//Druckventil "Auf"
+	ePressCtrl			: E_PressCtrl;
+	tPressTime			: TIME;			//Öffnungszeit Druckventil
+	timerPress			: TON;			//Timer für Öffnungszeit Druckventil
+
+	//Action: "PulsePressure"
+	bPulsePress			: BOOL;
+	nStateA_PulsePress	: USINT;	//State von A_PulsePress()
+	eSwitchCtrlPhase1	: E_PressCtrl;		//
+	eSwitchCtrlPhase2	: E_PressCtrl;		//
+	nPulseDutycycle		: UINT;		//Tastverhältnis (0-100%)
+	nTimePhase1			: UINT;
+	nTimePhase2			: UINT;
+	timerPulse			: TON;		//Timer
+	nSetpointPulses		: UINT;		//Soll Anzahl an Pulses
+	nCurrentPulses		: UINT;		//aktuelle Anzahl an Pulses
+	bPulseOn			: BOOL;
+	
+	//Action: "LockUnlock"
+	bLockUnlock				: BOOL;
+	nStateA_LockUnlock		: USINT;	//State von A_LockUnlock
+	bLock					: BOOL;		//True = Verriegeln, False = Entriegeln
+	
+	//Action: "Adjust"
+	bAdjust					: BOOL;
+	nStateA_Adjust			: USINT;	//State von A_Adjust
+	nAdjustAngle			: INT;		//absolute Winkeleinstellung in 1/1000°	
+	
+	//Action: "Expose"
+	bExpose					: BOOL;
+	nStateA_Expose			: USINT;	//State von A_Expose
+	bExposeStart			: BOOL;
+	timerExpose				: TON;
+	//bDigiOut				AT %Q* : BOOL;
+
+	eCurPressState			: E_PressCtrl;
+	nCurPressValue			: INT;
+	
+END_VAR
+]]></Declaration>
+    <Implementation>
+      <ST><![CDATA[IF eCurrentState = E_MachineState.MACHINESTATE_Active THEN
+	IF bInitTool THEN
+		A_InitTool();
+		IF nStateA_InitTool >= 80 THEN
+			IF nStateA_InitTool >= 99 THEN
+				bError := TRUE;
+			END_IF
+			bInitTool := FALSE;
+			nStateA_InitTool := 0;
+			M_RemoveListEntry(nSearchValue:= E_Action.ACTION_Init);
+		END_IF		
+	END_IF
+
+	IF bLockUnlock THEN
+		A_LockUnlock();
+		IF nStateA_LockUnlock >= 80 THEN
+			IF nStateA_LockUnlock >= 99 THEN
+				bError := TRUE;		
+			END_IF
+			bLockUnlock := FALSE;
+			nStateA_LockUnlock := 0;
+			M_RemoveListEntry(nSearchValue:= E_Action.ACTION_LockUnlock);
+		END_IF
+	END_IF
+	
+	IF bSetPress THEN
+		fbSetPress(pPneuChannelRef:= pPneuChannelPress);
+		IF NOT fbSetPress.bBusy THEN
+			IF fbSetPress.bError THEN
+				bError := TRUE;
+				stError.ErrorId := fbSetPress.nErrorId;
+				stError.POU := E_POU.POU_FB_StampSupport;
+				fbErrorList.M_Add(stError);
+			END_IF
+			bSetPress := FALSE;
+			fbSetPress(pPneuChannelRef:= pPneuChannelPress, bExecute:= FALSE);
+			M_RemoveListEntry(nSearchValue:= E_Action.ACTION_SetPressure);
+		END_IF
+	END_IF	
+
+	IF bSetVacuum THEN
+		fbSetVacuum(pPneuChannelRef:= pPneuChannelVac);
+		IF NOT fbSetVacuum.bBusy THEN
+			IF fbSetVacuum.bError THEN
+				bError := TRUE;
+				stError.ErrorId := fbSetVacuum.nErrorId;
+				stError.POU := E_POU.POU_FB_StampSupport;
+				fbErrorList.M_Add(stError);
+			END_IF
+			bSetVacuum := FALSE;
+			fbSetVacuum(pPneuChannelRef:= pPneuChannelVac, bExecute:= FALSE);
+			M_RemoveListEntry(nSearchValue:= E_Action.ACTION_SetVacuum);
+		END_IF
+	END_IF	
+	
+	IF bSwitchPress THEN
+		A_SwitchPress();
+		IF nStateA_SwitchPress >= 80 THEN
+			IF nStateA_SwitchPress >= 99 THEN
+				bError := TRUE;
+			END_IF
+			bSwitchPress := FALSE;
+			nStateA_SwitchPress := 0;
+			M_RemoveListEntry(nSearchValue:= E_Action.ACTION_SwitchPressure);
+		END_IF
+	END_IF	
+
+	IF bPulsePress THEN	//Druck/Vakuum Ein/Aus
+		A_PulsePress();
+		IF nStateA_PulsePress >= 80 THEN
+			IF nStateA_PulsePress >= 99 THEN
+				bError := TRUE;
+			END_IF
+			bPulsePress := FALSE;
+			nStateA_PulsePress := 0;
+			M_RemoveListEntry(nSearchValue:= E_Action.ACTION_PulsePressure);
+		END_IF
+	END_IF
+	
+	IF bAdjust THEN
+		A_Adjust();
+		IF nStateA_Adjust >= 80 THEN
+			IF nStateA_Adjust >= 99 THEN
+				bError := TRUE;
+			END_IF
+			bAdjust := FALSE;
+			nStateA_Adjust := 0;
+			M_RemoveListEntry(nSearchValue:= E_Action.ACTION_StampAdjust);
+		END_IF
+	END_IF
+	
+	IF bExpose THEN
+		A_Expose();
+		IF nStateA_Expose >= 80 THEN
+			IF nStateA_Expose >= 99 THEN
+				bError := TRUE;
+			END_IF
+			bExpose := FALSE;
+			nStateA_Expose := 0;
+			M_RemoveListEntry(nSearchValue:= E_Action.ACTION_Expose);
+		END_IF
+	END_IF
+	
+END_IF
+
+fbMultiZStamp(pFbMultiZ := pFbMultiZ);
+
+SUPER^();	//FB_MzTool aufrufen
+
+//Prozessdaten aktualisieren
+
+stProcessData.n32Data[7].0 := pFbMultiZ^.stStampSupport.bLocked;
+stProcessData.n32Data[7].1 := pFbMultiZ^.stStampSupport.bLight;
+stProcessData.n32Data[7].2 := pFbMultiZ^.stStampSupport.bStampInSupport;
+stProcessData.n32Data[7].3 := GVL_HwRefIO.bTrigger1;
+
+IF pFbMultiZ^.stStampSupport.bAngleReached THEN
+	stProcessData.n32Data[8] := pFbMultiZ^.stStampSupport.nAngleSetpoint;
+END_IF
+
+IF pPneuChannelPress > 0 THEN
+	stProcessData.n32Data[9] := pPneuChannelPress^.P_nSetPressure;
+	stProcessData.n32Data[10] := pPneuChannelPress^.P_nCurrentPressure;
+	nCurPressValue := pPneuChannelPress^.P_nCurrentPressure;
+END_IF
+
+IF pPneuChannelVac > 0 THEN
+	stProcessData.n32Data[11] := pPneuChannelVac^.P_nSetPressure;
+	stProcessData.n32Data[12] := pPneuChannelVac^.P_nCurrentPressure;
+END_IF
+
+IF pFbMultiZ > 0 THEN
+	IF NOT (pFbMultiZ^.aDigiOut[nDOutChanValvePress] OR pFbMultiZ^.aDigiOut[nDOutChanValveVac]) THEN
+		eCurPressState := E_PressCtrl.PRESSCTRL_Off;
+	ELSIF pFbMultiZ^.aDigiOut[nDOutChanValvePress] AND NOT pFbMultiZ^.aDigiOut[nDOutChanValveVac] THEN
+		eCurPressState := E_PressCtrl.PRESSCTRL_PressOn;
+	ELSIF NOT pFbMultiZ^.aDigiOut[nDOutChanValvePress] AND pFbMultiZ^.aDigiOut[nDOutChanValveVac] THEN
+		eCurPressState := E_PressCtrl.PRESSCTRL_VacOn;	
+	ELSE
+		eCurPressState := E_PressCtrl.PRESSCTRL_UNDEFINED;
+	END_IF
+END_IF
+
+stProcessData.n32Data[13] := eCurPressState;
+aObjProcData[nNotifyId] := stProcessData;
+]]></ST>
+    </Implementation>
+    <Property Name="P_rZOffsetLocked" Id="{0149ef6f-822a-4289-8288-27738e140715}">
+      <Declaration><![CDATA[PROPERTY P_rZOffsetLocked : REAL]]></Declaration>
+      <Get Name="Get" Id="{d977e6c9-62d7-4329-a269-b13acd13b109}">
+        <Declaration><![CDATA[VAR
+END_VAR
+]]></Declaration>
+        <Implementation>
+          <ST><![CDATA[P_rZOffsetLocked := rZOffsetLocked;]]></ST>
+        </Implementation>
+      </Get>
+    </Property>
+    <Method Name="M_GetAllProps" Id="{1104a310-4714-4534-a2c2-86223d3bafae}">
+      <Declaration><![CDATA[METHOD M_GetAllProps : ERRORID
+VAR_INPUT
+	refCmdData : REFERENCE TO  ST_CmdData;
+END_VAR
+]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[//Basisproperties lesen
+SUPER^.M_GetAllProps(refCmdData);
+//Specialproperties lesen
+nCurrentPropIndex := nCurrentPropIndex + 1;
+refCmdData.n32Data[nCurrentPropIndex] := REAL_TO_DINT(rZOffsetUnlocked);
+nCurrentPropIndex := nCurrentPropIndex + 1;
+refCmdData.n32Data[nCurrentPropIndex] := REAL_TO_DINT(rZOffsetLocked);
+
+nCurrentPropIndex := nCurrentPropIndex + 1;
+IF pPneuChannelPress > 0 THEN
+	refCmdData.n32Data[nCurrentPropIndex] := pPneuChannelPress^.nChannel;
+ELSE
+	refCmdData.n32Data[nCurrentPropIndex] := 0;
+END_IF
+
+nCurrentPropIndex := nCurrentPropIndex + 1;
+IF pPneuChannelVac > 0 THEN
+	refCmdData.n32Data[nCurrentPropIndex] := pPneuChannelVac^.nChannel;
+ELSE
+	refCmdData.n32Data[nCurrentPropIndex] := 0;
+END_IF
+
+nCurrentPropIndex := nCurrentPropIndex + 1;
+refCmdData.n32Data[nCurrentPropIndex] := nDOutChanValvePress; //Digitaler Ausgangskanal MzHead Druckventil
+nCurrentPropIndex := nCurrentPropIndex + 1;
+refCmdData.n32Data[nCurrentPropIndex] := nDOutChanValveVac; //Digitaler Ausgangskanal MzHead Vakuumventil]]></ST>
+      </Implementation>
+    </Method>
+    <Property Name="P_bStampInMagazine" Id="{14f1539a-4d40-49d3-a7a5-d652fd35429c}">
+      <Declaration><![CDATA[PROPERTY P_bStampInMagazine : BOOL]]></Declaration>
+      <Get Name="Get" Id="{c68729ea-b7e4-4cbc-bf6f-9759eb046274}">
+        <Declaration><![CDATA[VAR
+END_VAR
+]]></Declaration>
+        <Implementation>
+          <ST><![CDATA[P_bStampInMagazine := fbMultiZStamp.P_bStampInMagazine;]]></ST>
+        </Implementation>
+      </Get>
+    </Property>
+    <Method Name="M_GetPressValueOk" Id="{21f7605a-f6ba-4e07-a76a-75ef1657d594}">
+      <Declaration><![CDATA[METHOD M_GetPressValueOk : BOOL
+VAR_INPUT
+	nSetPressure	: INT;
+	nTolerancePlus	: INT;
+	nToleranceMinus	: INT;
+END_VAR
+]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[IF (nCurPressValue >= nSetPressure - nToleranceMinus) AND (nCurPressValue <= nSetPressure + nTolerancePlus)THEN
+	M_GetPressValueOk := TRUE;
+	RETURN;
+END_IF]]></ST>
+      </Implementation>
+    </Method>
+    <Property Name="P_bIsInit" Id="{263eb690-019c-4a78-a72b-f663563b732b}">
+      <Declaration><![CDATA[PROPERTY P_bIsInit : BOOL]]></Declaration>
+      <Get Name="Get" Id="{faeb6cbe-fdc5-457c-a9da-19792b958ef4}">
+        <Declaration><![CDATA[VAR
+END_VAR
+]]></Declaration>
+        <Implementation>
+          <ST><![CDATA[P_bIsInit := bInitToolOk AND SUPER^.P_bIsInit;]]></ST>
+        </Implementation>
+      </Get>
+    </Property>
+    <Action Name="A_SwitchPress" Id="{2e6333e7-fa77-47b0-bbb6-a8872863fde3}">
+      <Implementation>
+        <ST><![CDATA[CASE nStateA_SwitchPress OF
+	0:
+		timerPress(IN:= TRUE, PT:= tPressTime);
+		nStateA_SwitchPress := 1;
+		
+	1:	//Warten bis Zeitabgelaufen
+		timerPress();
+		IF timerPress.Q THEN
+			timerPress(IN:= FALSE);
+			pFbMultiZ^.aDigiOut[nDOutChanValvePress] := FALSE;
+			pFbMultiZ^.aDigiOut[nDOutChanValveVac] := FALSE;
+			nStateA_SwitchPress := 80;
+		END_IF
+		
+	70:	//Abbrechen
+		timerPress(IN:= FALSE);
+		nStateA_SwitchPress := 80;
+END_CASE]]></ST>
+      </Implementation>
+    </Action>
+    <Property Name="P_bLocked" Id="{381081c5-d613-4967-85d8-50ea4c5df679}">
+      <Declaration><![CDATA[PROPERTY P_bLocked : BOOL]]></Declaration>
+      <Get Name="Get" Id="{9d9d10ec-a8c8-430f-9fa2-fcf41a66eb2e}">
+        <Declaration><![CDATA[VAR
+END_VAR
+]]></Declaration>
+        <Implementation>
+          <ST><![CDATA[P_bLocked := pFbMultiZ^.stStampSupport.bLocked;]]></ST>
+        </Implementation>
+      </Get>
+    </Property>
+    <Property Name="P_nCurPressValue" Id="{3c133601-fee6-4fdc-8c19-937d003dcf1b}">
+      <Declaration><![CDATA[PROPERTY P_nCurPressValue : INT]]></Declaration>
+      <Get Name="Get" Id="{174d99e2-9b44-47d0-b157-1277488dbf95}">
+        <Declaration><![CDATA[VAR
+END_VAR
+]]></Declaration>
+        <Implementation>
+          <ST><![CDATA[P_nCurPressValue := nCurPressValue;]]></ST>
+        </Implementation>
+      </Get>
+    </Property>
+    <Action Name="A_Expose" Id="{3d7e92f2-b386-43ad-80e5-bf353d749130}">
+      <Implementation>
+        <ST><![CDATA[CASE nStateA_Expose OF
+	0:	
+		GVL_HwRefIO.bTrigger1 := TRUE;
+		//Timer starten
+		IF timerExpose.PT > T#0S THEN
+			timerExpose(IN:=TRUE);
+			nStateA_Expose := 1;
+		ELSE
+			nStateA_Expose := 2;
+		END_IF
+	
+	1:	//Warten, bis Zeit abgelaufen
+		timerExpose();
+		IF timerExpose.Q THEN
+			timerExpose(IN:= FALSE);
+			GVL_HwRefIO.bTrigger1 := FALSE;
+			nStateA_Expose := 2;
+		END_IF
+		
+	2:	//Delay bis ready (Blendenschaltzeit)
+		timerExpose(IN:=TRUE,PT:=T#500MS);
+		IF timerExpose.Q THEN
+			timerExpose(IN:=FALSE);
+			nStateA_Expose := 80;
+		END_IF	
+		
+	70:	//Abbrechen
+		timerExpose(IN:= FALSE);
+		GVL_HwRefIO.bTrigger1 := FALSE;
+		nStateA_Expose := 80;
+END_CASE]]></ST>
+      </Implementation>
+    </Action>
+    <Method Name="M_CheckAction" Id="{44ccbbea-2837-4f80-8c4f-f715e3598103}">
+      <Declaration><![CDATA[METHOD M_CheckAction : ERRORID
+VAR_INPUT
+	refActionData 	: REFERENCE TO ST_ActionData;
+	pCorrelObject	: POINTER TO FB_Object;
+END_VAR
+
+VAR
+	pStampMagazine : POINTER TO FB_StampMagazine;
+END_VAR]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[CASE refActionData.eAction OF
+	E_Action.ACTION_MoveToTarget:
+		M_CheckAction := SUPER^.M_CheckAction(refActionData,pCorrelObject);
+		IF M_CheckAction > 0 THEN
+			RETURN;
+		END_IF
+		IF fbMultiZStamp.P_bStampInSupport THEN	//Sensor zeigt an, dass Stamp aufgenommen
+			IF pPiece = 0 THEN
+				M_CheckAction := E_ErrorIdCmd.ERRORID_InvalidStampAssignment;
+			END_IF
+		ELSE
+			IF pPiece > 0 THEN
+				M_CheckAction := E_ErrorIdCmd.ERRORID_InvalidStampAssignment;
+			END_IF
+		END_IF
+
+	E_Action.ACTION_ExchangePiece:
+		IF fbObjectDirectory.M_GetObjType(refActionData.nTarget) <> E_ObjectType.OBJECTTYPE_StampMagazine THEN
+			M_CheckAction := E_ErrorIdCmd.ERRORID_UnsuitableTarget;
+		ELSE
+			IF refActionData.aParams[2] = 0 THEN //Drop - es muss ein Stamp im Support sein
+				IF pPiece = 0 OR NOT P_bStampInSupport THEN
+					M_CheckAction := E_ErrorIdCmd.ERRORID_NoPieceOnTool;
+				END_IF
+			ELSIF refActionData.aParams[2] = 1 THEN //Take - es darf kein Stamp im Support sein
+				IF pPiece > 0 OR P_bStampInSupport THEN 
+					M_CheckAction := E_ErrorIdCmd.ERRORID_PieceAlreadyOnTool;	
+				END_IF
+			ELSE
+				M_CheckAction := E_ErrorIdCmd.ERRORID_InvalidCtrl;
+			END_IF
+		END_IF
+	E_Action.ACTION_MeasureTool:
+		IF fbObjectDirectory.M_GetObjType(refActionData.nTarget) = E_ObjectType.OBJECTTYPE_InkStation THEN
+			;
+		ELSIF fbObjectDirectory.M_GetObjType(refActionData.nTarget) = E_ObjectType.OBJECTTYPE_StampMagazine THEN
+			pStampMagazine := fbObjectDirectory.M_GetObjPointer(refActionData.nTarget);
+			//Ist der MeasurePoint vorhanden?
+			IF NOT pStampMagazine^.P_bMeasurePointAvailable THEN
+				M_CheckAction := E_ErrorIdCmd.ERRORID_UnsuitableTarget;	
+			END_IF
+		ELSE
+			M_CheckAction := E_ErrorIdCmd.ERRORID_UnsuitableTarget;
+		END_IF
+		//Es muss ein Stempel im Support sein
+		IF NOT (P_bStampInSupport AND pPiece > 0) THEN
+			M_CheckAction := E_ErrorIdCmd.ERRORID_NoPieceOnTool;
+		END_IF
+		
+	E_Action.ACTION_Expose, //BasicAction für ActionOnArray
+	E_Action.ACTION_SwitchPressure: //BasicAction für ActionOnArray
+	E_Action.ACTION_StampInking,
+	E_Action.ACTION_StampDemolding:
+		IF pPiece = 0 THEN
+			M_CheckAction := E_ErrorIdCmd.ERRORID_NoPieceOnTool;
+		END_IF		
+ELSE
+	M_CheckAction := SUPER^.M_CheckAction(refActionData, pCorrelObject);
+END_CASE]]></ST>
+      </Implementation>
+    </Method>
+    <Action Name="A_Stop" Id="{54b957e7-5c90-42e3-83e6-4d3aa08dc841}">
+      <Implementation>
+        <ST><![CDATA[IF nStateA_Stop = 0 THEN
+
+	IF bInitTool AND nStateA_InitTool < 70 THEN
+		nStateA_InitTool := 70;
+	END_IF
+	
+	IF bSetPress THEN
+		fbSetPress(bExecute:= FALSE, pPneuChannelRef:= pPneuChannelPress);
+	END_IF
+
+	IF bSetVacuum THEN
+		fbSetVacuum(bExecute:= FALSE, pPneuChannelRef:= pPneuChannelVac);
+	END_IF
+	
+	IF bSwitchPress AND nStateA_SwitchPress < 70 THEN
+		nStateA_SwitchPress := 70;
+	END_IF
+
+	IF bLockUnlock AND nStateA_LockUnlock < 70 THEN
+		nStateA_LockUnlock := 70;
+	END_IF
+	
+	IF bExpose AND nStateA_Expose < 70 THEN
+		nStateA_Expose := 70;
+	END_IF
+	
+	IF bPulsePress AND nStateA_PulsePress < 70 THEN
+		nStateA_PulsePress := 70;
+	END_IF
+
+	nStateA_Stop := 1;
+END_IF
+
+SUPER^.A_Stop();]]></ST>
+      </Implementation>
+    </Action>
+    <Action Name="A_InitTool" Id="{5937a449-ceba-4cfd-b4a5-19af7fb27143}">
+      <Implementation>
+        <ST><![CDATA[IF nStateA_InitTool > 0 AND fbMultiZStamp.bError THEN
+	stError.ErrorId := fbMultiZStamp.nErrorId;
+	stError.POUState := nStateA_InitTool;
+	nStateA_InitTool := 99;
+END_IF
+
+CASE nStateA_InitTool OF
+	0:	//Warten bis InitBase fertig
+		IF NOT bInitAxis THEN
+			bInitToolOk := FALSE;
+			IF bError THEN
+				nStateA_InitTool := 0;
+				bInitTool := FALSE;
+				M_RemoveListEntry(nSearchValue:= E_Action.ACTION_Init);
+				RETURN;
+			END_IF
+			nStateA_InitTool := 1;
+		END_IF
+		
+	1:	//Stamp initialisieren
+		fbMultiZStamp.M_Init();
+		nStateA_InitTool := 2;
+		
+	2:	//Warten bis Initialisierung fertig
+		IF NOT fbMultiZStamp.bBusy THEN
+			bInitToolOk := TRUE;
+			nStateA_InitTool := 80;
+		END_IF
+		
+	70:	//Abbrechen
+		fbMultiZStamp.M_Stop();
+		nStateA_InitTool := 71;
+		
+	71:	
+		IF NOT fbMultiZStamp.bBusy THEN
+			nStateA_InitTool := 80;
+		END_IF
+		
+END_CASE
+
+//Errorhandling
+IF nStateA_InitTool = 99 THEN
+	stError.POU := E_POU.POU_FB_StampSupport;
+	stError.Cmd := E_Action.ACTION_Init;
+	stError.POUAction := E_POUACT.POUACT_A_InitSpec;
+	fbErrorList.M_Add(stError);
+END_IF]]></ST>
+      </Implementation>
+    </Action>
+    <Method Name="M_ExeAction" Id="{62b3b5d6-c6a4-45a2-8a16-69fb43f9f126}">
+      <Declaration><![CDATA[METHOD M_ExeAction : ERRORID
+VAR_INPUT
+	refActionData : REFERENCE TO ST_ActionData;	
+END_VAR]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[IF NOT (eCurrentState = E_MachineState.MACHINESTATE_Idle OR
+	eCurrentState = E_MachineState.MACHINESTATE_Active OR
+	eCurrentState = E_MachineState.MACHINESTATE_Ready) THEN
+	M_ExeAction := E_ErrorIdCmd.ERRORID_InvalidState;
+	RETURN;
+END_IF
+
+CASE refActionData.eAction OF
+	E_Action.ACTION_Init:
+		IF NOT bInitAxis AND NOT bInitTool THEN
+			bInitAxis := TRUE;
+			bInitTool := TRUE;
+			fbList.A_AddHeadValue( hList := hList, putValue := E_Action.ACTION_Init);	//InitAxis
+			fbList.A_AddHeadValue( hList := hList, putValue := E_Action.ACTION_Init);	//InitTool
+		ELSE
+			RETURN;
+		END_IF	
+
+	E_Action.ACTION_LockUnlock:
+		IF NOT bLockUnlock THEN
+			bLockUnlock := TRUE;
+			bLock := DINT_TO_BOOL(refActionData.aParams[1]);		
+			fbList.A_AddHeadValue( hList := hList, putValue := E_Action.ACTION_LockUnlock); 
+		END_IF
+		
+	E_Action.ACTION_SetPressure:
+		fbSetPress(bExecute:= FALSE, pPneuChannelRef:= pPneuChannelPress); //eventueller Fehler wird auch zurückgesetzt
+		fbSetPress.bAwait := DINT_TO_BOOL(refActionData.aParams[1]);
+		fbSetPress.nValue := DINT_TO_INT(refActionData.aParams[2]);
+		fbSetPress.nTolerancePlus := DINT_TO_INT(refActionData.aParams[3]);
+		fbSetPress.nToleranceMinus := DINT_TO_INT(refActionData.aParams[4]);
+		fbSetPress.tTimeout := DINT_TO_TIME(refActionData.aParams[5]);
+		
+		fbSetPress(bExecute:= TRUE,	pPneuChannelRef:= pPneuChannelPress,nErrorId=> M_ExeAction);
+		IF fbSetPress.bError THEN
+			RETURN;
+		END_IF
+		
+		IF NOT bSetPress AND fbSetPress.bBusy THEN
+			bSetPress := TRUE;
+			fbList.A_AddHeadValue(hList := hList, putValue := E_Action.ACTION_SetPressure);
+		ELSE
+			RETURN;	
+		END_IF
+
+	E_Action.ACTION_SetVacuum:
+		fbSetVacuum(bExecute:= FALSE, pPneuChannelRef:= pPneuChannelVac); //eventueller Fehler wird auch zurückgesetzt
+		fbSetVacuum.bAwait := DINT_TO_BOOL(refActionData.aParams[1]);
+		fbSetVacuum.nValue := DINT_TO_INT(refActionData.aParams[2]);
+		fbSetVacuum.nTolerancePlus := DINT_TO_INT(refActionData.aParams[3]);
+		fbSetVacuum.nToleranceMinus := DINT_TO_INT(refActionData.aParams[4]);
+		fbSetVacuum.tTimeout := DINT_TO_TIME(refActionData.aParams[5]);
+		
+		fbSetVacuum(bExecute:= TRUE, pPneuChannelRef:= pPneuChannelVac,nErrorId=> M_ExeAction);
+		IF fbSetVacuum.bError THEN
+			RETURN;
+		END_IF
+		
+		IF NOT bSetVacuum AND fbSetVacuum.bBusy THEN
+			bSetVacuum := TRUE;
+			fbList.A_AddHeadValue(hList := hList, putValue := E_Action.ACTION_SetVacuum);
+		ELSE
+			RETURN;	
+		END_IF
+		
+	E_Action.ACTION_SwitchPressure:
+		//Pneumatikkanal checken
+		ePressCtrl := DINT_TO_USINT(refActionData.aParams[1]);
+		tPressTime := DINT_TO_TIME(refActionData.aParams[2]);
+		CASE ePressCtrl OF
+			E_PressCtrl.PRESSCTRL_Off:
+				pFbMultiZ^.aDigiOut[nDOutChanValvePress] := FALSE;
+				pFbMultiZ^.aDigiOut[nDOutChanValveVac] := FALSE;
+				RETURN;			
+			E_PressCtrl.PRESSCTRL_PressOn:
+				pFbMultiZ^.aDigiOut[nDOutChanValvePress] := TRUE;
+				pFbMultiZ^.aDigiOut[nDOutChanValveVac] := FALSE;
+				IF tPressTime = T#0S THEN
+					RETURN;			
+				ELSE
+					bSwitchPress := TRUE;
+					fbList.A_AddHeadValue(hList := hList, putValue := E_Action.ACTION_SwitchPressure);					
+				END_IF
+			E_PressCtrl.PRESSCTRL_VacOn:
+				pFbMultiZ^.aDigiOut[nDOutChanValvePress] := FALSE;
+				pFbMultiZ^.aDigiOut[nDOutChanValveVac] := TRUE;
+				IF tPressTime = T#0S THEN
+					RETURN;					
+				ELSE
+					bSwitchPress := TRUE;
+					fbList.A_AddHeadValue(hList := hList, putValue := E_Action.ACTION_SwitchPressure);					
+				END_IF
+		ELSE
+			RETURN;
+		END_CASE
+		
+	E_Action.ACTION_PulsePressure:
+		bPulseOn := DINT_TO_BOOL(refActionData.aParams[6]);
+		IF bPulseOn THEN	//On
+			eSwitchCtrlPhase1 := DINT_TO_USINT(refActionData.aParams[1]);
+			eSwitchCtrlPhase2 := DINT_TO_USINT(refActionData.aParams[2]);
+	
+			IF NOT(refActionData.aParams[4] >= 1 AND refActionData.aParams[4] <= 100) THEN
+				M_ExeAction := E_ErrorIdCmd.ERRORID_InvalidDutyCycle;  //Error
+				RETURN;
+			END_IF
+			
+			nTimePhase1 := DINT_TO_UINT(refActionData.aParams[3] / 100 * refActionData.aParams[4]); 
+			nTimePhase2 := DINT_TO_UINT(refActionData.aParams[3] - nTimePhase1);
+			
+			IF NOT bPulsePress THEN
+				bPulsePress := TRUE;
+				fbList.A_AddHeadValue(hList := hList, putValue := E_Action.ACTION_PulsePressure);
+			ELSE
+				RETURN;
+			END_IF
+			
+			nCurrentPulses := 0;
+			nSetpointPulses := DINT_TO_UINT(refActionData.aParams[5]);
+		ELSE
+			RETURN;
+		END_IF
+		
+	E_Action.ACTION_StampAdjust:
+		IF NOT bAdjust THEN
+			//überprüfen ob Sollwinkel in gültigen Grenzen !!NOCH IMPLEMENTIEREN!!
+			nAdjustAngle := DINT_TO_INT(refActionData.aParams[1]);
+			bAdjust := TRUE;
+			fbList.A_AddHeadValue(hList := hList, putValue := E_Action.ACTION_StampAdjust);
+		ELSE
+			RETURN;
+		END_IF
+		
+	E_Action.ACTION_Expose:
+		bExposeStart := DINT_TO_BOOL(refActionData.aParams[1]);
+		IF NOT bExpose AND bExposeStart THEN
+			timerExpose.PT := DINT_TO_TIME(refActionData.aParams[3]);
+			fbList.A_AddHeadValue( hList := hList, putValue := E_Action.ACTION_Expose);
+			bExpose := TRUE;
+		ELSIF bExpose AND NOT bExposeStart THEN
+			nStateA_Expose := 70;
+		ELSE
+			GVL_HwRefIO.bTrigger1 := FALSE;
+		END_IF
+
+	E_Action.ACTION_SwitchLight:
+		fbMultiZStamp.P_bLight := DINT_TO_BOOL(refActionData.aParams[1]);
+		RETURN;
+
+	ELSE
+		M_ExeAction := SUPER^.M_ExeAction(refActionData);
+		RETURN;
+END_CASE
+
+bBusy := TRUE;
+eCurrentState := E_MachineState.MACHINESTATE_Active;]]></ST>
+      </Implementation>
+    </Method>
+    <Method Name="M_ClearAllProps" Id="{73a8cd5e-146d-4e9b-b499-62260b8441c8}">
+      <Declaration><![CDATA[METHOD M_ClearAllProps
+VAR_INPUT
+	bIgnoreParent : BOOL; //Es wird das gesamte OD gelöscht. -> Zeiger auf Parent nicht mehr gültig!
+END_VAR
+]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[pPneuChannelPress := 0;
+pPneuChannelVac := 0;
+SUPER^.M_ClearAllProps(bIgnoreParent);]]></ST>
+      </Implementation>
+    </Method>
+    <Action Name="A_Reset" Id="{8776b8a6-8251-45ca-9e63-a3013738d0d2}">
+      <Implementation>
+        <ST><![CDATA[//Ist noch eine Aktion aktiv?
+IF nStateA_ResetSpec = 0 THEN 
+	
+	IF bAdjust THEN
+		bAdjust := FALSE;
+		nStateA_Adjust := 0;
+	END_IF
+
+	IF bExpose THEN
+		bExpose := FALSE;
+		nStateA_Expose := 0;
+	END_IF
+
+	IF bLockUnlock THEN
+		bLockUnlock := FALSE;
+		nStateA_LockUnlock := 0;
+	END_IF
+	
+	IF bSetPress THEN
+		bSetPress := FALSE;
+		fbSetPress(bExecute:= FALSE, pPneuChannelRef:= pPneuChannelPress);
+	END_IF
+
+	IF bSetVacuum THEN
+		bSetVacuum := FALSE;
+		fbSetVacuum(bExecute:= FALSE, pPneuChannelRef:= pPneuChannelVac);
+	END_IF
+	
+	IF bSwitchPress THEN 
+		bSwitchPress := FALSE;
+		nStateA_SwitchPress := 0;
+	END_IF
+	
+	IF bPulsePress THEN 
+		bPulsePress := FALSE;
+		nStateA_PulsePress := 0;
+	END_IF
+	
+	fbMultiZStamp.M_Reset();
+	
+	nStateA_ResetSpec := 80;		
+END_IF
+
+SUPER^.A_Reset();]]></ST>
+      </Implementation>
+    </Action>
+    <Method Name="M_AddChild" Id="{8a066854-6839-4e33-9024-fcd5d493cfb0}">
+      <Declaration><![CDATA[METHOD M_AddChild : ERRORID
+VAR_INPUT
+	pObject : POINTER TO FB_Object;
+	nSlotNr	: UINT;
+	nIndex 	: INT;
+END_VAR
+]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[//Kann folgende Objekt-Typen aufnehmen
+//Stamp
+IF pObject > 0 THEN
+	IF pObject^.P_eObjectType = E_ObjectType.OBJECTTYPE_Stamp OR
+		 	pObject^.P_eObjectType = E_ObjectType.OBJECTTYPE_Exposure OR 
+			pObject^.P_eObjectType = E_ObjectType.OBJECTTYPE_DummyTool OR
+			pObject^.P_eObjectType = E_ObjectType.OBJECTTYPE_Camera THEN
+		M_AddChild := SUPER^.M_AddChild(pObject,nSlotNr,nIndex);
+	ELSE
+		M_AddChild := E_ErrorIdObjMgmt.ERRORID_InvalidParentObject;
+	END_IF
+ELSE
+	M_AddChild := E_ErrorIdObjMgmt.ERRORID_InvalidParentObject;
+END_IF]]></ST>
+      </Implementation>
+    </Method>
+    <Method Name="M_SetAllProps" Id="{999d8635-bfa5-4347-bfeb-0659ce73901b}">
+      <Declaration><![CDATA[METHOD M_SetAllProps : ERRORID
+VAR_INPUT
+	refCmdData : REFERENCE TO  ST_CmdData;
+END_VAR
+
+VAR
+	nPneuChannel : USINT;
+END_VAR]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[M_SetAllProps := SUPER^.M_SetAllProps(refCmdData);
+
+IF M_SetAllProps = 0 THEN
+	fbMultiZStamp(pFbMultiZ := pFbMultiZ);
+ELSE
+	RETURN;
+END_IF
+
+nCurrentPropIndex := nCurrentPropIndex + 1;
+nSpecPropIndex := nCurrentPropIndex;
+rZOffsetUnlocked := DINT_TO_REAL(refCmdData.n32Data[nCurrentPropIndex]);
+nCurrentPropIndex := nCurrentPropIndex + 1;
+rZOffsetLocked := DINT_TO_REAL(refCmdData.n32Data[nCurrentPropIndex]);
+
+//PneuChannel Druck
+nCurrentPropIndex := nCurrentPropIndex + 1;
+nPneuChannel := DINT_TO_USINT(refCmdData.n32Data[nCurrentPropIndex]);
+IF NOT (nPneuChannel > 0 AND nPneuChannel <= cNoOfPneuChannels) THEN
+	M_SetAllProps := E_ErrorIdObjMgmt.ERRORID_InvalidPneuChannel;
+	RETURN;	
+END_IF
+pPneuChannelPress := ADR(aFbPneuChannel[nPneuChannel]);
+
+//PneuChannel Vakuum
+nCurrentPropIndex := nCurrentPropIndex + 1;
+nPneuChannel := DINT_TO_USINT(refCmdData.n32Data[nCurrentPropIndex]);		
+IF NOT (nPneuChannel > 0 AND nPneuChannel <= cNoOfPneuChannels) THEN
+	M_SetAllProps := E_ErrorIdObjMgmt.ERRORID_InvalidPneuChannel;
+	RETURN;	
+END_IF
+pPneuChannelVac := ADR(aFbPneuChannel[nPneuChannel]);
+
+nCurrentPropIndex := nCurrentPropIndex + 1;
+nDOutChanValvePress := DINT_TO_USINT(refCmdData.n32Data[nCurrentPropIndex]);	//Digitaler Ausgangskanal MzHead Druckventil Pressure
+IF NOT(nDOutChanValvePress > 0 AND nDOutChanValvePress <= 7) THEN
+	M_SetAllProps := E_ErrorIdObjMgmt.ERRORID_InvalidMzDOutChannel;
+	RETURN;
+END_IF
+
+nCurrentPropIndex := nCurrentPropIndex + 1;
+nDOutChanValveVac := DINT_TO_USINT(refCmdData.n32Data[nCurrentPropIndex]);	//Digitaler Ausgangskanal MzHead Druckventil Vacuum
+IF NOT(nDOutChanValveVac > 0 AND nDOutChanValveVac <= 7) THEN
+	M_SetAllProps := E_ErrorIdObjMgmt.ERRORID_InvalidMzDOutChannel;
+	RETURN;
+END_IF
+
+pZAxisRef^.eFixedToolType := E_MzToolType.TOOL_TYPE_Stamp;
+
+nNoOfProps := nCurrentPropIndex + 1;]]></ST>
+      </Implementation>
+    </Method>
+    <Method Name="M_SetSingleProp" Id="{a2ee77ce-63a0-41ad-a283-20a564928efb}">
+      <Declaration><![CDATA[METHOD M_SetSingleProp : ERRORID
+VAR_INPUT
+	refCmdData : REFERENCE TO  ST_CmdData;
+END_VAR
+
+VAR
+	nPneuChannel : USINT;
+END_VAR]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[IF nSpecPropIndex = refCmdData.aHeader[1] THEN //ZOffsetUnlocked
+	rZOffsetUnlocked := DINT_TO_REAL(refCmdData.n32Data[0]);
+	
+ELSIF (nSpecPropIndex + 1) = refCmdData.aHeader[1] THEN //ZOffsetLocked
+	rZOffsetLocked := DINT_TO_REAL(refCmdData.n32Data[0]);
+	
+ELSIF (nSpecPropIndex + 1) = refCmdData.aHeader[1] THEN //PneuChannel Druck
+	nPneuChannel :=  DINT_TO_USINT(refCmdData.n32Data[0]);
+	IF NOT (nPneuChannel > 0 AND nPneuChannel <= cNoOfPneuChannels) THEN
+		M_SetSingleProp := E_ErrorIdObjMgmt.ERRORID_InvalidPneuChannel;
+		RETURN;	
+	END_IF
+	pPneuChannelPress := ADR(aFbPneuChannel[nPneuChannel]);	
+		
+ELSIF (nSpecPropIndex + 1) = refCmdData.aHeader[1] THEN //PneuChannel Vakuum
+	nPneuChannel :=  DINT_TO_USINT(refCmdData.n32Data[0]);
+	IF NOT (nPneuChannel > 0 AND nPneuChannel <= cNoOfPneuChannels) THEN
+		M_SetSingleProp := E_ErrorIdObjMgmt.ERRORID_InvalidPneuChannel;
+		RETURN;	
+	END_IF
+	pPneuChannelVac := ADR(aFbPneuChannel[nPneuChannel]);
+
+ELSIF (nSpecPropIndex + 1) = refCmdData.aHeader[1] THEN //Digitaler Ausgangskanal Kopfbasisplatine für Druckventil
+	IF refCmdData.n32Data[0] < 1 OR refCmdData.n32Data[0] > 9 THEN
+		M_SetSingleProp := E_ErrorIdObjMgmt.ERRORID_InvalidMzDOutChannel;
+		RETURN;
+	END_IF
+	nDOutChanValvePress := DINT_TO_USINT(refCmdData.n32Data[0]);
+	
+ELSIF (nSpecPropIndex + 1) = refCmdData.aHeader[1] THEN //Digitaler Ausgangskanal Kopfbasisplatine für Vakuumventil
+	IF refCmdData.n32Data[0] < 1 OR refCmdData.n32Data[0] > 9 THEN
+		M_SetSingleProp := E_ErrorIdObjMgmt.ERRORID_InvalidMzDOutChannel;
+		RETURN;
+	END_IF
+	nDOutChanValveVac := DINT_TO_USINT(refCmdData.n32Data[0]);
+	
+ELSE
+	M_SetSingleProp := SUPER^.M_SetSingleProp(refCmdData);
+END_IF]]></ST>
+      </Implementation>
+    </Method>
+    <Property Name="P_eCurPressState" Id="{a9eeab42-93f0-4ccf-be57-58fb7ecff654}">
+      <Declaration><![CDATA[PROPERTY P_eCurPressState : E_PressCtrl]]></Declaration>
+      <Get Name="Get" Id="{756c1197-b043-437f-af55-31f63642eb75}">
+        <Declaration><![CDATA[VAR
+END_VAR
+]]></Declaration>
+        <Implementation>
+          <ST><![CDATA[P_eCurPressState := eCurPressState;]]></ST>
+        </Implementation>
+      </Get>
+    </Property>
+    <Action Name="A_PulsePress" Id="{b70c7f73-887a-452e-86d2-e9e1252d8a27}">
+      <Implementation>
+        <ST><![CDATA[CASE nStateA_PulsePress OF
+	0:	//Phase1
+		IF eSwitchCtrlPhase1 = E_PressCtrl.PRESSCTRL_Off THEN
+			pFbMultiZ^.aDigiOut[nDOutChanValvePress] := FALSE;
+			pFbMultiZ^.aDigiOut[nDOutChanValveVac] := FALSE;
+		ELSIF eSwitchCtrlPhase1 = E_PressCtrl.PRESSCTRL_PressOn THEN
+			pFbMultiZ^.aDigiOut[nDOutChanValvePress] := TRUE;
+			pFbMultiZ^.aDigiOut[nDOutChanValveVac] := FALSE;
+		ELSIF eSwitchCtrlPhase1 = E_PressCtrl.PRESSCTRL_VacOn THEN
+			pFbMultiZ^.aDigiOut[nDOutChanValvePress] := FALSE;
+			pFbMultiZ^.aDigiOut[nDOutChanValveVac] := TRUE;
+		END_IF
+
+		timerPulse(IN:= TRUE, PT:= UINT_TO_TIME(nTimePhase1));
+		IF timerPulse.Q THEN
+			timerPulse(IN:= FALSE);
+			nStateA_PulsePress := 1;
+			nCurrentPulses := nCurrentPulses + 1;
+		END_IF
+
+	1:	//Phase2
+		IF eSwitchCtrlPhase2 = E_PressCtrl.PRESSCTRL_Off THEN
+			pFbMultiZ^.aDigiOut[nDOutChanValvePress] := FALSE;
+			pFbMultiZ^.aDigiOut[nDOutChanValveVac] := FALSE;
+		ELSIF eSwitchCtrlPhase2 = E_PressCtrl.PRESSCTRL_PressOn THEN
+			pFbMultiZ^.aDigiOut[nDOutChanValvePress] := TRUE;
+			pFbMultiZ^.aDigiOut[nDOutChanValveVac] := FALSE;
+		ELSIF eSwitchCtrlPhase2 = E_PressCtrl.PRESSCTRL_VacOn THEN
+			pFbMultiZ^.aDigiOut[nDOutChanValvePress] := FALSE;
+			pFbMultiZ^.aDigiOut[nDOutChanValveVac] := TRUE;
+		END_IF	
+
+		timerPulse(IN:= TRUE, PT:= UINT_TO_TIME(nTimePhase2));
+		IF timerPulse.Q THEN
+			timerPulse(IN:= FALSE);
+			IF nCurrentPulses = nSetpointPulses THEN
+				pFbMultiZ^.aDigiOut[nDOutChanValvePress] := FALSE;
+				pFbMultiZ^.aDigiOut[nDOutChanValveVac] := FALSE;
+				nStateA_PulsePress := 80;
+			ELSIF nSetpointPulses = 0 AND NOT bPulseOn THEN
+				pFbMultiZ^.aDigiOut[nDOutChanValvePress] := FALSE;
+				pFbMultiZ^.aDigiOut[nDOutChanValveVac] := FALSE;
+				nStateA_PulsePress := 80;
+			ELSE
+				nStateA_PulsePress := 0;	
+			END_IF
+		END_IF
+		
+	70:	//Abbrechen	
+		pFbMultiZ^.aDigiOut[nDOutChanValvePress] := FALSE;
+		pFbMultiZ^.aDigiOut[nDOutChanValveVac] := FALSE;
+		timerPulse(IN:= FALSE);
+		nStateA_PulsePress := 80;
+END_CASE]]></ST>
+      </Implementation>
+    </Action>
+    <Property Name="P_rZOffsetUnlocked" Id="{c8779477-ad6f-44e4-9751-a5bd4c34ef7e}">
+      <Declaration><![CDATA[PROPERTY P_rZOffsetUnlocked : REAL]]></Declaration>
+      <Get Name="Get" Id="{4357d8b0-c140-4157-9a36-a899648d04ef}">
+        <Declaration><![CDATA[VAR
+END_VAR
+]]></Declaration>
+        <Implementation>
+          <ST><![CDATA[P_rZOffsetUnlocked := rZOffsetUnlocked;]]></ST>
+        </Implementation>
+      </Get>
+    </Property>
+    <Method Name="FB_init" Id="{d017bfe1-f337-4da8-9049-284eda74788d}">
+      <Declaration><![CDATA[METHOD FB_init : BOOL
+VAR_INPUT
+	bInitRetains : BOOL; // if TRUE, the retain variables are initialized (warm start / cold start)
+	bInCopyCode : BOOL;  // if TRUE, the instance afterwards gets moved into the copy code (online change)
+END_VAR
+]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[eObjectType := E_ObjectType.OBJECTTYPE_StampSupport;
+eObjectGroup := E_ObjectGroup.OBJECTGROUP_MzTool OR E_ObjectGroup.OBJECTGROUP_Device;]]></ST>
+      </Implementation>
+    </Method>
+    <Property Name="P_bStampInSupport" Id="{d666fa6b-e902-473e-b27c-a5577a8cc590}">
+      <Declaration><![CDATA[PROPERTY P_bStampInSupport : BOOL]]></Declaration>
+      <Get Name="Get" Id="{53db24c5-654a-42f6-800b-6745184505d0}">
+        <Declaration><![CDATA[VAR
+END_VAR
+]]></Declaration>
+        <Implementation>
+          <ST><![CDATA[P_bStampInSupport := fbMultiZStamp.P_bStampInSupport;]]></ST>
+        </Implementation>
+      </Get>
+    </Property>
+    <Action Name="A_Adjust" Id="{d83f4440-18cc-4551-ac1b-9980adf24c50}">
+      <Implementation>
+        <ST><![CDATA[IF nStateA_Adjust = 0 THEN
+	fbMultiZStamp.M_Adjust(nAdjustAngle);
+	nStateA_Adjust := 1;
+END_IF
+
+IF nStateA_Adjust = 1 THEN
+	IF NOT fbMultiZStamp.bBusy THEN
+		nStateA_Adjust := 80;	
+	END_IF
+	
+	IF fbMultiZStamp.bError THEN
+		stError.Cmd := E_Action.ACTION_StampAdjust;
+		stError.ErrorId := fbMultiZStamp.nErrorId;
+		stError.POU := E_POU.POU_FB_StampSupport;
+		stError.POUAction := E_POUACT.POUACT_A_Adjust;
+		stError.POUState := nStateA_Adjust;
+		fbErrorList.M_Add(stError);
+		fbMultiZStamp.M_Reset();
+		nStateA_Adjust := 99;	
+	END_IF	
+END_IF]]></ST>
+      </Implementation>
+    </Action>
+    <Action Name="A_LockUnlock" Id="{da5a1976-b875-4d8b-95ea-c985f1887b1f}">
+      <Implementation>
+        <ST><![CDATA[IF nStateA_LockUnlock = 0 THEN
+	fbMultiZStamp.M_LockUnLock(bLock);
+		nStateA_LockUnlock := 1;
+END_IF
+
+IF nStateA_LockUnlock = 1 THEN
+	IF NOT fbMultiZStamp.bBusy THEN
+		nStateA_LockUnlock := 80;	
+	END_IF
+	
+	IF fbMultiZStamp.bError THEN
+		stError.ErrorId := fbMultiZStamp.nErrorId;
+		stError.Cmd := E_Action.ACTION_LockUnlock;
+		stError.POU := E_POU.POU_FB_StampSupport;
+		stError.POUAction := E_POUACT.POUACT_A_LockUnlock;
+		stError.POUState := nStateA_LockUnlock;
+		fbErrorList.M_Add(stError);			
+		fbMultiZStamp.M_Reset();
+		nStateA_LockUnlock := 99;	
+	END_IF	
+END_IF
+
+IF nStateA_LockUnlock = 70 THEN
+	IF fbMultiZStamp.bBusy THEN
+		fbMultiZStamp.M_Stop();
+	END_IF
+	nStateA_LockUnlock := 80;
+END_IF]]></ST>
+      </Implementation>
+    </Action>
+    <Method Name="M_CancelAction" Id="{f66d291b-99db-45ee-ad8d-abfa1429e330}">
+      <Declaration><![CDATA[METHOD M_CancelAction
+VAR_INPUT
+	eAction : E_Action;
+END_VAR
+]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[CASE eAction OF
+	E_Action.ACTION_SetPressure:
+		IF bSetPress THEN
+			fbSetPress(bExecute:= FALSE, pPneuChannelRef:= pPneuChannelPress);
+		END_IF
+	
+	E_Action.ACTION_SetVacuum:
+		IF bSetVacuum THEN
+			fbSetVacuum(bExecute:= FALSE, pPneuChannelRef:= pPneuChannelVac);
+		END_IF
+		
+	E_Action.ACTION_SwitchPressure:
+		IF bSwitchPress AND nStateA_SwitchPress < 70 THEN
+			nStateA_SwitchPress := 70;
+		END_IF
+
+	E_Action.ACTION_LockUnlock:
+		IF bLockUnlock AND nStateA_LockUnlock < 70 THEN
+			nStateA_LockUnlock := 70;
+		END_IF	
+
+	E_Action.ACTION_Expose:
+		IF bExpose AND nStateA_Expose < 70 THEN
+			nStateA_Expose := 70;
+		END_IF
+
+	E_Action.ACTION_PulsePressure:
+		IF bPulsePress AND nStateA_PulsePress < 70 THEN
+			nStateA_PulsePress := 70;
+		END_IF	
+ELSE
+	SUPER^.M_CancelAction(eAction);
+END_CASE]]></ST>
+      </Implementation>
+    </Method>
+    <Property Name="P_stAbsPosPhys" Id="{f759cbf4-c876-48b8-a1b2-4869d565eb92}">
+      <Declaration><![CDATA[PROPERTY P_stAbsPosPhys : ST_3DPoint]]></Declaration>
+      <Get Name="Get" Id="{d74aee21-df36-49dd-9da2-4829ebfd3d5e}">
+        <Declaration><![CDATA[VAR
+	stTemp	: ST_3DPoint;
+	stDim	: ST_3DDimension;
+END_VAR
+]]></Declaration>
+        <Implementation>
+          <ST><![CDATA[//Die absolute Postion eines Tool in "Z" hat nicht den gleichen Bezug wie X und Y
+//X und Y beziehen sich auf den Koordinatenursprung, wenn die Achsen theoretischn aus Antrieb (0;0) stehen
+//Z bezieht sich auf die Sliderunterkante des Z-Antriebes verechnet mit AbsPos vom Head(Ergebnis ist in den meisten Fällen negativ)
+
+//Offset und RelPos addieren
+stTemp := F_Add3DPoints(stRelPos,stOffset);
+
+//in Abhängigkeit von LockState und Stempel aufgenommen die verschiedenen ZOffsets addieren
+IF pFbMultiZ^.stStampSupport.bLocked THEN
+	IF pFbMultiZ^.stStampSupport.bStampInSupport THEN
+		//Offsets dem Stempeln verrechnen
+		IF pPiece > 0 THEN
+			stDim := pPiece^.P_stDimension;
+			IF NOT pPiece^.P_bIgnoreOffset THEN
+				stTemp := F_Add3DPoints(stTemp,pPiece^.P_stOffset);	
+			END_IF
+ 			stTemp.Z := stTemp.Z + pPiece^.P_rZOverlapTool - stDim.Height;
+		END_IF
+	ELSE
+		stTemp.Z := stTemp.Z + rZOffsetLocked;
+	END_IF
+ELSE //unlocked
+	stTemp.Z := stTemp.Z + rZOffsetUnlocked;
+END_IF
+
+//AbsPos vom ParentSlot holen
+IF pParentSlot > 0 THEN
+	stTemp := F_Add3DPoints(stTemp,pParentSlot^.P_stAbsPos);	
+END_IF
+P_stAbsPosPhys := stTemp;
+
+
+
+
+
+]]></ST>
+        </Implementation>
+      </Get>
+    </Property>
+    <LineIds Name="FB_StampSupport">
+      <LineId Id="330" Count="144" />
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="FB_StampSupport.P_rZOffsetLocked.Get">
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="FB_StampSupport.M_GetAllProps">
+      <LineId Id="3" Count="6" />
+      <LineId Id="31" Count="0" />
+      <LineId Id="10" Count="0" />
+      <LineId Id="21" Count="3" />
+      <LineId Id="11" Count="0" />
+      <LineId Id="30" Count="0" />
+      <LineId Id="12" Count="0" />
+      <LineId Id="26" Count="3" />
+      <LineId Id="13" Count="0" />
+      <LineId Id="32" Count="0" />
+      <LineId Id="14" Count="2" />
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="FB_StampSupport.P_bStampInMagazine.Get">
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="FB_StampSupport.M_GetPressValueOk">
+      <LineId Id="3" Count="2" />
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="FB_StampSupport.P_bIsInit.Get">
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="FB_StampSupport.A_SwitchPress">
+      <LineId Id="2" Count="16" />
+      <LineId Id="1" Count="0" />
+    </LineIds>
+    <LineIds Name="FB_StampSupport.P_bLocked.Get">
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="FB_StampSupport.P_nCurPressValue.Get">
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="FB_StampSupport.A_Expose">
+      <LineId Id="2" Count="16" />
+      <LineId Id="25" Count="6" />
+      <LineId Id="19" Count="5" />
+      <LineId Id="1" Count="0" />
+    </LineIds>
+    <LineIds Name="FB_StampSupport.M_CheckAction">
+      <LineId Id="51" Count="0" />
+      <LineId Id="119" Count="0" />
+      <LineId Id="121" Count="3" />
+      <LineId Id="126" Count="7" />
+      <LineId Id="125" Count="0" />
+      <LineId Id="120" Count="0" />
+      <LineId Id="56" Count="0" />
+      <LineId Id="59" Count="13" />
+      <LineId Id="58" Count="0" />
+      <LineId Id="73" Count="0" />
+      <LineId Id="75" Count="1" />
+      <LineId Id="110" Count="0" />
+      <LineId Id="77" Count="0" />
+      <LineId Id="79" Count="9" />
+      <LineId Id="74" Count="0" />
+      <LineId Id="95" Count="0" />
+      <LineId Id="94" Count="0" />
+      <LineId Id="97" Count="0" />
+      <LineId Id="101" Count="0" />
+      <LineId Id="93" Count="0" />
+      <LineId Id="99" Count="1" />
+      <LineId Id="98" Count="0" />
+      <LineId Id="54" Count="0" />
+      <LineId Id="57" Count="0" />
+      <LineId Id="55" Count="0" />
+    </LineIds>
+    <LineIds Name="FB_StampSupport.A_Stop">
+      <LineId Id="2" Count="5" />
+      <LineId Id="35" Count="5" />
+      <LineId Id="10" Count="5" />
+      <LineId Id="20" Count="14" />
+      <LineId Id="1" Count="0" />
+    </LineIds>
+    <LineIds Name="FB_StampSupport.A_InitTool">
+      <LineId Id="2" Count="45" />
+      <LineId Id="1" Count="0" />
+    </LineIds>
+    <LineIds Name="FB_StampSupport.M_ExeAction">
+      <LineId Id="215" Count="154" />
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="FB_StampSupport.M_ClearAllProps">
+      <LineId Id="10" Count="1" />
+      <LineId Id="6" Count="0" />
+    </LineIds>
+    <LineIds Name="FB_StampSupport.A_Reset">
+      <LineId Id="2" Count="17" />
+      <LineId Id="40" Count="7" />
+      <LineId Id="23" Count="16" />
+      <LineId Id="1" Count="0" />
+    </LineIds>
+    <LineIds Name="FB_StampSupport.M_AddChild">
+      <LineId Id="3" Count="12" />
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="FB_StampSupport.M_SetAllProps">
+      <LineId Id="3" Count="47" />
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="FB_StampSupport.M_SetSingleProp">
+      <LineId Id="3" Count="1" />
+      <LineId Id="50" Count="0" />
+      <LineId Id="5" Count="1" />
+      <LineId Id="49" Count="0" />
+      <LineId Id="7" Count="0" />
+      <LineId Id="40" Count="0" />
+      <LineId Id="57" Count="3" />
+      <LineId Id="11" Count="2" />
+      <LineId Id="45" Count="0" />
+      <LineId Id="51" Count="3" />
+      <LineId Id="18" Count="0" />
+      <LineId Id="56" Count="0" />
+      <LineId Id="19" Count="5" />
+      <LineId Id="61" Count="0" />
+      <LineId Id="25" Count="5" />
+      <LineId Id="62" Count="0" />
+      <LineId Id="31" Count="1" />
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="FB_StampSupport.P_eCurPressState.Get">
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="FB_StampSupport.A_PulsePress">
+      <LineId Id="2" Count="52" />
+      <LineId Id="1" Count="0" />
+    </LineIds>
+    <LineIds Name="FB_StampSupport.P_rZOffsetUnlocked.Get">
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="FB_StampSupport.FB_init">
+      <LineId Id="7" Count="1" />
+    </LineIds>
+    <LineIds Name="FB_StampSupport.P_bStampInSupport.Get">
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="FB_StampSupport.A_Adjust">
+      <LineId Id="2" Count="19" />
+      <LineId Id="1" Count="0" />
+    </LineIds>
+    <LineIds Name="FB_StampSupport.A_LockUnlock">
+      <LineId Id="2" Count="26" />
+      <LineId Id="1" Count="0" />
+    </LineIds>
+    <LineIds Name="FB_StampSupport.M_CancelAction">
+      <LineId Id="3" Count="0" />
+      <LineId Id="34" Count="7" />
+      <LineId Id="7" Count="0" />
+      <LineId Id="42" Count="0" />
+      <LineId Id="8" Count="3" />
+      <LineId Id="43" Count="0" />
+      <LineId Id="16" Count="3" />
+      <LineId Id="44" Count="0" />
+      <LineId Id="20" Count="3" />
+      <LineId Id="45" Count="0" />
+      <LineId Id="24" Count="5" />
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="FB_StampSupport.P_stAbsPosPhys.Get">
+      <LineId Id="3" Count="34" />
+      <LineId Id="2" Count="0" />
+    </LineIds>
+  </POU>
+</TcPlcObject>

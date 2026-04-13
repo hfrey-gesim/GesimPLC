@@ -1,0 +1,38 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<TcPlcObject Version="1.1.0.1" ProductVersion="3.1.0.25">
+  <POU Name="F_YFuncX" Id="{2733645e-10e6-4319-8a66-de1a36eb4039}">
+    <Declaration><![CDATA[FUNCTION F_YFuncX : REAL
+VAR_INPUT
+	rxMin: REAL;
+	rxMax: REAL;
+	ryMin: REAL;
+	ryMax: REAL;
+	rx: REAL;
+END_VAR
+VAR
+	rGain: REAL;
+	rResult: REAL;
+END_VAR
+]]></Declaration>
+    <Implementation>
+      <ST><![CDATA[IF rxMax = rxMin OR ryMax = ryMin THEN	//Unzulässig
+	RETURN;	
+END_IF
+
+//Gain positiv oder negativ?
+IF (rxMax + rxMin < 0) XOR (ryMax + ryMin < 0) THEN	//Gain negativ
+	rGain := (ryMin - ryMax) / (rxMax - rxMin);
+	rResult := (rx - rxMax) * rGain + ryMin;
+ELSE									//Gain positiv
+	rGain := (ryMax - ryMin) / (rxMax - rxMin);
+	rResult := (rx - rxMin) * rGain + ryMin;
+END_IF
+
+F_YFuncX := LIMIT(ryMin,rResult,ryMax);
+
+
+]]></ST>
+    </Implementation>
+    <ObjectProperties />
+  </POU>
+</TcPlcObject>

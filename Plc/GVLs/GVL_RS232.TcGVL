@@ -1,0 +1,36 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<TcPlcObject Version="1.1.0.1" ProductVersion="3.1.4024.6">
+  <GVL Name="GVL_RS232" Id="{73a98d42-2fce-4f59-b952-e918b4f2ce6d}">
+    <Declaration><![CDATA[{attribute 'qualified_only'}
+{attribute 'contextName':='ComTask'}
+VAR_GLOBAL CONSTANT
+	{IF defined(Unistat) AND defined(Diluter)}
+	cNoOfSerialPorts 	: USINT := 2;
+	{ELSE}
+	cNoOfSerialPorts 	: USINT := 1;
+	{END_IF} 	
+END_VAR
+
+VAR_GLOBAL
+	{IF defined(CX5010) AND defined(Unistat) AND defined(Diluter)}
+	fbSerialPortDiluter	: FB_SerialComPort_PC;
+	fbSerialPortUnistat	: FB_SerialComPort_USB;
+	aSerialPorts	: ARRAY[1..cNoOfSerialPorts] OF POINTER TO FB_SerialComPort_Base := [ADR(fbSerialPortDiluter), ADR(fbSerialPortUnistat)];
+	{ELSIF defined(CX5010) OR defined(CX9020)}
+	fbSerialPortDiluter	: FB_SerialComPort_PC;
+	aSerialPorts	: ARRAY[1..cNoOfSerialPorts] OF POINTER TO FB_SerialComPort_Base := [ADR(fbSerialPortDiluter)];
+	{ELSIF defined(C6015) AND defined(Unistat) AND defined(Diluter)} //kam bisher noch nicht vor
+	fbSerialPortDiluter	: FB_SerialComPort_EL60xx;
+	fbSerialPortUnistat	: FB_SerialComPort_USB;
+	aSerialPorts	: ARRAY[1..cNoOfSerialPorts] OF POINTER TO FB_SerialComPort_Base := [ADR(fbSerialPortDiluter), ADR(fbSerialPortUnistat)];
+	{ELSIF defined(C6015) AND defined(Unistat)}
+	fbSerialPortUnistat	: FB_SerialComPort_USB;
+	fbSerialPortDiluter	: FB_SerialComPort_Base; //nur als Dummy
+	aSerialPorts	: ARRAY[1..cNoOfSerialPorts] OF POINTER TO FB_SerialComPort_Base := [ADR(fbSerialPortUnistat)];
+	{ELSE}
+	fbSerialPortDiluter	: FB_SerialComPort_USB;
+	aSerialPorts	: ARRAY[1..cNoOfSerialPorts] OF POINTER TO FB_SerialComPort_Base := [ADR(fbSerialPortDiluter)];
+	{END_IF}
+END_VAR]]></Declaration>
+  </GVL>
+</TcPlcObject>

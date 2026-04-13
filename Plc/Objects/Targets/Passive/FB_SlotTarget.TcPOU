@@ -1,0 +1,483 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<TcPlcObject Version="1.1.0.1" ProductVersion="3.1.4024.5">
+  <POU Name="FB_SlotTarget" Id="{68ad8885-a566-42ad-9789-2b25b9d7aef4}" SpecialFunc="None">
+    <Declaration><![CDATA[FUNCTION_BLOCK FB_SlotTarget EXTENDS FB_TargetBase IMPLEMENTS I_SlotTarget
+VAR_INPUT
+END_VAR
+VAR_OUTPUT
+END_VAR
+VAR
+	fbSlotList			: FB_SlotList;
+	nNumberOfSlots		: UINT;
+	nFirstSlotPropIndex	: UINT;	//erster Index für Slots (benötigt in M_SetSingleProps)
+	nLastSlotPropIndex	: UINT;	//letzte Index für Slots (benötigt in M_SetSingleProps)
+END_VAR
+]]></Declaration>
+    <Implementation>
+      <ST><![CDATA[SUPER^();]]></ST>
+    </Implementation>
+    <Method Name="M_AddChild" Id="{33da418a-31b3-442f-b8db-884ea529fb9a}">
+      <Declaration><![CDATA[METHOD M_AddChild : ERRORID
+VAR_INPUT
+	pObject : POINTER TO FB_Object;
+	nSlotNr	: UINT;
+	nIndex 	: INT;
+END_VAR
+
+VAR
+	pSlot : POINTER TO FB_Slot;
+END_VAR]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[//In den abgeleiteten Tool-FBs wird überprüft, ob das entsprechende Objekt als Child tauglich ist
+IF pObject > 0 THEN
+	IF nSlotNr > 0 THEN
+		pSlot := fbSlotList.M_GetAtNr(nSlotNr);
+		IF pSlot > 0 THEN
+			IF pSlot^.P_pChild = 0 THEN
+				//Object darf selber noch an keinem Parent hängen
+				IF pObject^.P_pParentObject = 0 THEN
+					pSlot^.P_pChild := pObject;
+					pObject^.P_pObjCollectNode := pObjCollectNode^.nodes.M_AddNewNode(pObject,nIndex);
+					pObject^.M_UpdateParent();
+				ELSE
+					M_AddChild := E_ErrorIdObjMgmt.ERRORID_ObjectAlreadyOnAnotherParent;
+				END_IF
+			ELSE //Slot bereits belegt
+				M_AddChild := E_ErrorIdObjMgmt.ERRORID_SlotIsAlreadyOccupied;
+			END_IF		
+		ELSE
+			M_AddChild := E_ErrorIdObjMgmt.ERRORID_InvalidSlotNumber;			
+		END_IF	
+	ELSE
+		M_AddChild := SUPER^.M_AddChild(pObject,nSlotNr,nIndex);
+	END_IF
+ELSE
+	M_AddChild := E_ErrorIdObjMgmt.ERRORID_InvalidParentObject;
+END_IF]]></ST>
+      </Implementation>
+    </Method>
+    <Method Name="M_ApplyPos" Id="{074acd7d-816b-43b1-8062-d3bede1a9ea6}">
+      <Declaration><![CDATA[METHOD M_ApplyPos : ERRORID
+VAR_INPUT
+	eTargetRef 		: E_TargetRef;
+	nPointSlotNr	: UINT;
+	stPos 			: ST_3DPoint;
+	bXPos			: BOOL;
+	bYPos			: BOOL;
+	bZPos			: BOOL;	
+END_VAR
+
+VAR
+	stAbsPos		: ST_3DPoint;
+	pSlot			: POINTER TO FB_Slot;
+END_VAR]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[IF eTargetRef = E_TargetRef.TARGETREF_Slot THEN
+	stAbsPos := P_stAbsPosLB;
+	pSlot := M_GetSlot(nPointSlotNr);
+	IF pSlot > 0 THEN
+		IF bXPos THEN
+			pSlot^.P_rRelPosX := stPos.X - stAbsPos.X;
+		END_IF
+		IF bYPos THEN
+			pSlot^.P_rRelPosY := stPos.Y - stAbsPos.Y;
+		END_IF
+		IF bZPos THEN
+			pSlot^.P_rRelPosZ := stPos.Z - stAbsPos.Z;
+			P_pWorkplate^.P_bCalcCollisHeight := TRUE;
+		END_IF
+	ELSE
+		M_ApplyPos := E_ErrorIdCmd.ERRORID_InvalidTargetSlot;
+	END_IF
+ELSE
+	M_ApplyPos := SUPER^.M_ApplyPos(eTargetRef, nPointSlotNr, stPos,bXPos, bYPos, bZPos);	
+END_IF
+
+
+]]></ST>
+      </Implementation>
+    </Method>
+    <Method Name="M_ClearAllProps" Id="{59296870-e8b5-434b-bada-d955c992a0de}">
+      <Declaration><![CDATA[METHOD M_ClearAllProps
+VAR_INPUT
+	bIgnoreParent : BOOL; //Es wird das gesamte OD gelöscht. -> Zeiger auf Parent nicht mehr gültig!
+END_VAR
+]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[fbSlotList.M_Reset();
+SUPER^.M_ClearAllProps(bIgnoreParent);]]></ST>
+      </Implementation>
+    </Method>
+    <Method Name="M_GetAbsPos" Id="{539841fa-9c09-4be3-916b-7c506bf7968d}">
+      <Declaration><![CDATA[METHOD M_GetAbsPos : ST_3DPoint
+VAR_INPUT
+	pChildPos	: POINTER TO ST_3DPoint;
+	eTargetRef 	: E_TargetRef;
+	nParam1		: UINT;
+ 	nParam2		: UINT;
+	nParam3		: USINT;
+	nZLevel		: USINT;
+END_VAR
+VAR_OUTPUT
+	nErrorId 	: ERRORID;
+	lrAngle		: LREAL;
+END_VAR
+VAR
+	stLocPos : ST_3DPoint;
+	pSlot : POINTER TO FB_Slot;
+END_VAR
+]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[IF eTargetRef = E_TargetRef.TARGETREF_Slot THEN
+	//Slotnummer checken
+	pSlot := M_GetSlot(nParam1);
+	IF pSlot > 0 THEN
+		stLocPos := F_Add3DPoints(pSlot^.P_stRelPos,stRelPos);
+		stLocPos.Z := stLocPos.Z + stDimension.Height;
+		//kann es mal sein, dass hier das ParentTarget = 0 ist?
+		//ja -> bei der Workplate
+		IF pChildPos > 0 THEN
+			stLocPos := F_Add3DPoints(stLocPos,pChildPos^);
+		END_IF
+		IF pParentTarget > 0 THEN
+			IF pParentSlot > 0 THEN
+				M_GetAbsPos := pParentTarget^.M_GetAbsPos(pChildPos := ADR(stLocPos), eTargetRef:= E_TargetRef.TARGETREF_Slot,
+															nParam1:= pParentSlot^.P_nNr,
+															nParam2:= 0, nParam3:= 0,nZLevel:= 0, lrAngle=> lrAngle,
+															nErrorId=> nErrorId);		
+			ELSE
+				M_GetAbsPos := pParentTarget^.M_GetAbsPos(pChildPos := ADR(stLocPos), eTargetRef:= E_TargetRef.TARGETREF_LeftBottom,
+																nParam1:= 0,
+																nParam2:= 0, nParam3:= 0,nZLevel:= 0,
+																lrAngle => lrAngle, nErrorId=> nErrorId);
+			END_IF
+		ELSE
+			M_GetAbsPos := stLocPos;
+		END_IF		
+	ELSE
+		nErrorId := E_ErrorIdCmd.ERRORID_InvalidTargetSlot;
+	END_IF
+	
+ELSE
+	M_GetAbsPos := SUPER^.M_GetAbsPos(pChildPos := pChildPos, eTargetRef:= eTargetRef,
+													nParam1:= nParam1,
+													nParam2:= nParam2, nParam3:= nParam3, nZLevel:= nZLevel,
+													lrAngle => lrAngle, nErrorId=> nErrorId);	
+END_IF]]></ST>
+      </Implementation>
+    </Method>
+    <Method Name="M_GetAllProps" Id="{d1ba297f-c6cd-4f89-b504-647bc352bde2}">
+      <Declaration><![CDATA[METHOD M_GetAllProps : ERRORID
+VAR_INPUT
+	refCmdData : REFERENCE TO  ST_CmdData;
+END_VAR
+
+VAR
+	i : UINT;
+	pSlot		: POINTER TO FB_Slot;
+	pPieceSlot	: POINTER TO FB_PieceSlot;
+END_VAR]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[SUPER^.M_GetAllProps(refCmdData);
+
+nCurrentPropIndex := nCurrentPropIndex + 1;
+
+refCmdData.n32Data[nCurrentPropIndex] := fbSlotList.P_nCount;
+
+fbSlotList.M_SetCurrentToHead();
+
+IF (eObjectGroup AND E_ObjectGroup.OBJECTGROUP_Rack) = E_ObjectGroup.OBJECTGROUP_Rack THEN
+	FOR i := 1 TO fbSlotList.P_nCount BY 1 DO
+		pPieceSlot := fbSlotList.M_GetNext();
+		IF pPieceSlot > 0 THEN
+			nCurrentPropIndex := nCurrentPropIndex + 1;
+			refCmdData.n32Data[nCurrentPropIndex] := pPieceSlot^.P_nNr;
+			nCurrentPropIndex := nCurrentPropIndex + 1;
+			refCmdData.n32Data[nCurrentPropIndex] := REAL_TO_DINT(pPieceSlot^.P_rRelPosX);
+			nCurrentPropIndex := nCurrentPropIndex + 1;
+			refCmdData.n32Data[nCurrentPropIndex] := REAL_TO_DINT(pPieceSlot^.P_rRelPosY);
+			nCurrentPropIndex := nCurrentPropIndex + 1;
+			refCmdData.n32Data[nCurrentPropIndex] := REAL_TO_DINT(pPieceSlot^.P_rRelPosZ);
+			nCurrentPropIndex := nCurrentPropIndex + 1;
+			refCmdData.n32Data[nCurrentPropIndex] := REAL_TO_DINT(pPieceSlot^.P_rDepth);
+		END_IF		
+	END_FOR	
+ELSE
+	FOR i := 1 TO fbSlotList.P_nCount BY 1 DO
+		pSlot := fbSlotList.M_GetNext();
+		IF pSlot > 0 THEN
+			nCurrentPropIndex := nCurrentPropIndex + 1;
+			refCmdData.n32Data[nCurrentPropIndex] := pSlot^.P_nNr;
+			nCurrentPropIndex := nCurrentPropIndex + 1;
+			refCmdData.n32Data[nCurrentPropIndex] := REAL_TO_DINT(pSlot^.P_rRelPosX);
+			nCurrentPropIndex := nCurrentPropIndex + 1;
+			refCmdData.n32Data[nCurrentPropIndex] := REAL_TO_DINT(pSlot^.P_rRelPosY);
+			nCurrentPropIndex := nCurrentPropIndex + 1;
+			refCmdData.n32Data[nCurrentPropIndex] := REAL_TO_DINT(pSlot^.P_rRelPosZ);
+		END_IF		
+	END_FOR	
+END_IF
+]]></ST>
+      </Implementation>
+    </Method>
+    <Method Name="M_GetSlot" Id="{b2b68d2c-d749-433b-9fde-d7ea952aea2e}">
+      <Declaration><![CDATA[METHOD M_GetSlot : POINTER TO FB_Slot
+VAR_INPUT
+	nSlotNr : UINT;
+END_VAR
+]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[M_GetSlot := fbSlotList.M_GetAtNr(nSlotNr);
+]]></ST>
+      </Implementation>
+    </Method>
+    <Method Name="M_GetSlotFromChild" Id="{70633989-a08f-497d-8884-a4ecef893eaf}">
+      <Declaration><![CDATA[METHOD M_GetSlotFromChild : POINTER TO FB_Slot
+VAR_INPUT
+	pObject : POINTER TO FB_Object;
+END_VAR
+
+VAR
+	pSlot : POINTER TO FB_Slot;
+END_VAR
+]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[//Die SlotList iterieren und vergleichen ob Objekte übereinstimmen
+fbSlotList.M_SetCurrentToHead();
+REPEAT
+	pSlot := fbSlotList.M_GetNext();
+	IF pSlot > 0 THEN
+		IF pSlot^.P_pChild = pObject THEN
+			M_GetSlotFromChild := pSlot;
+			EXIT;
+		END_IF
+	END_IF
+UNTIL pSlot = 0
+END_REPEAT]]></ST>
+      </Implementation>
+    </Method>
+    <Method Name="M_SetAllProps" Id="{ea81c70b-343b-41b4-b7ac-8560bed24a5a}">
+      <Declaration><![CDATA[METHOD M_SetAllProps : ERRORID
+VAR_INPUT
+	refCmdData : REFERENCE TO  ST_CmdData;
+END_VAR
+
+VAR
+	i : UINT;
+	pSlot 		: POINTER TO FB_Slot;
+	pPieceSlot	: POINTER TO FB_PieceSlot;
+END_VAR
+]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[M_SetAllProps := SUPER^.M_SetAllProps(refCmdData);
+
+IF M_SetAllProps > 0 THEN
+	RETURN;
+END_IF
+
+//Slots parametrieren
+nCurrentPropIndex := nCurrentPropIndex + 1;
+nFirstSlotPropIndex := nCurrentPropIndex;
+nNumberOfSlots := DINT_TO_UINT(refCmdData.n32Data[nCurrentPropIndex]);
+
+//Falls SlotList noch nicht existiert, dann neue erstellen
+IF fbSlotList.P_nCount = 0 THEN
+	FOR i:= 1 TO nNumberOfSlots BY 1 DO
+		IF (eObjectGroup AND E_ObjectGroup.OBJECTGROUP_Rack) = E_ObjectGroup.OBJECTGROUP_Rack THEN
+			pPieceSlot := __NEW(FB_PieceSlot(pOwner := THIS));
+			pSlot := pPieceSlot;
+		ELSE
+			pSlot := __NEW(FB_Slot(pOwner := THIS));
+		END_IF
+		
+		fbSlotList.M_Add(pSlot);
+		nCurrentPropIndex := nCurrentPropIndex + 1;
+		pSlot^.P_nNr := DINT_TO_USINT(refCmdData.n32Data[nCurrentPropIndex]);
+		nCurrentPropIndex := nCurrentPropIndex + 1;
+		pSlot^.P_rRelPosX := DINT_TO_REAL(refCmdData.n32Data[nCurrentPropIndex]);
+		nCurrentPropIndex := nCurrentPropIndex + 1;
+		pSlot^.P_rRelPosY := DINT_TO_REAL(refCmdData.n32Data[nCurrentPropIndex]);
+		nCurrentPropIndex := nCurrentPropIndex + 1;
+		pSlot^.P_rRelPosZ := DINT_TO_REAL(refCmdData.n32Data[nCurrentPropIndex]);
+		
+		IF (eObjectGroup AND E_ObjectGroup.OBJECTGROUP_Rack) = E_ObjectGroup.OBJECTGROUP_Rack THEN
+			nCurrentPropIndex := nCurrentPropIndex + 1;
+			pPieceSlot^.P_rDepth := DINT_TO_REAL(refCmdData.n32Data[nCurrentPropIndex]);
+		END_IF
+	END_FOR
+ELSE
+	IF nNumberOfSlots <> fbSlotList.P_nCount THEN	//Anzahl der Slots dürfen sich nicht ändern
+		M_SetAllProps := E_ErrorIdObjMgmt.ERRORID_ChangeNoOfSlotsNotAllowed;
+		RETURN;		
+	END_IF
+
+	FOR i:= 1 TO nNumberOfSlots BY 1 DO
+		nCurrentPropIndex := nCurrentPropIndex + 1;
+		IF (eObjectGroup AND E_ObjectGroup.OBJECTGROUP_Rack) = E_ObjectGroup.OBJECTGROUP_Rack THEN
+			pPieceSlot := fbSlotList.M_GetAtNr(DINT_TO_USINT(refCmdData.n32Data[nCurrentPropIndex]));
+			IF pPieceSlot > 0 THEN
+				nCurrentPropIndex := nCurrentPropIndex + 1;
+				pPieceSlot^.P_rRelPosX := DINT_TO_REAL(refCmdData.n32Data[nCurrentPropIndex]);
+				nCurrentPropIndex := nCurrentPropIndex + 1;
+				pPieceSlot^.P_rRelPosY := DINT_TO_REAL(refCmdData.n32Data[nCurrentPropIndex]);
+				nCurrentPropIndex := nCurrentPropIndex + 1;
+				pPieceSlot^.P_rRelPosZ := DINT_TO_REAL(refCmdData.n32Data[nCurrentPropIndex]);
+				nCurrentPropIndex := nCurrentPropIndex + 1;
+				pPieceSlot^.P_rDepth := DINT_TO_REAL(refCmdData.n32Data[nCurrentPropIndex]);
+			ELSE
+				M_SetAllProps := 222;
+				RETURN;
+			END_IF 
+		ELSE
+			pSlot := fbSlotList.M_GetAtNr(DINT_TO_USINT(refCmdData.n32Data[nCurrentPropIndex]));
+			IF pSlot > 0 THEN
+				nCurrentPropIndex := nCurrentPropIndex + 1;
+				pSlot^.P_rRelPosX := DINT_TO_REAL(refCmdData.n32Data[nCurrentPropIndex]);
+				nCurrentPropIndex := nCurrentPropIndex + 1;
+				pSlot^.P_rRelPosY := DINT_TO_REAL(refCmdData.n32Data[nCurrentPropIndex]);
+				nCurrentPropIndex := nCurrentPropIndex + 1;
+				pSlot^.P_rRelPosZ := DINT_TO_REAL(refCmdData.n32Data[nCurrentPropIndex]);
+			ELSE
+				M_SetAllProps := 222;
+				RETURN;
+			END_IF	
+		END_IF
+	END_FOR
+END_IF
+nLastSlotPropIndex := nCurrentPropIndex;
+nNoOfProps := nCurrentPropIndex + 1;]]></ST>
+      </Implementation>
+    </Method>
+    <Method Name="M_SetSingleProp" Id="{1b12c8c6-ffea-42b1-a983-0ceaa80d828e}">
+      <Declaration><![CDATA[METHOD M_SetSingleProp : ERRORID
+VAR_INPUT
+	refCmdData : REFERENCE TO  ST_CmdData;
+END_VAR
+
+VAR
+	nSlotNr		: UINT;
+	nIndex		: UINT;
+	pSlot		: POINTER TO FB_Slot;
+	pPieceSlot	: POINTER TO FB_PieceSlot;
+END_VAR
+]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[//Handelt es sich bei dem PropNr um eine SlotPropNr?
+IF refCmdData.aHeader[1] >= nFirstSlotPropIndex AND refCmdData.aHeader[1] <= nLastSlotPropIndex THEN
+	nIndex := (refCmdData.aHeader[1]- nFirstSlotPropIndex);
+	//Beachten normale Slots oder PieceSlots
+	IF (eObjectGroup AND E_ObjectGroup.OBJECTGROUP_Rack) = E_ObjectGroup.OBJECTGROUP_Rack THEN //PieceSlots
+		IF nIndex MOD 5 = 0 THEN
+			nSlotNr := nIndex / 5;
+		ELSE
+			nSlotNr := nIndex / 5 + 1;
+		END_IF
+		pPieceSlot := fbSlotList.M_GetAtNr(nSlotNr);
+		IF pPieceSlot > 0 THEN
+			nIndex := nIndex - ((nSlotNr - 1)* 5);
+			CASE nIndex OF
+				2:	pPieceSlot^.P_rRelPosX := DINT_TO_REAL(refCmdData.n32Data[0]);
+				
+				3:	pPieceSlot^.P_rRelPosY := DINT_TO_REAL(refCmdData.n32Data[0]);
+				
+				4:	pPieceSlot^.P_rRelPosZ := DINT_TO_REAL(refCmdData.n32Data[0]);
+					P_pWorkplate^.P_bCalcCollisHeight := TRUE;
+				
+				5:	pPieceSlot^.P_rDepth := DINT_TO_REAL(refCmdData.n32Data[0]);
+			END_CASE
+		END_IF
+	ELSE //normale Slots
+		IF nIndex MOD 4 = 0 THEN
+			nSlotNr := nIndex / 4;
+		ELSE
+			nSlotNr := nIndex / 4 + 1;
+		END_IF
+		pSlot := fbSlotList.M_GetAtNr(nSlotNr);
+		IF pSlot > 0 THEN
+			nIndex := nIndex - ((nSlotNr - 1)* 4);
+			CASE nIndex OF
+				2:	pSlot^.P_rRelPosX := DINT_TO_REAL(refCmdData.n32Data[0]);
+				
+				3:	pSlot^.P_rRelPosY := DINT_TO_REAL(refCmdData.n32Data[0]);
+				
+				4:	pSlot^.P_rRelPosZ := DINT_TO_REAL(refCmdData.n32Data[0]);
+					P_pWorkplate^.P_bCalcCollisHeight := TRUE;
+			END_CASE
+		END_IF	
+	END_IF
+ELSE
+	M_SetSingleProp := SUPER^.M_SetSingleProp(refCmdData);
+END_IF]]></ST>
+      </Implementation>
+    </Method>
+    <LineIds Name="FB_SlotTarget">
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="FB_SlotTarget.M_AddChild">
+      <LineId Id="8" Count="0" />
+      <LineId Id="42" Count="1" />
+      <LineId Id="47" Count="8" />
+      <LineId Id="57" Count="2" />
+      <LineId Id="61" Count="3" />
+      <LineId Id="45" Count="1" />
+      <LineId Id="44" Count="0" />
+      <LineId Id="16" Count="0" />
+      <LineId Id="14" Count="0" />
+      <LineId Id="10" Count="0" />
+      <LineId Id="7" Count="0" />
+    </LineIds>
+    <LineIds Name="FB_SlotTarget.M_ApplyPos">
+      <LineId Id="3" Count="21" />
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="FB_SlotTarget.M_ClearAllProps">
+      <LineId Id="3" Count="0" />
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="FB_SlotTarget.M_GetAbsPos">
+      <LineId Id="27" Count="4" />
+      <LineId Id="55" Count="0" />
+      <LineId Id="36" Count="0" />
+      <LineId Id="50" Count="0" />
+      <LineId Id="56" Count="2" />
+      <LineId Id="51" Count="0" />
+      <LineId Id="59" Count="0" />
+      <LineId Id="71" Count="2" />
+      <LineId Id="60" Count="0" />
+      <LineId Id="62" Count="0" />
+      <LineId Id="64" Count="3" />
+      <LineId Id="61" Count="0" />
+      <LineId Id="52" Count="0" />
+      <LineId Id="54" Count="0" />
+      <LineId Id="53" Count="0" />
+      <LineId Id="41" Count="8" />
+      <LineId Id="21" Count="0" />
+    </LineIds>
+    <LineIds Name="FB_SlotTarget.M_GetAllProps">
+      <LineId Id="3" Count="38" />
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="FB_SlotTarget.M_GetSlot">
+      <LineId Id="3" Count="0" />
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="FB_SlotTarget.M_GetSlotFromChild">
+      <LineId Id="11" Count="10" />
+      <LineId Id="6" Count="0" />
+    </LineIds>
+    <LineIds Name="FB_SlotTarget.M_SetAllProps">
+      <LineId Id="3" Count="35" />
+      <LineId Id="85" Count="1" />
+      <LineId Id="88" Count="0" />
+      <LineId Id="87" Count="0" />
+      <LineId Id="39" Count="0" />
+      <LineId Id="89" Count="0" />
+      <LineId Id="41" Count="33" />
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="FB_SlotTarget.M_SetSingleProp">
+      <LineId Id="3" Count="44" />
+      <LineId Id="2" Count="0" />
+    </LineIds>
+  </POU>
+</TcPlcObject>

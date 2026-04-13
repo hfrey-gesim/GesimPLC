@@ -1,0 +1,22 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<TcPlcObject Version="1.1.0.1" ProductVersion="3.1.4024.5">
+  <Task Name="ComTask" Id="{17f5e87a-4dd5-4f6e-aeea-514d92f1a223}">
+    <!--CycleTime in micro seconds.-->
+    <CycleTime>4000</CycleTime>
+    <Priority>8</Priority>
+    <PouCall>
+      <Name>CANInterfaceCom</Name>
+    </PouCall>
+    <PouCall>
+      <Name>SerialBackCom</Name>
+    </PouCall>
+    <PouCall>
+      <Name>FirmwUpdate</Name>
+    </PouCall>
+    <TaskFBGuid>{3311d42f-4c85-4927-9772-c672bea01e9b}</TaskFBGuid>
+    <Fb_init>{4a655634-6cbd-41e2-b7a8-5a05ecb123a9}</Fb_init>
+    <Fb_exit>{396e8f36-25a8-4811-a529-35f74dc73136}</Fb_exit>
+    <CycleUpdate>{36d297a0-1fb8-4bdc-91c6-946e0c06a06f}</CycleUpdate>
+    <PostCycleUpdate>{7fe19770-4a46-440f-9237-6c6eb1024f68}</PostCycleUpdate>
+  </Task>
+</TcPlcObject>

@@ -1,0 +1,662 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<TcPlcObject Version="1.1.0.1" ProductVersion="3.1.4024.11">
+  <POU Name="FB_EndlessExtruderTMCM_Control" Id="{5583fc5b-f48b-4d2c-a58c-3702659f6387}" SpecialFunc="None">
+    <Declaration><![CDATA[FUNCTION_BLOCK FB_EndlessExtruderTMCM_Control EXTENDS FB_ExtruderControl
+
+VAR
+	pEndlessExtruderRef		: POINTER TO FB_EndlessExtruderTMCM_Ref;
+	pTMCM1140Ref			: POINTER TO FB_HwRefTMCM1140;
+	fbTMCM1140Power			: FB_TMCM1140_Power;
+	fbTMCM1140Rotate		: FB_TMCM1140_Rotate;
+	fbTMCM1140Move			: FB_TMCM1140_Move;
+	
+	nState 					: USINT;
+	nStateNext 				: USINT;
+	
+	nStateAction			: USINT;
+	
+	bCompress				: BOOL;
+	bRelax					: BOOL;
+	
+	bNormalStop				: BOOL;
+	bHardStop				: BOOL;
+	bCCW					: BOOL;
+END_VAR
+
+VAR CONSTANT
+	//Diese Einschränkungen sind bei Endlos-Extrudern nicht relevant.
+	cMinCompDistance 	: DINT := 0;
+	cMaxCompDistance 	: DINT := 500000;
+	cMinDistance		: DINT := -100000;
+	cMaxDistance 		: DINT := 100000;
+	cMinRelaxDistance	: DINT := 0;
+	cMaxRelaxDistance 	: DINT := 500000;
+	
+	cMinCompFeed		: DINT := 0;
+	cMaxCompFeed 		: DINT := 48;	//µl/s
+	cMinFeed			: DINT := 0;	//µl/s
+	cMaxFeed			: DINT := 48;	//µl/s
+	cMinRelaxFeed		: DINT := 0;
+	cMaxRelaxFeed 		: DINT := 48;	//µl/s
+END_VAR]]></Declaration>
+    <Implementation>
+      <ST><![CDATA[IF pFbExtruderRef = 0 THEN
+	RETURN;
+END_IF
+
+pEndlessExtruderRef := pFbExtruderRef; //pExtruderRef wird in M_Init der Basisklasse gesetzt
+pTMCM1140Ref := pEndlessExtruderRef^.P_pHwRefTMCM1140;
+
+//Workaround für FDM-Fan - Hier gibt es noch die zweite Möglichkeit, es direkt über eine Out von der TMCM zu machen.
+IF pEndlessExtruderRef^.P_nTriggerChannel > 0 THEN
+	IF pEndlessExtruderRef^.P_eTriggerOutput = E_TriggerOutput.MultiZOutput THEN
+		fbMultiZDigiOut.M_On(pEndlessExtruderRef^.P_nTriggerChannel);
+	ELSIF pEndlessExtruderRef^.P_eTriggerOutput = E_TriggerOutput.MultiZPWM THEN
+ 		fbMultiZPWM.M_On(pEndlessExtruderRef^.P_nTriggerChannel, 1000);
+	END_IF
+END_IF
+
+IF nState = 1 THEN //Compress
+	//Bei NormalStop:
+	//Compress zu Ende führen und weiter zu Relax
+	//Bei HardStop:
+	//Compress sofort stoppen dann ready
+	bBusy := TRUE;
+	IF bCompress THEN
+		fbTMCM1140Move(pHwRef:= pTMCM1140Ref, bRelative:= TRUE, nPosition:= pFbExtruderRef^.P_nCompDistanceCalc,
+						nSpeed:= pFbExtruderRef^.P_nCompFeedCalc, bStop:= bHardStop, bExecute:= TRUE);
+		IF NOT fbTMCM1140Move.bBusy THEN
+			IF fbTMCM1140Move.bError THEN
+				nErrorId := fbTMCM1140Move.nErrorId;
+				nState := 99;
+			ELSE
+				IF bNormalStop THEN
+					nState := 3; //weiter zu Relax
+				ELSE
+					nState := 2; //weiter zu Extrude	
+				END_IF
+			END_IF
+			fbTMCM1140Move(pHwRef:= pTMCM1140Ref, bExecute:= FALSE);
+		END_IF	
+	ELSE
+		nState := 2; //weiter zu Extrude
+	END_IF
+END_IF
+
+IF nState = 2 THEN //Extrude
+	//Bei NormalStop:
+	//Extrude sofort stoppen und weiter zu Relax
+	//Bei HardStop:
+	//Extrude sofort stoppen dann ready
+	A_Extrude();
+	IF nStateAction >= 80 THEN
+		IF nStateAction >= 99 THEN
+			nState := 99;
+		ELSE
+			IF bHardStop THEN
+				nState := 0;
+			ELSE
+				nState := 3; //weiter zu Relax
+			END_IF			
+		END_IF
+		nStateAction := 0;
+	END_IF
+END_IF
+
+IF nState = 3 THEN //Relax
+	//Bei NormalStop normal zu Ende führen
+	//Bei HardStop Relax sofort stoppen
+	IF bRelax THEN
+		fbTMCM1140Move(pHwRef:= pTMCM1140Ref, bRelative:= TRUE, nPosition:= - pFbExtruderRef^.P_nRelaxDistanceCalc,
+						nSpeed:= pFbExtruderRef^.P_nRelaxFeedCalc, bStop:= bHardStop, bExecute:= TRUE);
+		IF NOT fbTMCM1140Move.bBusy THEN
+			IF fbTMCM1140Move.bError THEN
+				nErrorId := fbTMCM1140Move.nErrorId;
+				nState := 99;
+			ELSE
+				nState := 0;
+			END_IF
+			fbTMCM1140Move(pHwRef:= pTMCM1140Ref, bExecute:= FALSE);
+		END_IF	
+	ELSE
+		nState := 0;
+	END_IF	
+END_IF
+
+IF nState = 4 THEN //Init
+	bBusy := TRUE;
+	A_Init();
+	IF nStateAction >= 80 THEN
+		IF nStateAction >= 99 THEN
+			nState := 99;
+		ELSE
+			nState := 0;	
+		END_IF
+		nStateAction := 0;
+	END_IF
+END_IF
+
+IF nState = 5 THEN //Reset
+	bBusy := TRUE;
+	A_Init();
+	IF nStateAction >= 80 THEN
+		IF nStateAction >= 99 THEN
+			nState := 99;
+		ELSE
+			nState := 0;
+			bError := FALSE;
+			nErrorId := 0;
+		END_IF
+		nStateAction := 0;
+	END_IF
+END_IF
+
+IF nState = 0 THEN
+	bBusy := FALSE;
+	IF pEndlessExtruderRef^.P_bError THEN
+		nState := 99;
+	END_IF
+END_IF
+
+IF nState = 99 THEN
+	bBusy := FALSE;
+	bError := TRUE;
+END_IF
+]]></ST>
+    </Implementation>
+    <Action Name="A_Compress" Id="{7c345e0c-d0b5-4178-aa16-31fdb7c6855a}">
+      <Implementation>
+        <ST><![CDATA[IF nStateAction = 0 THEN
+	fbTMCM1140Move(pHwRef:= pTMCM1140Ref , bRelative:= TRUE, nPosition:= pFbExtruderRef^.P_nCompDistanceCalc,
+					nSpeed:= pFbExtruderRef^.P_nCompFeedCalc, bExecute:= TRUE);
+	nStateAction := 1;
+ELSIF nStateAction = 1 THEN 
+	fbTMCM1140Move(pHwRef:= pTMCM1140Ref, bStop:= bNormalStop OR bHardStop);
+	IF NOT fbTMCM1140Move.bBusy THEN
+		IF fbTMCM1140Move.bError THEN
+			nStateAction := 99;
+		ELSE
+			nStateAction := 80;
+		END_IF
+		fbTMCM1140Move(pHwRef:= pTMCM1140Ref, bExecute:= FALSE);
+	END_IF
+END_IF]]></ST>
+      </Implementation>
+    </Action>
+    <Action Name="A_Extrude" Id="{b7a2c2d4-38f9-4fdf-be03-faca7eec2fe0}">
+      <Implementation>
+        <ST><![CDATA[IF nStateAction = 0 THEN
+	IF bNormalStop THEN
+		nStateAction := 80;
+		RETURN;
+	END_IF
+	
+	IF pFbExtruderRef^.P_nFeedCalc < 0 THEN
+		bCCW := TRUE;
+	ELSIF pFbExtruderRef^.P_nFeedCalc > 0 THEN
+		bCCW := FALSE;
+	ELSE
+		nStateAction := 80;
+		RETURN;
+	END_IF
+	
+	IF pFbExtruderRef^.P_nDistanceOrgin <> 0 THEN
+ 		IF bCCW THEN
+			fbTMCM1140Move.nPosition := -pFbExtruderRef^.P_nDistanceCalc;
+		ELSE
+			fbTMCM1140Move.nPosition := pFbExtruderRef^.P_nDistanceCalc;
+		END_IF
+		fbTMCM1140Move(pHwRef:= pTMCM1140Ref, bRelative:= TRUE, nSpeed:= ABS(pFbExtruderRef^.P_nFeedCalc), bExecute:= TRUE);
+		nStateAction := 1;
+	ELSE
+		fbTMCM1140Rotate(pHwRef:= pTMCM1140Ref, bCCW:= bCCW, nSpeed:= ABS(pFbExtruderRef^.P_nFeedCalc), bExecute:= TRUE);
+		nStateAction := 2;
+	END_IF
+END_IF
+
+IF nStateAction = 1 THEN
+	fbTMCM1140Move(pHwRef:= pTMCM1140Ref, bStop:= bNormalStop OR bHardStop);
+	IF NOT fbTMCM1140Move.bBusy THEN
+		IF fbTMCM1140Move.bError THEN
+			nErrorId := fbTMCM1140Move.nErrorId;
+			nStateAction := 99;
+		ELSE
+			nStateAction := 80;	
+		END_IF
+		fbTMCM1140Move(pHwRef:= pTMCM1140Ref, bExecute:= FALSE);
+	END_IF
+END_IF
+
+IF nStateAction = 2 THEN
+	fbTMCM1140Rotate(pHwRef:= pTMCM1140Ref, bStop:= bNormalStop OR bHardStop);
+	IF NOT fbTMCM1140Rotate.bBusy THEN
+		IF fbTMCM1140Rotate.bError THEN
+			nErrorId := fbTMCM1140Rotate.nErrorId;
+			nStateAction := 99;
+		ELSE
+			nStateAction := 80;	
+		END_IF
+		fbTMCM1140Rotate(pHwRef:= pTMCM1140Ref, bExecute:= FALSE);
+	END_IF	
+END_IF]]></ST>
+      </Implementation>
+    </Action>
+    <Action Name="A_Init" Id="{2405b3ee-7728-43ec-a60b-01a2f2c830be}">
+      <Implementation>
+        <ST><![CDATA[IF nStateAction = 0 THEN	//Init
+	fbTMCM1140Power(pHwRef:= pTMCM1140Ref, bExecute := TRUE);
+	IF NOT fbTMCM1140Power.bBusy THEN
+		IF fbTMCM1140Power.bError THEN
+			nStateAction := 99;
+		ELSE
+			nStateAction := 80;
+		END_IF
+		fbTMCM1140Power(pHwRef:= pTMCM1140Ref, bExecute := FALSE);
+	END_IF
+END_IF]]></ST>
+      </Implementation>
+    </Action>
+    <Action Name="A_Relax" Id="{ba6097df-30cf-406f-9050-60bef8bbf9a9}">
+      <Implementation>
+        <ST><![CDATA[IF nStateAction = 0 THEN
+	fbTMCM1140Move(pHwRef:= pTMCM1140Ref, bRelative:= TRUE, nPosition:= -pFbExtruderRef^.P_nRelaxDistanceCalc,
+					nSpeed:= pFbExtruderRef^.P_nRelaxFeedCalc, bExecute:= TRUE);
+	nStateAction := 1;
+ELSIF nStateAction = 1 THEN
+	fbTMCM1140Move(pHwRef:= pTMCM1140Ref, bStop:= bNormalStop OR bHardStop);
+	IF NOT fbTMCM1140Move.bBusy THEN
+		IF fbTMCM1140Move.bError THEN
+			nStateAction := 99;
+		ELSE
+			nStateAction := 80;	
+		END_IF
+		fbTMCM1140Move(pHwRef:= pTMCM1140Ref, bExecute:= FALSE);
+	END_IF
+END_IF]]></ST>
+      </Implementation>
+    </Action>
+    <Method Name="M_HardStop" Id="{3aaf91c9-e54b-467e-8482-eddd3e7a2942}">
+      <Declaration><![CDATA[METHOD M_HardStop
+VAR_INPUT
+END_VAR
+]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[IF bBusy THEN
+	bHardStop := TRUE;
+END_IF]]></ST>
+      </Implementation>
+    </Method>
+    <Method Name="M_Init" Id="{29e2ae95-91a9-4afe-ab81-a804ebb5715f}">
+      <Declaration><![CDATA[METHOD M_Init
+VAR_INPUT
+END_VAR
+]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[nState := 4;]]></ST>
+      </Implementation>
+    </Method>
+    <Method Name="M_LockUnlock" Id="{39f4e5bc-ea65-429a-8121-d10dd70b9e64}">
+      <Declaration><![CDATA[METHOD M_LockUnlock
+VAR_INPUT
+END_VAR
+]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[]]></ST>
+      </Implementation>
+    </Method>
+    <Method Name="M_Reset" Id="{8e0e04ca-ede2-4d55-b33f-10ba39608521}">
+      <Declaration><![CDATA[METHOD M_Reset
+VAR_INPUT
+END_VAR
+]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[IF bError THEN
+	nState := 5; //Reset
+END_IF]]></ST>
+      </Implementation>
+    </Method>
+    <Method Name="M_SetCompDistance" Id="{aeda2ccd-5095-4c24-96dd-9281c776d506}">
+      <Declaration><![CDATA[METHOD M_SetCompDistance : ERRORID
+VAR_INPUT
+	nValue : DINT;	
+END_VAR
+]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[IF nValue >= 0 THEN
+	IF pEndlessExtruderRef > 0 THEN
+		IF pEndlessExtruderRef^.P_nCompDistanceOrgin <> nValue THEN
+			pEndlessExtruderRef^.P_nCompDistanceOrgin := nValue;
+		END_IF
+	END_IF
+ELSE
+	M_SetCompDistance := E_ErrorIdObjMgmt.ERRORID_InvalidCompressDistance;
+END_IF]]></ST>
+      </Implementation>
+    </Method>
+    <Method Name="M_SetCompFeed" Id="{17afea16-a37b-4d01-a77f-4d85d5de2451}">
+      <Declaration><![CDATA[METHOD M_SetCompFeed : ERRORID
+VAR_INPUT
+	nValue : DINT;
+END_VAR
+]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[IF nValue >= 0 THEN
+	IF pEndlessExtruderRef > 0 THEN
+		IF pEndlessExtruderRef^.P_nCompFeedOrgin <> nValue THEN
+			pEndlessExtruderRef^.P_nCompFeedOrgin := nValue;
+		END_IF
+	END_IF
+ELSE
+	M_SetCompFeed := E_ErrorIdObjMgmt.ERRORID_InvalidCompressFeed;
+END_IF]]></ST>
+      </Implementation>
+    </Method>
+    <Method Name="M_SetDistance" Id="{76d460eb-b33d-44d3-971a-a96f17541b89}">
+      <Declaration><![CDATA[METHOD M_SetDistance : ERRORID
+VAR_INPUT
+	nValue : DINT;
+END_VAR
+]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[IF nValue >= 0 THEN
+	IF pEndlessExtruderRef > 0 THEN
+		IF pEndlessExtruderRef^.P_nDistanceOrgin <> nValue THEN
+			pEndlessExtruderRef^.P_nDistanceOrgin := nValue;
+		END_IF
+	END_IF
+ELSE
+	M_SetDistance := E_ErrorIdObjMgmt.ERRORID_InvalidExtrudeDistance;
+END_IF]]></ST>
+      </Implementation>
+    </Method>
+    <Method Name="M_SetFeed" Id="{a9b54f2d-5b71-40fe-a7f0-7fb6b559ab55}">
+      <Declaration><![CDATA[METHOD M_SetFeed : ERRORID
+VAR_INPUT
+	nValue : DINT;
+END_VAR
+]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[//Feed darf auch negativ sein (rückwärts)
+IF nValue <> 0 THEN
+	IF pEndlessExtruderRef > 0 THEN
+		IF pEndlessExtruderRef^.P_nFeedOrgin <> nValue THEN
+			pEndlessExtruderRef^.P_nFeedOrgin := nValue;
+		END_IF
+	END_IF
+ELSE
+	M_SetFeed := E_ErrorIdObjMgmt.ERRORID_InvalidExtrudeFeed;
+END_IF]]></ST>
+      </Implementation>
+    </Method>
+    <Method Name="M_SetRelaxDistance" Id="{af89af5d-325e-459b-a2d4-7aa9a9b047e7}">
+      <Declaration><![CDATA[METHOD M_SetRelaxDistance : ERRORID
+VAR_INPUT
+	nValue : DINT;
+END_VAR
+]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[IF nValue >= 0 THEN
+	IF pEndlessExtruderRef > 0 THEN
+		IF pEndlessExtruderRef^.P_nRelaxDistanceOrgin <> nValue THEN
+			pEndlessExtruderRef^.P_nRelaxDistanceOrgin := nValue;
+		END_IF
+	END_IF
+ELSE
+	M_SetRelaxDistance := E_ErrorIdObjMgmt.ERRORID_InvalidRelaxDistance;
+END_IF]]></ST>
+      </Implementation>
+    </Method>
+    <Method Name="M_SetRelaxFeed" Id="{1780c94b-fa52-4369-a96c-a74cee97da30}">
+      <Declaration><![CDATA[METHOD M_SetRelaxFeed : ERRORID
+VAR_INPUT
+	nValue : DINT;
+END_VAR
+]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[IF nValue >= 0 THEN
+	IF pEndlessExtruderRef > 0 THEN
+		IF pEndlessExtruderRef^.P_nRelaxFeedOrgin <> nValue THEN
+			pEndlessExtruderRef^.P_nRelaxFeedOrgin := nValue;
+		END_IF
+	END_IF
+ELSE
+	M_SetRelaxFeed := E_ErrorIdObjMgmt.ERRORID_InvalidRelaxFeed;
+END_IF]]></ST>
+      </Implementation>
+    </Method>
+    <Method Name="M_StartStop" Id="{b84a2a3d-b415-4178-a75c-98509bd73553}">
+      <Declaration><![CDATA[METHOD M_StartStop
+VAR_INPUT
+	bStart : BOOL;
+END_VAR
+]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[IF bStart AND NOT bBusy THEN
+	bNormalStop := FALSE;
+	bHardStop := FALSE;
+	IF pFbExtruderRef^.P_nCompDistanceCalc > 0 AND pFbExtruderRef^.P_nCompFeedCalc > 0 AND pFbExtruderRef^.P_nDistanceCalc >= 0 AND pFbExtruderRef^.P_nFeedCalc > 0 THEN
+		bCompress := TRUE;
+	ELSE
+		bCompress := FALSE;
+	END_IF
+	IF pFbExtruderRef^.P_nRelaxDistanceCalc > 0 AND pFbExtruderRef^.P_nRelaxFeedCalc > 0 AND pFbExtruderRef^.P_nDistanceCalc >= 0  AND pFbExtruderRef^.P_nFeedCalc > 0 THEN
+		bRelax := TRUE;
+	ELSE
+		bRelax := FALSE;
+	END_IF
+	nState := 1;
+ELSIF NOT bStart AND bBusy THEN
+	bNormalStop := TRUE;
+END_IF]]></ST>
+      </Implementation>
+    </Method>
+    <LineIds Name="FB_EndlessExtruderTMCM_Control">
+      <LineId Id="31" Count="2" />
+      <LineId Id="62" Count="0" />
+      <LineId Id="175" Count="0" />
+      <LineId Id="625" Count="0" />
+      <LineId Id="582" Count="1" />
+      <LineId Id="581" Count="0" />
+      <LineId Id="584" Count="0" />
+      <LineId Id="587" Count="0" />
+      <LineId Id="589" Count="1" />
+      <LineId Id="588" Count="0" />
+      <LineId Id="585" Count="0" />
+      <LineId Id="659" Count="0" />
+      <LineId Id="287" Count="0" />
+      <LineId Id="662" Count="3" />
+      <LineId Id="247" Count="0" />
+      <LineId Id="697" Count="0" />
+      <LineId Id="703" Count="3" />
+      <LineId Id="793" Count="0" />
+      <LineId Id="707" Count="9" />
+      <LineId Id="701" Count="1" />
+      <LineId Id="433" Count="0" />
+      <LineId Id="249" Count="1" />
+      <LineId Id="340" Count="0" />
+      <LineId Id="683" Count="3" />
+      <LineId Id="275" Count="0" />
+      <LineId Id="341" Count="0" />
+      <LineId Id="496" Count="1" />
+      <LineId Id="499" Count="0" />
+      <LineId Id="502" Count="3" />
+      <LineId Id="501" Count="0" />
+      <LineId Id="498" Count="0" />
+      <LineId Id="291" Count="0" />
+      <LineId Id="253" Count="0" />
+      <LineId Id="255" Count="0" />
+      <LineId Id="251" Count="0" />
+      <LineId Id="256" Count="0" />
+      <LineId Id="694" Count="1" />
+      <LineId Id="736" Count="4" />
+      <LineId Id="791" Count="0" />
+      <LineId Id="741" Count="1" />
+      <LineId Id="753" Count="0" />
+      <LineId Id="748" Count="4" />
+      <LineId Id="731" Count="0" />
+      <LineId Id="297" Count="0" />
+      <LineId Id="373" Count="0" />
+      <LineId Id="515" Count="10" />
+      <LineId Id="298" Count="0" />
+      <LineId Id="529" Count="0" />
+      <LineId Id="528" Count="0" />
+      <LineId Id="532" Count="6" />
+      <LineId Id="541" Count="1" />
+      <LineId Id="539" Count="1" />
+      <LineId Id="530" Count="1" />
+      <LineId Id="526" Count="0" />
+      <LineId Id="307" Count="0" />
+      <LineId Id="726" Count="0" />
+      <LineId Id="479" Count="2" />
+      <LineId Id="9" Count="0" />
+      <LineId Id="727" Count="0" />
+      <LineId Id="689" Count="0" />
+      <LineId Id="729" Count="0" />
+      <LineId Id="691" Count="1" />
+      <LineId Id="483" Count="0" />
+    </LineIds>
+    <LineIds Name="FB_EndlessExtruderTMCM_Control.A_Compress">
+      <LineId Id="11" Count="0" />
+      <LineId Id="32" Count="1" />
+      <LineId Id="17" Count="0" />
+      <LineId Id="14" Count="0" />
+      <LineId Id="24" Count="0" />
+      <LineId Id="19" Count="0" />
+      <LineId Id="26" Count="1" />
+      <LineId Id="30" Count="1" />
+      <LineId Id="28" Count="0" />
+      <LineId Id="20" Count="0" />
+      <LineId Id="25" Count="0" />
+      <LineId Id="1" Count="0" />
+    </LineIds>
+    <LineIds Name="FB_EndlessExtruderTMCM_Control.A_Extrude">
+      <LineId Id="42" Count="1" />
+      <LineId Id="45" Count="0" />
+      <LineId Id="44" Count="0" />
+      <LineId Id="22" Count="0" />
+      <LineId Id="113" Count="1" />
+      <LineId Id="117" Count="0" />
+      <LineId Id="119" Count="2" />
+      <LineId Id="123" Count="1" />
+      <LineId Id="118" Count="0" />
+      <LineId Id="116" Count="0" />
+      <LineId Id="2" Count="0" />
+      <LineId Id="104" Count="0" />
+      <LineId Id="125" Count="0" />
+      <LineId Id="127" Count="1" />
+      <LineId Id="126" Count="0" />
+      <LineId Id="88" Count="0" />
+      <LineId Id="5" Count="0" />
+      <LineId Id="10" Count="0" />
+      <LineId Id="94" Count="0" />
+      <LineId Id="21" Count="0" />
+      <LineId Id="23" Count="0" />
+      <LineId Id="26" Count="2" />
+      <LineId Id="98" Count="0" />
+      <LineId Id="33" Count="0" />
+      <LineId Id="78" Count="0" />
+      <LineId Id="101" Count="0" />
+      <LineId Id="79" Count="0" />
+      <LineId Id="81" Count="1" />
+      <LineId Id="80" Count="0" />
+      <LineId Id="34" Count="0" />
+      <LineId Id="37" Count="3" />
+      <LineId Id="50" Count="0" />
+      <LineId Id="61" Count="0" />
+      <LineId Id="83" Count="0" />
+      <LineId Id="100" Count="0" />
+      <LineId Id="84" Count="0" />
+      <LineId Id="86" Count="1" />
+      <LineId Id="85" Count="0" />
+      <LineId Id="59" Count="0" />
+      <LineId Id="49" Count="0" />
+      <LineId Id="1" Count="0" />
+    </LineIds>
+    <LineIds Name="FB_EndlessExtruderTMCM_Control.A_Init">
+      <LineId Id="1" Count="0" />
+      <LineId Id="24" Count="0" />
+      <LineId Id="16" Count="2" />
+      <LineId Id="20" Count="3" />
+      <LineId Id="5" Count="0" />
+      <LineId Id="3" Count="0" />
+    </LineIds>
+    <LineIds Name="FB_EndlessExtruderTMCM_Control.A_Relax">
+      <LineId Id="2" Count="0" />
+      <LineId Id="18" Count="0" />
+      <LineId Id="4" Count="2" />
+      <LineId Id="19" Count="0" />
+      <LineId Id="8" Count="0" />
+      <LineId Id="13" Count="1" />
+      <LineId Id="16" Count="1" />
+      <LineId Id="15" Count="0" />
+      <LineId Id="9" Count="0" />
+      <LineId Id="12" Count="0" />
+      <LineId Id="1" Count="0" />
+    </LineIds>
+    <LineIds Name="FB_EndlessExtruderTMCM_Control.M_HardStop">
+      <LineId Id="11" Count="1" />
+      <LineId Id="5" Count="0" />
+    </LineIds>
+    <LineIds Name="FB_EndlessExtruderTMCM_Control.M_Init">
+      <LineId Id="5" Count="0" />
+    </LineIds>
+    <LineIds Name="FB_EndlessExtruderTMCM_Control.M_LockUnlock">
+      <LineId Id="5" Count="0" />
+    </LineIds>
+    <LineIds Name="FB_EndlessExtruderTMCM_Control.M_Reset">
+      <LineId Id="5" Count="2" />
+    </LineIds>
+    <LineIds Name="FB_EndlessExtruderTMCM_Control.M_SetCompDistance">
+      <LineId Id="10" Count="3" />
+      <LineId Id="15" Count="2" />
+      <LineId Id="19" Count="0" />
+      <LineId Id="5" Count="0" />
+    </LineIds>
+    <LineIds Name="FB_EndlessExtruderTMCM_Control.M_SetCompFeed">
+      <LineId Id="7" Count="3" />
+      <LineId Id="12" Count="2" />
+      <LineId Id="16" Count="0" />
+      <LineId Id="5" Count="0" />
+    </LineIds>
+    <LineIds Name="FB_EndlessExtruderTMCM_Control.M_SetDistance">
+      <LineId Id="13" Count="0" />
+      <LineId Id="7" Count="2" />
+      <LineId Id="12" Count="0" />
+      <LineId Id="14" Count="2" />
+      <LineId Id="5" Count="0" />
+    </LineIds>
+    <LineIds Name="FB_EndlessExtruderTMCM_Control.M_SetFeed">
+      <LineId Id="29" Count="0" />
+      <LineId Id="14" Count="3" />
+      <LineId Id="20" Count="2" />
+      <LineId Id="24" Count="0" />
+      <LineId Id="5" Count="0" />
+    </LineIds>
+    <LineIds Name="FB_EndlessExtruderTMCM_Control.M_SetRelaxDistance">
+      <LineId Id="19" Count="3" />
+      <LineId Id="24" Count="2" />
+      <LineId Id="28" Count="0" />
+      <LineId Id="5" Count="0" />
+    </LineIds>
+    <LineIds Name="FB_EndlessExtruderTMCM_Control.M_SetRelaxFeed">
+      <LineId Id="15" Count="3" />
+      <LineId Id="20" Count="2" />
+      <LineId Id="24" Count="0" />
+      <LineId Id="5" Count="0" />
+    </LineIds>
+    <LineIds Name="FB_EndlessExtruderTMCM_Control.M_StartStop">
+      <LineId Id="16" Count="1" />
+      <LineId Id="7" Count="0" />
+      <LineId Id="22" Count="1" />
+      <LineId Id="35" Count="1" />
+      <LineId Id="24" Count="0" />
+      <LineId Id="28" Count="1" />
+      <LineId Id="37" Count="1" />
+      <LineId Id="30" Count="0" />
+      <LineId Id="15" Count="0" />
+      <LineId Id="10" Count="0" />
+      <LineId Id="8" Count="0" />
+      <LineId Id="2" Count="0" />
+    </LineIds>
+  </POU>
+</TcPlcObject>

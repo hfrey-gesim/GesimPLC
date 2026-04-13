@@ -1,0 +1,156 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<TcPlcObject Version="1.1.0.1" ProductVersion="3.1.0.25">
+  <POU Name="FB_HwRefTripleTrigger" Id="{26cee8e2-36d9-4e41-bc0a-fec1b2da8863}">
+    <Declaration><![CDATA[FUNCTION_BLOCK FB_HwRefTripleTrigger EXTENDS FB_CanNodeBase
+VAR_INPUT
+END_VAR
+VAR_OUTPUT
+END_VAR
+VAR
+	//PDOs
+	nState 			AT %I* : ARRAY[1..3] OF USINT;
+	nError 			AT %I* : USINT;
+	nPeriod 		AT %Q* : ARRAY[1..3] OF UINT;
+	nPulse 			AT %Q* : ARRAY[1..3] OF UINT;
+	nPulseNumber 	AT %Q* : ARRAY[1..3] OF UINT;
+	nVoltage 		AT %Q* : ARRAY[1..3] OF UINT;
+	nCtrl 			AT %Q* : ARRAY[1..3] OF USINT;
+	
+	//SDOs
+	nFrequency 			: ARRAY[1..3] OF DINT;
+	nAmplitudePercent 	: ARRAY[1..3] OF UINT;
+END_VAR
+]]></Declaration>
+    <Implementation>
+      <ST><![CDATA[IF bNodeEnabled THEN
+	SUPER^();
+END_IF]]></ST>
+    </Implementation>
+    <Method Name="M_SetPulse" Id="{0bec5832-8e9e-4505-9c81-2655528a436b}">
+      <Declaration><![CDATA[METHOD M_SetPulse
+VAR_INPUT
+	nChannel : USINT;
+	nPulse : UINT;
+END_VAR
+]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[THIS^.nPulse[nChannel] := nPulse;]]></ST>
+      </Implementation>
+    </Method>
+    <Method Name="M_SetFrequency" Id="{15c430fe-87d5-4cb6-bfce-4fd5e98a425c}">
+      <Declaration><![CDATA[METHOD M_SetFrequency
+VAR_INPUT
+	nChannel : USINT;
+	nFrequency : DINT;
+END_VAR
+]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[IF nFrequency > 0 THEN
+	THIS^.nFrequency[nChannel] := nFrequency;
+	nPeriod[nChannel] := DINT_TO_UINT(1000000 / nFrequency);
+ELSE
+	nPeriod[nChannel] := 0;
+	THIS^.nFrequency[nChannel] := 0;
+END_IF]]></ST>
+      </Implementation>
+    </Method>
+    <Method Name="M_TriggerOn" Id="{2ba45212-773c-419f-a142-57023ff6e62e}">
+      <Declaration><![CDATA[METHOD M_TriggerOn
+VAR_INPUT
+	nChannel : USINT;
+	nPulseNumber : UINT;
+END_VAR
+]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[THIS^.nPulseNumber[nChannel] := nPulseNumber;
+nCtrl[nChannel] := 1;]]></ST>
+      </Implementation>
+    </Method>
+    <Method Name="M_GetAmlitudeVolt" Id="{339a69c5-feee-4259-9b1b-676e07a3a853}">
+      <Declaration><![CDATA[METHOD M_GetAmlitudeVolt : UINT
+VAR_INPUT
+	nChannel : USINT;
+END_VAR
+]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[M_GetAmlitudeVolt := nVoltage[nChannel];]]></ST>
+      </Implementation>
+    </Method>
+    <Method Name="M_TriggerOff" Id="{427320c8-9eaf-4a0d-be88-f5601914bbe4}">
+      <Declaration><![CDATA[METHOD M_TriggerOff
+VAR_INPUT
+	nChannel : USINT;
+END_VAR
+]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[nCtrl[nChannel] := 0;]]></ST>
+      </Implementation>
+    </Method>
+    <Method Name="M_GetState" Id="{42971dd1-b7d4-4340-9ab1-5a7471b5c267}">
+      <Declaration><![CDATA[METHOD M_GetState : BOOL
+VAR_INPUT
+	nChannel : USINT;
+END_VAR
+]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[M_GetState := nState[nChannel].0;]]></ST>
+      </Implementation>
+    </Method>
+    <Method Name="M_GetPulse" Id="{91faeae8-62e1-4cb8-a967-cb4b0db0f46c}">
+      <Declaration><![CDATA[METHOD M_GetPulse : UINT
+VAR_INPUT
+	nChannel : USINT;
+END_VAR
+]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[M_GetPulse := nPulse[nChannel];
+]]></ST>
+      </Implementation>
+    </Method>
+    <Method Name="M_GetAmplitudePercent" Id="{aaed8dbb-ba72-4034-ba37-74cd9daa3be1}">
+      <Declaration><![CDATA[METHOD M_GetAmplitudePercent : UINT
+VAR_INPUT
+	nChannel : USINT;
+END_VAR
+]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[M_GetAmplitudePercent := nAmplitudePercent[nChannel];]]></ST>
+      </Implementation>
+    </Method>
+    <Method Name="M_SetAmplitudeVolt" Id="{ab8a24c2-7675-4de9-85f8-9fc601f3f51c}">
+      <Declaration><![CDATA[METHOD M_SetAmplitudeVolt
+VAR_INPUT
+	nChannel : USINT;
+	nValue : UINT;
+END_VAR
+]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[nVoltage[nChannel] := LIMIT(0,nValue,10000);
+nAmplitudePercent[nChannel] := nVoltage[nChannel] * 1000 / 10000;]]></ST>
+      </Implementation>
+    </Method>
+    <Method Name="M_SetAmplitudePercent" Id="{b412a503-a1aa-4bf0-afb6-a3cc34bccead}">
+      <Declaration><![CDATA[METHOD M_SetAmplitudePercent
+VAR_INPUT
+	nChannel : USINT;
+	nValue : UINT;	//Zehntel %
+END_VAR
+]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[nAmplitudePercent[nChannel] := LIMIT(0,nValue,1000);
+nVoltage[nChannel] := 10000 / 1000 * nAmplitudePercent[nChannel];]]></ST>
+      </Implementation>
+    </Method>
+    <Method Name="M_GetFrequency" Id="{c8d6a827-5acb-484a-938c-083024fe5667}">
+      <Declaration><![CDATA[METHOD M_GetFrequency : DINT
+VAR_INPUT
+	nChannel : USINT;
+END_VAR
+]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[M_GetFrequency := nFrequency[nChannel];]]></ST>
+      </Implementation>
+    </Method>
+    <ObjectProperties />
+  </POU>
+</TcPlcObject>

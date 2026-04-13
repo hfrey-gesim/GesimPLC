@@ -1,0 +1,32 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<TcPlcObject Version="1.1.0.1" ProductVersion="3.1.4020.12">
+  <POU Name="SimutateHwModules" Id="{dc8ef37f-0f03-4e8a-9c29-20627da88774}" SpecialFunc="None">
+    <Declaration><![CDATA[PROGRAM SimutateHwModules
+VAR
+	stHardwareId : ST_HardwareId;
+END_VAR
+]]></Declaration>
+    <Implementation>
+      <ST><![CDATA[fbXDriveBeck.P_pMultiZRef := ADR(aFbMultiZRef[1]);
+fbYDriveBeck.P_pMultiZRef := ADR(aFbMultiZRef[1]);
+stHardwareId.eGroup := E_HardwareGrp.AxisX;
+stHardwareId.nParentItem := 0;
+stHardwareId.nItem := 1;
+fbXDriveBeck.P_stHardwareId := stHardwareId;
+stHardwareId.eGroup := E_HardwareGrp.AxisY;
+stHardwareId.nParentItem := 1;
+stHardwareId.nItem := 1;
+fbYDriveBeck.P_stHardwareId := stHardwareId;
+ 
+fbXYDriveList.M_Add(ADR(fbXDriveBeck));
+fbXYDriveList.M_Add(ADR(fbYDriveBeck));]]></ST>
+    </Implementation>
+    <LineIds Name="SimutateHwModules">
+      <LineId Id="19" Count="0" />
+      <LineId Id="21" Count="8" />
+      <LineId Id="18" Count="0" />
+      <LineId Id="11" Count="0" />
+      <LineId Id="5" Count="0" />
+    </LineIds>
+  </POU>
+</TcPlcObject>

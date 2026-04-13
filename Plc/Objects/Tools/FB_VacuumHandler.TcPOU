@@ -1,0 +1,659 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<TcPlcObject Version="1.1.0.1" ProductVersion="3.1.4022.18">
+  <POU Name="FB_VacuumHandler" Id="{c1aa037e-2c7c-4211-8fb5-58b1d65062d0}" SpecialFunc="None">
+    <Declaration><![CDATA[FUNCTION_BLOCK FB_VacuumHandler EXTENDS FB_MzTool
+VAR_INPUT
+END_VAR
+VAR_OUTPUT
+END_VAR
+VAR
+	
+
+	//SpecProperties
+	pPneuChannelVac		: POINTER TO FB_PneuChannelRef;
+	nValveNrVacuum		: USINT;
+	nHoldVacuumVial		: INT;
+	nHoldVacuumSeptum	: INT;
+	rDockOffset			: REAL;
+
+	//****************************************Aktionvariablen****************************************************
+	
+	stActionDataSpec	: ST_ActionData;
+	
+	//Action: "InitSpec"
+	bInitSpec			: BOOL;
+	bInitSpecFlag		: BOOL := TRUE;
+	nStateA_InitSpec	: USINT;
+	
+	//Action: "SetVacuum"
+	bSetVacuum			: BOOL;
+	fbSetVacuum			: FB_SetPressure;
+	
+	//Action: "SwitchPressure"
+	bSwitchPress		: BOOL;			
+	nStateA_SwitchPress	: USINT;		//State von A_SwitchPress()
+	nSwitchPressChannel	: USINT;
+	eSwitchPressCtrl	: E_PressCtrl;
+	tPressTime			: TIME;			//nach dieser Zeit Ventil automatisch wieder zu
+	timerPress			: TON;			//Timer für Öffnungszeit Druckventil 		
+	
+END_VAR]]></Declaration>
+    <Implementation>
+      <ST><![CDATA[IF eCurrentState = E_MachineState.MACHINESTATE_Active THEN
+	
+	IF bSetVacuum THEN
+		fbSetVacuum(pPneuChannelRef:= pPneuChannelVac);
+		IF NOT fbSetVacuum.bBusy THEN
+			IF fbSetVacuum.bError THEN
+				bError := TRUE;
+				stError.ErrorId := fbSetVacuum.nErrorId;
+				stError.POU := E_POU.POU_FB_VacuumHandler;
+				fbErrorList.M_Add(stError);
+			END_IF
+			bSetVacuum := FALSE;
+			fbSetVacuum(pPneuChannelRef:= pPneuChannelVac, bExecute:= FALSE);
+			M_RemoveListEntry(nSearchValue:= E_Action.ACTION_SetVacuum);
+		END_IF
+	END_IF	
+	
+	IF bSwitchPress THEN	//Kartuschendruck einstellen und Ein-bzw. Aus schalten 
+		A_SwitchPress();
+		IF nStateA_SwitchPress >= 80 THEN
+			IF nStateA_SwitchPress >= 99 THEN
+				bError := TRUE;
+			END_IF
+			bSwitchPress := FALSE;
+			nStateA_SwitchPress := 0;
+			M_RemoveListEntry(nSearchValue:= E_Action.ACTION_SwitchPressure);
+		END_IF
+	END_IF	
+END_IF
+
+SUPER^();	//FB_MzTool aufrufen
+
+//Prozessdaten aktualisieren
+IF pPneuChannelVac > 0 THEN
+	stProcessData.n32Data[7] := pPneuChannelVac^.P_nCurrentPressure;
+END_IF
+
+IF nValveNrVacuum > 0 THEN
+	IF aValves[nValveNrVacuum].bDigiOut1 THEN
+		stProcessData.n32Data[8] := E_PressCtrl.PRESSCTRL_VacOn;
+	ELSE
+		stProcessData.n32Data[8] := E_PressCtrl.PRESSCTRL_Off;
+	END_IF
+END_IF
+
+aObjProcData[nNotifyId] := stProcessData;
+]]></ST>
+    </Implementation>
+    <Action Name="A_Reset" Id="{f2521c9d-1700-46e6-a221-5b5d232b9717}">
+      <Implementation>
+        <ST><![CDATA[//Ist noch eine Aktion aktiv?
+IF nStateA_ResetSpec = 0 THEN 
+	nStateA_ResetSpec := 80;
+END_IF
+
+SUPER^.A_Reset();]]></ST>
+      </Implementation>
+    </Action>
+    <Action Name="A_Stop" Id="{c62b2af7-96f6-4651-a490-605dbe8a8a39}">
+      <Implementation>
+        <ST><![CDATA[IF nStateA_Stop = 0 THEN
+	nStateA_Stop := 1;
+END_IF
+
+SUPER^.A_Stop();]]></ST>
+      </Implementation>
+    </Action>
+    <Action Name="A_SwitchPress" Id="{47fb3efd-7cc4-4411-bff6-dfe38df593eb}">
+      <Implementation>
+        <ST><![CDATA[CASE nStateA_SwitchPress OF
+	0:	//Ventil Einschalten
+		IF eSwitchPressCtrl = E_PressCtrl.PRESSCTRL_PressOn OR eSwitchPressCtrl = E_PressCtrl.PRESSCTRL_VacOn THEN
+			aValves[M_GetValveNr(nSwitchPressChannel)].M_On(1);
+		END_IF
+	
+		//Timer starten
+		IF tPressTime = T#0S THEN
+			nStateA_SwitchPress := 80;
+			RETURN;	
+		END_IF
+		
+		timerPress(IN:= FALSE);
+		timerPress(IN:= TRUE, PT:= tPressTime);
+		nStateA_SwitchPress := 1;
+		
+	1:	//Warten bis Zeitabgelaufen
+		timerPress();
+		IF timerPress.Q THEN
+			timerPress(IN:= FALSE);
+			aValves[M_GetValveNr(nSwitchPressChannel)].M_Off();
+			nStateA_SwitchPress := 80;
+		END_IF
+		
+	70:	//Abbrechen
+		timerPress(IN:= FALSE);
+		aValves[M_GetValveNr(nSwitchPressChannel)].M_Off();
+		nStateA_SwitchPress := 80;
+END_CASE]]></ST>
+      </Implementation>
+    </Action>
+    <Method Name="FB_init" Id="{81581120-d180-441f-89fc-b86fe9e26cec}">
+      <Declaration><![CDATA[METHOD FB_init : BOOL
+VAR_INPUT
+	bInitRetains : BOOL; // if TRUE, the retain variables are initialized (warm start / cold start)
+	bInCopyCode : BOOL;  // if TRUE, the instance afterwards gets moved into the copy code (online change)
+END_VAR
+]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[eObjectType := E_ObjectType.OBJECTTYPE_VacuumHandler;
+eObjectGroup := E_ObjectGroup.OBJECTGROUP_MzTool OR E_ObjectGroup.OBJECTGROUP_Device;]]></ST>
+      </Implementation>
+    </Method>
+    <Method Name="M_AddChild" Id="{d61337df-4893-4166-8043-635e41d02126}">
+      <Declaration><![CDATA[METHOD M_AddChild : ERRORID
+VAR_INPUT
+	pObject : POINTER TO FB_Object;
+	nSlotNr	: UINT;
+	nIndex 	: INT;	
+END_VAR
+]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[//Kann folgende Objekt-Typen aufnehmen
+//Vial, Septum
+IF pObject > 0 THEN
+	IF pObject^.P_eObjectType = E_ObjectType.OBJECTTYPE_Vial OR
+		pObject^.P_eObjectType = E_ObjectType.OBJECTTYPE_Septum THEN
+		M_AddChild := SUPER^.M_AddChild(pObject,nSlotNr,nIndex);
+	ELSE
+		M_AddChild := E_ErrorIdObjMgmt.ERRORID_InvalidParentObject;
+	END_IF
+ELSE
+	M_AddChild := E_ErrorIdObjMgmt.ERRORID_InvalidParentObject;
+END_IF]]></ST>
+      </Implementation>
+    </Method>
+    <Method Name="M_CancelAction" Id="{346f83e9-9ac4-4cdf-88cc-9653b2132cd0}">
+      <Declaration><![CDATA[METHOD M_CancelAction
+VAR_INPUT
+	eAction : E_Action;
+END_VAR
+]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[CASE eAction OF
+
+	E_Action.ACTION_SetVacuum:
+		IF bSetVacuum THEN
+			fbSetVacuum(bExecute:= FALSE, pPneuChannelRef:= pPneuChannelVac);
+		END_IF
+
+	E_Action.ACTION_SwitchPressure:
+		IF bSwitchPress AND nStateA_SwitchPress < 70 THEN
+			nStateA_SwitchPress := 70;
+		END_IF	
+ELSE
+	SUPER^.M_CancelAction(eAction);
+END_CASE]]></ST>
+      </Implementation>
+    </Method>
+    <Method Name="M_CheckAction" Id="{d8e47171-ca06-45b5-88c2-03e2a5d24850}">
+      <Declaration><![CDATA[METHOD M_CheckAction : ERRORID
+VAR_INPUT
+	refActionData 	: REFERENCE TO ST_ActionData;
+	pCorrelObject	: POINTER TO FB_Object;
+END_VAR
+
+VAR
+	pRack : POINTER TO FB_Rack;
+	pReactor : POINTER TO FB_Reactor;
+	pSlot : POINTER TO FB_PieceSlot;
+	pTarget : POINTER TO FB_TargetBase;
+END_VAR]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[CASE refActionData.eAction OF
+	E_Action.ACTION_ExchangePiece:
+		pTarget := fbObjectDirectory.M_GetObjPointer(refActionData.nTarget);
+		//Welches Piece soll gehandelt werden?
+		IF refActionData.aParams[2] = 0 THEN //Drop
+			IF pPiece = 0 THEN
+				M_CheckAction := E_ErrorIdCmd.ERRORID_NoPieceOnTool;
+				RETURN;	
+			END_IF
+			//VacuumHandler kann folgende Pieces handeln
+			//Vial, Septum
+			IF pPiece^.P_eObjectType = E_ObjectType.OBJECTTYPE_Vial THEN
+				//Target muss VialRack oder Reaktor sein
+				IF pTarget^.P_eObjectType = E_ObjectType.OBJECTTYPE_VialRack THEN
+					pRack := pTarget;
+					//Slot muss frei sein
+					pSlot := pRack^.M_GetSlot(DINT_TO_UINT(refActionData.aParams[1]));
+					IF pSlot = 0 THEN
+						M_CheckAction := E_ErrorIdCmd.ERRORID_InvalidTargetSlot;
+						RETURN;
+					ELSIF pSlot^.P_pPiece > 0 THEN
+						M_CheckAction := E_ErrorIdCmd.ERRORID_PieceAlreadyInSlot;
+						RETURN;
+					END_IF
+				ELSIF pTarget^.P_eObjectType = E_ObjectType.OBJECTTYPE_Reactor THEN
+					//Slot muss frei sein
+					//Hier kann ein Vial geholt werden
+					pReactor := pTarget;
+					IF pReactor^.P_pVial > 0 THEN
+						M_CheckAction := E_ErrorIdCmd.ERRORID_PieceAlreadyInSlot;
+						RETURN;
+					END_IF
+				ELSE
+					M_CheckAction := E_ErrorIdCmd.ERRORID_UnsuitableTarget;
+					RETURN;
+				END_IF
+			ELSIF pPiece^.P_eObjectType = E_ObjectType.OBJECTTYPE_Septum THEN
+				//Target kann nur Reaktor mit Vial sein
+				//Ob ein Vial im Reaktor steht, wird in FB_Reactor.M_CheckActon() geprüft 
+				IF pTarget^.P_eObjectType <> E_ObjectType.OBJECTTYPE_Reactor THEN 
+					M_CheckAction := E_ErrorIdCmd.ERRORID_UnsuitableTarget;
+					RETURN;
+				END_IF
+			ELSE
+				M_CheckAction := E_ErrorIdCmd.ERRORID_InvalidPieceType;
+				RETURN;
+			END_IF
+		ELSE  //Take
+			//Schon ein Piece am Tool?
+			IF THIS^.pPiece > 0 THEN
+				M_CheckAction := E_ErrorIdCmd.ERRORID_PieceAlreadyOnTool;
+				RETURN;
+			END_IF
+			
+			IF pTarget^.P_eObjectType = E_ObjectType.OBJECTTYPE_Reactor THEN
+				//Hier kann ein Vial geholt werden
+				pReactor := pTarget;
+				IF pReactor^.P_pVial = 0 THEN
+					M_CheckAction := E_ErrorIdCmd.ERRORID_NoPieceInSlot;
+					RETURN;
+				ELSIF pReactor^.P_pVial^.P_pSeptum > 0 THEN
+					M_CheckAction := E_ErrorIdCmd.ERRORID_SeptumAlreadyOnVial;
+					RETURN;
+				END_IF
+			ELSIF pTarget^.P_eObjectType = E_ObjectType.OBJECTTYPE_VialRack THEN
+				//Hier kann ein Vial geholt werden
+				pRack := pTarget;
+				pSlot := pRack^.M_GetSlot(DINT_TO_UINT(refActionData.aParams[1]));
+				IF pSlot > 0 THEN
+					IF pSlot^.P_pPiece = 0 THEN
+						M_CheckAction := E_ErrorIdCmd.ERRORID_NoPieceInSlot;
+						RETURN;
+					ELSIF pSlot^.P_pPiece^.P_eObjectType <> E_ObjectType.OBJECTTYPE_Vial THEN
+						M_CheckAction := E_ErrorIdCmd.ERRORID_InvalidPieceType;
+						RETURN;
+					END_IF
+				ELSE
+					M_CheckAction := E_ErrorIdCmd.ERRORID_InvalidTargetSlot;
+					RETURN;				
+				END_IF		
+			ELSIF pTarget^.P_eObjectType = E_ObjectType.OBJECTTYPE_SeptumRack THEN
+				//Hier kann ein Septum geholt werden 
+				pRack := pTarget;
+				pSlot := pRack^.M_GetSlot(DINT_TO_UINT(refActionData.aParams[1]));
+				IF pSlot > 0 THEN
+					IF pSlot^.P_pPiece = 0 THEN
+						M_CheckAction := E_ErrorIdCmd.ERRORID_NoPieceInSlot;
+						RETURN;
+					ELSIF pSlot^.P_pPiece^.P_eObjectType <> E_ObjectType.OBJECTTYPE_Septum THEN
+						M_CheckAction := E_ErrorIdCmd.ERRORID_InvalidPieceType;
+						RETURN;
+					END_IF
+				ELSE
+					M_CheckAction := E_ErrorIdCmd.ERRORID_InvalidTargetSlot;
+					RETURN;				
+				END_IF
+			END_IF
+		END_IF	
+ELSE
+	M_CheckAction := SUPER^.M_CheckAction(refActionData, pCorrelObject);
+END_CASE]]></ST>
+      </Implementation>
+    </Method>
+    <Method Name="M_ClearAllProps" Id="{f5396b84-8c36-4e68-acc8-07dc87eec7d2}">
+      <Declaration><![CDATA[METHOD M_ClearAllProps
+VAR_INPUT
+	bIgnoreParent : BOOL; //Es wird das gesamte OD gelöscht. -> Zeiger auf Parent nicht mehr gültig!
+END_VAR
+]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[pPneuChannelVac := 0;
+SUPER^.M_ClearAllProps(bIgnoreParent);]]></ST>
+      </Implementation>
+    </Method>
+    <Method Name="M_ExeAction" Id="{d36bcf23-57e8-45da-afb1-d013d0cf9311}">
+      <Declaration><![CDATA[METHOD M_ExeAction : ERRORID
+VAR_INPUT
+	refActionData : REFERENCE TO ST_ActionData;	
+END_VAR]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[IF NOT (eCurrentState = E_MachineState.MACHINESTATE_Idle OR
+	eCurrentState = E_MachineState.MACHINESTATE_Active OR
+	eCurrentState = E_MachineState.MACHINESTATE_Ready) THEN
+	M_ExeAction := E_ErrorIdCmd.ERRORID_InvalidState;
+	RETURN;
+END_IF
+
+CASE refActionData.eAction OF
+	E_Action.ACTION_SetVacuum:
+		fbSetVacuum(bExecute:= FALSE, pPneuChannelRef:= pPneuChannelVac); //eventueller Fehler wird auch zurückgesetzt
+		fbSetVacuum.bAwait := DINT_TO_BOOL(refActionData.aParams[1]);
+		fbSetVacuum.nValue := DINT_TO_INT(refActionData.aParams[2]);
+		fbSetVacuum.nTolerancePlus := DINT_TO_INT(refActionData.aParams[3]);
+		fbSetVacuum.nToleranceMinus := DINT_TO_INT(refActionData.aParams[4]);
+		fbSetVacuum.tTimeout := DINT_TO_TIME(refActionData.aParams[5]);
+		
+		fbSetVacuum(bExecute:= TRUE, pPneuChannelRef:= pPneuChannelVac,nErrorId=> M_ExeAction);
+		IF fbSetVacuum.bError THEN
+			RETURN;
+		END_IF
+		
+		IF NOT bSetVacuum AND fbSetVacuum.bBusy THEN
+			bSetVacuum := TRUE;
+			fbList.A_AddHeadValue(hList := hList, putValue := E_Action.ACTION_SetVacuum);
+		ELSE
+			RETURN;	
+		END_IF
+		
+	E_Action.ACTION_SwitchPressure:
+		//Channel checken
+		nSwitchPressChannel := DINT_TO_USINT(refActionData.aParams[1]);
+		IF M_GetValveNr(nSwitchPressChannel) = 0 THEN
+			M_ExeAction := E_ErrorIdObjMgmt.ERRORID_InvalidPneuChannel;
+			RETURN;
+		END_IF
+		eSwitchPressCtrl := DINT_TO_USINT(refActionData.aParams[2]);
+		tPressTime := DINT_TO_TIME(refActionData.aParams[3]);
+		IF bSwitchPress THEN	//Aktion ist aktiv
+			//Statemachine zurücksetzen
+		 	nStateA_SwitchPress := 0;		
+			aValves[M_GetValveNr(nSwitchPressChannel)].M_Off();
+			nStateA_SwitchPress := 80;
+		ELSE //Aktion ist nicht aktiv
+			IF eSwitchPressCtrl = E_PressCtrl.PRESSCTRL_PressOn OR eSwitchPressCtrl = E_PressCtrl.PRESSCTRL_VacOn THEN
+				bSwitchPress := TRUE;
+				fbList.A_AddHeadValue(hList := hList, putValue := E_Action.ACTION_SwitchPressure);
+			ELSE
+				aValves[M_GetValveNr(nSwitchPressChannel)].M_Off();
+			END_IF			
+		END_IF
+	ELSE
+		M_ExeAction := SUPER^.M_ExeAction(refActionData);
+		RETURN;
+END_CASE
+
+bBusy := TRUE;
+eCurrentState := E_MachineState.MACHINESTATE_Active;]]></ST>
+      </Implementation>
+    </Method>
+    <Method Name="M_GetAllProps" Id="{7498e882-850f-455a-b427-2ce622e513e8}">
+      <Declaration><![CDATA[METHOD M_GetAllProps : ERRORID
+VAR_INPUT
+	refCmdData : REFERENCE TO  ST_CmdData;
+END_VAR
+]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[//BaseProperties lesen
+SUPER^.M_GetAllProps(refCmdData);
+nCurrentPropIndex := nCurrentPropIndex + 1;
+IF pPneuChannelVac > 0 THEN
+	refCmdData.n32Data[nCurrentPropIndex] := pPneuChannelVac^.nChannel;
+ELSE
+	refCmdData.n32Data[nCurrentPropIndex] := 0;
+END_IF
+nCurrentPropIndex := nCurrentPropIndex + 1;
+refCmdData.n32Data[nCurrentPropIndex] := nValveNrVacuum;
+nCurrentPropIndex := nCurrentPropIndex + 1;
+refCmdData.n32Data[nCurrentPropIndex] := nHoldVacuumVial;
+nCurrentPropIndex := nCurrentPropIndex + 1;
+refCmdData.n32Data[nCurrentPropIndex] := nHoldVacuumSeptum;
+nCurrentPropIndex := nCurrentPropIndex + 1;
+refCmdData.n32Data[nCurrentPropIndex] := REAL_TO_DINT(rDockOffset);]]></ST>
+      </Implementation>
+    </Method>
+    <Method Name="M_GetValveNr" Id="{532ca410-f0b6-4fba-afdf-72a1e23a779a}">
+      <Declaration><![CDATA[METHOD PRIVATE M_GetValveNr : USINT
+VAR_INPUT
+	nChannel : USINT;
+END_VAR
+]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[IF nChannel = 1 THEN
+	M_GetValveNr := nValveNrVacuum;
+END_IF]]></ST>
+      </Implementation>
+    </Method>
+    <Method Name="M_SetAllProps" Id="{b05fa154-6159-4df0-a0c5-e0cf8b250d2b}">
+      <Declaration><![CDATA[METHOD M_SetAllProps : ERRORID
+VAR_INPUT
+	refCmdData : REFERENCE TO  ST_CmdData;
+END_VAR
+
+VAR
+	nPneuChannel : USINT;
+END_VAR]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[M_SetAllProps := SUPER^.M_SetAllProps(refCmdData);
+
+IF M_SetAllProps > 0 THEN
+	RETURN;
+END_IF
+
+nCurrentPropIndex := nCurrentPropIndex + 1;
+nSpecPropIndex := nCurrentPropIndex;
+nPneuChannel := DINT_TO_USINT(refCmdData.n32Data[nCurrentPropIndex]);
+IF NOT (nPneuChannel >= 0 AND nPneuChannel <= cNoOfPneuChannels) THEN
+	M_SetAllProps := E_ErrorIdObjMgmt.ERRORID_InvalidPneuChannel;
+	RETURN;	
+END_IF
+pPneuChannelVac := ADR(aFbPneuChannel[nPneuChannel]);
+
+nCurrentPropIndex := nCurrentPropIndex + 1;
+nValveNrVacuum := DINT_TO_USINT(refCmdData.n32Data[nCurrentPropIndex]);
+IF NOT (nValveNrVacuum > 0 AND nValveNrVacuum <= cNoOfValves) THEN
+	M_SetAllProps := E_ErrorIdObjMgmt.ERRORID_InvalidValveNumber;
+	RETURN;
+END_IF
+
+nCurrentPropIndex := nCurrentPropIndex + 1;
+nHoldVacuumVial := DINT_TO_INT(refCmdData.n32Data[nCurrentPropIndex]);
+
+nCurrentPropIndex := nCurrentPropIndex + 1;
+nHoldVacuumSeptum := DINT_TO_INT(refCmdData.n32Data[nCurrentPropIndex]);
+
+nCurrentPropIndex := nCurrentPropIndex + 1;
+rDockOffset := DINT_TO_REAL(refCmdData.n32Data[nCurrentPropIndex]);
+
+nNoOfProps := nCurrentPropIndex + 1;]]></ST>
+      </Implementation>
+    </Method>
+    <Method Name="M_SetSingleProp" Id="{a100353a-0fc8-437c-9c6b-5e51fd6094d6}">
+      <Declaration><![CDATA[METHOD M_SetSingleProp : ERRORID
+VAR_INPUT
+	refCmdData : REFERENCE TO  ST_CmdData;
+END_VAR
+
+VAR
+	nPneuChannel : USINT;
+END_VAR]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[IF nSpecPropIndex = refCmdData.aHeader[1] THEN	//PneuChannelVacuum
+	nPneuChannel := DINT_TO_USINT(refCmdData.n32Data[0]);
+	IF NOT (nPneuChannel > 0 AND nPneuChannel <= cNoOfPneuChannels) THEN
+		M_SetSingleProp := E_ErrorIdObjMgmt.ERRORID_InvalidPneuChannel;
+		RETURN;	
+	END_IF
+	pPneuChannelVac := ADR(aFbPneuChannel[nPneuChannel]);
+ELSIF nSpecPropIndex + 1 = refCmdData.aHeader[1] THEN	//ValveNrVacuum
+	IF refCmdData.n32Data[0] >= 0 AND refCmdData.n32Data[0] <= cNoOfValves THEN
+		nValveNrVacuum := DINT_TO_USINT(refCmdData.n32Data[0]);
+	ELSE
+		M_SetSingleProp := E_ErrorIdObjMgmt.ERRORID_InvalidValveNumber;
+	END_IF
+ELSIF nSpecPropIndex + 2 = refCmdData.aHeader[1] THEN	//HoldVacVial
+	nHoldVacuumVial := DINT_TO_INT(refCmdData.n32Data[0]);
+ELSIF nSpecPropIndex + 3 = refCmdData.aHeader[1] THEN	//HoldVacSeptum
+	nHoldVacuumSeptum := DINT_TO_INT(refCmdData.n32Data[0]);
+ELSIF nSpecPropIndex + 4 = refCmdData.aHeader[1] THEN	//DockOffset
+	rDockOffset := DINT_TO_REAL(refCmdData.n32Data[0]);
+ELSE
+	M_SetSingleProp := SUPER^.M_SetSingleProp(refCmdData);
+END_IF]]></ST>
+      </Implementation>
+    </Method>
+    <Property Name="P_nHoldVacSept" Id="{d2bca821-482c-4431-a8f7-99f51f6c3fed}">
+      <Declaration><![CDATA[PROPERTY P_nHoldVacSept : INT]]></Declaration>
+      <Get Name="Get" Id="{1836db2e-0d7f-4449-ab6a-8db80585349a}">
+        <Declaration><![CDATA[VAR
+END_VAR
+]]></Declaration>
+        <Implementation>
+          <ST><![CDATA[P_nHoldVacSept := nHoldVacuumSeptum;
+]]></ST>
+        </Implementation>
+      </Get>
+    </Property>
+    <Property Name="P_nHoldVacVial" Id="{e4adb27f-74a4-4f9d-9c8c-716a267ad43a}">
+      <Declaration><![CDATA[PROPERTY P_nHoldVacVial : INT]]></Declaration>
+      <Get Name="Get" Id="{e22aea68-2e1d-4bc2-99c2-24f1a4580091}">
+        <Declaration><![CDATA[VAR
+END_VAR
+]]></Declaration>
+        <Implementation>
+          <ST><![CDATA[P_nHoldVacVial := nHoldVacuumVial;
+]]></ST>
+        </Implementation>
+      </Get>
+    </Property>
+    <Property Name="P_rDockOffset" Id="{777ed1fc-b583-4413-8bc1-10b7f22d7803}">
+      <Declaration><![CDATA[PROPERTY P_rDockOffset : REAL]]></Declaration>
+      <Get Name="Get" Id="{42cd27ed-b8b7-4cf7-ad6c-e6f2af0b0d43}">
+        <Declaration><![CDATA[VAR
+END_VAR
+]]></Declaration>
+        <Implementation>
+          <ST><![CDATA[P_rDockOffset := rDockOffset;]]></ST>
+        </Implementation>
+      </Get>
+    </Property>
+    <LineIds Name="FB_VacuumHandler">
+      <LineId Id="3" Count="1" />
+      <LineId Id="91" Count="12" />
+      <LineId Id="15" Count="17" />
+      <LineId Id="106" Count="1" />
+      <LineId Id="36" Count="0" />
+      <LineId Id="108" Count="0" />
+      <LineId Id="37" Count="8" />
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="FB_VacuumHandler.A_Reset">
+      <LineId Id="2" Count="4" />
+      <LineId Id="1" Count="0" />
+    </LineIds>
+    <LineIds Name="FB_VacuumHandler.A_Stop">
+      <LineId Id="2" Count="3" />
+      <LineId Id="1" Count="0" />
+    </LineIds>
+    <LineIds Name="FB_VacuumHandler.A_SwitchPress">
+      <LineId Id="2" Count="27" />
+      <LineId Id="1" Count="0" />
+    </LineIds>
+    <LineIds Name="FB_VacuumHandler.FB_init">
+      <LineId Id="7" Count="1" />
+    </LineIds>
+    <LineIds Name="FB_VacuumHandler.M_AddChild">
+      <LineId Id="19" Count="0" />
+      <LineId Id="8" Count="1" />
+      <LineId Id="22" Count="1" />
+      <LineId Id="17" Count="1" />
+      <LineId Id="15" Count="0" />
+      <LineId Id="11" Count="0" />
+      <LineId Id="13" Count="0" />
+      <LineId Id="12" Count="0" />
+      <LineId Id="5" Count="0" />
+    </LineIds>
+    <LineIds Name="FB_VacuumHandler.M_CancelAction">
+      <LineId Id="3" Count="0" />
+      <LineId Id="23" Count="0" />
+      <LineId Id="18" Count="4" />
+      <LineId Id="8" Count="5" />
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="FB_VacuumHandler.M_CheckAction">
+      <LineId Id="113" Count="0" />
+      <LineId Id="118" Count="0" />
+      <LineId Id="121" Count="94" />
+      <LineId Id="120" Count="0" />
+      <LineId Id="116" Count="0" />
+      <LineId Id="119" Count="0" />
+      <LineId Id="117" Count="0" />
+    </LineIds>
+    <LineIds Name="FB_VacuumHandler.M_ClearAllProps">
+      <LineId Id="11" Count="0" />
+      <LineId Id="6" Count="0" />
+    </LineIds>
+    <LineIds Name="FB_VacuumHandler.M_ExeAction">
+      <LineId Id="3" Count="7" />
+      <LineId Id="78" Count="17" />
+      <LineId Id="38" Count="29" />
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="FB_VacuumHandler.M_GetAllProps">
+      <LineId Id="3" Count="2" />
+      <LineId Id="22" Count="3" />
+      <LineId Id="6" Count="5" />
+      <LineId Id="16" Count="1" />
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="FB_VacuumHandler.M_GetValveNr">
+      <LineId Id="3" Count="1" />
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="FB_VacuumHandler.M_SetAllProps">
+      <LineId Id="3" Count="8" />
+      <LineId Id="45" Count="3" />
+      <LineId Id="15" Count="10" />
+      <LineId Id="36" Count="0" />
+      <LineId Id="26" Count="0" />
+      <LineId Id="33" Count="0" />
+      <LineId Id="37" Count="0" />
+      <LineId Id="34" Count="1" />
+      <LineId Id="28" Count="0" />
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="FB_VacuumHandler.M_SetSingleProp">
+      <LineId Id="78" Count="0" />
+      <LineId Id="120" Count="0" />
+      <LineId Id="124" Count="3" />
+      <LineId Id="121" Count="0" />
+      <LineId Id="56" Count="0" />
+      <LineId Id="58" Count="1" />
+      <LineId Id="86" Count="0" />
+      <LineId Id="62" Count="0" />
+      <LineId Id="101" Count="0" />
+      <LineId Id="103" Count="0" />
+      <LineId Id="102" Count="0" />
+      <LineId Id="104" Count="0" />
+      <LineId Id="106" Count="1" />
+      <LineId Id="105" Count="0" />
+      <LineId Id="47" Count="0" />
+      <LineId Id="45" Count="0" />
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="FB_VacuumHandler.P_nHoldVacSept.Get">
+      <LineId Id="3" Count="0" />
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="FB_VacuumHandler.P_nHoldVacVial.Get">
+      <LineId Id="3" Count="0" />
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="FB_VacuumHandler.P_rDockOffset.Get">
+      <LineId Id="2" Count="0" />
+    </LineIds>
+  </POU>
+</TcPlcObject>

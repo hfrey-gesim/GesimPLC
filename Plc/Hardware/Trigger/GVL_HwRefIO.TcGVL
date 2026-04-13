@@ -1,0 +1,14 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<TcPlcObject Version="1.1.0.1">
+  <GVL Name="GVL_HwRefIO" Id="{9a08484d-a6da-4677-8455-97be885dec6a}">
+    <Declaration><![CDATA[VAR_GLOBAL
+	bTrigger1 AT %Q*: BOOL; //genutzt von Exposer oder StampSupport
+	//bTrigger1 wird seid V2.0.17.27 nicht mehr genutzt
+	//Es gibt dafür in GVL_Hardware: 
+	//fbPlcTriggerOut	: FB_TriggerOut;
+	//fbMultiZDigiOut 	: FB_TriggerOut;
+	//fbMultiZPWM		: FB_MultiZPWM;
+	bTrigger2 AT %Q*: BOOL;	//genutzt von M150/M151 (GCode)
+END_VAR]]></Declaration>
+  </GVL>
+</TcPlcObject>

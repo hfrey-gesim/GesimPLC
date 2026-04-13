@@ -1,0 +1,15 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<TcPlcObject Version="1.1.0.1" ProductVersion="3.1.0.25">
+  <DUT Name="ST_ZGPIO_AnaIn" Id="{75f7e5e9-9984-4cf9-9eb2-5ac8c23cd3c5}">
+    <Declaration><![CDATA[TYPE ST_ZGPIO_AnaIn :
+STRUCT
+	nValue		AT %I* : INT;	//Pdo
+	nTrigger	: USINT;		//Sdo
+	nLimit		: INT;			//Sdo
+	nDelta		: INT;			//Sdo
+END_STRUCT
+END_TYPE
+]]></Declaration>
+    <ObjectProperties />
+  </DUT>
+</TcPlcObject>

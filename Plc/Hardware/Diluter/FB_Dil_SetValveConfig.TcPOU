@@ -1,0 +1,109 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<TcPlcObject Version="1.1.0.1" ProductVersion="3.1.4024.9">
+  <POU Name="FB_Dil_SetValveConfig" Id="{264528c4-5071-48be-a466-57fa25d76f4a}" SpecialFunc="None">
+    <Declaration><![CDATA[FUNCTION_BLOCK FB_Dil_SetValveConfig
+VAR_INPUT
+	bExecute	: BOOL;
+	eValveType  : E_DilValveType;
+END_VAR
+VAR_OUTPUT
+	bBusy		: BOOL;
+	bError		: BOOL;
+	nErrorId	: ERRORID;
+END_VAR
+VAR
+	nState		: USINT;
+	sSendData	: STRING(100);
+	timer		: TON;
+END_VAR
+VAR_IN_OUT
+	DilSendCmd 	: FB_Dil_SendCmd;
+	pDilRef		: POINTER TO FB_HwRefDiluter;
+END_VAR
+]]></Declaration>
+    <Implementation>
+      <ST><![CDATA[IF pDilRef = 0 THEN
+	bError := TRUE;
+	RETURN;	
+END_IF
+
+IF bExecute THEN
+	CASE nState OF
+		0:	//Write valve config
+			bBusy := TRUE;
+			sSendData := CONCAT(USINT_TO_STRING(pDilRef^.nChannel),'U');
+			sSendData := CONCAT(sSendData,USINT_TO_STRING(eValveType));
+			sSendData := CONCAT(sSendData,'R');
+			DilSendCmd(bExecute:= TRUE, bExpectReply:= TRUE, sSendData:= sSendData);
+			
+			IF NOT DilSendCmd.bBusy THEN
+				IF DilSendCmd.bError THEN
+					bBusy := FALSE;
+					bError := TRUE;
+					nErrorId := DilSendCmd.nErrorId;
+				ELSE
+					nState := 1;
+				END_IF
+				DilSendCmd(bExecute:= FALSE);
+			END_IF
+		
+		1:	//Reset
+			sSendData := CONCAT(USINT_TO_STRING(pDilRef^.nChannel),'!R');
+			DilSendCmd(bExecute:= TRUE, bExpectReply:= FALSE, sSendData:= sSendData);
+			IF NOT DilSendCmd.bBusy THEN
+				IF DilSendCmd.bError THEN
+					bBusy := FALSE;
+					bError := TRUE;
+					nErrorId := DilSendCmd.nErrorId;
+				ELSE
+					nState := 2;
+				END_IF
+				DilSendCmd(bExecute:= FALSE);
+			END_IF
+		
+		2:	//200ms warten, bis Diluter wieder bereit
+			timer(IN:= TRUE, PT:=T#200MS);
+			IF timer.Q THEN
+				timer(IN:= FALSE);
+				nState := 80;
+				bBusy := FALSE;
+			END_IF
+	END_CASE
+ELSE
+	DilSendCmd(bExecute:= FALSE);
+	bBusy := FALSE;
+	bError := FALSE;
+	nErrorId := 0;
+	nState := 0;
+END_IF]]></ST>
+    </Implementation>
+    <LineIds Name="FB_Dil_SetValveConfig">
+      <LineId Id="3" Count="5" />
+      <LineId Id="55" Count="1" />
+      <LineId Id="62" Count="7" />
+      <LineId Id="105" Count="0" />
+      <LineId Id="70" Count="1" />
+      <LineId Id="93" Count="1" />
+      <LineId Id="72" Count="1" />
+      <LineId Id="58" Count="0" />
+      <LineId Id="75" Count="0" />
+      <LineId Id="59" Count="0" />
+      <LineId Id="80" Count="0" />
+      <LineId Id="83" Count="0" />
+      <LineId Id="85" Count="1" />
+      <LineId Id="106" Count="0" />
+      <LineId Id="87" Count="1" />
+      <LineId Id="95" Count="1" />
+      <LineId Id="89" Count="1" />
+      <LineId Id="92" Count="0" />
+      <LineId Id="76" Count="1" />
+      <LineId Id="98" Count="3" />
+      <LineId Id="104" Count="0" />
+      <LineId Id="102" Count="0" />
+      <LineId Id="57" Count="0" />
+      <LineId Id="24" Count="4" />
+      <LineId Id="52" Count="0" />
+      <LineId Id="2" Count="0" />
+    </LineIds>
+  </POU>
+</TcPlcObject>

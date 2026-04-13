@@ -1,0 +1,16 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<TcPlcObject Version="1.1.0.1" ProductVersion="3.1.4020.6">
+  <DUT Name="E_StepState" Id="{e353e463-6afd-45a0-94ef-d7e80a91d8e8}">
+    <Declaration><![CDATA[TYPE E_StepState :
+(
+	STEPSTATUS_Idle := 0,
+	STEPSTATUS_InQueue,
+	STEPSTATUS_Active,
+	STEPSTATUS_Pause,
+	STEPSTATUS_Ready,
+	STEPSTATUS_Error
+)USINT;
+END_TYPE
+]]></Declaration>
+  </DUT>
+</TcPlcObject>

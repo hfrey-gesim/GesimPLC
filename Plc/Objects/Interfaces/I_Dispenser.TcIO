@@ -1,0 +1,49 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<TcPlcObject Version="1.1.0.1" ProductVersion="3.1.4024.11">
+  <Itf Name="I_Dispenser" Id="{e792d365-6ec9-4483-ab01-542766a2614d}">
+    <Declaration><![CDATA[INTERFACE I_Dispenser EXTENDS I_Device
+]]></Declaration>
+    <Method Name="M_DispenserPrepare" Id="{513c230f-c455-4cb0-a684-ec85589147e1}">
+      <Declaration><![CDATA[METHOD M_DispenserPrepare : ERRORID
+VAR_INPUT
+END_VAR
+]]></Declaration>
+    </Method>
+    <Method Name="M_DispenserStart" Id="{b73a2d85-93a7-4b09-bfa5-5e32f6a99a4b}">
+      <Declaration><![CDATA[METHOD M_DispenserStart : ERRORID
+VAR_INPUT
+END_VAR
+]]></Declaration>
+    </Method>
+    <Method Name="M_DispenserStop" Id="{1e1f3098-e0ea-4c4c-b669-e1b7b783e740}">
+      <Declaration><![CDATA[METHOD M_DispenserStop : ERRORID
+VAR_INPUT
+END_VAR
+]]></Declaration>
+    </Method>
+    <Property Name="P_bError" Id="{5a716da3-ef8d-4d73-a784-b0d831ea7693}">
+      <Declaration><![CDATA[PROPERTY P_bError : BOOL]]></Declaration>
+      <Get Name="Get" Id="{d24a57e0-89e5-40ea-a1de-9e2a54789d30}">
+        <Declaration><![CDATA[]]></Declaration>
+      </Get>
+    </Property>
+    <Property Name="P_eDispenserState" Id="{832cec29-8b9d-4f39-b700-c27fee7dde7c}">
+      <Declaration><![CDATA[PROPERTY P_eDispenserState : E_DispenserState]]></Declaration>
+      <Get Name="Get" Id="{57b169fb-ca46-4612-9c53-0cfe4d964bd9}">
+        <Declaration><![CDATA[]]></Declaration>
+      </Get>
+    </Property>
+    <Property Name="P_nErrorId" Id="{f1ab7aa2-2498-4e43-8962-04c7668a763f}">
+      <Declaration><![CDATA[PROPERTY P_nErrorId : ERRORID]]></Declaration>
+      <Get Name="Get" Id="{37a8d1a1-e3b2-447e-9605-67a819e528d0}">
+        <Declaration><![CDATA[]]></Declaration>
+      </Get>
+    </Property>
+    <Property Name="P_pObject" Id="{222f6aa0-ebe0-4cf4-83b0-6364246ef50a}">
+      <Declaration><![CDATA[PROPERTY P_pObject : POINTER TO FB_Object]]></Declaration>
+      <Get Name="Get" Id="{288b951d-6cc7-4a1e-bd77-21265119a435}">
+        <Declaration><![CDATA[]]></Declaration>
+      </Get>
+    </Property>
+  </Itf>
+</TcPlcObject>

@@ -1,0 +1,16 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<TcPlcObject Version="1.1.0.1" ProductVersion="3.1.4024.5">
+  <Task Name="GCodeTask" Id="{0c962932-bdbb-4adc-989c-452ef4937fe2}">
+    <!--CycleTime in micro seconds.-->
+    <CycleTime>2000</CycleTime>
+    <Priority>6</Priority>
+    <PouCall>
+      <Name>GCode</Name>
+    </PouCall>
+    <TaskFBGuid>{171b9674-d0a8-4688-94f6-0f154d2e0014}</TaskFBGuid>
+    <Fb_init>{7822df14-2e82-4959-bc80-826f80f08e29}</Fb_init>
+    <Fb_exit>{89ec56f7-db39-4921-8f77-29ca2daa382a}</Fb_exit>
+    <CycleUpdate>{508debab-989a-49c4-9323-86f39157f5ff}</CycleUpdate>
+    <PostCycleUpdate>{7879dbc2-5685-4f56-81fb-a4e010ac157e}</PostCycleUpdate>
+  </Task>
+</TcPlcObject>

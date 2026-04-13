@@ -1,0 +1,38 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<TcPlcObject Version="1.1.0.1" ProductVersion="3.1.4022.18">
+  <POU Name="F_GetChannelCodeTwin" Id="{2f03d461-58ee-48f5-b199-e79779a5951d}" SpecialFunc="None">
+    <Declaration><![CDATA[FUNCTION F_GetChannelCodeTwin : STRING[1]
+VAR_INPUT
+	nChannel1 : USINT;
+	nChannel2 : USINT;
+END_VAR
+VAR
+END_VAR
+]]></Declaration>
+    <Implementation>
+      <ST><![CDATA[IF nChannel1 = 1 AND nChannel2 = 2 OR nChannel1 = 2 AND nChannel2 = 1 THEN
+	F_GetChannelCodeTwin := 'A';
+ELSIF nChannel1 = 3 AND nChannel2 = 4 OR nChannel1 = 4 AND nChannel2 = 3 THEN
+	F_GetChannelCodeTwin := 'C';
+ELSIF nChannel1 = 5 AND nChannel2 = 6 OR nChannel1 = 6 AND nChannel2 = 5 THEN
+	F_GetChannelCodeTwin := 'E';
+ELSIF nChannel1 = 7 AND nChannel2 = 8 OR nChannel1 = 8 AND nChannel2 = 7 THEN
+	F_GetChannelCodeTwin := 'G';
+ELSIF nChannel1 = 9 AND nChannel2 = 10 OR nChannel1 = 10 AND nChannel2 = 9 THEN
+	F_GetChannelCodeTwin := 'I';
+ELSIF nChannel1 = 11 AND nChannel2 = 12 OR nChannel1 = 12 AND nChannel2 = 11 THEN
+	F_GetChannelCodeTwin := 'K';
+ELSIF nChannel1 = 13 AND nChannel2 = 14 OR nChannel1 = 14 AND nChannel2 = 13 THEN
+	F_GetChannelCodeTwin := 'M';
+ELSE //Andere Paarkombinationen gibt es nicht, da Diluter immer direkt nebeneinander liegen müssen.
+	F_GetChannelCodeTwin := '_'; //Das ist der Code für alle Diluter
+	
+END_IF]]></ST>
+    </Implementation>
+    <LineIds Name="F_GetChannelCodeTwin">
+      <LineId Id="3" Count="15" />
+      <LineId Id="26" Count="0" />
+      <LineId Id="2" Count="0" />
+    </LineIds>
+  </POU>
+</TcPlcObject>

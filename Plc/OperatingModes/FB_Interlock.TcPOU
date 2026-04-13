@@ -1,0 +1,166 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<TcPlcObject Version="1.1.0.1" ProductVersion="3.1.0.25">
+  <POU Name="FB_Interlock" Id="{65bccfce-9836-48f6-b40b-a8289db043d9}">
+    <Declaration><![CDATA[FUNCTION_BLOCK FB_Interlock
+VAR_INPUT
+	bExecute 		: BOOL;
+	eOpClCtrl 		: E_OpClCtrl;
+END_VAR
+VAR_OUTPUT
+	bBusy			: BOOL;
+	bError 			: BOOL;
+	nErrorId 		: ERRORID;
+	eCurrentState 	: E_OpClState;
+END_VAR
+VAR
+	nState 			: USINT;
+	nStateA_Action 	: USINT;
+	i 				: USINT;
+	timeout			: TON;
+END_VAR
+]]></Declaration>
+    <Implementation>
+      <ST><![CDATA[IF bExecute THEN
+	IF nState = 0 THEN
+		IF eOpClCtrl = E_OpClCtrl.Open THEN
+			nState := 1;
+		ELSIF eOpClCtrl = E_OpClCtrl.Close THEN
+			nState := 2;
+		ELSE
+			bError := TRUE;
+			nErrorId := E_ErrorIdCmd.ERRORID_InvalidCtrl;
+			RETURN;		
+		END_IF
+		bBusy := TRUE;
+	END_IF
+	
+	IF nState = 1 THEN
+		A_Lock();
+	ELSIF nState = 2 THEN
+		A_Unlock();
+	END_IF
+	
+	IF nStateA_Action >= 80 THEN
+		nState := 80;
+		IF nStateA_Action >= 99 THEN
+			bError := TRUE;
+			nState := 99;
+		END_IF
+		bBusy := FALSE;
+	END_IF
+ELSE
+	bError := FALSE;
+	nErrorId := 0;
+	nState := 0;
+	timeout(IN:= FALSE);
+END_IF]]></ST>
+    </Implementation>
+    <Action Name="A_Lock" Id="{79959df7-5a1c-4c09-99d6-2d0cc52041f6}">
+      <Implementation>
+        <ST><![CDATA[CASE nStateA_Action OF
+	0:	//Lock
+		fbInterlockRef.M_Lock();
+		timeout(IN:= TRUE, PT:= T#200MS);
+		nStateA_Action := 1;
+	
+	1:	//Locked?
+		timeout();
+		IF timeout.Q THEN
+			{warning'Implement ErrorId'}
+			nStateA_Action := 99;
+		ELSE
+			IF fbInterlockRef.P_bLocked THEN
+				timeout(IN:= FALSE);
+				nStateA_Action := 80;
+				//Achsen wieder einschalten
+				FOR i:= 1 TO cMaxMzHeads BY 1 DO
+					IF aStXYDrives[i].iXDrive.P_bHomed THEN
+						aStXYDrives[i].iXDrive.M_PowerOn();
+						nStateA_Action := 2;
+					END_IF
+					IF aStXYDrives[i].iYDrive.P_bHomed THEN
+						aStXYDrives[i].iYDrive.M_PowerOn();
+						nStateA_Action := 2;
+					END_IF
+				END_FOR
+			END_IF
+		END_IF		
+	
+	2:	//Achsen EIN?
+		timeout(IN:= TRUE, PT:= T#2S);
+		IF timeout.Q THEN
+			{warning'Implement ErrorId'}
+			nStateA_Action := 99;
+			RETURN;
+		END_IF
+		nStateA_Action := 80;
+		FOR i:= 1 TO cMaxMzHeads BY 1 DO
+			IF aStXYDrives[i].iXDrive.P_bHomed THEN
+				IF aStXYDrives[i].iXDrive.P_bBusy THEN
+					nStateA_Action := 2;
+				END_IF
+			END_IF
+
+			IF aStXYDrives[i].iYDrive.P_bHomed THEN
+				IF aStXYDrives[i].iXDrive.P_bBusy THEN
+					nStateA_Action := 2;
+				END_IF
+			END_IF
+		END_FOR
+END_CASE]]></ST>
+      </Implementation>
+    </Action>
+    <Action Name="A_Unlock" Id="{80f88d89-2069-46f3-ade5-a1377ffd4d35}">
+      <Implementation>
+        <ST><![CDATA[CASE nStateA_Action OF
+	0:
+		//Hochspannungsmodul vorhanden? -> auschalten
+		
+		//Muss in sichere Position gefahren werden?
+		//Kann nur erfolgen, wenn die Motoren bereits initialisiert wurden
+		
+		//XY-Antriebe ausschalten
+		FOR i:= 1 TO cMaxMzHeads BY 1 DO
+			aStXYDrives[i].iXDrive.M_PowerOff();
+			aStXYDrives[i].iYDrive.M_PowerOff();
+		END_FOR
+
+	1:	//XY-Antriebe aus?
+		nStateA_Action := 2;
+		FOR i:= 1 TO cMaxMzHeads BY 1 DO
+			IF aStXYDrives[i].iXDrive.P_bBusy THEN
+				nStateA_Action := 1;
+				RETURN;
+			END_IF
+			
+			IF aStXYDrives[i].iYDrive.P_bBusy THEN
+				nStateA_Action := 1;
+				RETURN;
+			END_IF
+		END_FOR
+	
+	2:	//Unlock
+		fbInterlockRef.M_UnLock();
+		timeout(IN:= TRUE, PT:= T#200MS);
+		nStateA_Action := 3;
+	
+	3:	//Unlocked?
+		timeout();
+		IF timeout.Q THEN
+			{warning'Implement ErrorId'}
+			nStateA_Action := 99;
+		ELSE
+			IF NOT fbInterlockRef.P_bLocked THEN
+				nStateA_Action := 80;
+			END_IF
+		END_IF
+END_CASE
+
+
+
+]]></ST>
+      </Implementation>
+    </Action>
+    <ObjectProperties />
+  </POU>
+</TcPlcObject>

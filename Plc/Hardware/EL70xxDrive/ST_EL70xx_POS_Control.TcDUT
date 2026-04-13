@@ -1,0 +1,17 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<TcPlcObject Version="1.1.0.1" ProductVersion="3.1.4024.11">
+  <DUT Name="ST_EL70xx_POS_Control" Id="{2e357df4-b9dc-4fef-9bd3-abaabf6142f0}">
+    <Declaration><![CDATA[TYPE ST_EL70xx_POS_Control :
+STRUCT
+	Execute 		AT %Q* : BIT;
+	EmergencyStop 	AT %Q* : BIT;
+	TargetPosition	AT %Q* : DINT;
+	Velocity		AT %Q* : INT;
+	StartType		AT %Q* : E_EL70xx_StartType;
+	Acceleration	AT %Q* : UINT;
+	Deceleration	AT %Q* : UINT;
+END_STRUCT
+END_TYPE
+]]></Declaration>
+  </DUT>
+</TcPlcObject>

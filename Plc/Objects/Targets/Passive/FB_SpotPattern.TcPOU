@@ -1,0 +1,229 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<TcPlcObject Version="1.1.0.1" ProductVersion="3.1.4022.18">
+  <POU Name="FB_SpotPattern" Id="{3816633b-e0c1-48f5-a43f-c87b5c0ee35c}" SpecialFunc="None">
+    <Declaration><![CDATA[{attribute 'enable_dynamic_creation'}
+FUNCTION_BLOCK FB_SpotPattern EXTENDS FB_TargetBase
+VAR_INPUT
+END_VAR
+VAR_OUTPUT
+END_VAR
+VAR
+	nType			: USINT;		//0=TwoDimArray, 1=File
+	nCols			: USINT;		//Anzahl Spalten
+	nRows			: USINT;		//Anzahl Zeilen
+	rSpaceCols		: REAL;			//Abstand Spalten zueinander (Mitte Wells)
+	rSpaceRows		: REAL;			//Abstand Zeilen zueinander (Mitte Wells)
+	nCurrentCol		: UINT;			//Aktuelle Spalte (nur bei Type "Array")
+	nCurrentRow		: UINT;			//Aktuelle Zeile (nur bei Type "Array")
+	nCurrentPoint	: UINT;			//Aktueller Punkt (nur bei Type "File")
+END_VAR
+]]></Declaration>
+    <Implementation>
+      <ST><![CDATA[]]></ST>
+    </Implementation>
+    <Method Name="FB_init" Id="{d9267855-46f4-482a-8076-13c5b60b8724}">
+      <Declaration><![CDATA[METHOD FB_init : BOOL
+VAR_INPUT
+	bInitRetains : BOOL; // if TRUE, the retain variables are initialized (warm start / cold start)
+	bInCopyCode : BOOL;  // if TRUE, the instance afterwards gets moved into the copy code (online change)
+END_VAR
+]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[eObjectType := E_ObjectType.OBJECTTYPE_SpotPattern;
+eObjectGroup := E_ObjectGroup.OBJECTGROUP_Target;]]></ST>
+      </Implementation>
+    </Method>
+    <Method Name="M_AddChild" Id="{b0d72961-2bf3-4f21-8e81-f0768ab3bab4}">
+      <Declaration><![CDATA[METHOD M_AddChild : ERRORID
+VAR_INPUT
+	pObject : POINTER TO FB_Object;
+	nSlotNr	: UINT;
+	nIndex 	: INT;
+END_VAR
+]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[//Kann folgende Objekte aufnehmen:
+IF pObject > 0 THEN
+	IF pObject^.P_eObjectType = E_ObjectType.OBJECTTYPE_Point THEN
+		M_AddChild := SUPER^.M_AddChild(pObject,nSlotNr,nIndex);
+	ELSE
+		M_AddChild := E_ErrorIdObjMgmt.ERRORID_InvalidParentObject;
+	END_IF
+ELSE
+	M_AddChild := E_ErrorIdObjMgmt.ERRORID_InvalidParentObject;
+END_IF]]></ST>
+      </Implementation>
+    </Method>
+    <Method Name="M_GetAllProps" Id="{095be88a-f435-45ea-8e1d-de49bbe20e3e}">
+      <Declaration><![CDATA[METHOD M_GetAllProps : ERRORID
+VAR_INPUT
+	refCmdData : REFERENCE TO  ST_CmdData;
+END_VAR
+]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[SUPER^.M_GetAllProps(refCmdData);
+
+nCurrentPropIndex := nCurrentPropIndex + 1;
+refCmdData.n32Data[nCurrentPropIndex] := nType;
+nCurrentPropIndex := nCurrentPropIndex + 1;
+refCmdData.n32Data[nCurrentPropIndex] := nCols;
+nCurrentPropIndex := nCurrentPropIndex + 1;
+refCmdData.n32Data[nCurrentPropIndex] := nRows;
+nCurrentPropIndex := nCurrentPropIndex + 1;
+refCmdData.n32Data[nCurrentPropIndex] := REAL_TO_DINT(rSpaceCols);
+nCurrentPropIndex := nCurrentPropIndex + 1;
+refCmdData.n32Data[nCurrentPropIndex] := REAL_TO_DINT(rSpaceRows);]]></ST>
+      </Implementation>
+    </Method>
+    <Method Name="M_SetAllProps" Id="{3bd97e4f-4802-476f-99e0-569edb0a1a30}">
+      <Declaration><![CDATA[METHOD M_SetAllProps : ERRORID
+VAR_INPUT
+	refCmdData : REFERENCE TO  ST_CmdData;
+END_VAR
+]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[M_SetAllProps := SUPER^.M_SetAllProps(refCmdData);
+
+IF M_SetAllProps > 0 THEN
+	RETURN;
+END_IF
+
+nCurrentPropIndex := nCurrentPropIndex + 1;
+nType := DINT_TO_USINT(refCmdData.n32Data[nCurrentPropIndex]);
+nCurrentPropIndex := nCurrentPropIndex + 1;
+nCols := DINT_TO_USINT(refCmdData.n32Data[nCurrentPropIndex]);
+nCurrentPropIndex := nCurrentPropIndex + 1; 
+nRows := DINT_TO_USINT(refCmdData.n32Data[nCurrentPropIndex]);
+nCurrentPropIndex := nCurrentPropIndex + 1;
+rSpaceCols := DINT_TO_REAL(refCmdData.n32Data[nCurrentPropIndex]);
+nCurrentPropIndex := nCurrentPropIndex + 1;
+rSpaceRows := DINT_TO_REAL(refCmdData.n32Data[nCurrentPropIndex]);
+
+nNoOfProps := nCurrentPropIndex + 1;]]></ST>
+      </Implementation>
+    </Method>
+    <Method Name="M_SetNextCol" Id="{ff8019d9-b767-4eef-8c7d-21f7cf6bed52}">
+      <Declaration><![CDATA[METHOD M_SetNextCol : BOOL
+VAR_INPUT
+END_VAR
+]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[nCurrentCol := nCurrentCol + 1;
+IF nCurrentCol > nCols THEN //Spaltenumbruch
+	nCurrentCol := 1;
+	M_SetNextCol := TRUE;
+END_IF]]></ST>
+      </Implementation>
+    </Method>
+    <Method Name="M_SetNextRow" Id="{87d06657-9565-4f1b-b511-f482c4fbc52f}">
+      <Declaration><![CDATA[METHOD M_SetNextRow : BOOL
+VAR_INPUT
+END_VAR
+]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[nCurrentRow := nCurrentRow + 1;
+IF nCurrentRow > nRows THEN //Zeilenumbruch
+	nCurrentRow := 1;
+	M_SetNextRow := TRUE;
+END_IF]]></ST>
+      </Implementation>
+    </Method>
+    <Method Name="M_SetSingleProp" Id="{cb499cfb-b7f7-4f37-b63a-b9f8397d22cc}">
+      <Declaration><![CDATA[METHOD M_SetSingleProp : ERRORID
+VAR_INPUT
+	refCmdData : REFERENCE TO  ST_CmdData;
+END_VAR
+]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[//Properties Nr kleiner 9 sind Basisproperties
+//Dort wird separat auf ihr Gültigkeit geprüft
+IF refCmdData.aHeader[1] < 9 THEN	//Property-Nr
+	//Basisproperty -> Methode in BasisFb aufrufen
+	M_SetSingleProp := SUPER^.M_SetSingleProp(refCmdData);
+ELSE	//Specialproperty (ab 9)
+	CASE refCmdData.aHeader[1] OF
+		9:	nType := DINT_TO_USINT(refCmdData.n32Data[0]);
+		
+		10:	nCols := DINT_TO_USINT(refCmdData.n32Data[0]);
+
+		11:	nRows := DINT_TO_USINT(refCmdData.n32Data[0]);
+
+		12:	rSpaceCols := DINT_TO_REAL(refCmdData.n32Data[0]);
+		
+		13:	rSpaceRows := DINT_TO_REAL(refCmdData.n32Data[0]);
+		
+		ELSE
+			//Ungültige Property-Nr
+			M_SetSingleProp := E_ErrorIdCmd.ERRORID_InvalidProperty;
+	END_CASE
+END_IF]]></ST>
+      </Implementation>
+    </Method>
+    <Property Name="P_nCols" Id="{0b8f142d-4764-44d9-969e-25494fdc6835}">
+      <Declaration><![CDATA[PROPERTY P_nCols : USINT]]></Declaration>
+      <Get Name="Get" Id="{326bcff1-96e7-46a1-ba88-bf69d1d74661}">
+        <Declaration><![CDATA[VAR
+END_VAR
+]]></Declaration>
+        <Implementation>
+          <ST><![CDATA[P_nCols := nCols;]]></ST>
+        </Implementation>
+      </Get>
+    </Property>
+    <Property Name="P_nRows" Id="{0afdb209-41a0-4014-8df1-b8b3e6f3d13e}">
+      <Declaration><![CDATA[PROPERTY P_nRows : USINT]]></Declaration>
+      <Get Name="Get" Id="{008968be-ea6a-472c-bee6-d0ea02d77a3d}">
+        <Declaration><![CDATA[VAR
+END_VAR
+]]></Declaration>
+        <Implementation>
+          <ST><![CDATA[P_nRows := nRows;]]></ST>
+        </Implementation>
+      </Get>
+    </Property>
+    <LineIds Name="FB_SpotPattern">
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="FB_SpotPattern.FB_init">
+      <LineId Id="7" Count="1" />
+    </LineIds>
+    <LineIds Name="FB_SpotPattern.M_AddChild">
+      <LineId Id="19" Count="0" />
+      <LineId Id="9" Count="0" />
+      <LineId Id="22" Count="0" />
+      <LineId Id="20" Count="0" />
+      <LineId Id="18" Count="0" />
+      <LineId Id="15" Count="0" />
+      <LineId Id="11" Count="0" />
+      <LineId Id="13" Count="0" />
+      <LineId Id="12" Count="0" />
+      <LineId Id="5" Count="0" />
+    </LineIds>
+    <LineIds Name="FB_SpotPattern.M_GetAllProps">
+      <LineId Id="3" Count="10" />
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="FB_SpotPattern.M_SetAllProps">
+      <LineId Id="3" Count="16" />
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="FB_SpotPattern.M_SetNextCol">
+      <LineId Id="3" Count="3" />
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="FB_SpotPattern.M_SetNextRow">
+      <LineId Id="3" Count="3" />
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="FB_SpotPattern.M_SetSingleProp">
+      <LineId Id="3" Count="20" />
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="FB_SpotPattern.P_nCols.Get">
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="FB_SpotPattern.P_nRows.Get">
+      <LineId Id="2" Count="0" />
+    </LineIds>
+  </POU>
+</TcPlcObject>

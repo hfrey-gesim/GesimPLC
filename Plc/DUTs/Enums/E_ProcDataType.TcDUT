@@ -1,0 +1,18 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<TcPlcObject Version="1.1.0.1" ProductVersion="3.1.4020.6">
+  <DUT Name="E_ProcDataType" Id="{6a727a3e-5b22-429a-a1c8-9491fe9deed8}">
+    <Declaration><![CDATA[TYPE E_ProcDataType :
+(
+	PROCDATATYPE_Temp1 := 0,
+	PROCDATATYPE_Temp2 := 1,
+	PROCDATATYPE_Press1 := 2,
+	PROCDATATYPE_Press2 := 3,
+	PROCDATATYPE_Voltage1 := 4,
+	PROCDATATYPE_Voltage2 := 5,
+	PROCDATATYPE_Current1 := 6,
+	PROCDATATYPE_Current2 := 7
+)USINT;
+END_TYPE
+]]></Declaration>
+  </DUT>
+</TcPlcObject>

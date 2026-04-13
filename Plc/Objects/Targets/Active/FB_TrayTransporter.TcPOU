@@ -1,0 +1,1785 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<TcPlcObject Version="1.1.0.1" ProductVersion="3.1.4024.11">
+  <POU Name="FB_TrayTransporter" Id="{4d66d362-38df-4053-9cc9-ed0171414b92}" SpecialFunc="None">
+    <Declaration><![CDATA[FUNCTION_BLOCK FB_TrayTransporter EXTENDS FB_ActiveTarget IMPLEMENTS I_SlotTarget
+
+VAR
+	fbSlotList			: FB_SlotList;
+	pSlot				: POINTER TO FB_Slot;
+	nNumberOfSlots		: UINT;
+	nFirstSlotPropIndex	: UINT;	//erster Index für Slots (benötigt in M_SetSingleProps)
+	nLastSlotPropIndex	: UINT;	//letzte Index für Slots (benötigt in M_SetSingleProps)
+	
+	pTraySlot			: POINTER TO FB_Slot;
+	
+	nTemp				: DINT;
+
+	//Hardware-Verküpfung
+	pSliderRef			: POINTER TO FB_HwRefNanotecPD;
+	pDrivingPinRefLeft	: POINTER TO FB_HwRefTMCM1140;
+	pDrivingPinRefRight	: POINTER TO FB_HwRefTMCM1140;
+	pTrayLock			: POINTER TO FB_HwRefTrayLock;
+	bReadyFlagLeft		AT %I* : BOOL;
+	bReadyFlagRight		AT %I* : BOOL;
+	
+	//Spec-Properties
+	nOffsetLeftDrivingPin	: DINT;
+	nOffsetRightDrivingPin	: DINT;
+	nDrivingPinThickness	: DINT;
+	nTransferPosLeft		: DINT;
+	nTransferPosRight		: DINT;
+	nSafePosLeft			: DINT;
+	nSafePosRight			: DINT;
+	nTrayLength				: DINT;
+	nHollowDistance			: DINT;
+	nHollowWidth			: DINT;
+	
+	//****************************************Aktionvariablen****************************************************
+	
+	//Action: "Init"
+	fbSliderPower 			: FB_NanotecPD_Power;
+	fbDrivingPinLeftPower 	: FB_TMCM1140_Power;
+	fbDrivingPinRightPower 	: FB_TMCM1140_Power;
+	fbSliderHome			: FB_NanotecPD_Home;
+	fbDrivingPinLeftHome	: FB_TMCM1140_Home;
+	fbDrivingPinRightHome	: FB_TMCM1140_Home;
+	
+	//Action: "MoveTrayTransporter"
+	bMoveSlider			: BOOL;
+	fbMoveSlider 		: FB_NanotecPD_Move;
+	nStateA_MoveSlider 	: USINT;
+	
+	nMoveSliderPosition	: DINT;
+	nMoveSliderSpeed	: DINT;
+	
+	//Action: "TurnDrivingPin"
+	bTurnDrivingPin			: BOOL;
+	nStateA_TurnDrivingPin	: USINT;
+	eTurnDrivingPinSel		: E_DrivingPinSelection;
+	eTurnDrivingPinCtrl		: E_DrivingPinCtrl;
+	fbTurnDrivingPinLeft	: FB_TMCM1140_Move;
+	fbTurnDrivingPinRight	: FB_TMCM1140_Move;
+	bReHomingLeftPin		: BOOL;
+	bReHomingRightPin		: BOOL;
+	
+	//Action: "LockUnlock"
+	bLockUnlock				: BOOL;
+	nStateA_LockUnlock		: USINT;
+	eLockCtrl				: E_LockCtrl;
+	fbTrayLockCtrl			: FB_HwTrayLockControl;
+
+END_VAR
+]]></Declaration>
+    <Implementation>
+      <ST><![CDATA[IF bInitFB THEN
+	bInitFB := FALSE;
+	F_CreateLinkedListHnd(ADR(aNodes), SIZEOF(aNodes), hList);
+	stError.ObjectId := nObjectID;
+	stError.HardwareGrp := E_HardwareGrp.Nothing;
+	stError.POU := E_POU.POU_FB_TrayTransporter;
+END_IF
+
+CASE eCurrentState OF
+	E_MachineState.MACHINESTATE_Active:
+		IF bInit THEN
+			A_Init();
+			IF nStateA_Init >= 80 THEN
+				bIsInit := TRUE;
+				IF nStateA_Init >= 99 THEN
+					bError := TRUE;
+					bIsInit := FALSE;
+				END_IF
+				bInit := FALSE;
+				nStateA_Init := 0;
+				M_RemoveListEntry(nSearchValue:= E_Action.ACTION_Init);
+			END_IF
+		END_IF
+		
+		IF bMoveSlider THEN
+			A_MoveSlider();
+			IF nStateA_MoveSlider >= 80 THEN
+				IF bStop THEN
+					bCanceled := TRUE;
+				END_IF
+				IF nStateA_MoveSlider >= 99 THEN
+					bError := TRUE;
+				END_IF
+				bMoveSlider := FALSE;
+				nStateA_MoveSlider := 0;
+				M_RemoveListEntry(nSearchValue:= E_Action.ACTION_MoveTrayTransporter);
+			END_IF
+		END_IF
+		
+		IF bTurnDrivingPin THEN
+			A_TurnDrivingPin();
+			IF nStateA_TurnDrivingPin >= 80 THEN
+				IF bStop THEN
+					bCanceled := TRUE;
+				END_IF
+				IF nStateA_TurnDrivingPin >= 99 THEN
+					bError := TRUE;
+				END_IF
+				bTurnDrivingPin := FALSE;
+				nStateA_TurnDrivingPin := 0;
+				M_RemoveListEntry(nSearchValue:= E_Action.ACTION_TurnDrivingPin);
+			END_IF
+		END_IF
+		
+		IF bLockUnlock THEN
+			A_LockUnlock();
+			IF nStateA_LockUnlock >= 80 THEN
+				IF bStop THEN
+					bCanceled := TRUE;
+				END_IF
+				IF nStateA_LockUnlock >= 99 THEN
+					bError := TRUE;
+				END_IF
+				bLockUnlock := FALSE;
+				nStateA_LockUnlock := 0;
+				M_RemoveListEntry(nSearchValue:= E_Action.ACTION_LockUnlock);
+			END_IF
+		END_IF
+	
+		IF hList.nCount = 0 THEN
+			eCurrentState := E_MachineState.MACHINESTATE_Ready;
+		END_IF
+
+		IF bError  THEN
+			eCurrentState := E_MachineState.MACHINESTATE_Error;
+		END_IF
+		
+	E_MachineState.MACHINESTATE_Reset:
+			nStateA_Init := 0;
+			nStateA_Reset := 0;
+			bBusy := FALSE;
+			bError := FALSE;
+			bStop := FALSE;
+			bStopAllOnError := FALSE;
+			fbList.A_Reset(hList:= hList);
+			nErrorId := 0;
+			stError.Cmd := 0;
+			stError.ErrorId := 0;
+			eCurrentState := E_MachineState.MACHINESTATE_Idle;
+
+	E_MachineState.MACHINESTATE_Ready:
+		bBusy := FALSE;
+		bStop := FALSE;
+		eCurrentState := E_MachineState.MACHINESTATE_Idle;
+	
+	E_MachineState.MACHINESTATE_Error:
+		bBusy := FALSE;	
+		bStop := FALSE;
+END_CASE
+
+//Prozessdaten aktualisieren
+stProcessData.nObjId := nObjectID;
+bIsInit := TRUE;
+
+stProcessData.n32Data[1] := eCurrentState;
+stProcessData.n32Data[2] := stError.ErrorId;
+stProcessData.n32Data[3] := pSliderRef^.P_nCurrentRealPos;
+IF pDrivingPinRefLeft > 0 THEN
+	bIsInit := bIsInit AND pDrivingPinRefLeft^.P_bIsHomed;
+	nTemp := pDrivingPinRefLeft^.P_nCurrentPosReal;
+	IF nTemp >= -10 AND nTemp <= 10 THEN //horizontal
+		stProcessData.n32Data[4] := E_DrivingPinState.Horizontal;	
+	ELSIF nTemp >= 890 AND nTemp <= 910 THEN //vertikal
+		stProcessData.n32Data[4] := E_DrivingPinState.Vertical;
+	ELSE
+		stProcessData.n32Data[4] := E_DrivingPinState.UNDEFINED;
+	END_IF
+END_IF
+
+IF pDrivingPinRefRight > 0 THEN
+	bIsInit := bIsInit AND pDrivingPinRefRight^.P_bIsHomed;
+	IF nTemp >= -10 AND nTemp <= 10 THEN //horizontal
+		stProcessData.n32Data[5] := E_DrivingPinState.Horizontal;	
+	ELSIF nTemp >= 890 AND nTemp <= 910 THEN //vertikal
+		stProcessData.n32Data[5] := E_DrivingPinState.Vertical;
+	ELSE
+		stProcessData.n32Data[5] := E_DrivingPinState.UNDEFINED;
+	END_IF
+END_IF
+
+bIsInit := bIsInit AND pSliderRef^.P_bIsHomed;
+stProcessData.n32Data[0] := BOOL_TO_DINT(bIsInit);
+
+IF pTrayLock^.eCurrentState = E_LockState.Locked THEN
+	stProcessData.n32Data[6] := E_LockCtrl.Lock;
+ELSIF pTrayLock^.eCurrentState = E_LockState.Unlocked THEN
+	stProcessData.n32Data[6] := E_LockCtrl.Unlock;
+ELSE
+	stProcessData.n32Data[6] := 99;
+END_IF
+
+aObjProcData[nNotifyId] := stProcessData;]]></ST>
+    </Implementation>
+    <Action Name="A_Init" Id="{ee59137f-8dd7-4853-873b-ca4346e84092}">
+      <Implementation>
+        <ST><![CDATA[IF nStateA_Init = 0 THEN	//Power
+	{IF defined (TrayTransporterL)}
+	pDrivingPinRefLeft^.P_bIsHomed := FALSE;
+	fbDrivingPinLeftPower(pHwRef:= pDrivingPinRefLeft, bExecute:= TRUE);
+	fbSliderPower(pHwRef := pSliderRef, bExecute := TRUE);
+	IF NOT (fbDrivingPinLeftPower.bBusy OR fbSliderPower.bBusy) THEN
+		IF fbDrivingPinLeftPower.bError THEN
+			stError.ErrorId := fbDrivingPinLeftPower.nErrorId;
+			stError.POUState := nStateA_Init;
+			//stError.HardwareGrp := pDrivingPinRefLeft^.P_stHardwareId.eGroup;
+			//stError.HardwareNr := pDrivingPinRefLeft^.P_stHardwareId.nItem;
+			nStateA_Init := 99;
+		ELSIF fbSliderPower.bError THEN
+			stError.ErrorId := fbSliderPower.nErrorId;
+			stError.POUState := nStateA_Init;
+			nStateA_Init := 99;
+		ELSE
+			nStateA_Init := 1;
+		END_IF
+		fbDrivingPinLeftPower(pHwRef:= pDrivingPinRefLeft, bExecute:= FALSE);
+		fbSliderPower(pHwRef := pSliderRef, bExecute := FALSE);
+	END_IF
+	
+	{ELSIF defined (TrayTransporterR)}
+	pDrivingPinRefRight^.P_bIsHomed := FALSE;
+	fbDrivingPinRightPower(pHwRef:= pDrivingPinRefRight, bExecute:= TRUE);
+	fbSliderPower(pHwRef := pSliderRef, bExecute := TRUE);
+	IF NOT (fbDrivingPinRightPower.bBusy OR fbSliderPower.bBusy) THEN
+		IF fbDrivingPinRightPower.bError THEN
+			stError.ErrorId := fbDrivingPinRightPower.nErrorId;
+			stError.POUState := nStateA_Init;
+			nStateA_Init := 99;
+		ELSIF fbSliderPower.bError THEN
+			stError.ErrorId := fbSliderPower.nErrorId;
+			stError.POUState := nStateA_Init;
+			nStateA_Init := 99;
+		ELSE
+			nStateA_Init := 1;
+		END_IF
+		fbDrivingPinRightPower(pHwRef:= pDrivingPinRefRight, bExecute:= FALSE);
+		fbSliderPower(pHwRef := pSliderRef, bExecute := FALSE);
+	END_IF
+	
+	{ELSIF defined (TrayTransporterLR)}
+	fbDrivingPinLeftPower(pHwRef:= pDrivingPinRefLeft ,bExecute:= TRUE);
+	fbDrivingPinRightPower(pHwRef:= pDrivingPinRefRight, bExecute:= TRUE);
+	fbSliderPower(pHwRef := pSliderRef, bExecute := TRUE);
+	IF NOT (fbDrivingPinLeftPower.bBusy OR fbDrivingPinRightPower.bBusy OR fbSliderPower.bBusy) THEN
+		IF fbDrivingPinLeftPower.bError THEN
+			stError.ErrorId := fbDrivingPinLeftPower.nErrorId;
+			stError.POUState := nStateA_Init;
+			nStateA_Init := 99;
+		ELSIF fbDrivingPinRightPower.bError THEN
+			stError.ErrorId := fbDrivingPinRightPower.nErrorId;
+			stError.POUState := nStateA_Init;
+			nStateA_Init := 99;
+		ELSIF fbSliderPower.bError THEN
+			stError.ErrorId := fbSliderPower.nErrorId;
+			stError.POUState := nStateA_Init;
+			nStateA_Init := 99;
+		ELSE
+			nStateA_Init := 1;
+		END_IF
+		fbDrivingPinLeftPower(pHwRef:= pDrivingPinRefLeft, bExecute:= FALSE);
+		fbDrivingPinRightPower(pHwRef:= pDrivingPinRefRight, bExecute:= FALSE);
+		fbSliderPower(pHwRef:= pSliderRef, bExecute := FALSE);
+	END_IF
+	{END_IF}
+	pSliderRef^.P_bIsHomed := FALSE;
+	
+ELSIF nStateA_Init = 1 THEN //Homing Driving pins
+	{IF defined (TrayTransporterL)}
+	fbDrivingPinLeftHome(pHwRef:= pDrivingPinRefLeft, bExecute:= TRUE, bStop:= bStop);
+	IF NOT fbDrivingPinLeftHome.bBusy THEN
+		IF fbDrivingPinLeftHome.bError THEN
+			stError.ErrorId := fbDrivingPinLeftHome.nErrorId;
+			stError.POUState := nStateA_Init;
+			nStateA_Init := 99;
+		ELSE
+			nStateA_Init := 2;
+		END_IF
+		fbDrivingPinLeftHome(pHwRef:= pDrivingPinRefLeft, bExecute:= FALSE);
+	END_IF
+	{ELSIF defined (TrayTransporterR)}
+	fbDrivingPinRightHome(pHwRef:= pDrivingPinRefRight, bExecute:= TRUE, bStop:= bStop);
+	IF NOT fbDrivingPinRightHome.bBusy THEN
+		IF fbDrivingPinRightHome.bError THEN
+			stError.ErrorId := fbDrivingPinRightHome.nErrorId;
+			stError.POUState := nStateA_Init;
+			nStateA_Init := 99;
+		ELSE
+			nStateA_Init := 2;
+		END_IF
+		fbDrivingPinRightHome(pHwRef:= pDrivingPinRefRight, bExecute:= FALSE);
+	END_IF
+	
+	{ELSIF defined (TrayTransporterLR)}
+	fbDrivingPinLeftHome(pHwRef:= pDrivingPinRefLeft, bExecute:= TRUE, bStop:= bStop);
+	fbDrivingPinRightHome(pHwRef:= pDrivingPinRefRight, bExecute:= TRUE,  bStop:= bStop);
+	IF NOT (fbDrivingPinLeftHome.bBusy OR fbDrivingPinRightHome.bBusy) THEN
+		IF fbDrivingPinLeftHome.bError THEN
+			stError.ErrorId := fbDrivingPinLeftHome.nErrorId;
+			stError.POUState := nStateA_Init;
+			nStateA_Init := 99;
+		ELSIF fbDrivingPinRightHome.bError THEN
+			stError.ErrorId := fbDrivingPinRightHome.nErrorId;
+			stError.POUState := nStateA_Init;
+			nStateA_Init := 99;
+		ELSE
+			nStateA_Init := 2;
+		END_IF
+		fbDrivingPinLeftHome(pHwRef:= pDrivingPinRefLeft, bExecute:= FALSE);
+		fbDrivingPinRightHome(pHwRef:= pDrivingPinRefRight, bExecute:= FALSE);
+	END_IF
+	{END_IF}
+	
+ELSIF nStateA_Init = 2 THEN //Homing slider
+	fbSliderHome(pHwRef := pSliderRef, bExecute := TRUE, bStop:= bStop);
+	IF NOT fbSliderHome.bBusy THEN
+		IF fbSliderHome.bError THEN
+			stError.ErrorId := fbSliderHome.nErrorId;
+			nStateA_Init := 99;
+		ELSE
+			nStateA_Init := 80;
+		END_IF
+		fbSliderHome(pHwRef := pSliderRef, bExecute := FALSE);
+	END_IF
+END_IF
+
+//Errorhandling
+IF nStateA_Init = 99 THEN
+	stError.Cmd := E_Action.ACTION_Init;
+	stError.POUAction := E_POUACT.POUACT_A_Init;
+	fbErrorList.M_Add(stError);
+END_IF]]></ST>
+      </Implementation>
+    </Action>
+    <Action Name="A_LockUnlock" Id="{6ac9a117-a1f3-4061-8920-497dd214cbb6}">
+      <Implementation>
+        <ST><![CDATA[IF nStateA_LockUnlock = 0 THEN
+	fbTrayLockCtrl(pHwRef:= pTrayLock, eCtrl:= eLockCtrl, bExecute:= TRUE);
+	IF NOT fbTrayLockCtrl.bBusy THEN
+		IF fbTrayLockCtrl.bError THEN
+			stError.ErrorId := fbTrayLockCtrl.nErrorId;
+			nStateA_LockUnlock := 99;
+		ELSE
+			nStateA_LockUnlock := 80;
+		END_IF
+		fbTrayLockCtrl(pHwRef:= pTrayLock, bExecute:= FALSE);
+	END_IF
+END_IF
+
+//Errorhandling
+IF nStateA_LockUnlock = 99 THEN
+	stError.Cmd := E_Action.ACTION_LockUnlock;
+	stError.POUAction := E_POUACT.POUACT_A_LockUnlock;
+	fbErrorList.M_Add(stError);
+END_IF]]></ST>
+      </Implementation>
+    </Action>
+    <Action Name="A_MoveSlider" Id="{244245ab-eb6f-49bd-9db8-22c773d27f83}">
+      <Implementation>
+        <ST><![CDATA[IF nStateA_MoveSlider = 0 THEN
+	fbMoveSlider(pHWRef:= pSliderRef, bStop:= bStop, bExecute := TRUE);
+	IF NOT fbMoveSlider.bBusy THEN
+		IF fbMoveSlider.bError THEN
+			stError.ErrorId := fbMoveSlider.nErrorId;
+			nStateA_MoveSlider := 99;
+		ELSE
+			nStateA_MoveSlider := 80;
+		END_IF
+		fbMoveSlider(pHWRef:= pSliderRef, bExecute := FALSE);
+	END_IF
+END_IF
+
+//Errorhandling
+IF nStateA_MoveSlider = 99 THEN
+	stError.Cmd := E_Action.ACTION_MoveTrayTransporter;
+	stError.POUAction := E_POUACT.POUACT_A_MoveSlider;
+	fbErrorList.M_Add(stError);
+END_IF]]></ST>
+      </Implementation>
+    </Action>
+    <Action Name="A_TurnDrivingPin" Id="{fc1f6914-8f38-43a9-b647-4a29c1b027bb}">
+      <Implementation>
+        <ST><![CDATA[IF nStateA_TurnDrivingPin = 0 THEN
+	CASE eTurnDrivingPinSel OF
+		E_DrivingPinSelection.Left:
+			fbTurnDrivingPinLeft(pHwRef:= pDrivingPinRefLeft, nSpeed:= -1, bRelative:= FALSE, bExecute:= TRUE, bStop:= bStop); 
+		E_DrivingPinSelection.Right:
+			fbTurnDrivingPinRight(pHwRef:= pDrivingPinRefRight, nSpeed:= -1, bRelative:= FALSE, bExecute:= TRUE, bStop:= bStop);
+		E_DrivingPinSelection.Both:
+			IF pDrivingPinRefLeft > 0 THEN
+				fbTurnDrivingPinLeft(pHwRef:= pDrivingPinRefLeft, nSpeed:= -1, bRelative:= FALSE, bExecute:= TRUE, bStop:= bStop);
+			END_IF
+			IF pDrivingPinRefRight > 0 THEN
+				fbTurnDrivingPinRight(pHwRef:= pDrivingPinRefRight, nSpeed:= -1, bRelative:= FALSE, bExecute:= TRUE, bStop:= bStop);	
+			END_IF
+	END_CASE
+	
+	IF NOT (fbTurnDrivingPinLeft.bBusy OR fbTurnDrivingPinRight.bBusy) THEN
+		IF fbTurnDrivingPinLeft.bError THEN
+			stError.ErrorId := fbTurnDrivingPinLeft.nErrorId;
+			nStateA_TurnDrivingPin := 99;
+		ELSIF fbTurnDrivingPinRight.bError THEN
+			stError.ErrorId := fbTurnDrivingPinRight.nErrorId;
+			nStateA_TurnDrivingPin := 99;
+		ELSE
+			nStateA_TurnDrivingPin := 80;
+			IF NOT bStop THEN
+				CASE eTurnDrivingPinSel OF
+					E_DrivingPinSelection.Left:
+						IF eTurnDrivingPinCtrl = E_DrivingPinCtrl.Horizontal THEN //HomeSwitch muss betätigt sein
+							IF NOT pDrivingPinRefLeft^.P_bHomeSwitch THEN //Error
+								nStateA_TurnDrivingPin := 1;
+								bReHomingLeftPin := TRUE;
+							END_IF
+						ELSE //LimitSwitchRight muss betätigt sein
+							IF NOT pDrivingPinRefLeft^.P_bRightLimitSwitch THEN //Error
+								nStateA_TurnDrivingPin := 1;
+								bReHomingLeftPin := TRUE;
+							END_IF
+						END_IF
+					E_DrivingPinSelection.Right:
+						IF eTurnDrivingPinCtrl = E_DrivingPinCtrl.Horizontal THEN //HomeSwitch muss betätigt sein
+							IF NOT pDrivingPinRefRight^.P_bHomeSwitch THEN //Error
+								nStateA_TurnDrivingPin := 1;
+								bReHomingRightPin := TRUE;
+							END_IF
+						ELSE //LimitSwitchRight muss betätigt sein
+							IF NOT pDrivingPinRefRight^.P_bRightLimitSwitch THEN //Error
+								nStateA_TurnDrivingPin := 1;
+								bReHomingRightPin := TRUE;
+							END_IF
+						END_IF
+					E_DrivingPinSelection.Both:
+						IF eTurnDrivingPinCtrl = E_DrivingPinCtrl.Horizontal THEN //HomeSwitches müssen betätigt sein
+							IF pDrivingPinRefLeft > 0 AND_THEN NOT pDrivingPinRefLeft^.P_bHomeSwitch THEN //Error
+								nStateA_TurnDrivingPin := 1;
+								bReHomingLeftPin := TRUE;
+							END_IF
+							IF pDrivingPinRefRight > 0 AND_THEN NOT pDrivingPinRefRight^.P_bHomeSwitch THEN //Error
+								nStateA_TurnDrivingPin := 1;
+								bReHomingRightPin := TRUE;
+							END_IF
+						ELSE
+							IF pDrivingPinRefLeft > 0 AND_THEN NOT pDrivingPinRefLeft^.P_bRightLimitSwitch THEN //Error
+								nStateA_TurnDrivingPin := 1;
+								bReHomingLeftPin := TRUE;
+							END_IF
+							IF pDrivingPinRefRight > 0 AND_THEN NOT pDrivingPinRefRight^.P_bRightLimitSwitch THEN //Error
+								nStateA_TurnDrivingPin := 1;
+								bReHomingRightPin := TRUE;
+							END_IF
+						END_IF
+				END_CASE
+			END_IF
+		END_IF
+		fbTurnDrivingPinLeft(pHwRef:= pDrivingPinRefLeft, bExecute:= FALSE);
+		fbTurnDrivingPinRight(pHwRef:= pDrivingPinRefRight, bExecute:= FALSE);
+	END_IF
+ELSIF nStateA_TurnDrivingPin = 1 THEN //ReHoming pins -> danach in Error
+	IF bReHomingLeftPin THEN
+		fbDrivingPinLeftHome(pHwRef:= pDrivingPinRefLeft, bExecute:= TRUE);	
+	END_IF
+	
+	IF bReHomingRightPin THEN
+		fbDrivingPinRightHome(pHwRef:= pDrivingPinRefRight, bExecute:= TRUE);	
+	END_IF
+	
+	IF NOT (fbDrivingPinLeftHome.bBusy OR fbDrivingPinRightHome.bBusy) THEN
+		fbDrivingPinLeftHome(pHwRef:= pDrivingPinRefLeft, bExecute:= FALSE);
+		fbDrivingPinRightHome(pHwRef:= pDrivingPinRefRight, bExecute:= FALSE);
+		bReHomingLeftPin := FALSE;
+		bReHomingRightPin := FALSE;
+		stError.ErrorId := E_ErrorIdCmd.ERRORID_DrivingPinBlocked;
+		nStateA_TurnDrivingPin := 99;
+	END_IF
+END_IF
+
+//Errorhandling
+IF nStateA_TurnDrivingPin = 99 THEN
+	stError.Cmd := E_Action.ACTION_TurnDrivingPin;
+	stError.POUAction := E_POUACT.POUACT_A_TurnDrivingPin;
+	fbErrorList.M_Add(stError);
+END_IF]]></ST>
+      </Implementation>
+    </Action>
+    <Method Name="FB_init" Id="{5220f666-5722-4a93-8428-88f1871d6d5d}">
+      <Declaration><![CDATA[METHOD FB_init : BOOL
+VAR_INPUT
+	bInitRetains : BOOL; // if TRUE, the retain variables are initialized (warm start / cold start)
+	bInCopyCode : BOOL;  // if TRUE, the instance afterwards gets moved into the copy code (online change)
+END_VAR
+]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[eObjectType := E_ObjectType.OBJECTTYPE_TrayTransporter;
+eObjectGroup := E_ObjectGroup.OBJECTGROUP_Target OR E_ObjectGroup.OBJECTGROUP_Device;]]></ST>
+      </Implementation>
+    </Method>
+    <Method Name="M_AddChild" Id="{27e2d5cc-639d-454d-8af6-379d2ba566b8}">
+      <Declaration><![CDATA[METHOD M_AddChild : ERRORID
+VAR_INPUT
+	pObject : POINTER TO FB_Object;
+	nSlotNr	: UINT;
+	nIndex 	: INT;	
+END_VAR
+
+VAR
+	pSlot : POINTER TO FB_Slot;
+END_VAR]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[//In den abgeleiteten Tool-FBs wird überprüft, ob das entsprechende Objekt als Child tauglich ist
+IF pObject > 0 THEN
+	IF nSlotNr > 0 THEN
+		pSlot := fbSlotList.M_GetAtNr(nSlotNr);
+		IF pSlot > 0 THEN
+			IF pSlot^.P_pChild = 0 THEN
+				//Object darf selber noch an keinem Parent hängen
+				IF pObject^.P_pParentObject = 0 THEN
+					pSlot^.P_pChild := pObject;
+					pObject^.P_pObjCollectNode := pObjCollectNode^.nodes.M_AddNewNode(pObject,nIndex);
+					pObject^.M_UpdateParent();
+				ELSE
+					M_AddChild := E_ErrorIdObjMgmt.ERRORID_ObjectAlreadyOnAnotherParent;
+				END_IF
+			ELSE //Slot bereits belegt
+				M_AddChild := E_ErrorIdObjMgmt.ERRORID_SlotIsAlreadyOccupied;
+			END_IF		
+		ELSE
+			M_AddChild := E_ErrorIdObjMgmt.ERRORID_InvalidSlotNumber;			
+		END_IF	
+	ELSE
+		M_AddChild := SUPER^.M_AddChild(pObject,nSlotNr,nIndex);
+	END_IF
+ELSE
+	M_AddChild := E_ErrorIdObjMgmt.ERRORID_InvalidParentObject;
+END_IF]]></ST>
+      </Implementation>
+    </Method>
+    <Method Name="M_CancelAction" Id="{c9f91b18-1673-4a7b-9bee-1118de45c673}">
+      <Declaration><![CDATA[METHOD M_CancelAction
+VAR_INPUT
+	eAction : E_Action;
+END_VAR
+]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[//Eine einzelne Action abzubrechen ist hier nicht implementiert.
+bStop := TRUE;]]></ST>
+      </Implementation>
+    </Method>
+    <Method Name="M_CheckAction" Id="{3e01c292-9cbf-4134-a9dc-a101e9067ad3}">
+      <Declaration><![CDATA[METHOD M_CheckAction : ERRORID
+VAR_INPUT
+	refActionData 	: REFERENCE TO ST_ActionData;
+	pCorrelObject	: POINTER TO FB_Object;
+END_VAR
+]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[IF NOT refActionData.eAction = E_Action.ACTION_MoveToTarget THEN
+	M_CheckAction := E_ErrorIdCmd.ERRORID_InvalidAction;	
+END_IF]]></ST>
+      </Implementation>
+    </Method>
+    <Method Name="M_ClearAllProps" Id="{c6157f4e-c9a3-4d4e-a7dc-60b48b1a72f9}">
+      <Declaration><![CDATA[METHOD M_ClearAllProps
+VAR_INPUT
+	bIgnoreParent : BOOL; //Es wird das gesamte OD gelöscht. -> Zeiger auf Parent nicht mehr gültig!
+END_VAR
+]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[fbSlotList.M_Reset();
+SUPER^.M_ClearAllProps(bIgnoreParent);]]></ST>
+      </Implementation>
+    </Method>
+    <Method Name="M_ExeAction" Id="{630da09f-b31a-4e41-9f83-fa586d355f07}">
+      <Declaration><![CDATA[METHOD M_ExeAction : ERRORID
+VAR_INPUT
+	refActionData	: REFERENCE TO ST_ActionData;
+END_VAR
+]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[IF NOT (eCurrentState = E_MachineState.MACHINESTATE_Idle OR
+	eCurrentState = E_MachineState.MACHINESTATE_Active OR
+	eCurrentState = E_MachineState.MACHINESTATE_Ready) THEN
+	M_ExeAction := E_ErrorIdCmd.ERRORID_InvalidState;
+	RETURN;
+END_IF
+
+IF bStop THEN
+	M_ExeAction := E_ErrorIdCmd.ERRORID_InvalidState;
+	RETURN;
+END_IF
+
+bCanceled := FALSE;
+
+CASE refActionData.eAction OF
+	E_Action.ACTION_Init:
+		IF NOT bInit THEN
+			bInit := TRUE;
+			fbList.A_AddHeadValue(hList := hList, putValue:= E_Action.ACTION_Init);
+		ELSE
+			RETURN;
+		END_IF
+	E_Action.ACTION_MoveTrayTransporter:
+		IF NOT bIsInit THEN
+			M_ExeAction := E_ErrorIdCmd.ERRORID_DeviceNotInitialized;  //Error
+			RETURN;
+		END_IF
+		
+		IF bMoveSlider THEN
+			M_ExeAction := E_ErrorIdCmd.ERRORID_BasicActionActive;
+			RETURN;
+		END_IF
+		
+		fbMoveSlider(pHWRef:= pSliderRef, nPosition:= refActionData.aParams[1], nSpeed:= refActionData.aParams[2], 
+					bStop:= FALSE, bExecute := TRUE);
+		IF fbMoveSlider.bError THEN
+			M_ExeAction := fbMoveSlider.nErrorId;
+			fbMoveSlider(pHWRef:= pSliderRef, bExecute := FALSE);
+			RETURN;
+		END_IF
+		
+		bMoveSlider := TRUE;
+		fbList.A_AddHeadValue(hList := hList, putValue:= E_Action.ACTION_MoveTrayTransporter);
+		
+	E_Action.ACTION_TurnDrivingPin:
+		IF NOT bIsInit THEN
+			M_ExeAction := E_ErrorIdCmd.ERRORID_DeviceNotInitialized;  //Error
+			RETURN;
+		END_IF
+		
+		IF bTurnDrivingPin THEN
+			M_ExeAction := E_ErrorIdCmd.ERRORID_BasicActionActive;
+			RETURN;
+		END_IF
+		
+		eTurnDrivingPinSel := DINT_TO_USINT(refActionData.aParams[1]);
+		eTurnDrivingPinCtrl := DINT_TO_USINT(refActionData.aParams[2]);
+		IF eTurnDrivingPinSel = E_DrivingPinSelection.Left THEN
+			IF pDrivingPinRefLeft = 0 THEN
+				M_ExeAction := E_ErrorIdCmd.ERRORID_DrivingPinLeftNotAvailable;
+				RETURN;
+			END_IF
+		ELSIF eTurnDrivingPinSel = E_DrivingPinSelection.Right THEN
+			IF pDrivingPinRefRight = 0 THEN
+				M_ExeAction := E_ErrorIdCmd.ERRORID_DrivingPinRightNotAvailable;
+				RETURN;
+			END_IF
+		END_IF
+		
+		IF eTurnDrivingPinCtrl = E_DrivingPinCtrl.Horizontal THEN
+			fbTurnDrivingPinLeft.nPosition := 0;
+			fbTurnDrivingPinRight.nPosition := 0;
+		ELSE
+			fbTurnDrivingPinLeft.nPosition := 900;
+			fbTurnDrivingPinRight.nPosition := 900;
+		END_IF
+		
+		bTurnDrivingPin := TRUE;
+		fbList.A_AddHeadValue(hList := hList, putValue:= E_Action.ACTION_TurnDrivingPin);
+		
+	E_Action.ACTION_LockUnlock:
+	
+		IF bLockUnlock THEN
+			M_ExeAction := E_ErrorIdCmd.ERRORID_BasicActionActive;
+			RETURN;
+		END_IF
+		
+		eLockCtrl := DINT_TO_USINT(refActionData.aParams[1]);
+		bLockUnlock := TRUE;
+		fbList.A_AddHeadValue(hList := hList, putValue:= E_Action.ACTION_LockUnlock);
+	
+	ELSE
+		M_ExeAction := E_ErrorIdCmd.ERRORID_InvalidAction;	
+END_CASE
+
+bBusy := TRUE;
+eCurrentState := E_MachineState.MACHINESTATE_Active;
+]]></ST>
+      </Implementation>
+    </Method>
+    <Method Name="M_GetAbsPos" Id="{7e05e544-e775-49ce-a443-9ff421fd08c5}">
+      <Declaration><![CDATA[METHOD M_GetAbsPos : ST_3DPoint
+VAR_INPUT
+	pChildPos	: POINTER TO ST_3DPoint;
+	eTargetRef 	: E_TargetRef;
+	nParam1		: UINT;
+ 	nParam2		: UINT;
+	nParam3		: USINT;
+	nZLevel		: USINT;
+END_VAR
+VAR_OUTPUT
+	nErrorId 	: ERRORID;
+	lrAngle		: LREAL;
+END_VAR
+VAR
+	stLocPos : ST_3DPoint;
+	pSlot : POINTER TO FB_Slot;
+END_VAR
+]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[IF eTargetRef = E_TargetRef.TARGETREF_Slot THEN
+	//Slotnummer checken
+	pSlot := M_GetSlot(nParam1);
+	IF pSlot > 0 THEN
+		stLocPos := F_Add3DPoints(pSlot^.P_stRelPos,stRelPos);
+		stLocPos.Z := stLocPos.Z + stDimension.Height;
+		//kann es mal sein, dass hier das ParentTarget = 0 ist?
+		//ja -> bei der Workplate
+		IF pChildPos > 0 THEN
+			stLocPos := F_Add3DPoints(stLocPos,pChildPos^);
+		END_IF
+		IF pParentTarget > 0 THEN
+			IF pParentSlot > 0 THEN
+				M_GetAbsPos := pParentTarget^.M_GetAbsPos(pChildPos := ADR(stLocPos), eTargetRef:= E_TargetRef.TARGETREF_Slot,
+															nParam1:= pParentSlot^.P_nNr,
+															nParam2:= 0, nParam3:= 0,nZLevel:= 0, lrAngle=> lrAngle,
+															nErrorId=> nErrorId);		
+			ELSE
+				M_GetAbsPos := pParentTarget^.M_GetAbsPos(pChildPos := ADR(stLocPos), eTargetRef:= E_TargetRef.TARGETREF_LeftBottom,
+																nParam1:= 0,
+																nParam2:= 0, nParam3:= 0,nZLevel:= 0,
+																lrAngle => lrAngle, nErrorId=> nErrorId);
+			END_IF
+		ELSE
+			M_GetAbsPos := stLocPos;
+		END_IF		
+	ELSE
+		nErrorId := E_ErrorIdCmd.ERRORID_InvalidTargetSlot;
+	END_IF
+	
+ELSE
+	M_GetAbsPos := SUPER^.M_GetAbsPos(pChildPos := pChildPos, eTargetRef:= eTargetRef,
+													nParam1:= nParam1,
+													nParam2:= nParam2, nParam3:= nParam3, nZLevel:= nZLevel,
+													lrAngle => lrAngle, nErrorId=> nErrorId);	
+END_IF]]></ST>
+      </Implementation>
+    </Method>
+    <Method Name="M_GetActionBusy" Id="{91b93aab-4011-4e5f-b7d5-2187df0865b1}">
+      <Declaration><![CDATA[METHOD M_GetActionBusy : BOOL
+VAR_INPUT
+	eAction : E_Action;
+END_VAR
+]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[getPosPtr := 0;(* start from first node element *)
+fbList.A_FindNext( hList := hList, putPosPtr := getPosPtr, putValue := eAction, getValue=>getValue, getPosPtr=>getPosPtr );
+IF fbList.bOk THEN	//Eintrag wurde gefunden, d.h. Action ist noch busy
+	M_GetActionBusy := TRUE;
+END_IF]]></ST>
+      </Implementation>
+    </Method>
+    <Method Name="M_GetAllProps" Id="{36834252-e539-4ba5-b886-1a228034834e}">
+      <Declaration><![CDATA[METHOD M_GetAllProps : ERRORID
+VAR_INPUT
+	refCmdData : REFERENCE TO  ST_CmdData;
+END_VAR
+
+VAR
+	i : UINT;
+	pSlot		: POINTER TO FB_Slot;
+END_VAR
+
+]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[SUPER^.M_GetAllProps(refCmdData);
+
+nCurrentPropIndex := nCurrentPropIndex + 1;
+
+refCmdData.n32Data[nCurrentPropIndex] := fbSlotList.P_nCount;
+
+fbSlotList.M_SetCurrentToHead();
+
+FOR i := 1 TO fbSlotList.P_nCount BY 1 DO
+	pSlot := fbSlotList.M_GetNext();
+	IF pSlot > 0 THEN
+		nCurrentPropIndex := nCurrentPropIndex + 1;
+		refCmdData.n32Data[nCurrentPropIndex] := pSlot^.P_nNr;
+		nCurrentPropIndex := nCurrentPropIndex + 1;
+		refCmdData.n32Data[nCurrentPropIndex] := REAL_TO_DINT(pSlot^.P_rRelPosX);
+		nCurrentPropIndex := nCurrentPropIndex + 1;
+		refCmdData.n32Data[nCurrentPropIndex] := REAL_TO_DINT(pSlot^.P_rRelPosY);
+		nCurrentPropIndex := nCurrentPropIndex + 1;
+		refCmdData.n32Data[nCurrentPropIndex] := REAL_TO_DINT(pSlot^.P_rRelPosZ);
+	END_IF		
+END_FOR	
+
+nCurrentPropIndex := nCurrentPropIndex + 1;
+refCmdData.n32Data[nCurrentPropIndex] := nOffsetLeftDrivingPin;
+nCurrentPropIndex := nCurrentPropIndex + 1;
+refCmdData.n32Data[nCurrentPropIndex] := nOffsetRightDrivingPin;
+nCurrentPropIndex := nCurrentPropIndex + 1;
+refCmdData.n32Data[nCurrentPropIndex] := nDrivingPinThickness;
+nCurrentPropIndex := nCurrentPropIndex + 1;
+refCmdData.n32Data[nCurrentPropIndex] := nTransferPosLeft;
+nCurrentPropIndex := nCurrentPropIndex + 1;
+refCmdData.n32Data[nCurrentPropIndex] := nTransferPosRight;
+nCurrentPropIndex := nCurrentPropIndex + 1;
+refCmdData.n32Data[nCurrentPropIndex] := nSafePosLeft;
+nCurrentPropIndex := nCurrentPropIndex + 1;
+refCmdData.n32Data[nCurrentPropIndex] := nSafePosRight;
+nCurrentPropIndex := nCurrentPropIndex + 1;
+refCmdData.n32Data[nCurrentPropIndex] := nTrayLength;
+nCurrentPropIndex := nCurrentPropIndex + 1;
+refCmdData.n32Data[nCurrentPropIndex] := nHollowDistance;
+nCurrentPropIndex := nCurrentPropIndex + 1;
+refCmdData.n32Data[nCurrentPropIndex] := nHollowWidth;
+
+
+]]></ST>
+      </Implementation>
+    </Method>
+    <Method Name="M_GetSliderPosTrayInSlot" Id="{9f8bc5e9-fee1-44f8-807f-bfc7d57218d7}">
+      <Declaration><![CDATA[METHOD M_GetSliderPosTrayInSlot : DINT
+VAR_INPUT
+	ePinSelection : E_DrivingPinSelection;
+	eHollowSelection : E_TrayHollowSelection;
+END_VAR
+]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[//Gibt die Position(Raw) für den Slider zurück, wenn Tray im Slot1 positioniert ist und entsprechender 
+//DrivingPin in Mitte der ausgewählen Aussparung
+CASE eHollowSelection OF
+	E_TrayHollowSelection.Left:
+		IF ePinSelection = E_DrivingPinSelection.Left THEN
+			M_GetSliderPosTrayInSlot := REAL_TO_DINT(pTraySlot^.P_rRelPosX) + nHollowDistance + nOffsetLeftDrivingPin;
+		ELSIF ePinSelection = E_DrivingPinSelection.Right THEN
+			M_GetSliderPosTrayInSlot := REAL_TO_DINT(pTraySlot^.P_rRelPosX) + nHollowDistance - nOffsetRightDrivingPin;
+		END_IF	
+	E_TrayHollowSelection.Centre:
+		IF ePinSelection = E_DrivingPinSelection.Left THEN
+			M_GetSliderPosTrayInSlot := REAL_TO_DINT(pTraySlot^.P_rRelPosX) + nTrayLength / 2 + nOffsetLeftDrivingPin;
+		ELSIF ePinSelection = E_DrivingPinSelection.Right THEN
+			M_GetSliderPosTrayInSlot := REAL_TO_DINT(pTraySlot^.P_rRelPosX) + nTrayLength / 2 - nOffsetRightDrivingPin;
+		END_IF	
+	E_TrayHollowSelection.Right:
+		IF ePinSelection = E_DrivingPinSelection.Left THEN
+			M_GetSliderPosTrayInSlot := REAL_TO_DINT(pTraySlot^.P_rRelPosX) + nTrayLength - nHollowDistance + nOffsetLeftDrivingPin;
+		ELSIF ePinSelection = E_DrivingPinSelection.Right THEN
+			M_GetSliderPosTrayInSlot := REAL_TO_DINT(pTraySlot^.P_rRelPosX) + nTrayLength - nHollowDistance - nOffsetRightDrivingPin;
+		END_IF
+END_CASE
+
+
+
+
+
+]]></ST>
+      </Implementation>
+    </Method>
+    <Method Name="M_GetSlot" Id="{ebe6683c-5c4b-4ef8-8e1f-d4a306fe570f}">
+      <Declaration><![CDATA[METHOD M_GetSlot : POINTER TO FB_Slot
+VAR_INPUT
+	nSlotNr : UINT;
+END_VAR
+]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[M_GetSlot := fbSlotList.M_GetAtNr(nSlotNr);]]></ST>
+      </Implementation>
+    </Method>
+    <Method Name="M_GetSlotFromChild" Id="{5fa81abd-4cf7-4862-95a6-511bb93945dd}">
+      <Declaration><![CDATA[METHOD M_GetSlotFromChild : POINTER TO FB_Slot
+VAR_INPUT
+	pObject : POINTER TO FB_Object;
+END_VAR
+
+VAR
+	pSlot : POINTER TO FB_Slot;
+END_VAR
+]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[//Die SlotList iterieren und vergleichen ob Objekte übereinstimmen
+fbSlotList.M_SetCurrentToHead();
+REPEAT
+	pSlot := fbSlotList.M_GetNext();
+	IF pSlot > 0 THEN
+		IF pSlot^.P_pChild = pObject THEN
+			M_GetSlotFromChild := pSlot;
+			EXIT;
+		END_IF
+	END_IF
+UNTIL pSlot = 0
+END_REPEAT]]></ST>
+      </Implementation>
+    </Method>
+    <Method Name="M_GetStateForTransfer" Id="{d67a7200-29c0-4109-a8f3-e7b691a9db40}">
+      <Declaration><![CDATA[METHOD M_GetStateForTransfer : ERRORID
+VAR_INPUT
+	eCtrl : E_TransferTrayCtrl;
+END_VAR
+]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[//Egal, welche Richtung was tranportiert wird, wenn Stacker, dann muss immer
+//richtige Ausrichtung und auf einem Fach stehen
+{IF defined(Stacker)}
+IF afbStacker[1].P_eCurrentSpinPositon <> E_StackerRotPosition.TransferPositionPrinter1 THEN
+	M_GetStateForTransfer := E_ErrorIdCmd.ERRORID_StackerNotInTransferPosition;
+	RETURN;
+END_IF
+IF afbStacker[1].P_nCurrentShelf = 0 THEN
+	M_GetStateForTransfer := E_ErrorIdCmd.ERRORID_StackerNotInShelfPosition;
+	RETURN;
+END_IF
+{END_IF}
+
+CASE eCtrl OF
+	E_TransferTrayCtrl.LeftToSlot:
+	{IF defined(Stacker)}
+	IF afbStacker[1].P_bTraysAligned THEN
+		IF afbStacker[1].P_bTrayInCurrentShelf THEN
+			RETURN; //Alles OK
+		ELSE
+			M_GetStateForTransfer := E_ErrorIdCmd.ERRORID_NoTrayInStackerShelf;	
+		END_IF
+	ELSE
+		M_GetStateForTransfer := E_ErrorIdCmd.ERRORID_TraysNotAligned;	
+	END_IF
+	{ELSE}
+	IF NOT bReadyFlagLeft THEN
+		M_GetStateForTransfer := E_ErrorIdCmd.ERRORID_NoTrayOnLeftTransferStation;
+	END_IF
+	{END_IF}
+	E_TransferTrayCtrl.RightToSlot:
+	{IF defined(Stacker)}
+	IF afbStacker[1].P_bTraysAligned THEN
+		IF afbStacker[1].P_bTrayInCurrentShelf THEN
+			RETURN; //Alles OK
+		ELSE
+			M_GetStateForTransfer := E_ErrorIdCmd.ERRORID_NoTrayInStackerShelf;	
+		END_IF
+	ELSE
+		M_GetStateForTransfer := E_ErrorIdCmd.ERRORID_TraysNotAligned;	
+	END_IF
+	{ELSE}
+	IF NOT bReadyFlagRight THEN
+		M_GetStateForTransfer := E_ErrorIdCmd.ERRORID_NoTrayOnRightTransferStation;
+	END_IF
+	{END_IF}
+	E_TransferTrayCtrl.SlotToLeft:
+	{IF defined(Stacker)}
+	IF afbStacker[1].P_bTrayInCurrentShelf THEN
+		M_GetStateForTransfer := E_ErrorIdCmd.ERRORID_TrayAlreadyInStackerShelf;
+		RETURN;
+	END_IF
+	{ELSE}
+	IF bReadyFlagLeft THEN
+		M_GetStateForTransfer := E_ErrorIdCmd.ERRORID_TrayAlreadyOnLeftTransferStation;
+	END_IF
+	{END_IF}
+	E_TransferTrayCtrl.SlotToRight:
+	{IF defined(Stacker)}
+	IF afbStacker[1].P_bTrayInCurrentShelf THEN
+		M_GetStateForTransfer := E_ErrorIdCmd.ERRORID_TrayAlreadyInStackerShelf;
+		RETURN;
+	END_IF
+	{ELSE}
+	IF bReadyFlagRight THEN
+		M_GetStateForTransfer := E_ErrorIdCmd.ERRORID_TrayAlreadyOnRightTransferStation;
+	END_IF
+	{END_IF}
+ELSE
+	M_GetStateForTransfer := E_ErrorIdCmd.ERRORID_InvalidCtrl;
+END_CASE]]></ST>
+      </Implementation>
+    </Method>
+    <Method Name="M_RemoveListEntry" Id="{b660161c-8785-454e-8f70-4aa985c8122c}">
+      <Declaration><![CDATA[METHOD M_RemoveListEntry : BOOL
+VAR_INPUT
+	nSearchValue	: E_Action;
+END_VAR
+]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[getPosPtr := 0;(* start from first node element *)
+fbList.A_FindNext( hList := hList, putPosPtr := getPosPtr, putValue := nSearchValue, getValue=>getValue, getPosPtr=>getPosPtr );
+IF fbList.bOk THEN	//Eintrag wurde gefunden
+	fbList.A_RemoveValueAtPosPtr(hList:= hList,	putPosPtr:= getPosPtr);
+	IF fbList.bOk THEN
+		M_RemoveListEntry := TRUE;
+	END_IF
+END_IF
+]]></ST>
+      </Implementation>
+    </Method>
+    <Method Name="M_SetAllProps" Id="{9919a3a6-4315-44fb-aca2-a3cfcd17c97b}">
+      <Declaration><![CDATA[METHOD M_SetAllProps : ERRORID
+VAR_INPUT
+	refCmdData : REFERENCE TO  ST_CmdData;
+END_VAR
+
+VAR
+	i : UINT;
+	pSlot 		: POINTER TO FB_Slot;
+END_VAR
+]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[M_SetAllProps := SUPER^.M_SetAllProps(refCmdData);
+
+IF M_SetAllProps > 0 THEN
+	RETURN;
+END_IF
+
+{IF defined (TrayTransporterL)}
+pSliderRef := ADR(fbHwRefTrayTransSlider);
+pDrivingPinRefLeft := ADR(fbHwRefDrivingPinLeft);
+pTrayLock := ADR(fbHwRefTrayLock);
+{ELSIF defined (TrayTransporterR)}
+pSliderRef := ADR(fbHwRefTrayTransSlider);
+pDrivingPinRefRight := ADR(fbHwRefDrivingPinRight);
+pTrayLock := ADR(fbHwRefTrayLock);
+{ELSIF defined (TrayTransporterLR)}
+pSliderRef := ADR(fbHwRefTrayTransSlider);
+pDrivingPinRefLeft := ADR(fbHwRefDrivingPinLeft);
+pDrivingPinRefRight := ADR(fbHwRefDrivingPinRight);
+pTrayLock := ADR(fbHwRefTrayLock);
+{ELSE}
+M_SetAllProps := E_ErrorIdObjMgmt.ERRORID_InvalidHardwareRef;
+RETURN;
+{END_IF}
+
+//Slots parametrieren
+nCurrentPropIndex := nCurrentPropIndex + 1;
+nFirstSlotPropIndex := nCurrentPropIndex;
+nNumberOfSlots := DINT_TO_UINT(refCmdData.n32Data[nCurrentPropIndex]);
+
+//Falls SlotList noch nicht existiert, dann neue erstellen
+IF fbSlotList.P_nCount = 0 THEN
+	FOR i:= 1 TO nNumberOfSlots BY 1 DO
+		pSlot := __NEW(FB_Slot(pOwner := THIS));
+		fbSlotList.M_Add(pSlot);
+		nCurrentPropIndex := nCurrentPropIndex + 1;
+		pSlot^.P_nNr := DINT_TO_USINT(refCmdData.n32Data[nCurrentPropIndex]);
+		nCurrentPropIndex := nCurrentPropIndex + 1;
+		pSlot^.P_rRelPosX := DINT_TO_REAL(refCmdData.n32Data[nCurrentPropIndex]);
+		nCurrentPropIndex := nCurrentPropIndex + 1;
+		pSlot^.P_rRelPosY := DINT_TO_REAL(refCmdData.n32Data[nCurrentPropIndex]);
+		nCurrentPropIndex := nCurrentPropIndex + 1;
+		pSlot^.P_rRelPosZ := DINT_TO_REAL(refCmdData.n32Data[nCurrentPropIndex]);
+		IF i = 1 THEN
+			pTraySlot := pSlot;
+		END_IF
+	END_FOR
+ELSE
+	IF nNumberOfSlots <> fbSlotList.P_nCount THEN	//Anzahl der Slots dürfen sich nicht ändern
+		M_SetAllProps := E_ErrorIdObjMgmt.ERRORID_ChangeNoOfSlotsNotAllowed;
+		RETURN;		
+	END_IF
+
+	FOR i:= 1 TO nNumberOfSlots BY 1 DO
+		nCurrentPropIndex := nCurrentPropIndex + 1;
+		pSlot := fbSlotList.M_GetAtNr(DINT_TO_USINT(refCmdData.n32Data[nCurrentPropIndex]));
+		IF pSlot > 0 THEN
+			nCurrentPropIndex := nCurrentPropIndex + 1;
+			pSlot^.P_rRelPosX := DINT_TO_REAL(refCmdData.n32Data[nCurrentPropIndex]);
+			nCurrentPropIndex := nCurrentPropIndex + 1;
+			pSlot^.P_rRelPosY := DINT_TO_REAL(refCmdData.n32Data[nCurrentPropIndex]);
+			nCurrentPropIndex := nCurrentPropIndex + 1;
+			pSlot^.P_rRelPosZ := DINT_TO_REAL(refCmdData.n32Data[nCurrentPropIndex]);
+		ELSE
+			M_SetAllProps := 222;
+			RETURN;
+		END_IF	
+	END_FOR
+END_IF
+nLastSlotPropIndex := nCurrentPropIndex;
+
+nCurrentPropIndex := nCurrentPropIndex + 1;
+nSpecPropIndex := nCurrentPropIndex;
+
+nOffsetLeftDrivingPin := refCmdData.n32Data[nCurrentPropIndex];
+nCurrentPropIndex := nCurrentPropIndex + 1;
+nOffsetRightDrivingPin := refCmdData.n32Data[nCurrentPropIndex];
+nCurrentPropIndex := nCurrentPropIndex + 1;
+nDrivingPinThickness := refCmdData.n32Data[nCurrentPropIndex];
+nCurrentPropIndex := nCurrentPropIndex + 1;
+nTransferPosLeft := refCmdData.n32Data[nCurrentPropIndex];
+nCurrentPropIndex := nCurrentPropIndex + 1;
+nTransferPosRight := refCmdData.n32Data[nCurrentPropIndex];
+nCurrentPropIndex := nCurrentPropIndex + 1;
+nSafePosLeft := refCmdData.n32Data[nCurrentPropIndex];
+nCurrentPropIndex := nCurrentPropIndex + 1;
+nSafePosRight := refCmdData.n32Data[nCurrentPropIndex];
+nCurrentPropIndex := nCurrentPropIndex + 1;
+nTrayLength := refCmdData.n32Data[nCurrentPropIndex];
+nCurrentPropIndex := nCurrentPropIndex + 1;
+nHollowDistance := refCmdData.n32Data[nCurrentPropIndex];
+nCurrentPropIndex := nCurrentPropIndex + 1;
+nHollowWidth := refCmdData.n32Data[nCurrentPropIndex];
+
+nNoOfProps := nCurrentPropIndex + 1;]]></ST>
+      </Implementation>
+    </Method>
+    <Method Name="M_SetSingleProp" Id="{ab253d18-49df-48ae-8ea9-a37efb13b7b5}">
+      <Declaration><![CDATA[METHOD M_SetSingleProp : ERRORID
+VAR_INPUT
+	refCmdData : REFERENCE TO  ST_CmdData;
+END_VAR
+]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[IF nSpecPropIndex = refCmdData.aHeader[1] THEN
+	nOffsetLeftDrivingPin := refCmdData.n32Data[0];
+ELSIF (nSpecPropIndex + 1) = refCmdData.aHeader[1] THEN
+	nOffsetRightDrivingPin := refCmdData.n32Data[0];
+ELSIF (nSpecPropIndex + 2) = refCmdData.aHeader[1] THEN
+	nDrivingPinThickness := refCmdData.n32Data[0];
+ELSIF (nSpecPropIndex + 3) = refCmdData.aHeader[1] THEN
+	nTransferPosLeft := refCmdData.n32Data[0];
+ELSIF (nSpecPropIndex + 4) = refCmdData.aHeader[1] THEN
+	nTransferPosRight := refCmdData.n32Data[0];
+ELSIF (nSpecPropIndex + 5) = refCmdData.aHeader[1] THEN
+	nSafePosLeft := refCmdData.n32Data[0];
+ELSIF (nSpecPropIndex + 6) = refCmdData.aHeader[1] THEN
+	nSafePosRight := refCmdData.n32Data[0];
+ELSIF (nSpecPropIndex + 7) = refCmdData.aHeader[1] THEN
+	nTrayLength := refCmdData.n32Data[0];
+ELSIF (nSpecPropIndex + 8) = refCmdData.aHeader[1] THEN
+	nHollowDistance := refCmdData.n32Data[0];
+ELSIF (nSpecPropIndex + 9) = refCmdData.aHeader[1] THEN
+	nHollowWidth := refCmdData.n32Data[0];	
+ELSE
+	M_SetSingleProp := SUPER^.M_SetSingleProp(refCmdData);
+END_IF]]></ST>
+      </Implementation>
+    </Method>
+    <Method Name="M_Stop" Id="{b2bd02de-7942-4f60-8355-6d95f36613c5}">
+      <Declaration><![CDATA[METHOD M_Stop : ERRORID
+]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[IF bInit OR bMoveSlider OR bTurnDrivingPin THEN
+	bStop := TRUE;	
+END_IF]]></ST>
+      </Implementation>
+    </Method>
+    <Property Name="P_bReadyForDeliveringLeft" Id="{a1e168d0-9bd1-4f58-a1de-785648855908}">
+      <Declaration><![CDATA[PROPERTY P_bReadyForDeliveringLeft : BOOL]]></Declaration>
+      <Get Name="Get" Id="{c5401055-697a-4f08-b342-a0948e64d63b}">
+        <Declaration><![CDATA[VAR
+END_VAR
+]]></Declaration>
+        <Implementation>
+          <ST><![CDATA[{IF defined(Stacker)}
+//Stacker muss auf TransferPosPrinter1 stehen
+//Stacker muss auf irgendeinem Shelf stehen
+//Trays müssen hier nicht unbedingt ausgerichtet sein?
+//Sensor "TrayDetection" muss FALSE sein
+P_bReadyForDeliveringLeft := (afbStacker[1].P_eCurrentSpinPositon = E_StackerRotPosition.TransferPositionPrinter1) AND
+ 						(afbStacker[1].P_nCurrentShelf > 0) AND afbStacker[1].P_bTraysAligned AND NOT afbStacker[1].P_bTrayInCurrentShelf;
+{ELSE}
+P_bReadyForDeliveringLeft := NOT bReadyFlagLeft;
+{END_IF}]]></ST>
+        </Implementation>
+      </Get>
+    </Property>
+    <Property Name="P_bReadyForDeliveringRight" Id="{06286751-01ae-4609-9fcf-acd33d5e6cce}">
+      <Declaration><![CDATA[PROPERTY P_bReadyForDeliveringRight : BOOL]]></Declaration>
+      <Get Name="Get" Id="{bd1972c5-eb93-4034-acd7-c1f17ea5e2ac}">
+        <Declaration><![CDATA[VAR
+END_VAR
+]]></Declaration>
+        <Implementation>
+          <ST><![CDATA[P_bReadyForDeliveringRight := NOT bReadyFlagRight;]]></ST>
+        </Implementation>
+      </Get>
+    </Property>
+    <Property Name="P_bReadyForTakingLeft" Id="{c4557297-cfb0-42b5-adef-97e3164049b0}">
+      <Declaration><![CDATA[PROPERTY P_bReadyForTakingLeft : BOOL]]></Declaration>
+      <Get Name="Get" Id="{eecb36ee-76c8-49ad-8f63-0b40598c7083}">
+        <Declaration><![CDATA[VAR
+END_VAR
+]]></Declaration>
+        <Implementation>
+          <ST><![CDATA[{IF defined(Stacker)}
+//Stacker muss auf TransferPosPrinter1 stehen
+//Stacker muss auf irgendeinem Shelf stehen
+//Trays müssen genau ausgerichtet sein (Aligned)
+//Sensor "TrayDetection" muss TRUE sein
+P_bReadyForTakingLeft := (afbStacker[1].P_eCurrentSpinPositon = E_StackerRotPosition.TransferPositionPrinter1) AND
+ 						(afbStacker[1].P_nCurrentShelf > 0) AND afbStacker[1].P_bTraysAligned AND (afbStacker[1].P_bTrayInCurrentShelf);
+{ELSE}
+P_bReadyForTakingLeft := bReadyFlagLeft;
+{END_IF}
+
+]]></ST>
+        </Implementation>
+      </Get>
+    </Property>
+    <Property Name="P_bReadyForTakingRight" Id="{0c850681-6802-4548-bd65-c6059b21d8ec}">
+      <Declaration><![CDATA[PROPERTY P_bReadyForTakingRight : BOOL]]></Declaration>
+      <Get Name="Get" Id="{8b8ff628-e28a-484e-9600-ebb940ce2f98}">
+        <Declaration><![CDATA[VAR
+END_VAR
+]]></Declaration>
+        <Implementation>
+          <ST><![CDATA[P_bReadyForTakingRight := bReadyFlagRight;]]></ST>
+        </Implementation>
+      </Get>
+    </Property>
+    <Property Name="P_bStopAllOnError" Id="{aad59fad-b229-4a24-95f9-9dc9708fcfb0}">
+      <Declaration><![CDATA[PROPERTY P_bStopAllOnError : BOOL]]></Declaration>
+      <Get Name="Get" Id="{07437681-5c53-4a00-9463-abc375bf6c1d}">
+        <Declaration><![CDATA[VAR
+END_VAR
+]]></Declaration>
+        <Implementation>
+          <ST><![CDATA[]]></ST>
+        </Implementation>
+      </Get>
+    </Property>
+    <Property Name="P_nDrivingPinGap" Id="{c822823c-ef47-496c-aa26-c3bf8d34c5fe}">
+      <Declaration><![CDATA[PROPERTY P_nDrivingPinGap : DINT]]></Declaration>
+      <Get Name="Get" Id="{9ddd8816-ec40-416f-9dbe-f79092ab4933}">
+        <Declaration><![CDATA[VAR
+END_VAR
+]]></Declaration>
+        <Implementation>
+          <ST><![CDATA[P_nDrivingPinGap := (nHollowWidth - nDrivingPinThickness) / 2;]]></ST>
+        </Implementation>
+      </Get>
+    </Property>
+    <Property Name="P_nHollowDistance" Id="{376a6c35-a82e-4337-9220-acfc640320fa}">
+      <Declaration><![CDATA[PROPERTY P_nHollowDistance : DINT]]></Declaration>
+      <Get Name="Get" Id="{95952aeb-0d16-4240-9180-df73750a03ca}">
+        <Declaration><![CDATA[VAR
+END_VAR
+]]></Declaration>
+        <Implementation>
+          <ST><![CDATA[P_nHollowDistance := nHollowDistance;]]></ST>
+        </Implementation>
+      </Get>
+    </Property>
+    <Property Name="P_nHollowToHollow" Id="{d4a6752c-cdbd-4ca4-a321-4d353a885a21}">
+      <Declaration><![CDATA[PROPERTY P_nHollowToHollow : DINT]]></Declaration>
+      <Get Name="Get" Id="{5730f85c-0312-4a09-a891-4cb93d0c4b77}">
+        <Declaration><![CDATA[VAR
+END_VAR
+]]></Declaration>
+        <Implementation>
+          <ST><![CDATA[P_nHollowToHollow := nTrayLength - 2 * nHollowDistance; ]]></ST>
+        </Implementation>
+      </Get>
+    </Property>
+    <Property Name="P_nMaxSliderPos" Id="{9ec417b8-4c8a-4b44-a2ee-e93c39f6d581}">
+      <Declaration><![CDATA[PROPERTY P_nMaxSliderPos : DINT]]></Declaration>
+      <Get Name="Get" Id="{0c75af73-f7ab-4f3a-8ca5-c854a8c1b035}">
+        <Declaration><![CDATA[VAR
+END_VAR
+]]></Declaration>
+        <Implementation>
+          <ST><![CDATA[P_nMaxSliderPos := pSliderRef^.P_nMaxPos;]]></ST>
+        </Implementation>
+      </Get>
+    </Property>
+    <Property Name="P_nMaxSliderSpeed" Id="{1bd4398a-e48c-408c-b388-d1625157b119}">
+      <Declaration><![CDATA[PROPERTY P_nMaxSliderSpeed : DINT]]></Declaration>
+      <Get Name="Get" Id="{5c755d7b-a742-4a86-9419-b4c8a153464d}">
+        <Declaration><![CDATA[VAR
+END_VAR
+]]></Declaration>
+        <Implementation>
+          <ST><![CDATA[P_nMaxSliderSpeed := pSliderRef^.P_nMaxSpeed;]]></ST>
+        </Implementation>
+      </Get>
+    </Property>
+    <Property Name="P_nMinSliderPos" Id="{00974cf4-f0f1-499f-93ee-f18ceffbd844}">
+      <Declaration><![CDATA[PROPERTY P_nMinSliderPos : DINT]]></Declaration>
+      <Get Name="Get" Id="{75aaed50-e367-45c5-9165-69eb4db5111a}">
+        <Declaration><![CDATA[VAR
+END_VAR
+]]></Declaration>
+        <Implementation>
+          <ST><![CDATA[P_nMinSliderPos := pSliderRef^.P_nMinPos;]]></ST>
+        </Implementation>
+      </Get>
+    </Property>
+    <Property Name="P_nSafePosLeft" Id="{7728de1f-7d2d-451e-a386-3176c0c47e33}">
+      <Declaration><![CDATA[PROPERTY P_nSafePosLeft : DINT]]></Declaration>
+      <Get Name="Get" Id="{e037a8f6-3341-47ff-bff0-171c0d2cda1e}">
+        <Declaration><![CDATA[VAR
+END_VAR
+]]></Declaration>
+        <Implementation>
+          <ST><![CDATA[P_nSafePosLeft := nSafePosLeft;]]></ST>
+        </Implementation>
+      </Get>
+    </Property>
+    <Property Name="P_nSafePosRight" Id="{d65845ba-6a47-4b89-9bfb-883087647d96}">
+      <Declaration><![CDATA[PROPERTY P_nSafePosRight : DINT]]></Declaration>
+      <Get Name="Get" Id="{5d6021bb-e9eb-4607-a1c7-e982f510e1de}">
+        <Declaration><![CDATA[VAR
+END_VAR
+]]></Declaration>
+        <Implementation>
+          <ST><![CDATA[P_nSafePosRight := nSafePosRight;]]></ST>
+        </Implementation>
+      </Get>
+    </Property>
+    <Property Name="P_nTransferPosLeft" Id="{24fd4392-4300-4637-a330-ea5b43400e32}">
+      <Declaration><![CDATA[PROPERTY P_nTransferPosLeft : DINT]]></Declaration>
+      <Get Name="Get" Id="{c490088a-dc09-4895-b7d0-47e124755e62}">
+        <Declaration><![CDATA[VAR
+END_VAR
+]]></Declaration>
+        <Implementation>
+          <ST><![CDATA[P_nTransferPosLeft := nTransferPosLeft;]]></ST>
+        </Implementation>
+      </Get>
+    </Property>
+    <Property Name="P_nTransferPosRight" Id="{326bbc63-d6e8-43c5-bee1-077de176a5a4}">
+      <Declaration><![CDATA[PROPERTY P_nTransferPosRight : DINT]]></Declaration>
+      <Get Name="Get" Id="{27424c0b-c9b0-4974-8d1d-8c2a8628e5d0}">
+        <Declaration><![CDATA[VAR
+END_VAR
+]]></Declaration>
+        <Implementation>
+          <ST><![CDATA[P_nTransferPosRight := nTransferPosRight;]]></ST>
+        </Implementation>
+      </Get>
+    </Property>
+    <Property Name="P_nTrayLength" Id="{86c4b505-dbb3-4ef0-98c5-c8e3fef4fecc}">
+      <Declaration><![CDATA[PROPERTY P_nTrayLength : DINT]]></Declaration>
+      <Get Name="Get" Id="{6fb47719-7cc4-4a38-bbb9-711058e74905}">
+        <Declaration><![CDATA[VAR
+END_VAR
+]]></Declaration>
+        <Implementation>
+          <ST><![CDATA[P_nTrayLength := nTrayLength;]]></ST>
+        </Implementation>
+      </Get>
+    </Property>
+    <LineIds Name="FB_TrayTransporter">
+      <LineId Id="6" Count="1" />
+      <LineId Id="116" Count="0" />
+      <LineId Id="8" Count="6" />
+      <LineId Id="83" Count="0" />
+      <LineId Id="88" Count="0" />
+      <LineId Id="91" Count="9" />
+      <LineId Id="89" Count="0" />
+      <LineId Id="164" Count="2" />
+      <LineId Id="168" Count="0" />
+      <LineId Id="623" Count="2" />
+      <LineId Id="169" Count="0" />
+      <LineId Id="171" Count="1" />
+      <LineId Id="178" Count="0" />
+      <LineId Id="174" Count="1" />
+      <LineId Id="170" Count="0" />
+      <LineId Id="167" Count="0" />
+      <LineId Id="349" Count="1" />
+      <LineId Id="352" Count="0" />
+      <LineId Id="354" Count="0" />
+      <LineId Id="627" Count="2" />
+      <LineId Id="355" Count="0" />
+      <LineId Id="357" Count="4" />
+      <LineId Id="356" Count="0" />
+      <LineId Id="353" Count="0" />
+      <LineId Id="527" Count="2" />
+      <LineId Id="534" Count="0" />
+      <LineId Id="631" Count="2" />
+      <LineId Id="535" Count="6" />
+      <LineId Id="530" Count="0" />
+      <LineId Id="84" Count="0" />
+      <LineId Id="101" Count="6" />
+      <LineId Id="221" Count="0" />
+      <LineId Id="223" Count="0" />
+      <LineId Id="226" Count="0" />
+      <LineId Id="228" Count="2" />
+      <LineId Id="296" Count="0" />
+      <LineId Id="231" Count="1" />
+      <LineId Id="234" Count="3" />
+      <LineId Id="109" Count="2" />
+      <LineId Id="295" Count="0" />
+      <LineId Id="112" Count="2" />
+      <LineId Id="108" Count="0" />
+      <LineId Id="31" Count="4" />
+      <LineId Id="703" Count="0" />
+      <LineId Id="702" Count="0" />
+      <LineId Id="37" Count="1" />
+      <LineId Id="433" Count="0" />
+      <LineId Id="436" Count="0" />
+      <LineId Id="705" Count="0" />
+      <LineId Id="437" Count="0" />
+      <LineId Id="448" Count="0" />
+      <LineId Id="451" Count="0" />
+      <LineId Id="449" Count="0" />
+      <LineId Id="453" Count="1" />
+      <LineId Id="452" Count="0" />
+      <LineId Id="450" Count="0" />
+      <LineId Id="438" Count="0" />
+      <LineId Id="464" Count="0" />
+      <LineId Id="440" Count="0" />
+      <LineId Id="706" Count="0" />
+      <LineId Id="458" Count="5" />
+      <LineId Id="441" Count="0" />
+      <LineId Id="439" Count="0" />
+      <LineId Id="708" Count="0" />
+      <LineId Id="707" Count="0" />
+      <LineId Id="709" Count="0" />
+      <LineId Id="552" Count="0" />
+      <LineId Id="544" Count="0" />
+      <LineId Id="547" Count="0" />
+      <LineId Id="545" Count="0" />
+      <LineId Id="548" Count="0" />
+      <LineId Id="554" Count="0" />
+      <LineId Id="550" Count="0" />
+      <LineId Id="546" Count="0" />
+      <LineId Id="542" Count="0" />
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="FB_TrayTransporter.A_Init">
+      <LineId Id="208" Count="0" />
+      <LineId Id="210" Count="0" />
+      <LineId Id="341" Count="0" />
+      <LineId Id="211" Count="20" />
+      <LineId Id="342" Count="0" />
+      <LineId Id="232" Count="42" />
+      <LineId Id="343" Count="1" />
+      <LineId Id="275" Count="52" />
+      <LineId Id="329" Count="10" />
+      <LineId Id="19" Count="0" />
+    </LineIds>
+    <LineIds Name="FB_TrayTransporter.A_LockUnlock">
+      <LineId Id="1" Count="0" />
+      <LineId Id="56" Count="0" />
+      <LineId Id="58" Count="0" />
+      <LineId Id="60" Count="0" />
+      <LineId Id="62" Count="0" />
+      <LineId Id="64" Count="0" />
+      <LineId Id="67" Count="1" />
+      <LineId Id="63" Count="0" />
+      <LineId Id="65" Count="0" />
+      <LineId Id="61" Count="0" />
+      <LineId Id="3" Count="0" />
+      <LineId Id="50" Count="5" />
+      <LineId Id="49" Count="0" />
+    </LineIds>
+    <LineIds Name="FB_TrayTransporter.A_MoveSlider">
+      <LineId Id="9" Count="0" />
+      <LineId Id="17" Count="0" />
+      <LineId Id="25" Count="1" />
+      <LineId Id="28" Count="0" />
+      <LineId Id="33" Count="0" />
+      <LineId Id="30" Count="1" />
+      <LineId Id="29" Count="0" />
+      <LineId Id="32" Count="0" />
+      <LineId Id="27" Count="0" />
+      <LineId Id="34" Count="0" />
+      <LineId Id="10" Count="0" />
+      <LineId Id="2" Count="4" />
+      <LineId Id="1" Count="0" />
+    </LineIds>
+    <LineIds Name="FB_TrayTransporter.A_TurnDrivingPin">
+      <LineId Id="148" Count="23" />
+      <LineId Id="253" Count="0" />
+      <LineId Id="256" Count="45" />
+      <LineId Id="255" Count="0" />
+      <LineId Id="218" Count="27" />
+      <LineId Id="37" Count="0" />
+    </LineIds>
+    <LineIds Name="FB_TrayTransporter.FB_init">
+      <LineId Id="7" Count="1" />
+    </LineIds>
+    <LineIds Name="FB_TrayTransporter.M_AddChild">
+      <LineId Id="8" Count="0" />
+      <LineId Id="42" Count="1" />
+      <LineId Id="47" Count="8" />
+      <LineId Id="57" Count="2" />
+      <LineId Id="61" Count="3" />
+      <LineId Id="45" Count="1" />
+      <LineId Id="44" Count="0" />
+      <LineId Id="16" Count="0" />
+      <LineId Id="14" Count="0" />
+      <LineId Id="10" Count="0" />
+      <LineId Id="7" Count="0" />
+    </LineIds>
+    <LineIds Name="FB_TrayTransporter.M_CancelAction">
+      <LineId Id="20" Count="0" />
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="FB_TrayTransporter.M_CheckAction">
+      <LineId Id="8" Count="2" />
+    </LineIds>
+    <LineIds Name="FB_TrayTransporter.M_ClearAllProps">
+      <LineId Id="3" Count="0" />
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="FB_TrayTransporter.M_ExeAction">
+      <LineId Id="63" Count="4" />
+      <LineId Id="61" Count="0" />
+      <LineId Id="88" Count="0" />
+      <LineId Id="87" Count="0" />
+      <LineId Id="91" Count="0" />
+      <LineId Id="89" Count="1" />
+      <LineId Id="187" Count="0" />
+      <LineId Id="186" Count="0" />
+      <LineId Id="62" Count="0" />
+      <LineId Id="7" Count="0" />
+      <LineId Id="42" Count="6" />
+      <LineId Id="41" Count="0" />
+      <LineId Id="57" Count="3" />
+      <LineId Id="71" Count="1" />
+      <LineId Id="75" Count="1" />
+      <LineId Id="74" Count="0" />
+      <LineId Id="77" Count="0" />
+      <LineId Id="174" Count="0" />
+      <LineId Id="181" Count="0" />
+      <LineId Id="175" Count="0" />
+      <LineId Id="177" Count="0" />
+      <LineId Id="179" Count="1" />
+      <LineId Id="178" Count="0" />
+      <LineId Id="68" Count="0" />
+      <LineId Id="81" Count="1" />
+      <LineId Id="96" Count="1" />
+      <LineId Id="99" Count="5" />
+      <LineId Id="107" Count="1" />
+      <LineId Id="106" Count="0" />
+      <LineId Id="109" Count="2" />
+      <LineId Id="115" Count="0" />
+      <LineId Id="121" Count="0" />
+      <LineId Id="125" Count="1" />
+      <LineId Id="124" Count="0" />
+      <LineId Id="122" Count="0" />
+      <LineId Id="129" Count="0" />
+      <LineId Id="132" Count="2" />
+      <LineId Id="120" Count="0" />
+      <LineId Id="135" Count="2" />
+      <LineId Id="141" Count="0" />
+      <LineId Id="139" Count="0" />
+      <LineId Id="142" Count="1" />
+      <LineId Id="138" Count="0" />
+      <LineId Id="118" Count="0" />
+      <LineId Id="112" Count="0" />
+      <LineId Id="114" Count="0" />
+      <LineId Id="148" Count="0" />
+      <LineId Id="56" Count="0" />
+      <LineId Id="163" Count="0" />
+      <LineId Id="149" Count="0" />
+      <LineId Id="156" Count="1" />
+      <LineId Id="155" Count="0" />
+      <LineId Id="162" Count="0" />
+      <LineId Id="159" Count="2" />
+      <LineId Id="153" Count="0" />
+      <LineId Id="34" Count="2" />
+      <LineId Id="50" Count="1" />
+      <LineId Id="49" Count="0" />
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="FB_TrayTransporter.M_GetAbsPos">
+      <LineId Id="3" Count="34" />
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="FB_TrayTransporter.M_GetActionBusy">
+      <LineId Id="9" Count="3" />
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="FB_TrayTransporter.M_GetAllProps">
+      <LineId Id="37" Count="7" />
+      <LineId Id="62" Count="12" />
+      <LineId Id="4" Count="1" />
+      <LineId Id="85" Count="0" />
+      <LineId Id="87" Count="1" />
+      <LineId Id="90" Count="0" />
+      <LineId Id="89" Count="0" />
+      <LineId Id="97" Count="2" />
+      <LineId Id="96" Count="0" />
+      <LineId Id="93" Count="0" />
+      <LineId Id="92" Count="0" />
+      <LineId Id="95" Count="0" />
+      <LineId Id="94" Count="0" />
+      <LineId Id="101" Count="0" />
+      <LineId Id="100" Count="0" />
+      <LineId Id="103" Count="0" />
+      <LineId Id="102" Count="0" />
+      <LineId Id="105" Count="0" />
+      <LineId Id="104" Count="0" />
+      <LineId Id="91" Count="0" />
+      <LineId Id="86" Count="0" />
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="FB_TrayTransporter.M_GetSliderPosTrayInSlot">
+      <LineId Id="24" Count="26" />
+      <LineId Id="8" Count="0" />
+    </LineIds>
+    <LineIds Name="FB_TrayTransporter.M_GetSlot">
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="FB_TrayTransporter.M_GetSlotFromChild">
+      <LineId Id="11" Count="10" />
+      <LineId Id="6" Count="0" />
+    </LineIds>
+    <LineIds Name="FB_TrayTransporter.M_GetStateForTransfer">
+      <LineId Id="90" Count="0" />
+      <LineId Id="94" Count="2" />
+      <LineId Id="99" Count="1" />
+      <LineId Id="98" Count="0" />
+      <LineId Id="91" Count="0" />
+      <LineId Id="101" Count="0" />
+      <LineId Id="103" Count="0" />
+      <LineId Id="102" Count="0" />
+      <LineId Id="92" Count="1" />
+      <LineId Id="5" Count="0" />
+      <LineId Id="7" Count="0" />
+      <LineId Id="18" Count="0" />
+      <LineId Id="53" Count="0" />
+      <LineId Id="57" Count="0" />
+      <LineId Id="61" Count="0" />
+      <LineId Id="63" Count="1" />
+      <LineId Id="62" Count="0" />
+      <LineId Id="59" Count="1" />
+      <LineId Id="58" Count="0" />
+      <LineId Id="12" Count="0" />
+      <LineId Id="20" Count="0" />
+      <LineId Id="38" Count="1" />
+      <LineId Id="21" Count="0" />
+      <LineId Id="9" Count="0" />
+      <LineId Id="22" Count="0" />
+      <LineId Id="67" Count="8" />
+      <LineId Id="24" Count="0" />
+      <LineId Id="40" Count="2" />
+      <LineId Id="26" Count="0" />
+      <LineId Id="10" Count="0" />
+      <LineId Id="27" Count="0" />
+      <LineId Id="104" Count="1" />
+      <LineId Id="107" Count="0" />
+      <LineId Id="106" Count="0" />
+      <LineId Id="29" Count="0" />
+      <LineId Id="43" Count="2" />
+      <LineId Id="31" Count="0" />
+      <LineId Id="11" Count="0" />
+      <LineId Id="33" Count="0" />
+      <LineId Id="108" Count="3" />
+      <LineId Id="35" Count="0" />
+      <LineId Id="46" Count="2" />
+      <LineId Id="37" Count="0" />
+      <LineId Id="16" Count="1" />
+      <LineId Id="8" Count="0" />
+    </LineIds>
+    <LineIds Name="FB_TrayTransporter.M_RemoveListEntry">
+      <LineId Id="3" Count="7" />
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="FB_TrayTransporter.M_SetAllProps">
+      <LineId Id="3" Count="3" />
+      <LineId Id="41" Count="0" />
+      <LineId Id="159" Count="1" />
+      <LineId Id="175" Count="0" />
+      <LineId Id="178" Count="0" />
+      <LineId Id="192" Count="0" />
+      <LineId Id="162" Count="0" />
+      <LineId Id="176" Count="0" />
+      <LineId Id="180" Count="0" />
+      <LineId Id="193" Count="0" />
+      <LineId Id="164" Count="0" />
+      <LineId Id="177" Count="0" />
+      <LineId Id="179" Count="0" />
+      <LineId Id="181" Count="0" />
+      <LineId Id="194" Count="0" />
+      <LineId Id="168" Count="0" />
+      <LineId Id="170" Count="1" />
+      <LineId Id="166" Count="0" />
+      <LineId Id="42" Count="3" />
+      <LineId Id="49" Count="4" />
+      <LineId Id="58" Count="0" />
+      <LineId Id="61" Count="8" />
+      <LineId Id="195" Count="2" />
+      <LineId Id="75" Count="8" />
+      <LineId Id="100" Count="11" />
+      <LineId Id="113" Count="2" />
+      <LineId Id="47" Count="0" />
+      <LineId Id="9" Count="1" />
+      <LineId Id="126" Count="1" />
+      <LineId Id="137" Count="0" />
+      <LineId Id="129" Count="0" />
+      <LineId Id="138" Count="0" />
+      <LineId Id="130" Count="0" />
+      <LineId Id="146" Count="2" />
+      <LineId Id="145" Count="0" />
+      <LineId Id="139" Count="0" />
+      <LineId Id="131" Count="0" />
+      <LineId Id="140" Count="0" />
+      <LineId Id="133" Count="0" />
+      <LineId Id="141" Count="0" />
+      <LineId Id="134" Count="0" />
+      <LineId Id="142" Count="0" />
+      <LineId Id="135" Count="0" />
+      <LineId Id="143" Count="0" />
+      <LineId Id="136" Count="0" />
+      <LineId Id="144" Count="0" />
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="FB_TrayTransporter.M_SetSingleProp">
+      <LineId Id="3" Count="13" />
+      <LineId Id="24" Count="0" />
+      <LineId Id="23" Count="0" />
+      <LineId Id="26" Count="0" />
+      <LineId Id="25" Count="0" />
+      <LineId Id="28" Count="0" />
+      <LineId Id="27" Count="0" />
+      <LineId Id="17" Count="1" />
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="FB_TrayTransporter.M_Stop">
+      <LineId Id="12" Count="2" />
+    </LineIds>
+    <LineIds Name="FB_TrayTransporter.P_bReadyForDeliveringLeft.Get">
+      <LineId Id="10" Count="3" />
+      <LineId Id="8" Count="0" />
+      <LineId Id="15" Count="1" />
+      <LineId Id="9" Count="0" />
+      <LineId Id="5" Count="0" />
+      <LineId Id="14" Count="0" />
+    </LineIds>
+    <LineIds Name="FB_TrayTransporter.P_bReadyForDeliveringRight.Get">
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="FB_TrayTransporter.P_bReadyForTakingLeft.Get">
+      <LineId Id="5" Count="0" />
+      <LineId Id="8" Count="0" />
+      <LineId Id="11" Count="0" />
+      <LineId Id="15" Count="0" />
+      <LineId Id="12" Count="2" />
+      <LineId Id="7" Count="0" />
+      <LineId Id="10" Count="0" />
+      <LineId Id="9" Count="0" />
+      <LineId Id="6" Count="0" />
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="FB_TrayTransporter.P_bReadyForTakingRight.Get">
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="FB_TrayTransporter.P_bStopAllOnError.Get">
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="FB_TrayTransporter.P_nDrivingPinGap.Get">
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="FB_TrayTransporter.P_nHollowDistance.Get">
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="FB_TrayTransporter.P_nHollowToHollow.Get">
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="FB_TrayTransporter.P_nMaxSliderPos.Get">
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="FB_TrayTransporter.P_nMaxSliderSpeed.Get">
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="FB_TrayTransporter.P_nMinSliderPos.Get">
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="FB_TrayTransporter.P_nSafePosLeft.Get">
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="FB_TrayTransporter.P_nSafePosRight.Get">
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="FB_TrayTransporter.P_nTransferPosLeft.Get">
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="FB_TrayTransporter.P_nTransferPosRight.Get">
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="FB_TrayTransporter.P_nTrayLength.Get">
+      <LineId Id="2" Count="0" />
+    </LineIds>
+  </POU>
+</TcPlcObject>

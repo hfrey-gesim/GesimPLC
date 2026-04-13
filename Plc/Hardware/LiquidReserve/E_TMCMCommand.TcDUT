@@ -1,0 +1,20 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<TcPlcObject Version="1.1.0.1" ProductVersion="3.1.0.25">
+  <DUT Name="E_TMCMCommand" Id="{d5e8eb8a-ad93-465f-b4f6-66cda107ad17}">
+    <Declaration><![CDATA[TYPE E_TMCMCommand :
+(
+	//Commands setzt sich aus TMCL-Instruction + TMCL-Type zusammen
+	ROTATE_R := 256,			//MSB= ROR=1 , LSB= 0
+	ROTATE_L := 512,			//MSB= ROL=2 , LSB= 0
+	STOP := 768,				//MSB= STOP=3 , LSB=0
+	MOVE_ABS := 1024,			//MSB= MVP=4 , LSB= ABS= 0
+	MOVE_REL := 1025,			//MSB= MVP=4 , LSB= REL= 1
+	SET_SPEED := 1284,			//MSB= SAP=5 , LSB= max positioning speed= 4
+	GET_ACT_SPEED := 1539,		//MSB= GAP=6 , LSB= actual speed= 3
+	GET_POS_REACHED := 1544		//MSB= GAP=6 , LSB= position reached= 8
+)UINT;
+END_TYPE
+]]></Declaration>
+    <ObjectProperties />
+  </DUT>
+</TcPlcObject>

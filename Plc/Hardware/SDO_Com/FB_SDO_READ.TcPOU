@@ -1,0 +1,98 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<TcPlcObject Version="1.1.0.1" ProductVersion="3.1.4022.18">
+  <POU Name="FB_SDO_READ" Id="{56abaa25-c3f3-4786-aa46-4eaf13f16079}" SpecialFunc="None">
+    <Declaration><![CDATA[FUNCTION_BLOCK FB_SDO_READ
+VAR_INPUT
+	sADSNetID		: STRING(23); 	//AMSNetID von Klemme EL6751. Can be empty if only one local single channel card is present
+    nPortNr			: WORD;         //Port No. vom CANopen-Knoten (siehe Gerätemanager)
+    nIndex			: DWORD;      	//ObjectIndex vom zu lesenden CANopen-Objecteintrag
+    nSubIndex		: DWORD;   		//SubIndex vom zu lesenden CANopen-Objecteintrag
+    nDataLength		: DWORD;   		//Länge des zu lesenden Datums (max 4 Byte)
+    bExecute		: BOOL;
+END_VAR
+
+VAR_OUTPUT
+	bBusy			: BOOL;
+	nData			: DINT;
+	sData			: STRING(20);
+    bError			: BOOL;
+    nAdsErrorId		: ERRORID;	//Ads-ErrorId
+	nSdoErrorId		: UDINT;	//Sdo-ErrorId
+END_VAR
+
+VAR
+    nState			: USINT;
+    ADSREAD			: ADSREAD;
+	uSdoData		: U_SDO_DATA;	//Union mit empfangenen Bytes und entsprechendem DINT
+	nCount			: USINT;
+END_VAR
+]]></Declaration>
+    <Implementation>
+      <ST><![CDATA[IF bExecute THEN
+	nCount := nCount + 1;
+	
+	CASE nState OF
+		0:	
+			bBusy := TRUE;
+			MEMSET(ADR(uSdoData),0,SIZEOF(uSdoData));
+			ADSREAD(NETID:= sADSNetID, PORT:= nPortNr, IDXGRP:= nIndex, IDXOFFS:= nSubIndex, 
+					LEN:= nDataLength, DESTADDR:= ADR(uSdoData), READ:= TRUE, TMOUT:= T#5S);
+
+			IF ADSREAD.ERR THEN
+				bError := TRUE;
+				//ADSREAD.ERRID in Ads-Error und Sdo-Error aufsplitten
+				// Ads-Error steht in Bit 0-15
+				nAdsErrorId := UDINT_TO_UINT(ADSREAD.ERRID AND 16#0000FFFF);
+				//Sdo-Error steht in Bit 16-31
+				nSdoErrorId := F_AdsError_TO_SdoError(ADSREAD.ERRID);
+				//Gelesenes Datum aus Union in Output-Datum übertragen
+				nData := uSdoData.nData;
+				ADSREAD(READ:= FALSE);
+				bBusy := FALSE;
+				nState := 99;
+			ELSE
+				nState := 1;
+			END_IF
+		1:
+			ADSREAD(READ:= FALSE); //Wenn hier schon auf False gesetzt wird, braucht es weniger Zyklen zum lesen
+
+			IF ADSREAD.ERR THEN
+				bError := TRUE;
+				//ADSREAD.ERRID in Ads-Error und Sdo-Error aufsplitten
+				// Ads-Error steht in Bit 0-15
+				nAdsErrorId := UDINT_TO_UINT(ADSREAD.ERRID AND 16#0000FFFF);
+				//Sdo-Error steht in Bit 16-31
+				nSdoErrorId := F_AdsError_TO_SdoError(ADSREAD.ERRID);
+				//Gelesenes Datum aus Union in Output-Datum übertragen
+				nData := uSdoData.nData;
+				sData := uSdoData.sData;
+				ADSREAD(READ:= FALSE);
+				bBusy := FALSE;
+				nState := 99;
+			ELSE
+				IF NOT ADSREAD.BUSY THEN
+					//Gelesenes Datum aus Union in Output-Datum übertragen
+					nData := uSdoData.nData;
+					sData := uSdoData.sData;
+					ADSREAD(READ:= FALSE);
+					nState := 2;
+					bBusy := FALSE;
+				END_IF; 				
+			END_IF
+	END_CASE
+ELSE
+	bBusy := FALSE;
+	bError := FALSE;
+	nAdsErrorId := 0;
+	nSdoErrorId := 0;
+	nState := 0;
+	nData := 0;
+	sData := '';
+END_IF]]></ST>
+    </Implementation>
+    <LineIds Name="FB_SDO_READ">
+      <LineId Id="87" Count="59" />
+      <LineId Id="2" Count="0" />
+    </LineIds>
+  </POU>
+</TcPlcObject>

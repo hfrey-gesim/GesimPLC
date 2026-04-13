@@ -1,0 +1,135 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<TcPlcObject Version="1.1.0.1">
+  <POU Name="MAIN" Id="{f6936619-0d38-41b8-915c-29efcf090a92}" SpecialFunc="None">
+    <Declaration><![CDATA[PROGRAM MAIN
+VAR
+	i				: UINT;
+	fbUPS 			: FB_S_UPS;
+	fbGetSystemTime : GETSYSTEMTIME;
+	bInhibitSequInfo: BOOL;
+	nErrInhibitCnt 	: UINT;
+	nState			: USINT;
+	
+	iter : FB_ObjCollectIterator;
+	pObject : POINTER TO FB_Object;
+	
+	(*fbRouterStatusInfo : FB_GetRouterStatusInfo();
+	info   : ST_TcRouterStatusInfo;*)
+
+END_VAR
+]]></Declaration>
+    <Implementation>
+      <ST><![CDATA[//Sytemzeit ermitteln
+fbGetSystemTime(timeLoDW=>timeStamp.dwLowDateTime, timeHiDW=>timeStamp.dwHighDateTime );
+//Stromausfall überwachen
+fbUPS(iPLCPort:= 851);
+
+(*fbRouterStatusInfo(bExecute:= TRUE);
+IF NOT fbRouterStatusInfo.bBusy THEN
+	info := fbRouterStatusInfo.info;
+	fbRouterStatusInfo(bExecute:= FALSE);
+END_IF*)
+
+CASE nState OF
+	0:	fbErrorList.A_Reset();
+		fbObjectDirectory.M_Init();
+		nState := 1;
+		//SimutateHwModules();
+		//nState := 2;
+		
+	1:	ScanHwModules();
+		IF NOT ScanHwModules.bBusy THEN
+			IF ScanHwModules.bError THEN
+				//MainDispacher in ErrorState setzen!!
+				MainDispacher.M_ForceError();
+				nState := 99;
+			ELSE
+				nState := 2;
+			END_IF
+		END_IF
+		
+	2:	//Running
+		A_Running();
+	
+	99:	//In diesem State ist nur FirmwareUpdate möglich
+		PC_Control();
+		MainDispacher();
+		
+END_CASE
+
+	
+//Nächsten Error aus Errorlist holen (alle 100ms bzw. 10 Zyklen)
+//Wenn ein Fehler ausgewertet wurde, dann den nächsten erst wieder nach 10 Zyklen auswerten
+//Wenn ein Error zurückgegeben wird, dann wird dieser in stNotifyError geschrieben.
+//-> Notification-Variable, welche bei Änderung and GUI gesendet wird.
+nErrInhibitCnt := SHR(nErrInhibitCnt,1);
+IF fbErrorList.nCount > 0 AND nErrInhibitCnt = 0 THEN
+	fbErrorList.A_Get(getValue=> stNotifyError);
+	fbErrorList.A_Remove();
+	nErrInhibitCnt := 512;
+END_IF
+//Nächste Info aus SequenceInfoList holen (alle 2 Zyklen)
+//Wenn eine SequenceInfo zurückgegeben wurde, dann wird diese in stSequenzInfo geschrieben.
+//-> Notification-Variable, welche bei Änderung and GUI gesendet wird.
+bInhibitSequInfo := NOT bInhibitSequInfo;
+IF bInhibitSequInfo THEN
+	fbSequenceInfo.M_GetHead(stSequenceStatus:=stSequenceInfo);		
+END_IF
+]]></ST>
+    </Implementation>
+    <Action Name="A_Running" Id="{36c03201-c600-4dcb-846c-0196d26b2359}">
+      <Implementation>
+        <ST><![CDATA[PC_Control();
+
+MainDispacher();
+
+fbSettings();
+
+ActionDispacher();
+
+fbComplexAction();
+
+IF fbConfiguration.P_bActivated THEN
+	//Wird nur aufgerufen, um die Kollisionshöhe bei Bedarf neu zu berechnen
+	afbWorkplate[1]();
+	
+	//Alle Devices aufrufen
+	fbObjectDirectory.P_pDeviceCollection^.M_GetIterator(iter);
+	WHILE iter.pNode > 0 DO
+		pObject := iter.pNode^.P_pObject; 
+		pObject^();
+		iter.M_Increment();
+	END_WHILE
+	
+	IF afbDryPad[1].P_nObjectID > 0 THEN
+		afbDryPad[1].M_UpdateProcessData();
+	END_IF
+	
+END_IF
+
+PerformHardware();
+]]></ST>
+      </Implementation>
+    </Action>
+    <LineIds Name="MAIN">
+      <LineId Id="868" Count="55" />
+      <LineId Id="251" Count="0" />
+    </LineIds>
+    <LineIds Name="MAIN.A_Running">
+      <LineId Id="260" Count="10" />
+      <LineId Id="421" Count="1" />
+      <LineId Id="424" Count="0" />
+      <LineId Id="436" Count="0" />
+      <LineId Id="425" Count="0" />
+      <LineId Id="429" Count="0" />
+      <LineId Id="427" Count="0" />
+      <LineId Id="430" Count="0" />
+      <LineId Id="428" Count="0" />
+      <LineId Id="426" Count="0" />
+      <LineId Id="437" Count="3" />
+      <LineId Id="432" Count="0" />
+      <LineId Id="387" Count="2" />
+      <LineId Id="6" Count="0" />
+    </LineIds>
+  </POU>
+</TcPlcObject>

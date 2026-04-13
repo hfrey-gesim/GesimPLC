@@ -1,0 +1,247 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<TcPlcObject Version="1.1.0.1">
+  <POU Name="FirmwUpdate" Id="{23357939-509a-4d88-a9c7-09cc51855aa0}" SpecialFunc="None">
+    <Declaration><![CDATA[PROGRAM FirmwUpdate
+VAR_INPUT
+	pFbCanNode : POINTER TO FB_CanNodeBase;
+	bExecute	: BOOL;
+END_VAR
+VAR_OUTPUT
+	bBusy : BOOL;
+	bError : BOOL;
+	nErrorId : ERRORID;
+	stInfo : ST_FirmwUpdInfo;
+END_VAR
+VAR
+	nStateAction			: UINT;
+	nStateActionNext		: UINT;
+	nStateActionTimeout		: UINT;
+	fbSendCanMessage 		: FB_SendCanMessage(ADR(CANInterfaceCom.stCanInterfaceBuffer));
+	fbS19File				: FB_S19File;
+	aExpectedData			: ARRAY[0..7] OF USINT;
+END_VAR
+]]></Declaration>
+    <Implementation>
+      <ST><![CDATA[//0. File laden und verifizieren
+//1. Check, ob Node da
+//2. Node da? -> reset
+//3. Connect so lange ausführen, bis positive Antwort
+//4. Status abrufen
+//5. Programm start
+//6. Set_MTA
+//7. Programm clear
+//8. Alle Blöcke schreiben
+//9. Programm Ende
+//10. Programm Reset
+IF bExecute THEN
+	CASE nStateAction OF
+		0:	//File laden
+			IF pFbCanNode = 0 THEN
+				nErrorId := E_ErrorIdHwGeneral.ERRORID_InvalidHwRef;
+				nStateAction := 99;
+				bError := TRUE;
+				RETURN;
+			END_IF
+			stInfo.eActState := E_FirmwUpdState.LoadFile;
+			stInfo.nBytesToWrite := 0;
+			stInfo.nWrittenBytes := 0;
+			bBusy := TRUE;
+			{IF defined(WIN10)}
+			fbS19File.A_OpenFile(sFileName:= 'C:\ftp\FirmwUpdate\FirmwUpdate.s19', bExecute:= TRUE);
+			{ELSE}
+			fbS19File.A_OpenFile(sFileName:= '\Hard Disk\ftp\FirmwUpdate\FirmwUpdate.s19', bExecute:= TRUE);
+			{END_IF}
+			IF NOT fbS19File.bBusy THEN
+				IF fbS19File.bError THEN
+					nErrorId := fbS19File.nErrorId;
+					nStateAction := 99;
+				ELSE
+					//Node vorhanden?
+					IF pFbCanNode^.P_bNodeEnabled AND pFbCanNode^.P_nNodeState = 0 THEN
+						pFbCanNode^.P_bStopMonitor := TRUE;	//Überwachung des Node deaktivieren
+						pFbCanNode^.M_ResetApp();
+					END_IF
+					nStateAction := 1;
+				END_IF
+				fbS19File.A_OpenFile(bExecute:= FALSE);
+			END_IF
+			
+		1:	//CONNECT
+			stInfo.eActState := E_FirmwUpdState.Connect;
+			stInfo.nBytesToWrite := fbS19File.P_nBytesToWrite;
+			fbSendCanMessage.aTxData[0] := 16#FF;	//XCP-Command: CONNECT
+			fbSendCanMessage.aTxData[1] := 0;
+			fbSendCanMessage.tTimeout := T#40MS;
+			fbSendCanMessage.nTxLength := 2;
+			nStateActionNext := 2;
+			nStateActionTimeout := 1;
+			nStateAction := 60;
+			//Erwartete Antwort
+			HEXSTR_TO_DATA('FF10000808000101',ADR(aExpectedData),8);
+			
+		2:	//GET_STATUS
+			stInfo.eActState := E_FirmwUpdState.GetStatus;
+			fbSendCanMessage.aTxData[0] := 16#FD;	//XCP-Command: GET_STATUS
+			fbSendCanMessage.tTimeout := T#100MS;
+			fbSendCanMessage.nTxLength := 1;
+			nStateActionNext := 3;
+			nStateActionTimeout := 99;
+			nStateAction := 60;
+			//Erwartete Antwort
+			HEXSTR_TO_DATA('FF00000000000000',ADR(aExpectedData),8);
+			
+		3:	//PROGRAM_START
+			stInfo.eActState := E_FirmwUpdState.ProgramStart;
+			fbSendCanMessage.aTxData[0] := 16#D2;	//XCP-Command: PROGRAM_START
+			fbSendCanMessage.tTimeout := T#100MS;
+			fbSendCanMessage.nTxLength := 1;
+			nStateActionNext := 4;
+			nStateActionTimeout := 99;
+			nStateAction := 60;
+			//Erwartete Antwort
+			HEXSTR_TO_DATA('FF00000800000000',ADR(aExpectedData),8);
+			
+		4:	//SET_MTA
+			stInfo.eActState := E_FirmwUpdState.SetMTA;
+			fbSendCanMessage.aTxData[0] := 16#F6;	//XCP-Command: SET_MTA
+			fbS19File.M_GetStartAdress(ADR(fbSendCanMessage.aTxData[4])); //ab hier wird das Programm im nächsten Schritt gelöscht
+			fbSendCanMessage.tTimeout := T#100MS;
+			fbSendCanMessage.nTxLength := 8;
+			nStateActionNext := 5;
+			nStateActionTimeout := 99;
+			nStateAction := 60;
+			//Erwartete Antwort
+			HEXSTR_TO_DATA('FF00000000000000',ADR(aExpectedData),8);
+			
+		5:	//PROGRAM_CLEAR - 
+			stInfo.eActState := E_FirmwUpdState.ProgramClear;
+			fbSendCanMessage.aTxData[0] := 16#D1;	//XCP-Command: PROGRAM_CLEAR
+			fbS19File.M_GetNoOfTotalBytes(ADR(fbSendCanMessage.aTxData[4])); //Anzahl der zu löschenden Bytes
+			fbSendCanMessage.tTimeout := T#3000MS;
+			fbSendCanMessage.nTxLength := 8;
+			nStateActionNext := 6;
+			nStateActionTimeout := 99;
+			nStateAction := 60;
+			//Erwartete Antwort
+			HEXSTR_TO_DATA('FF00000000000000',ADR(aExpectedData),8);
+	
+		6:	//PROGRAM
+			//Blockaufbau
+			//F6 XX XX XX XX XX XX XX	(SET_MTA)
+			//DO XX XX XX				(PROGRAM)
+			//C9 XX XX XX XX XX XX XX	(PROGRAM_MAX)
+			//C9 XX XX XX XX XX XX XX	(PROGRAM_MAX)
+			//usw
+			//Die Blöcke werden von "fbS19File" gebildet
+			stInfo.eActState := E_FirmwUpdState.Programming;
+			fbS19File.A_FitProgLine(bExecute:= TRUE);
+			IF NOT fbS19File.bBusy THEN
+				stInfo.nWrittenBytes := fbS19File.P_nWrittenBytes;
+				fbSendCanMessage.nTxLength := fbS19File.M_GetProgLine(ADR(fbSendCanMessage.aTxData));
+				fbSendCanMessage.tTimeout := T#100MS;
+				nStateActionTimeout := 99;
+				nStateAction := 60;
+				//Erwartete Antwort
+				HEXSTR_TO_DATA('FF00000000000000',ADR(aExpectedData),8);
+				IF fbS19File.P_bProgLineDone THEN
+					fbS19File.A_FitProgLine(bExecute:= FALSE);
+					nStateActionNext := 7;		
+				END_IF
+			END_IF
+			
+		7:	//PROGRAM (D0 mit SizeParamter 0)
+			fbSendCanMessage.aTxData[0] := 16#D0;	//XCP-Command: PROGRAM
+			fbSendCanMessage.aTxData[1] := 0;		//Size-Paramter 0
+			fbSendCanMessage.tTimeout := T#100MS;
+			fbSendCanMessage.nTxLength := 2;
+			nStateActionNext := 8;
+			nStateActionTimeout := 99;
+			nStateAction := 60;
+			//Erwartete Antwort
+			HEXSTR_TO_DATA('FF00000000000000',ADR(aExpectedData),8);
+		
+		8:	//PROGRAM_RESET
+			fbSendCanMessage.aTxData[0] := 16#CF;	//XCP-Command: PROGRAM_RESET
+			fbSendCanMessage.tTimeout := T#10MS;
+			fbSendCanMessage.nTxLength := 1;
+			//Durch Reset kommt keine Anwort zurück
+			IF pFbCanNode > 0 THEN
+				nStateActionNext := 9;
+				nStateActionTimeout := 9;
+			ELSE
+				nStateActionNext := 80;
+				nStateActionTimeout := 80;
+			END_IF
+			nStateAction := 60;
+			
+		9:	//Close File
+			fbS19File.A_CloseFile(bExecute:= TRUE);
+			IF NOT fbS19File.bBusy THEN
+				fbS19File.A_CloseFile(bExecute:= FALSE);
+				stInfo.eActState := E_FirmwUpdState.WaitForBootup;
+				nStateAction := 10;
+			END_IF
+			
+		10:	//Warten, dass sich Node meldet
+			//Timeout einbauen!!!!!!!!!!!!
+			
+			IF pFbCanNode^.P_nNodeState = 0 THEN
+				stInfo.eActState := E_FirmwUpdState.Ready;	
+				pFbCanNode^.P_bStopMonitor := FALSE;	//Überwachung des Node aktivieren
+				bBusy := FALSE;
+				nStateAction := 80;
+			END_IF
+	END_CASE
+	
+	IF nStateAction = 60 THEN	//CAN-Message senden
+		fbSendCanMessage(nIdentifierTX:= 16#667, nIdentifierRX:= 16#7E1, bExecute:= TRUE);
+		IF NOT fbSendCanMessage.bBusy THEN
+			IF NOT fbSendCanMessage.bError THEN
+				//Response auswerten
+				IF fbSendCanMessage.aRxData[0] = 16#FF THEN	//kein Fehler
+					IF MEMCMP(ADR(fbSendCanMessage.aRxData),ADR(aExpectedData),8) = 0 THEN
+						nStateAction := nStateActionNext;
+					ELSE
+						nStateAction := 99;
+					END_IF
+				ELSIF fbSendCanMessage.aRxData[0] = 16#FE THEN	//Error in respone
+					CASE fbSendCanMessage.aRxData[1] OF
+						16#00:	nErrorId := E_ErrorIdCan.ERRORID_XcpErrCmdSynch;
+						16#10:	nErrorId := E_ErrorIdCan.ERRORID_XcpErrCmdBusy;
+						16#20:	nErrorId := E_ErrorIdCan.ERRORID_XcpErrCmdUnknown;
+						16#22:	nErrorId := E_ErrorIdCan.ERRORID_XcpErrOutOfRange;
+						16#25:	nErrorId := E_ErrorIdCan.ERRORID_XcpErrAccessLocked;
+						16#26:	nErrorId := E_ErrorIdCan.ERRORID_XcpErrPageNotValid;
+						16#29:	nErrorId := E_ErrorIdCan.ERRORID_XcpErrSequence;
+						16#31:	nErrorId := E_ErrorIdCan.ERRORID_XcpErrGeneric;
+					END_CASE
+					nStateAction := 99;
+				END_IF
+			ELSE
+				nStateAction := nStateActionTimeout;
+			END_IF
+			fbSendCanMessage(bExecute:= FALSE);
+		END_IF		
+	END_IF
+	
+	IF nStateAction = 99 THEN
+		stInfo.eActState := E_FirmwUpdState.Error;
+		//CloseFile
+		fbS19File.A_CloseFile(bExecute:= TRUE);
+		IF NOT fbS19File.bBusy THEN
+			bError := TRUE;
+			bBusy := FALSE;
+			nStateAction := 100;
+		END_IF
+	END_IF
+ELSE
+	nStateAction := 0;
+	bError := FALSE;
+END_IF]]></ST>
+    </Implementation>
+    <LineIds Name="FirmwUpdate">
+      <LineId Id="274" Count="214" />
+      <LineId Id="2" Count="0" />
+    </LineIds>
+  </POU>
+</TcPlcObject>

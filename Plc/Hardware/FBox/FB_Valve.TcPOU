@@ -1,0 +1,50 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<TcPlcObject Version="1.1.0.1" ProductVersion="3.1.0.25">
+  <POU Name="FB_Valve" Id="{023069b1-e3a2-43dd-a646-5ec356221c42}">
+    <Declaration><![CDATA[FUNCTION_BLOCK FB_Valve
+VAR_INPUT
+END_VAR
+VAR_OUTPUT
+	bDigiOut1 AT %Q* : BOOL;
+	bDigiOut2 AT %Q* : BOOL;	//Für Ventile mit 2 Spulen und Mittelstellung
+END_VAR
+VAR
+	
+END_VAR
+]]></Declaration>
+    <Implementation>
+      <ST><![CDATA[]]></ST>
+    </Implementation>
+    <Method Name="M_On" Id="{6bb4e1a2-8675-40ca-a1ba-62add57592fe}">
+      <Declaration><![CDATA[METHOD M_On
+VAR_INPUT
+	nChannel	: USINT;	//1 oder 2 bei Ventil mit 2 Spulen und Mittelstellung
+END_VAR
+]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[IF nChannel = 1 THEN
+	bDigiOut1 := TRUE;
+	bDigiOut2 := FALSE;	
+ELSIF nChannel = 2 THEN
+	bDigiOut1 := FALSE;
+	bDigiOut2 := TRUE;
+ELSE
+	bDigiOut1 := FALSE;
+	bDigiOut2 := FALSE;
+END_IF
+]]></ST>
+      </Implementation>
+    </Method>
+    <Method Name="M_Off" Id="{c308813f-c942-41a5-8897-3fde347bedd5}">
+      <Declaration><![CDATA[METHOD M_Off
+VAR_INPUT
+END_VAR
+]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[bDigiOut1 := FALSE;
+bDigiOut2 := FALSE;]]></ST>
+      </Implementation>
+    </Method>
+    <ObjectProperties />
+  </POU>
+</TcPlcObject>

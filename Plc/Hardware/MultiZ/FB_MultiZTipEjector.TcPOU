@@ -1,0 +1,56 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<TcPlcObject Version="1.1.0.1" ProductVersion="3.1.0.25">
+  <POU Name="FB_MultiZTipEjector" Id="{f9e9465d-cd7e-47b7-a8aa-057eaa0bd722}">
+    <Declaration><![CDATA[FUNCTION_BLOCK FB_MultiZTipEjector
+VAR_INPUT
+	pfbZAxisRef	: POINTER TO FB_ZAxisRef;
+	bExecute 	: BOOL;	
+END_VAR
+VAR_OUTPUT
+	bBusy : BOOL;
+	bError : BOOL;
+	nErrorId : ERRORID;	
+END_VAR
+VAR
+	nState : USINT;
+	tmrDelay : TON;
+END_VAR]]></Declaration>
+    <Implementation>
+      <ST><![CDATA[IF bExecute THEN
+	bBusy := TRUE;
+	IF pfbZAxisRef^.stInput.nError > 0 THEN
+		pfbZAxisRef^.stStatus.bError := TRUE;
+		bBusy := FALSE;
+		bError := TRUE;
+		nErrorId := F_MultiZError_TO_ErrorId(pfbZAxisRef^.stInput.nError);
+		RETURN;
+	END_IF
+	
+	CASE nState OF
+		0:	pfbZAxisRef^.stOutput.nToolCtrl := 1;
+			tmrDelay(IN:= TRUE, PT:=T#500MS);
+			nState := 1;
+
+		1:	tmrDelay();
+			IF tmrDelay.Q THEN
+				tmrDelay(IN:= FALSE);
+				nState := 2;
+			END_IF
+			
+		2:	IF NOT pfbZAxisRef^.stInput.nToolState.0 THEN
+				pfbZAxisRef^.stOutput.nToolCtrl := 0;
+				nState := 80;
+				bBusy := FALSE;			
+			END_IF
+ 	END_CASE
+ELSE
+	tmrDelay(IN:= FALSE);
+	bBusy := FALSE;
+	bError := FALSE;
+	nErrorId := 0;
+	nState := 0;
+END_IF]]></ST>
+    </Implementation>
+    <ObjectProperties />
+  </POU>
+</TcPlcObject>

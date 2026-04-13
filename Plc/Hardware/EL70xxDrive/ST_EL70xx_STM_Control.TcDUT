@@ -1,0 +1,13 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<TcPlcObject Version="1.1.0.1" ProductVersion="3.1.4024.11">
+  <DUT Name="ST_EL70xx_STM_Control" Id="{f36d8772-2aca-478a-a5c3-5de42e561ac0}">
+    <Declaration><![CDATA[TYPE ST_EL70xx_STM_Control :
+STRUCT
+	Enable			AT %Q* : BIT;
+	Reset			AT %Q* : BIT;
+	ReduceTorque 	AT %Q* : BIT;	//Spulenstrom reduzieren
+END_STRUCT
+END_TYPE
+]]></Declaration>
+  </DUT>
+</TcPlcObject>

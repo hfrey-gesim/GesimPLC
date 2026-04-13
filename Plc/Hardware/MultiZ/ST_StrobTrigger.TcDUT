@@ -1,0 +1,19 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<TcPlcObject Version="1.1.0.1" ProductVersion="3.1.0.25">
+  <DUT Name="ST_StrobTrigger" Id="{c78d7d83-37f4-4de7-b9d3-e743abe3f933}">
+    <Declaration><![CDATA[TYPE ST_StrobTrigger :
+STRUCT
+	//aDroplist muss an erster Stelle stehen, da bei ARM7 die 4Byte Speicherausrichtung
+	//Probleme bei der weiteren Verarbeitung macht
+	aDroplist	: ARRAY[1..16] OF USINT;
+	bTest		: BOOL;
+	nCamDelay 	: UINT;
+	nStrobDelay : UINT;
+	nStrobDelay2 : UINT;
+	bDroplistActive : BOOL;
+END_STRUCT
+END_TYPE
+]]></Declaration>
+    <ObjectProperties />
+  </DUT>
+</TcPlcObject>

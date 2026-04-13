@@ -1,0 +1,696 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<TcPlcObject Version="1.1.0.1" ProductVersion="3.1.4022.18">
+  <POU Name="FB_DeloDot" Id="{f440a376-2024-46f6-a9f3-e2a33607976a}" SpecialFunc="None">
+    <Declaration><![CDATA[FUNCTION_BLOCK FB_DeloDot EXTENDS FB_GCodeTool
+VAR_INPUT
+END_VAR
+VAR_OUTPUT
+END_VAR
+VAR
+	//Reference zu TripleTrigger
+	pTripleTrigRef 		: POINTER TO FB_HwRefTripleTrigger;
+	pPneuChannelPress	: POINTER TO FB_PneuChannelRef;
+	
+	//Specproperties
+	nSubType			: DINT;		//wird noch nicht ausgewertet
+	nTriggerChannel		: USINT;
+	nStroke				: UINT;
+	
+	nDOutChanValvePress	: USINT;	//Digitaler Ausgangskanal MzHead Druckventil
+	
+	//****************************************Aktionvariablen****************************************************
+	
+	stActionDataSpec	: ST_ActionData;
+	
+	//Action: "SetPressure"
+	bSetPress			: BOOL;
+	fbSetPress			: FB_SetPressure;
+	
+	//Action: "SwitchPressure"
+	bSwitchPress		: BOOL;			
+	nStateA_SwitchPress	: USINT;		//State von A_SwitchPress()
+	nPressValue			: INT;			//Solldruck
+	//bPressOn			: BOOL;			//Druckventil "Auf"
+	eSwitchPressCtrl	: E_PressCtrl;
+	tPressTime			: TIME;			//nach dieser Zeit Ventil automatisch wieder zu
+	timerPress			: TON;			//Timer für Öffnungszeit Druckventil 	
+	
+	//Action: "InitTool"
+	bInitTool			: BOOL;
+	nStateA_InitTool	: USINT;
+	
+	//Action: "Dispense"
+	bDispense				: BOOL;
+	nStateA_Dispense		: USINT;
+	nDrops					: UINT;
+	bDispenseStart			: BOOL;
+	
+END_VAR
+]]></Declaration>
+    <Implementation>
+      <ST><![CDATA[IF eCurrentState = E_MachineState.MACHINESTATE_Active THEN
+	IF bInitTool THEN
+		A_InitTool();
+		IF nStateA_InitTool >= 80 THEN
+			IF nStateA_InitTool >= 99 THEN
+				bError := TRUE;
+			END_IF
+			bInitTool := FALSE;
+			nStateA_InitTool := 0;
+			M_RemoveListEntry(nSearchValue:= E_Action.ACTION_Init);
+		END_IF		
+	END_IF
+
+	IF bSetPress THEN
+		fbSetPress(pPneuChannelRef:= pPneuChannelPress);
+		IF NOT fbSetPress.bBusy THEN
+			IF fbSetPress.bError THEN
+				bError := TRUE;
+				stError.ErrorId := fbSetPress.nErrorId;
+				stError.POU := E_POU.POU_FB_Luer;
+				fbErrorList.M_Add(stError);
+			END_IF
+			bSetPress := FALSE;
+			fbSetPress(pPneuChannelRef:= pPneuChannelPress, bExecute:= FALSE);
+			M_RemoveListEntry(nSearchValue:= E_Action.ACTION_SetPressure);
+		END_IF
+	END_IF	
+	
+	IF bSwitchPress THEN	//Kartuschendruck einstellen und Ein-bzw. Aus schalten 
+		A_SwitchPress();
+		IF nStateA_SwitchPress >= 80 THEN
+			IF nStateA_SwitchPress >= 99 THEN
+				bError := TRUE;	
+			END_IF
+			bSwitchPress := FALSE;
+			nStateA_SwitchPress := 0;
+			M_RemoveListEntry(nSearchValue:= E_Action.ACTION_SwitchPressure);
+		END_IF
+	END_IF
+
+	IF bDispense THEN
+		A_Dispense();
+		IF nStateA_Dispense >= 80 THEN
+			IF nStateA_Dispense >= 99 THEN
+				bError := TRUE;	
+			END_IF
+			bDispense := FALSE;
+			nStateA_Dispense := 0;
+			M_RemoveListEntry(nSearchValue:= E_Action.ACTION_DispenseDrops);
+		END_IF
+	END_IF
+END_IF
+
+SUPER^();	//FB_MzTool aufrufen
+
+//Prozessdaten aktualisieren
+IF pPneuChannelPress > 0 THEN
+	stProcessData.n32Data[7] := pPneuChannelPress^.P_nCurrentPressure;
+END_IF
+
+IF pFbMultiZ > 0 THEN
+	IF nDOutChanValvePress > 0 AND nDOutChanValvePress < 8 THEN
+		stProcessData.n32Data[8] := BOOL_TO_DINT(pFbMultiZ^.aDigiOut[nDOutChanValvePress]);
+	END_IF
+END_IF
+
+IF pTripleTrigRef > 0 THEN
+	stProcessData.n32Data[9] := BOOL_TO_DINT(pTripleTrigRef^.M_GetState(nTriggerChannel));
+END_IF
+
+aObjProcData[nNotifyId] := stProcessData;]]></ST>
+    </Implementation>
+    <Action Name="A_Dispense" Id="{9bdc3631-3c07-4dd6-bb63-7bac4d1c6b26}">
+      <Implementation>
+        <ST><![CDATA[CASE nStateA_Dispense OF
+	0:
+		pTripleTrigRef^.M_TriggerOn(nTriggerChannel,nDrops);
+		nStateA_Dispense := 1;
+
+	1:	//Einen Zyklus warten
+		nStateA_Dispense := 2;
+		
+	2:	//Warten bis Dispensen fertig
+		IF NOT pTripleTrigRef^.M_GetState(nTriggerChannel) THEN
+			pTripleTrigRef^.M_TriggerOff(nTriggerChannel);
+			nStateA_Dispense := 80;
+		END_IF
+		
+	70:	//Abbrechen
+		pTripleTrigRef^.M_TriggerOff(nTriggerChannel);
+		nStateA_Dispense := 80;
+END_CASE]]></ST>
+      </Implementation>
+    </Action>
+    <Action Name="A_InitTool" Id="{d7170769-c897-45be-9bdd-5180e0a9962a}">
+      <Implementation>
+        <ST><![CDATA[nStateA_InitTool := 80;]]></ST>
+      </Implementation>
+    </Action>
+    <Action Name="A_Reset" Id="{add03427-fd26-4935-97bc-ed552f7cb41b}">
+      <Implementation>
+        <ST><![CDATA[//Ist noch eine Aktion aktiv?
+IF nStateA_ResetSpec = 0 THEN
+	IF bDispense THEN
+		bDispense := FALSE;
+		nStateA_Dispense := 0;
+	END_IF
+	
+	IF bSetPress THEN
+		bSetPress := FALSE;
+		fbSetPress(bExecute:= FALSE, pPneuChannelRef:= pPneuChannelPress);
+	END_IF
+	
+	IF bSwitchPress THEN
+		bSwitchPress := FALSE;
+		nStateA_SwitchPress := 0;
+	END_IF
+ 
+	nStateA_ResetSpec := 80;
+END_IF
+
+SUPER^.A_Reset();]]></ST>
+      </Implementation>
+    </Action>
+    <Action Name="A_Stop" Id="{4002261f-0050-47d3-84dc-87f292339b0b}">
+      <Implementation>
+        <ST><![CDATA[IF nStateA_Stop = 0 THEN
+	
+	IF bSetPress THEN
+		fbSetPress(bExecute:= FALSE, pPneuChannelRef:= pPneuChannelPress);
+	END_IF
+
+	IF bSwitchPress AND nStateA_SwitchPress < 70 THEN
+		nStateA_SwitchPress := 70;
+	END_IF
+	
+	IF bDispense AND nStateA_Dispense < 70 THEN
+		nStateA_Dispense := 70;
+	END_IF
+	
+	nStateA_Stop := 1;	
+END_IF
+
+SUPER^.A_Stop();]]></ST>
+      </Implementation>
+    </Action>
+    <Action Name="A_SwitchPress" Id="{f102050c-b78c-4deb-9f6a-5038b4de1a72}">
+      <Implementation>
+        <ST><![CDATA[CASE nStateA_SwitchPress OF
+	0:	//Ventil Einschalten
+		pFbMultiZ^.aDigiOut[nDOutChanValvePress] := TRUE;
+	
+		//Timer starten
+		IF tPressTime = T#0S THEN
+			nStateA_SwitchPress := 80;
+			RETURN;	
+		END_IF
+		
+		timerPress(IN:= TRUE, PT:= tPressTime);
+		nStateA_SwitchPress := 1;
+		
+	1:	//Warten bis Zeitabgelaufen
+		timerPress();
+		IF timerPress.Q THEN
+			timerPress(IN:= FALSE);
+			pFbMultiZ^.aDigiOut[nDOutChanValvePress] := FALSE;
+			nStateA_SwitchPress := 80;
+		END_IF
+		
+	70:	//Abbrechen
+		timerPress(IN:= FALSE);
+		pFbMultiZ^.aDigiOut[nDOutChanValvePress] := FALSE;
+		nStateA_SwitchPress := 80;
+END_CASE]]></ST>
+      </Implementation>
+    </Action>
+    <Method Name="FB_init" Id="{18f61024-0e0c-46ec-a274-4b7e5ea2fcf0}">
+      <Declaration><![CDATA[METHOD FB_init : BOOL
+VAR_INPUT
+	bInitRetains : BOOL; // if TRUE, the retain variables are initialized (warm start / cold start)
+	bInCopyCode : BOOL;  // if TRUE, the instance afterwards gets moved into the copy code (online change)
+END_VAR
+]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[eObjectType := E_ObjectType.OBJECTTYPE_DeloDot;
+eObjectGroup := E_ObjectGroup.OBJECTGROUP_MzTool OR E_ObjectGroup.OBJECTGROUP_Device;]]></ST>
+      </Implementation>
+    </Method>
+    <Method Name="M_AddChild" Id="{6c3b520f-27ad-4b5c-863e-540f54748297}">
+      <Declaration><![CDATA[METHOD M_AddChild : ERRORID
+VAR_INPUT
+	pObject : POINTER TO FB_Object;
+	nSlotNr	: UINT;
+	nIndex 	: INT;
+END_VAR
+]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[//Der Delodot-Dispenser kann folgende Objekt-Typen aufnehmen
+//Camera, Exposure, Nozzle
+IF pObject > 0 THEN
+	IF pObject^.P_eObjectType = E_ObjectType.OBJECTTYPE_Camera OR
+		pObject^.P_eObjectType = E_ObjectType.OBJECTTYPE_Exposure OR
+		pObject^.P_eObjectType = E_ObjectType.OBJECTTYPE_DummyTool OR
+		pObject^.P_eObjectType = E_ObjectType.OBJECTTYPE_Nozzle THEN
+		M_AddChild := SUPER^.M_AddChild(pObject,nSlotNr,nIndex);
+	ELSE
+		M_AddChild := E_ErrorIdObjMgmt.ERRORID_InvalidParentObject;
+	END_IF
+ELSE
+	M_AddChild := E_ErrorIdObjMgmt.ERRORID_InvalidParentObject;
+END_IF]]></ST>
+      </Implementation>
+    </Method>
+    <Method Name="M_CancelAction" Id="{b8aec001-cea2-4653-9f87-66085f30e7e6}">
+      <Declaration><![CDATA[METHOD M_CancelAction
+VAR_INPUT
+	eAction : E_Action;
+END_VAR
+]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[CASE eAction OF
+	E_Action.ACTION_SetPressure:
+		IF bSetPress  THEN
+			fbSetPress(bExecute:= FALSE, pPneuChannelRef:= pPneuChannelPress);
+		END_IF	
+	E_Action.ACTION_SwitchPressure:
+		IF bSwitchPress AND nStateA_SwitchPress < 70 THEN
+			nStateA_SwitchPress := 70;
+		END_IF
+	E_Action.ACTION_DispenseDrops:
+		IF bDispense AND nStateA_Dispense < 70 THEN
+			nStateA_Dispense := 70;
+		END_IF
+ELSE
+	SUPER^.M_CancelAction(eAction);
+END_CASE]]></ST>
+      </Implementation>
+    </Method>
+    <Method Name="M_CheckAction" Id="{2946d68c-7be2-4579-9d07-d29e0865a3ea}">
+      <Declaration><![CDATA[METHOD M_CheckAction : ERRORID
+VAR_INPUT
+	refActionData 	: REFERENCE TO ST_ActionData;
+	pCorrelObject	: POINTER TO FB_Object;
+END_VAR
+
+VAR
+END_VAR]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[CASE refActionData.eAction OF
+	E_Action.ACTION_DispenseDrops, //BasicAction für ActionOnArray
+	E_Action.ACTION_TeachTarget:
+		RETURN;
+ELSE
+	M_CheckAction := SUPER^.M_CheckAction(refActionData, pCorrelObject);
+END_CASE]]></ST>
+      </Implementation>
+    </Method>
+    <Method Name="M_CheckProcDataType" Id="{ce221d42-f0e0-4a23-aba0-139084496954}">
+      <Declaration><![CDATA[METHOD M_CheckProcDataType : BOOL
+VAR_INPUT
+	eProcDataType : E_ProcDataType;
+END_VAR
+]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[IF eProcDataType = E_ProcDataType.PROCDATATYPE_Temp1 THEN
+	M_CheckProcDataType := TRUE;
+END_IF]]></ST>
+      </Implementation>
+    </Method>
+    <Method Name="M_ClearAllProps" Id="{68e6f256-76c3-4a3b-9567-6655e0a46340}">
+      <Declaration><![CDATA[METHOD M_ClearAllProps
+VAR_INPUT
+	bIgnoreParent : BOOL; //Es wird das gesamte OD gelöscht. -> Zeiger auf Parent nicht mehr gültig!
+END_VAR
+]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[pPneuChannelPress := 0;
+SUPER^.M_ClearAllProps(bIgnoreParent);]]></ST>
+      </Implementation>
+    </Method>
+    <Method Name="M_ExeAction" Id="{c7c31a6e-37ac-42a6-a341-fde82cf7208d}">
+      <Declaration><![CDATA[METHOD M_ExeAction : ERRORID
+VAR_INPUT
+	refActionData : REFERENCE TO ST_ActionData;	
+END_VAR]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[IF NOT (eCurrentState = E_MachineState.MACHINESTATE_Idle OR
+	eCurrentState = E_MachineState.MACHINESTATE_Active OR
+	eCurrentState = E_MachineState.MACHINESTATE_Ready) THEN
+	M_ExeAction := E_ErrorIdCmd.ERRORID_InvalidState;
+	RETURN;
+END_IF
+
+CASE refActionData.eAction OF
+	
+	E_Action.ACTION_Init:
+		IF NOT bInitAxis AND NOT bInitTool THEN
+			bInitAxis := TRUE;
+			bInitTool := TRUE;
+			fbList.A_AddHeadValue(hList:= hList, putValue := E_Action.ACTION_Init);	//InitAxis
+			fbList.A_AddHeadValue(hList:= hList, putValue := E_Action.ACTION_Init);	//InitTool
+		ELSE
+			RETURN;
+		END_IF
+		
+	E_Action.ACTION_SetPressure:
+		fbSetPress(bExecute:= FALSE, pPneuChannelRef:= pPneuChannelPress); //eventueller Fehler wird auch zurückgesetzt
+		fbSetPress.bAwait := DINT_TO_BOOL(refActionData.aParams[1]);
+		fbSetPress.nValue := DINT_TO_INT(refActionData.aParams[2]);
+		fbSetPress.nTolerancePlus := DINT_TO_INT(refActionData.aParams[3]);
+		fbSetPress.nToleranceMinus := DINT_TO_INT(refActionData.aParams[4]);
+		fbSetPress.tTimeout := DINT_TO_TIME(refActionData.aParams[5]);
+		
+		fbSetPress(bExecute:= TRUE,	pPneuChannelRef:= pPneuChannelPress,nErrorId=> M_ExeAction);
+		IF fbSetPress.bError THEN
+			RETURN;
+		END_IF
+		
+		IF NOT bSetPress AND fbSetPress.bBusy THEN
+			bSetPress := TRUE;
+			fbList.A_AddHeadValue(hList := hList, putValue := E_Action.ACTION_SetPressure);
+		ELSE
+			RETURN;	
+		END_IF
+
+	E_Action.ACTION_SwitchPressure:
+		eSwitchPressCtrl := DINT_TO_USINT(refActionData.aParams[1]);
+		IF (eSwitchPressCtrl = E_PressCtrl.PRESSCTRL_PressOn) OR (eSwitchPressCtrl = E_PressCtrl.PRESSCTRL_Off) THEN
+			tPressTime := DINT_TO_TIME(refActionData.aParams[2]);
+			//Wenn Aktion aktiv kann es sein das die Zeit noch läuft oder der Druck an ist
+			IF bSwitchPress THEN	//Aktion ist aktiv
+				IF eSwitchPressCtrl = E_PressCtrl.PRESSCTRL_PressOn THEN
+					//Statemachine zurücksetzen
+					nStateA_SwitchPress := 0;		
+				ELSE
+					pFbMultiZ^.M_SetDigiOut(nChannel:= nDOutChanValvePress, bValue:= FALSE);
+					nStateA_SwitchPress := 80;
+				END_IF
+			ELSE	//Aktion ist nicht aktiv
+				IF eSwitchPressCtrl = E_PressCtrl.PRESSCTRL_PressOn THEN
+					bSwitchPress := TRUE;
+					fbList.A_AddHeadValue(hList := hList, putValue := E_Action.ACTION_SwitchPressure);
+				ELSE
+					pFbMultiZ^.M_SetDigiOut(nChannel:= nDOutChanValvePress, bValue:= FALSE);
+				END_IF
+			END_IF
+		ELSE
+			M_ExeAction := E_ErrorIdCmd.ERRORID_InvalidCtrl;
+			RETURN;
+		END_IF		
+		
+	E_Action.ACTION_DispenseDrops:
+		bDispenseStart := DINT_TO_BOOL(refActionData.aParams[2]);
+		IF NOT bDispense AND bDispenseStart THEN
+			nDrops := DINT_TO_UINT(refActionData.aParams[1]);
+			fbList.A_AddHeadValue( hList := hList, putValue := E_Action.ACTION_DispenseDrops);
+			bDispense := TRUE;
+		ELSE
+			pTripleTrigRef^.M_TriggerOff(nTriggerChannel);
+		END_IF
+
+	ELSE
+		M_ExeAction := SUPER^.M_ExeAction(refActionData);
+		RETURN;
+END_CASE
+bBusy := TRUE;
+eCurrentState := E_MachineState.MACHINESTATE_Active;]]></ST>
+      </Implementation>
+    </Method>
+    <Method Name="M_GetAllProps" Id="{eca8deb0-3373-4ba2-a966-894b0727e598}">
+      <Declaration><![CDATA[METHOD M_GetAllProps : ERRORID
+VAR_INPUT
+	refCmdData : REFERENCE TO  ST_CmdData;
+END_VAR
+]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[//BaseProperties lesen
+SUPER^.M_GetAllProps(refCmdData);
+//BaseProperties lesen
+nCurrentPropIndex := nCurrentPropIndex + 1; //SubType (Reserve)
+refCmdData.n32Data[nCurrentPropIndex] := nSubType;
+nCurrentPropIndex := nCurrentPropIndex + 1;
+refCmdData.n32Data[nCurrentPropIndex] := nTriggerChannel;
+IF pTripleTrigRef > 0 THEN
+	nCurrentPropIndex := nCurrentPropIndex + 1;
+	refCmdData.n32Data[nCurrentPropIndex] := pTripleTrigRef^.M_GetFrequency(nTriggerChannel);
+	nCurrentPropIndex := nCurrentPropIndex + 1;
+	refCmdData.n32Data[nCurrentPropIndex] := pTripleTrigRef^.M_GetPulse(nTriggerChannel);
+	nCurrentPropIndex := nCurrentPropIndex + 1;
+	refCmdData.n32Data[nCurrentPropIndex] := pTripleTrigRef^.M_GetAmplitudePercent(nTriggerChannel);
+ELSE
+	nCurrentPropIndex := nCurrentPropIndex + 3;
+END_IF
+nCurrentPropIndex := nCurrentPropIndex + 1;
+IF pPneuChannelPress > 0 THEN
+	refCmdData.n32Data[nCurrentPropIndex] := pPneuChannelPress^.nChannel;
+ELSE
+	refCmdData.n32Data[nCurrentPropIndex] := 0;
+END_IF
+nCurrentPropIndex := nCurrentPropIndex + 1; 
+refCmdData.n32Data[nCurrentPropIndex] := nDOutChanValvePress; //Digitaler Ausgangskanal MzHead Druckventil
+
+
+		
+
+
+
+		
+
+
+
+]]></ST>
+      </Implementation>
+    </Method>
+    <Method Name="M_SetAllProps" Id="{ea72c9fc-21d1-4ecd-a5cb-218c6cd3a7a7}">
+      <Declaration><![CDATA[METHOD M_SetAllProps : ERRORID
+VAR_INPUT
+	refCmdData : REFERENCE TO  ST_CmdData;
+END_VAR
+
+VAR
+	nPneuChannel : USINT;
+END_VAR]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[M_SetAllProps := SUPER^.M_SetAllProps(refCmdData);
+
+IF M_SetAllProps > 0 THEN
+	RETURN;
+END_IF
+
+{IF defined (variable:aFbTripleTriggerRef)}
+pTripleTrigRef := ADR(aFbTripleTriggerRef[1]);
+{ELSE}
+M_SetAllProps := E_ErrorIdObjMgmt.ERRORID_InvalidHardwareRef;
+RETURN;
+{END_IF}
+
+//SubType (Reserve)
+nCurrentPropIndex := nCurrentPropIndex + 1;
+nSubType := refCmdData.n32Data[nCurrentPropIndex];
+//TriggerChannel
+nCurrentPropIndex := nCurrentPropIndex + 1;
+nSpecPropIndex := nCurrentPropIndex;
+nTriggerChannel := DINT_TO_USINT(refCmdData.n32Data[nCurrentPropIndex]);
+IF NOT (nTriggerChannel >= 1 AND nTriggerChannel <= 3) THEN
+	M_SetAllProps := E_ErrorIdObjMgmt.ERRORID_InvalidTriggerChannel;
+	RETURN;
+END_IF
+
+//Frequenz
+nCurrentPropIndex := nCurrentPropIndex + 1;
+IF NOT (refCmdData.n32Data[nCurrentPropIndex] >= 16 AND refCmdData.n32Data[nCurrentPropIndex] <= 1000000) THEN	
+	M_SetAllProps := E_ErrorIdObjMgmt.ERRORID_InvalidFrequency;
+	RETURN;
+END_IF
+pTripleTrigRef^.M_SetFrequency(nTriggerChannel,refCmdData.n32Data[nCurrentPropIndex]);
+
+//Plusbreite
+nCurrentPropIndex := nCurrentPropIndex + 1;
+IF NOT (refCmdData.n32Data[nCurrentPropIndex] >= 0 AND refCmdData.n32Data[nCurrentPropIndex] <= 65535) THEN
+	M_SetAllProps := E_ErrorIdObjMgmt.ERRORID_InvalidPulseWidth;  //Error
+	RETURN;
+END_IF
+pTripleTrigRef^.M_SetPulse(nTriggerChannel,DINT_TO_UINT(refCmdData.n32Data[nCurrentPropIndex]));
+
+//Stroke(Hub) in % (1 Stelle hinter Komma)
+nCurrentPropIndex := nCurrentPropIndex + 1;
+IF NOT (refCmdData.n32Data[nCurrentPropIndex] >= 0 AND refCmdData.n32Data[nCurrentPropIndex] <= 1000) THEN
+	M_SetAllProps := E_ErrorIdObjMgmt.ERRORID_InvalidVoltage;  //Error
+	RETURN;
+END_IF
+pTripleTrigRef^.M_SetAmplitudePercent(nTriggerChannel,DINT_TO_UINT(refCmdData.n32Data[nCurrentPropIndex]));
+
+//PneuChannel Druck
+nCurrentPropIndex := nCurrentPropIndex + 1;
+nPneuChannel := DINT_TO_USINT(refCmdData.n32Data[nCurrentPropIndex]);
+IF NOT (nPneuChannel >= 0 AND nPneuChannel <= cNoOfPneuChannels) THEN
+	M_SetAllProps := E_ErrorIdObjMgmt.ERRORID_InvalidPneuChannel;
+	RETURN;	
+END_IF
+pPneuChannelPress := ADR(aFbPneuChannel[nPneuChannel]);
+
+//Digitale Ausgänge auf MzHead müssen zwischen 1 und 7 liegen
+nCurrentPropIndex := nCurrentPropIndex + 1;
+nDOutChanValvePress := DINT_TO_USINT(refCmdData.n32Data[nCurrentPropIndex]);	//Digitaler Ausgangskanal MzHead Druckventil
+IF NOT (nDOutChanValvePress >= 0 AND nDOutChanValvePress <= 7) THEN
+	M_SetAllProps := E_ErrorIdObjMgmt.ERRORID_InvalidMzDOutChannel;
+	RETURN;	
+END_IF
+
+nNoOfProps := nCurrentPropIndex + 1;]]></ST>
+      </Implementation>
+    </Method>
+    <Method Name="M_SetSingleProp" Id="{4bca3eef-9529-4432-abfe-34023900b625}">
+      <Declaration><![CDATA[METHOD M_SetSingleProp : ERRORID
+VAR_INPUT
+	refCmdData : REFERENCE TO  ST_CmdData;
+END_VAR]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[IF nSpecPropIndex = refCmdData.aHeader[1] THEN
+	IF refCmdData.n32Data[0] >= 1 AND refCmdData.n32Data[0] <= 3 THEN
+		nTriggerChannel := DINT_TO_USINT(refCmdData.n32Data[0]);
+	ELSE
+		M_SetSingleProp := E_ErrorIdObjMgmt.ERRORID_InvalidTriggerChannel;
+		RETURN;
+	END_IF
+ELSIF (nSpecPropIndex + 1) = refCmdData.aHeader[1] THEN	//Frequenz
+	IF NOT (refCmdData.n32Data[0] > 16 AND refCmdData.n32Data[0] < 1000000) THEN
+		M_SetSingleProp := E_ErrorIdObjMgmt.ERRORID_InvalidFrequency;
+		RETURN;
+	END_IF
+	pTripleTrigRef^.M_SetFrequency(nTriggerChannel,refCmdData.n32Data[0]);
+ELSIF (nSpecPropIndex + 2) = refCmdData.aHeader[1] THEN //Pulsbreite
+	IF NOT (refCmdData.n32Data[0] >= 0 AND refCmdData.n32Data[0] < 65535) THEN
+		M_SetSingleProp := E_ErrorIdObjMgmt.ERRORID_InvalidPulseWidth;
+		RETURN;
+	END_IF
+	pTripleTrigRef^.M_SetPulse(nTriggerChannel,DINT_TO_UINT(refCmdData.n32Data[0]));
+ELSIF (nSpecPropIndex + 3) = refCmdData.aHeader[1] THEN	//Stroke(Hub) in % (1 Stelle hinter Komma)
+	IF NOT (refCmdData.n32Data[0] >= 0 AND refCmdData.n32Data[0] <= 1000) THEN
+		M_SetSingleProp := E_ErrorIdObjMgmt.ERRORID_InvalidVoltage;
+		RETURN;
+	END_IF
+	pTripleTrigRef^.M_SetAmplitudePercent(nTriggerChannel,DINT_TO_UINT(refCmdData.n32Data[0]));
+ELSE
+	M_SetSingleProp := SUPER^.M_SetSingleProp(refCmdData);
+END_IF]]></ST>
+      </Implementation>
+    </Method>
+    <LineIds Name="FB_DeloDot">
+      <LineId Id="3" Count="12" />
+      <LineId Id="172" Count="12" />
+      <LineId Id="26" Count="29" />
+      <LineId Id="185" Count="1" />
+      <LineId Id="58" Count="5" />
+      <LineId Id="114" Count="3" />
+      <LineId Id="64" Count="1" />
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="FB_DeloDot.A_Dispense">
+      <LineId Id="2" Count="16" />
+      <LineId Id="1" Count="0" />
+    </LineIds>
+    <LineIds Name="FB_DeloDot.A_InitTool">
+      <LineId Id="1" Count="0" />
+    </LineIds>
+    <LineIds Name="FB_DeloDot.A_Reset">
+      <LineId Id="2" Count="19" />
+      <LineId Id="1" Count="0" />
+    </LineIds>
+    <LineIds Name="FB_DeloDot.A_Stop">
+      <LineId Id="2" Count="16" />
+      <LineId Id="1" Count="0" />
+    </LineIds>
+    <LineIds Name="FB_DeloDot.A_SwitchPress">
+      <LineId Id="2" Count="4" />
+      <LineId Id="26" Count="0" />
+      <LineId Id="7" Count="18" />
+      <LineId Id="1" Count="0" />
+    </LineIds>
+    <LineIds Name="FB_DeloDot.FB_init">
+      <LineId Id="7" Count="1" />
+    </LineIds>
+    <LineIds Name="FB_DeloDot.M_AddChild">
+      <LineId Id="3" Count="12" />
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="FB_DeloDot.M_CancelAction">
+      <LineId Id="3" Count="14" />
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="FB_DeloDot.M_CheckAction">
+      <LineId Id="27" Count="0" />
+      <LineId Id="30" Count="0" />
+      <LineId Id="33" Count="0" />
+      <LineId Id="35" Count="0" />
+      <LineId Id="28" Count="0" />
+      <LineId Id="31" Count="0" />
+      <LineId Id="29" Count="0" />
+    </LineIds>
+    <LineIds Name="FB_DeloDot.M_CheckProcDataType">
+      <LineId Id="3" Count="1" />
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="FB_DeloDot.M_ClearAllProps">
+      <LineId Id="10" Count="0" />
+      <LineId Id="6" Count="0" />
+    </LineIds>
+    <LineIds Name="FB_DeloDot.M_ExeAction">
+      <LineId Id="101" Count="10" />
+      <LineId Id="113" Count="8" />
+      <LineId Id="218" Count="16" />
+      <LineId Id="146" Count="2" />
+      <LineId Id="191" Count="0" />
+      <LineId Id="193" Count="21" />
+      <LineId Id="192" Count="0" />
+      <LineId Id="172" Count="15" />
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="FB_DeloDot.M_GetAllProps">
+      <LineId Id="3" Count="2" />
+      <LineId Id="29" Count="0" />
+      <LineId Id="24" Count="0" />
+      <LineId Id="6" Count="1" />
+      <LineId Id="35" Count="0" />
+      <LineId Id="44" Count="0" />
+      <LineId Id="36" Count="0" />
+      <LineId Id="45" Count="3" />
+      <LineId Id="50" Count="1" />
+      <LineId Id="37" Count="0" />
+      <LineId Id="11" Count="0" />
+      <LineId Id="53" Count="3" />
+      <LineId Id="52" Count="0" />
+      <LineId Id="58" Count="1" />
+      <LineId Id="57" Count="0" />
+      <LineId Id="38" Count="2" />
+      <LineId Id="13" Count="0" />
+      <LineId Id="41" Count="2" />
+      <LineId Id="14" Count="0" />
+      <LineId Id="34" Count="0" />
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="FB_DeloDot.M_SetAllProps">
+      <LineId Id="66" Count="6" />
+      <LineId Id="129" Count="2" />
+      <LineId Id="73" Count="1" />
+      <LineId Id="136" Count="0" />
+      <LineId Id="138" Count="0" />
+      <LineId Id="137" Count="0" />
+      <LineId Id="75" Count="40" />
+      <LineId Id="146" Count="0" />
+      <LineId Id="116" Count="8" />
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="FB_DeloDot.M_SetSingleProp">
+      <LineId Id="3" Count="0" />
+      <LineId Id="44" Count="0" />
+      <LineId Id="37" Count="0" />
+      <LineId Id="41" Count="2" />
+      <LineId Id="4" Count="0" />
+      <LineId Id="6" Count="17" />
+      <LineId Id="32" Count="1" />
+      <LineId Id="2" Count="0" />
+    </LineIds>
+  </POU>
+</TcPlcObject>

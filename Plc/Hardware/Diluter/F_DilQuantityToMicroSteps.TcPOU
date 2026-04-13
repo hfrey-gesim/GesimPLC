@@ -1,0 +1,21 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<TcPlcObject Version="1.1.0.1" ProductVersion="3.1.0.25">
+  <POU Name="F_DilQuantityToMicroSteps" Id="{ebc2bfe7-dc1b-4995-ba7b-b012261eee4f}">
+    <Declaration><![CDATA[FUNCTION F_DilQuantityToMicroSteps : UDINT
+VAR_INPUT
+	nQuantity : DINT; //Menge in 10tel µl
+	nSyringeSize : DINT; //Spritzengröße in µl
+END_VAR
+VAR
+	rQuantity : REAL;
+	rSyringe : REAL;
+END_VAR]]></Declaration>
+    <Implementation>
+      <ST><![CDATA[rQuantity := DINT_TO_REAL(nQuantity);
+rSyringe := DINT_TO_REAL(nSyringeSize);
+//1 voller HUB (Volumen Spritze) entspricht 24000 Mircosteps
+F_DilQuantityToMicroSteps := REAL_TO_UDINT(rQuantity * 24000.0 / rSyringe / 10.0);]]></ST>
+    </Implementation>
+    <ObjectProperties />
+  </POU>
+</TcPlcObject>

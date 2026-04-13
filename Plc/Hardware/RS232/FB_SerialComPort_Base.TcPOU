@@ -1,0 +1,149 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<TcPlcObject Version="1.1.0.1" ProductVersion="3.1.4024.11">
+  <POU Name="FB_SerialComPort_Base" Id="{dafc142e-3448-4161-a494-645e6b6fc2b9}" SpecialFunc="None">
+    <Declaration><![CDATA[FUNCTION_BLOCK FB_SerialComPort_Base
+VAR_INPUT
+END_VAR
+VAR_OUTPUT
+	bIsWorking 	: BOOL;
+	bIsLocked	: BOOL;
+END_VAR
+VAR
+	RxBufferSerialCom  	: Tc2_SerialCom.ComBuffer;
+	TxBufferSerialCom  	: Tc2_SerialCom.ComBuffer;
+	fbClearComBuffer	: Tc2_SerialCom.ClearComBuffer;
+	fbFifo				: FB_SimpleFIFO_PVOID;
+	bLock				: BOOL;
+	rTrig				: R_TRIG;
+	timerLock			: TON;
+END_VAR]]></Declaration>
+    <Implementation>
+      <ST><![CDATA[timerLock();
+IF timerLock.Q THEN
+	timerLock(IN:= FALSE);
+	bIsLocked := FALSE;
+END_IF
+
+	
+]]></ST>
+    </Implementation>
+    <Method Name="M_ClearRxComBuffer" Id="{332aa9fb-e536-4b99-a85f-5f887b31edb5}">
+      <Declaration><![CDATA[METHOD M_ClearRxComBuffer
+VAR_INPUT
+END_VAR
+]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[fbClearComBuffer(buffer := RxBufferSerialCom);
+]]></ST>
+      </Implementation>
+    </Method>
+    <Method Name="M_ClearTxComBuffer" Id="{1bec5137-ba4d-4171-ada5-e7038643fefd}">
+      <Declaration><![CDATA[METHOD M_ClearTxComBuffer
+VAR_INPUT
+END_VAR
+]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[fbClearComBuffer(buffer := TxBufferSerialCom);
+]]></ST>
+      </Implementation>
+    </Method>
+    <Method Name="M_IsMyTurn" Id="{baa7b5fa-53e6-41d1-9e2f-d5fc2a2148f1}">
+      <Declaration><![CDATA[METHOD M_IsMyTurn : BOOL
+VAR_INPUT
+	pInstance : PVOID;
+END_VAR
+]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[M_IsMyTurn := fbFifo.M_GetHead() = pInstance;]]></ST>
+      </Implementation>
+    </Method>
+    <Method Name="M_LockForTime" Id="{898bd436-bc77-4d73-a421-e307320706b2}">
+      <Declaration><![CDATA[METHOD M_LockForTime
+VAR_INPUT
+	tLockTime : TIME;
+END_VAR
+]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[timerLock.IN := TRUE;
+timerLock.PT := tLockTime;
+bIsLocked := TRUE;]]></ST>
+      </Implementation>
+    </Method>
+    <Method Name="M_Register" Id="{c68d76a8-c588-49a6-8626-9c21c307f594}">
+      <Declaration><![CDATA[METHOD M_Register : BOOL
+VAR_INPUT
+	pInstance : PVOID;
+END_VAR
+]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[M_Register := fbFifo.M_Add(pInstance);]]></ST>
+      </Implementation>
+    </Method>
+    <Method Name="M_Release" Id="{723d8d7d-b271-4973-bef0-c2097d6eca8a}">
+      <Declaration><![CDATA[METHOD M_Release : BOOL
+VAR_INPUT
+	pInstance : PVOID;
+END_VAR
+]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[M_Release := fbFifo.M_Remove(pInstance);]]></ST>
+      </Implementation>
+    </Method>
+    <Property Name="P_RxBuffer" Id="{b535b9fd-49c7-40c8-869a-6dde081406d4}">
+      <Declaration><![CDATA[PROPERTY P_RxBuffer : REFERENCE TO Tc2_SerialCom.ComBuffer]]></Declaration>
+      <Get Name="Get" Id="{ea137d5e-601f-47c2-abcd-3f046e772675}">
+        <Declaration><![CDATA[VAR
+END_VAR
+]]></Declaration>
+        <Implementation>
+          <ST><![CDATA[P_RxBuffer REF= RxBufferSerialCom;]]></ST>
+        </Implementation>
+      </Get>
+    </Property>
+    <Property Name="P_TxBuffer" Id="{53a2f75f-34bd-4aec-b1d3-b1b4202d4aa3}">
+      <Declaration><![CDATA[PROPERTY P_TxBuffer : REFERENCE TO Tc2_SerialCom.ComBuffer]]></Declaration>
+      <Get Name="Get" Id="{86315931-b7f4-42fc-afa9-e043df95388e}">
+        <Declaration><![CDATA[VAR
+END_VAR
+]]></Declaration>
+        <Implementation>
+          <ST><![CDATA[P_TxBuffer REF= TxBufferSerialCom;]]></ST>
+        </Implementation>
+      </Get>
+    </Property>
+    <LineIds Name="FB_SerialComPort_Base">
+      <LineId Id="23" Count="0" />
+      <LineId Id="2" Count="0" />
+      <LineId Id="24" Count="0" />
+      <LineId Id="21" Count="1" />
+      <LineId Id="18" Count="2" />
+    </LineIds>
+    <LineIds Name="FB_SerialComPort_Base.M_ClearRxComBuffer">
+      <LineId Id="3" Count="0" />
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="FB_SerialComPort_Base.M_ClearTxComBuffer">
+      <LineId Id="3" Count="0" />
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="FB_SerialComPort_Base.M_IsMyTurn">
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="FB_SerialComPort_Base.M_LockForTime">
+      <LineId Id="5" Count="0" />
+      <LineId Id="7" Count="1" />
+    </LineIds>
+    <LineIds Name="FB_SerialComPort_Base.M_Register">
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="FB_SerialComPort_Base.M_Release">
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="FB_SerialComPort_Base.P_RxBuffer.Get">
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="FB_SerialComPort_Base.P_TxBuffer.Get">
+      <LineId Id="2" Count="0" />
+    </LineIds>
+  </POU>
+</TcPlcObject>

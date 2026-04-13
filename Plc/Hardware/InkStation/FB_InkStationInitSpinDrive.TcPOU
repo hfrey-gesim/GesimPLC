@@ -1,0 +1,198 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<TcPlcObject Version="1.1.0.1" ProductVersion="3.1.0.25">
+  <POU Name="FB_InkStationInitSpinDrive" Id="{8a025658-ae4b-4bac-825b-293d730c5b34}">
+    <Declaration><![CDATA[FUNCTION_BLOCK FB_InkStationInitSpinDrive
+VAR_INPUT
+	pDriveRef		: POINTER TO FB_HwRefInkStatDriveSpin;
+	bExecute		: BOOL;
+END_VAR
+VAR_OUTPUT
+	bBusy		: BOOL;
+	bError		: BOOL;
+	nErrorId	: ERRORID;
+END_VAR
+VAR
+	fbSdoWrite	: FB_SDO_WRITE;
+	fbPower		: FB_CANOpenMotionPower;
+	nState		: USINT;
+	
+	nStateA 		: USINT;
+	nStateANext 	: USINT;
+	bCancel			: BOOL;
+	
+	dwSdoIndex 		: DWORD;
+	dwSdoSubIndex 	: DWORD;
+	dwSdoDataLength : DWORD;
+	nSdoDataValue 	: DINT;
+	
+END_VAR
+]]></Declaration>
+    <Implementation>
+      <ST><![CDATA[IF bExecute THEN
+	CASE nState OF
+		0:	//Prepare
+			bBusy := TRUE;
+			pDriveRef^.bIsInit := FALSE;
+			A_Prepare();
+			IF nStateA >= 80 THEN
+				IF nStateA >= 99 THEN
+					bError := TRUE;
+					bBusy := FALSE;
+					nState := 99;
+				ELSE
+					IF bCancel THEN
+						nState := 80;
+						bBusy := FALSE;
+					ELSE
+						nState := 1;	
+					END_IF
+				END_IF
+			END_IF
+
+		1:	//PowerOn
+			fbPower(pControl:= ADR(pDriveRef^.nControl), pStatus:= ADR(pDriveRef^.nStatus), bExecute:= TRUE);
+			IF NOT 	fbPower.bBusy THEN
+				IF fbPower.bError THEN
+					bError := TRUE;
+					bBusy := FALSE;
+					nState := 99;
+				ELSE
+					pDriveRef^.bDigiOut1 := TRUE;	//Versorgung für Digitale IOs (5V) einschalten
+					pDriveRef^.nOpMode := 2; 		//Mode = Velocity-Mode
+					bBusy := FALSE;
+					pDriveRef^.bIsInit := TRUE;
+				END_IF
+				fbPower(bExecute:= FALSE);
+			END_IF
+			IF bCancel THEN
+				fbPower(bExecute:= FALSE);
+				bBusy := FALSE;	
+			END_IF
+	END_CASE
+ELSE
+	bError := FALSE;
+	bCancel := FALSE;
+	nErrorId := 0;
+	nState := 0;
+END_IF]]></ST>
+    </Implementation>
+    <Action Name="A_Prepare" Id="{476cb1c3-b83c-4e8e-aee7-2dc0b4026c24}">
+      <Implementation>
+        <ST><![CDATA[CASE nStateA OF
+	0:	//Errorbit gesetzt?
+			IF pDriveRef^.nStatus.3 THEN //Error zurücksetzen
+				pDriveRef^.nControl := 153;
+			ELSE
+				pDriveRef^.nControl := 0;
+				nStateA := 1;
+			END_IF
+			
+	1:	//Velocity Dimension Index auf Internal units setzen (sonst lässt sich Microstepping nicht setzen)
+		dwSdoIndex := 16#208C;
+		dwSdoSubIndex := 0;
+		dwSdoDataLength := 1;
+		nSdoDataValue := 0; //Internal Units
+		nStateANext := 2;
+		nStateA := 60; //Sdo senden			
+		
+	2:	//Microstepping auf 128-fach setzen
+		dwSdoIndex := 16#2000;
+		dwSdoSubIndex := 0;
+		dwSdoDataLength := 1;
+		nSdoDataValue := 7; //Microstepping 128-fach
+		nStateANext := 3;
+		nStateA := 60; //Sdo senden			
+			
+	3:	//Pulsedivisor auf 0 setzen
+		dwSdoIndex := 16#2086;
+		dwSdoSubIndex := 0;
+		dwSdoDataLength := 1;
+		nSdoDataValue := 0; //Pulsedivisor 0
+		nStateANext := 4;
+		nStateA := 60; //Sdo senden			
+			
+	4:	//SwitchParameters setzen (keine Endlagen verwenden)		
+		dwSdoIndex := 16#2005;
+		dwSdoSubIndex := 0;
+		dwSdoDataLength := 4;
+		nSdoDataValue := 3; //keine Endlagen
+		nStateANext := 5;
+		nStateA := 60; //Sdo senden			
+			
+	5:	//Brake deaktivieren			
+		dwSdoIndex := 16#200C;
+		dwSdoSubIndex := 2;
+		dwSdoDataLength := 1;
+		nSdoDataValue := 0; //keine Brake
+		nStateANext := 6;
+		nStateA := 60; //Sdo senden
+
+	6:	//Digital Outputmask setzen		
+		dwSdoIndex := 16#2703;
+		dwSdoSubIndex := 2;
+		dwSdoDataLength := 4;
+		nSdoDataValue := 16#30000; //Mask
+		nStateANext := 7;
+		nStateA := 60; //Sdo senden
+		
+	7:	//MaxCurrent setzen
+		dwSdoIndex := 16#2003;
+		dwSdoSubIndex := 0;
+		dwSdoDataLength := 1;
+		nSdoDataValue := 170; //max Current (max255)
+		nStateANext := 8;
+		nStateA := 60; //Sdo senden
+		
+	8:	//Velocity Dimension Index setzen in RPM (Umdrehungen pro min)
+		dwSdoIndex := 16#208C;
+		dwSdoSubIndex := 0;
+		dwSdoDataLength := 1;
+		nSdoDataValue := 164; //164 ist Code für RPM
+		nStateANext := 9;
+		nStateA := 60; //Sdo senden
+		
+	9:	//vl Velocity Acc DeltaSpeed setzen (Dec wird automatisch gleich gesetzt)
+		dwSdoIndex := 16#6048;
+		dwSdoSubIndex := 1;
+		dwSdoDataLength := 4;
+		nSdoDataValue := 100;
+		nStateANext := 80;
+		nStateA := 60; //Sdo senden		
+			
+	60:	//Send SDO
+		fbSdoWrite(sADSNetID:= pDriveRef^.stAdsAdress.sNetId,nPortNr:= pDriveRef^.stAdsAdress.nPort, 
+					nIndex:= dwSdoIndex, nSubIndex:= dwSdoSubIndex, nDataLength:= dwSdoDataLength,
+					 nData:= nSdoDataValue, bExecute:= TRUE);
+		IF NOT fbSdoWrite.bBusy THEN
+			IF fbSdoWrite.bError THEN
+				nErrorId := fbSdoWrite.nAdsErrorId;
+				nStateA := 99;
+			ELSE
+				nStateA := nStateANext;
+			END_IF
+			fbSdoWrite(bExecute:= FALSE);
+		END_IF
+		
+	70:	//Abbrechen
+		IF fbSdoWrite.bBusy THEN
+			fbSdoWrite(bExecute:= FALSE);
+			nStateA := 80;
+		END_IF
+END_CASE]]></ST>
+      </Implementation>
+    </Action>
+    <Method Name="M_Stop" Id="{4f3f7b30-977f-4758-9cb3-53323dd34211}">
+      <Declaration><![CDATA[METHOD M_Stop
+VAR_INPUT
+END_VAR
+]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[IF bBusy THEN
+	bCancel := TRUE;
+END_IF
+]]></ST>
+      </Implementation>
+    </Method>
+    <ObjectProperties />
+  </POU>
+</TcPlcObject>

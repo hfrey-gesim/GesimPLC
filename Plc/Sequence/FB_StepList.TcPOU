@@ -1,0 +1,209 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<TcPlcObject Version="1.1.0.1" ProductVersion="3.1.4024.11">
+  <POU Name="FB_StepList" Id="{a9142575-d25a-4eec-8e26-d1230e38d27b}" SpecialFunc="None">
+    <Declaration><![CDATA[{attribute 'enable_dynamic_creation'}
+FUNCTION_BLOCK FB_StepList
+VAR_INPUT
+END_VAR
+VAR_OUTPUT
+END_VAR
+VAR
+	nStepCount	: UINT;	
+	nNoOfSteps	: UINT;
+	pIndexTable : POINTER TO PVOID;
+END_VAR
+]]></Declaration>
+    <Implementation>
+      <ST><![CDATA[]]></ST>
+    </Implementation>
+    <Method Name="FB_exit" Id="{488c8b72-5fe7-41a3-8f42-0320ca5cb5f4}">
+      <Declaration><![CDATA[METHOD FB_exit : BOOL
+VAR_INPUT
+	bInCopyCode : BOOL; // if TRUE, the exit method is called for exiting an instance that is copied afterwards (online change).
+END_VAR
+]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[IF pIndexTable > 0 THEN
+	__DELETE(pIndexTable);
+END_IF]]></ST>
+      </Implementation>
+    </Method>
+    <Method Name="FB_SetNoOfSteps" Id="{4b89f01a-7123-4960-8383-e7630a67717d}">
+      <Declaration><![CDATA[METHOD FB_SetNoOfSteps
+VAR_INPUT
+	nNoOfSteps : UINT;
+END_VAR
+
+VAR
+END_VAR
+]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[THIS^.nNoOfSteps := nNoOfSteps;
+pIndexTable := __NEW(PVOID, nNoOfSteps);
+MEMSET(pIndexTable,0,SIZEOF(PVOID) * nNoOfSteps);]]></ST>
+      </Implementation>
+    </Method>
+    <Method Name="M_Add" Id="{e5eb2bb9-9352-4ad4-9941-93b11072e8f5}">
+      <Declaration><![CDATA[METHOD M_Add : ERRORID
+VAR_INPUT
+	stStep	: ST_STEP;
+END_VAR
+
+VAR
+	pStep : POINTER TO ST_STEP;
+END_VAR]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[//StepNr muss größer "0" sein
+IF stStep.nStepNr < 1 THEN
+	M_Add := E_ErrorIdCmd.ERRORID_InvalidStepNr;
+	RETURN;
+END_IF
+
+//StepNr größer, als maximale Anzahl Steps beim Erstellen der Sequence angegeben
+IF stStep.nStepNr > nNoOfSteps THEN
+	M_Add := E_ErrorIdCmd.ERRORID_StepNrExeedsMaxNoOfSteps;
+	RETURN;
+END_IF
+
+//Step existiert schon
+//Das hier funzt nicht so recht.
+//Es wäre hier wahrscheinlich sehr hilfreich, einen Pointer auf WORD zu definieren
+IF pIndexTable[stStep.nStepNr - 1] > 0 THEN
+	M_Add := E_ErrorIdCmd.ERRORID_StepAlreadyExists;
+	RETURN;
+END_IF
+
+//StepNr muss immer eins größer sein als letzte Step 
+IF stStep.nStepNr < nStepCount THEN
+	M_Add := E_ErrorIdCmd.ERRORID_InvalidStepNr;
+	RETURN;	
+END_IF
+
+pStep := __NEW(ST_STEP);
+MEMCPY(pStep,ADR(stStep),SIZEOF(ST_STEP));
+pIndexTable[stStep.nStepNr - 1] := pStep; 
+nStepCount := nStepCount + 1;
+
+
+
+]]></ST>
+      </Implementation>
+    </Method>
+    <Method Name="M_Delete" Id="{53085257-95a4-41be-bc78-d660ecf89adb}">
+      <Declaration><![CDATA[METHOD M_Delete : BOOL
+VAR_INPUT
+	nMaxSteps	: UINT;
+END_VAR
+VAR_OUTPUT
+	nDeletedSteps : UINT;
+END_VAR
+VAR
+	pStep : POINTER TO ST_STEP;
+	pCondi: POINTER TO FB_CondiBase;
+END_VAR
+
+VAR_INST
+	i : UINT;
+END_VAR]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[IF pIndexTable = 0 THEN
+	M_Delete := TRUE;
+	RETURN;	
+END_IF
+//Maximal 200 Steps auf einmal löschen
+WHILE i < nNoOfSteps DO
+	IF pIndexTable[i] > 0 THEN
+		pStep := pIndexTable[i];
+		pCondi := pStep^.pCondi;
+		//Condi freigeben
+		IF pCondi > 0 THEN
+			pCondi^.M_ClearNext();
+			__DELETE(pCondi);
+		END_IF
+		__DELETE(pStep);
+		nDeletedSteps := nDeletedSteps + 1;
+		i := i + 1;
+		IF nDeletedSteps = nMaxSteps THEN
+			RETURN;
+		END_IF		
+	ELSE
+		EXIT;
+	END_IF
+END_WHILE
+
+i := 0;
+MEMSET(pIndexTable,0,SIZEOF(DWORD) * nNoOfSteps);
+nStepCount := 0;
+M_Delete := TRUE;]]></ST>
+      </Implementation>
+    </Method>
+    <Method Name="M_Get" Id="{2c18e175-cf64-4998-9115-a4afa1124192}">
+      <Declaration><![CDATA[METHOD M_Get : POINTER TO ST_Step
+VAR_INPUT
+	nStepNr	: UINT;
+END_VAR
+]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[IF nStepNr > 0 AND nStepNr <= nNoOfSteps THEN
+	M_Get := pIndexTable[nStepNr - 1];
+END_IF
+]]></ST>
+      </Implementation>
+    </Method>
+    <Method Name="M_GetLast" Id="{e0ade9b8-0494-416f-af37-de0da9379088}">
+      <Declaration><![CDATA[METHOD M_GetLast : POINTER TO ST_STEP
+VAR_INPUT
+END_VAR
+]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[IF nNoOfSteps > 0 THEN
+	M_GetLast := pIndexTable[nNoOfSteps - 1];
+END_IF]]></ST>
+      </Implementation>
+    </Method>
+    <Property Name="P_nCount" Id="{b6701bab-c5d0-4e40-b63e-d4f0835ec8f7}">
+      <Declaration><![CDATA[PROPERTY P_nCount : UINT]]></Declaration>
+      <Get Name="Get" Id="{7d01ee1f-08a5-4676-8ec2-ca96c06e92ee}">
+        <Declaration><![CDATA[VAR
+END_VAR
+]]></Declaration>
+        <Implementation>
+          <ST><![CDATA[P_nCount := nStepCount;]]></ST>
+        </Implementation>
+      </Get>
+    </Property>
+    <LineIds Name="FB_StepList">
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="FB_StepList.FB_exit">
+      <LineId Id="3" Count="1" />
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="FB_StepList.FB_SetNoOfSteps">
+      <LineId Id="3" Count="1" />
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="FB_StepList.M_Add">
+      <LineId Id="3" Count="12" />
+      <LineId Id="41" Count="1" />
+      <LineId Id="16" Count="17" />
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="FB_StepList.M_Delete">
+      <LineId Id="42" Count="22" />
+      <LineId Id="66" Count="4" />
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="FB_StepList.M_Get">
+      <LineId Id="3" Count="2" />
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="FB_StepList.M_GetLast">
+      <LineId Id="6" Count="1" />
+      <LineId Id="5" Count="0" />
+    </LineIds>
+    <LineIds Name="FB_StepList.P_nCount.Get">
+      <LineId Id="2" Count="0" />
+    </LineIds>
+  </POU>
+</TcPlcObject>

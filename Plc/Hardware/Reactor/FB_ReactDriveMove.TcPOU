@@ -1,0 +1,81 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<TcPlcObject Version="1.1.0.1" ProductVersion="3.1.4020.6">
+  <POU Name="FB_ReactDriveMove" Id="{87471ca3-25e3-47eb-9cd5-8a1a60ca93eb}" SpecialFunc="None">
+    <Declaration><![CDATA[FUNCTION_BLOCK FB_ReactDriveMove
+VAR_INPUT
+	pDriveRef 	: POINTER TO FB_HwRefReactDrive;
+	eDrive		: E_ReactDrive;
+	eOpClCtrl	: E_OpClCtrl;
+	bExecute	: BOOL; 
+END_VAR
+VAR_OUTPUT
+	bBusy		: BOOL;
+	bError		: BOOL;
+	nErrorId	: ERRORID;	
+END_VAR
+VAR
+	nState	: USINT;
+END_VAR
+VAR CONSTANT
+	cGear	: ARRAY[1..3] OF REAL := [12.8, 12.8, 25.6];
+END_VAR
+]]></Declaration>
+    <Implementation>
+      <ST><![CDATA[IF bExecute THEN
+	IF NOT pDriveRef^.bIsInit THEN
+		nErrorId := E_ErrorIdCmd.ERRORID_DeviceNotInitialized;
+		bError := TRUE;
+		RETURN;
+	END_IF
+
+	pDriveRef^.eCurrentState[eDrive] := E_OpClState.UNDEFINED;
+	IF pDriveRef^.nStatus[eDrive].3 THEN //Error
+		bBusy := FALSE;
+		bError := TRUE;
+		RETURN;
+	END_IF	
+
+	IF nState = 0 THEN	//PP-Mode einstellen
+		bBusy := TRUE;
+		IF pDriveRef^.nCurrentOpMode[eDrive] <> 1 THEN
+			pDriveRef^.nOpMode[eDrive] := 1;
+		ELSE
+			nState := 1;
+			pDriveRef^.nControl[eDrive] := 15;
+		END_IF
+	END_IF
+	
+	IF nState = 1 THEN
+		IF eOpClCtrl = E_OpClCtrl.Open THEN
+			pDriveRef^.nTargetPos[eDrive] := 0;
+		ELSE
+			pDriveRef^.nTargetPos[eDrive] := REAL_TO_DINT(DINT_TO_REAL(pDriveRef^.nClosedPosition[eDrive]) * cGear[eDrive]);
+		END_IF
+		
+		nState := 2;
+	ELSIF nState = 2 THEN
+		pDriveRef^.nControl[eDrive] := 31;
+		nState := 3;
+	ELSIF nState = 3 THEN
+		IF pDriveRef^.nStatus[eDrive].12 THEN  //Setpoint ACK
+			pDriveRef^.nControl[eDrive] := 15;
+			nState := 4;
+		END_IF
+	ELSIF nState = 4 THEN
+		IF pDriveRef^.nStatus[eDrive].10 THEN //TargetReached
+			IF eOpClCtrl = E_OpClCtrl.Open THEN
+				pDriveRef^.eCurrentState[eDrive] := E_OpClState.Open;
+			ELSE
+				pDriveRef^.eCurrentState[eDrive] := E_OpClState.Closed;
+			END_IF
+			bBusy := FALSE;
+		END_IF
+	END_IF
+ELSE
+	bError := FALSE;
+	nErrorId := 0;
+	nState := 0;
+END_IF]]></ST>
+    </Implementation>
+  </POU>
+</TcPlcObject>

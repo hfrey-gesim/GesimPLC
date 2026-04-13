@@ -1,0 +1,577 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<TcPlcObject Version="1.1.0.1" ProductVersion="3.1.4024.5">
+  <POU Name="FB_Diluter3Inputs" Id="{4908bb4e-e620-4a72-a6f7-161eaa402c73}" SpecialFunc="None">
+    <Declaration><![CDATA[FUNCTION_BLOCK FB_Diluter3Inputs EXTENDS FB_Diluter IMPLEMENTS I_Device
+
+VAR
+	aLiquidBottle		: ARRAY[1..3] OF USINT;
+ 	aValvePosInput 		: ARRAY[1..3] OF SINT;
+	nCurrentBottleNr 	: USINT;
+	nInput				: USINT;
+END_VAR
+]]></Declaration>
+    <Implementation>
+      <ST><![CDATA[SUPER^();]]></ST>
+    </Implementation>
+    <Action Name="A_Prepare" Id="{5fb3a7be-0279-465b-8b7a-e86215aebd55}">
+      <Implementation>
+        <ST><![CDATA[stError.POUState := nStateAction;
+
+IF nStateAction = 0 THEN
+	nStateAction := 1;
+	IF ePrepareMode = E_DilPrepareMode.ForAspirate THEN
+		//Abstand von ganz unten zu aktueller Pos muss mind TotalSteps betragen
+		nSetPosPlunger := UDINT_TO_UINT(24000 - nTotalSteps);
+		//ValvePosition wird bereits in M_ExeAction() gestetzt
+		IF nSetPosPlunger >= pDiluterRef1^.nActPlungerPos THEN	//Kolbenposition breits passend
+			//weiter zu MoveValve
+			nStateAction := 2;
+		END_IF
+	ELSE //ForDispense
+		nSetPosPlunger := UDINT_TO_UINT(nTotalSteps);
+		//ValvePosition wird bereits in M_ExeAction() gestetzt
+		IF nSetPosPlunger <= pDiluterRef1^.nActPlungerPos THEN	//Kolbenposition bereits passend
+			//weiter zu MoveValve
+			nStateAction := 2;
+		END_IF
+	END_IF			
+END_IF
+
+IF nStateAction = 1 THEN	//Move plunger
+	fbMoveToPos(bExecute:= TRUE, pDilRef:= pDiluterRef1, nTopSpeed:= DINT_TO_UINT(nSpeedReload), 
+				nPosition:= nSetPosPlunger, DilSendCmd:= fbSendCmd);
+	IF NOT fbMoveToPos.bBusy THEN
+		IF fbMoveToPos.bError THEN
+			stError.ErrorId := fbMoveToPos.nErrorId;
+			nStateAction := 99;
+		ELSE
+			nStateAction := 2;
+		END_IF
+		fbMoveToPos(bExecute:= FALSE, pDilRef:= pDiluterRef1, DilSendCmd:= fbSendCmd);
+	END_IF
+END_IF
+
+IF nStateAction = 2 THEN	//Move valve
+	fbMoveValve(bExecute:= TRUE, nValvePos:= nValvePosOutput, pDilRef:= pDiluterRef1, DilSendCmd:= fbSendCmd);
+	IF NOT fbMoveValve.bBusy THEN
+		IF fbMoveValve.bError THEN
+			stError.ErrorId := fbMoveValve.nErrorId;
+			nStateAction := 99;
+		ELSE
+			nStateAction := 80;
+		END_IF
+		fbMoveValve(bExecute:= FALSE, pDilRef:= pDiluterRef1, DilSendCmd:= fbSendCmd);
+	END_IF
+END_IF
+
+//Abbrechen
+IF nStateAction = 70 THEN
+	IF fbMoveToPos.bBusy THEN
+		fbMoveToPos(bExecute:= FALSE, DilSendCmd:= fbSendCmd, pDilRef:= pDiluterRef1);
+	ELSE
+		nStateAction := 71;
+	END_IF
+END_IF
+
+IF nStateAction = 71 THEN
+	fbStop(bExecute:= TRUE, DilSendCmd:= fbSendCmd, pDilRef1 := pDiluterRef1);
+	IF NOT fbStop.bBusy THEN
+		IF fbStop.bError THEN
+			nStateAction := 99;
+			stError.ErrorId := fbStop.nErrorId;
+		ELSE
+			nStateAction := 80;
+		END_IF
+		fbStop(bExecute:= FALSE, DilSendCmd:= fbSendCmd);
+	END_IF	
+END_IF
+//Ende Abbrechen
+
+//Errorhandling
+IF nStateAction = 99 THEN
+	stError.Cmd := E_Action.ACTION_DilPrepare;
+	stError.POUAction := E_POUACT.POUACT_A_Prepare;
+	fbErrorList.M_Add(stError);
+END_IF]]></ST>
+      </Implementation>
+    </Action>
+    <Action Name="A_Pump" Id="{91b049f3-b008-4c71-856e-928f482e5093}">
+      <Implementation>
+        <ST><![CDATA[stError.POUState := nStateAction;
+
+IF nStateAction = 0 THEN
+	//BottleStates abfragen
+	stError.ErrorId := M_CheckBottles(nCurrentBottleNr);
+	IF stError.ErrorId > 0 THEN
+		nStateAction := 70;
+		nStateNext := 99;
+		RETURN;
+	END_IF	
+	
+	nStateNext := 80;
+	fbPump(eMode:= ePumpMode, nValvePosPump:= nValvePosPump, nValvePosReload:= nValvePosReload, 
+			nSpeedPump:= nSpeedPump, nSpeedReload:= nSpeedReload, nTotalSteps:= nTotalSteps,
+			bExecute:= TRUE, DilSendCmd:= fbSendCmd, pDilRef:= pDiluterRef1);
+	IF NOT fbPump.bBusy THEN
+		IF fbPump.bError THEN
+			bError := TRUE;
+			stError.ErrorId := fbPump.nErrorId;
+			nStateAction := 99;
+		ELSE
+			nStateAction := 80;				
+		END_IF
+		fbPump(bExecute:= FALSE, DilSendCmd:= fbSendCmd, pDilRef:= pDiluterRef1);
+	END_IF
+END_IF
+
+//Abbrechen
+IF nStateAction = 70 THEN
+	IF fbPump.bBusy THEN
+		fbPump(bExecute:= FALSE, DilSendCmd:= fbSendCmd, pDilRef:= pDiluterRef1);
+	ELSE
+		nStateAction := 71;
+	END_IF
+END_IF
+
+IF nStateAction = 71 THEN
+	fbStop(bExecute:= TRUE, DilSendCmd:= fbSendCmd, pDilRef1 := pDiluterRef1);
+	IF NOT fbStop.bBusy THEN
+		IF fbStop.bError THEN
+			nStateAction := 99;
+			stError.ErrorId := fbStop.nErrorId;
+		ELSE
+			nStateAction := nStateNext;
+		END_IF
+		fbStop(bExecute:= FALSE, DilSendCmd:= fbSendCmd);
+	END_IF	
+END_IF
+//Ende Abbrechen
+
+//Errorhandling
+IF nStateAction = 99 THEN
+	fbPump(bExecute:= FALSE, DilSendCmd:= fbSendCmd, pDilRef:= pDiluterRef1);
+	stError.Cmd := E_Action.ACTION_DilPump;
+	stError.POUAction := E_POUACT.POUACT_A_Pump;
+	fbErrorList.M_Add(stError);
+END_IF]]></ST>
+      </Implementation>
+    </Action>
+    <Method Name="FB_init" Id="{93c03cc4-0780-47a6-a446-d51a66ef9465}">
+      <Declaration><![CDATA[METHOD FB_init : BOOL
+VAR_INPUT
+	bInitRetains : BOOL; // if TRUE, the retain variables are initialized (warm start / cold start)
+	bInCopyCode : BOOL;  // if TRUE, the instance afterwards gets moved into the copy code (online change)
+END_VAR
+]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[eObjectType := E_ObjectType.OBJECTTYPE_Diluter3Inputs;
+eObjectGroup := E_ObjectGroup.OBJECTGROUP_Device;
+eValveType := E_DilValveType.VALVETYPE_4Distribution;]]></ST>
+      </Implementation>
+    </Method>
+    <Method Name="M_CheckBottles" Id="{df92e011-771f-48c1-986d-7c14b2e90e12}">
+      <Declaration><![CDATA[METHOD M_CheckBottles : ERRORID
+VAR_INPUT
+	nInputNr : USINT;
+END_VAR
+]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[IF nInputNr >= 1 AND nInputNr <= 3 THEN
+	IF NOT aSensSysLiquidBottle[aLiquidBottle[nInputNr]] THEN
+		M_CheckBottles := E_ErrorIdCmd.ERRORID_LiquidBottleEmpty;
+		RETURN;
+	END_IF
+END_IF]]></ST>
+      </Implementation>
+    </Method>
+    <Method Name="M_ExeAction" Id="{508b57be-0f4e-4cda-aaae-9cf415feebfa}">
+      <Declaration><![CDATA[METHOD M_ExeAction : ERRORID
+VAR_INPUT
+	refActionData	: REFERENCE TO ST_ActionData;
+END_VAR
+
+VAR
+	i : USINT;
+END_VAR]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[//Diluter kann keine Actions parallel ausführen
+//Die einzige Action ist Stop
+IF eCurrentState = E_MachineState.MACHINESTATE_Idle THEN
+	CASE refActionData.eAction OF
+		E_Action.ACTION_DilPump: //Diluter Pumpen
+			IF NOT bIsInit THEN
+				M_ExeAction := E_ErrorIdDiluter.ERRORID_NotIniialized;
+				RETURN;
+			END_IF
+			//Param1 = Quantity in 10tel µl
+			//Param2 = Mode (Saugen oder Drücken) //Hier wird nur Drücken implementiert!
+			//Param3 = Flow Pumpen in 10tel µl/sec
+			//Param4 = Flow Nachladen in 10tel µl/sec
+			//Param5 = Ventilstellung Pump
+			//Param6 = Ventilstellung Nachladen
+			//Param7 = Ctrl (verschiedene Steuer-Bis (z.B. MoveBottom before Pump o.ä.)
+			
+			//Valve-Position Pumpen ist immer der Output wenn nicht anders angegeben.
+			IF refActionData.aParams[5] = 0 THEN
+				nValvePosPump := nValvePosOutput;
+			ELSE
+				nValvePosPump := DINT_TO_SINT(refActionData.aParams[5]);
+			END_IF
+			
+			//Valve-Position Reload ermitteln
+			IF refActionData.aParams[6] = 0 THEN
+				//Dieser Fall sollte einen Fehler werfen, da keine eindeutige Zuordnung möglich ist.
+				M_ExeAction := E_ErrorIdDiluter.ERRORID_InvalidValveParam;
+			ELSE
+				nValvePosReload := DINT_TO_SINT(refActionData.aParams[6]);
+				IF nValvePosReload < 1 OR nValvePosReload > 4 THEN
+					M_ExeAction := E_ErrorIdDiluter.ERRORID_InvalidValveParam;
+					RETURN;
+				END_IF
+			END_IF
+			
+			nCurrentBottleNr := 0;
+			ePumpMode := DINT_TO_USINT(refActionData.aParams[1]);
+			//Überwachung der Bottles erfolgt nur im Pumpmode "Press", da Bottles Vorratsflaschen
+			IF ePumpMode = E_DilPumpMode.MODE_Press THEN
+				FOR i:= 1 TO 3 BY 1 DO
+					IF aValvePosInput[i] = nValvePosReload THEN
+						nCurrentBottleNr := i;
+						EXIT;
+					END_IF
+				END_FOR
+				
+				M_ExeAction := M_CheckBottles(nCurrentBottleNr);
+				IF M_ExeAction > 0 THEN
+					RETURN;
+				END_IF
+			END_IF
+			
+			//Umrechnung von 10tel µl in Mircosteps
+			nTotalSteps := F_DilQuantityToMicroSteps(refActionData.aParams[2],nSyringeSize);
+			
+			//Umrechnung 10tel µl/s in Halbsteps/s
+			nSpeedPump := F_DilFlowToSpeed(refActionData.aParams[3], nSyringeSize);
+	
+			M_ExeAction := M_CheckSpeed(nSpeedPump);
+			IF M_ExeAction > 0 THEN
+				RETURN;
+			END_IF
+			
+			IF refActionData.aParams[4] = 0 THEN
+				//Umrechnung 10tel µl/s in Halbsteps/s
+				nSpeedReload := F_DilFlowToSpeed(nConfigReloadSpeed, nSyringeSize);
+			ELSE
+				//Umrechnung 10tel µl/s in Halbsteps/s
+				nSpeedReload := F_DilFlowToSpeed(refActionData.aParams[4], nSyringeSize);
+			END_IF
+			M_ExeAction := M_CheckSpeed(nSpeedReload);
+			IF M_ExeAction > 0 THEN
+				RETURN;
+			END_IF			
+			bPump := TRUE;
+			
+		E_Action.ACTION_DilTransfer:
+			//Diese Action ist für diesen Dilutertyp nicht implementiert
+				M_ExeAction := E_ErrorIdCmd.ERRORID_InvalidActionDiluterType;
+				RETURN;
+		E_Action.ACTION_DilPrepare:
+			IF NOT bIsInit THEN
+				M_ExeAction := E_ErrorIdDiluter.ERRORID_NotIniialized;
+				RETURN;
+			END_IF
+
+			ePrepareMode := DINT_TO_USINT(refActionData.aParams[1]);
+			nInput  := DINT_TO_USINT(refActionData.aParams[3]);
+			IF nInput < 1 OR nInput > 3 THEN
+				M_ExeAction := E_ErrorIdCmd.ERRORID_ActionLocked;
+				RETURN;
+			END_IF
+			
+			//Bottles OK?
+			M_ExeAction := M_CheckBottles(nInput);
+			IF M_ExeAction > 0 THEN
+				RETURN;
+			END_IF
+			
+			fbMoveToPos.nValvePos := aValvePosInput[nInput];
+			
+			//Umrechnung von 10tel µl in Mircosteps
+			nTotalSteps := F_DilQuantityToMicroSteps(refActionData.aParams[2],nSyringeSize);
+			nTotalSteps := MIN(24000,nTotalSteps);	//Es kann für max einen Hub reloaded werden
+			nSpeedReload := F_DilFlowToSpeed(nConfigReloadSpeed, nSyringeSize);
+			
+			bPrepare := TRUE;
+		ELSE
+			M_ExeAction := SUPER^.M_ExeAction(refActionData);
+			RETURN;
+	END_CASE
+	bBusy := TRUE;
+	eCurrentAction := refActionData.eAction;
+	eCurrentState := E_MachineState.MACHINESTATE_Active;
+ELSIF (eCurrentState = E_MachineState.MACHINESTATE_Active) AND (refActionData.eAction = E_Action.ACTION_Stop) THEN
+	M_Stop();
+ELSE
+	M_ExeAction := E_ErrorIdCmd.ERRORID_InvalidState;
+	RETURN;
+END_IF
+
+]]></ST>
+      </Implementation>
+    </Method>
+    <Method Name="M_GetAllProps" Id="{a9db570b-eef8-42c8-81d0-dbe3a15060ea}">
+      <Declaration><![CDATA[METHOD M_GetAllProps : ERRORID
+VAR_INPUT
+	refCmdData : REFERENCE TO  ST_CmdData;
+END_VAR
+]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[//Specialproperties lesen
+refCmdData.aHeader[0] := nObjectID;
+refCmdData.aHeader[1] := eObjectType;
+refCmdData.aHeader[2]:= nNotifyId;
+
+refCmdData.n32Data[1] := nParentSlotNr;
+refCmdData.n32Data[2] := nChannel;		//Diluter-Kanal
+refCmdData.n32Data[3] := nSyringeSize;	//Spritzengröße (für beide Dilutoren)
+refCmdData.n32Data[4] := nConfigReloadSpeed;
+refCmdData.n32Data[5] := aLiquidBottle[1];
+refCmdData.n32Data[6] := aLiquidBottle[2];
+refCmdData.n32Data[7] := aLiquidBottle[3];
+refCmdData.n32Data[8] := aValvePosInput[1];
+refCmdData.n32Data[9] := aValvePosInput[2];
+refCmdData.n32Data[10] := aValvePosInput[3];
+refCmdData.n32Data[11] := nValvePosOutput;
+]]></ST>
+      </Implementation>
+    </Method>
+    <Method Name="M_GetValvePosInput" Id="{51b3edaa-2ff3-4e84-8eb0-3803b43a52d0}">
+      <Declaration><![CDATA[METHOD M_GetValvePosInput : SINT
+VAR_INPUT
+	nInputNr : USINT;
+END_VAR
+]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[IF nInputNr >= 1 AND nInputNr <= 3 THEN
+	M_GetValvePosInput := aValvePosInput[nInputNr];
+END_IF]]></ST>
+      </Implementation>
+    </Method>
+    <Method Name="M_SetAllProps" Id="{ce5de1d7-8fbc-43fe-8c8c-6e30acff5e5a}">
+      <Declaration><![CDATA[METHOD M_SetAllProps : ERRORID
+VAR_INPUT
+	refCmdData : REFERENCE TO  ST_CmdData;
+END_VAR
+
+]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[nNoOfProps := 12;
+
+nParentSlotNr := DINT_TO_UINT(refCmdData.n32Data[1]);
+
+//Diluterkanal checken
+//Channel muss zwischen 1 und 7 liegen
+IF  NOT((refCmdData.n32Data[2] > 0) AND (refCmdData.n32Data[2] <= cNoOfDiluters)) THEN
+	M_SetAllProps := E_ErrorIdObjMgmt.ERRORID_InvalidDiluterChannel;
+	RETURN;
+ELSE
+	nChannel := DINT_TO_USINT(refCmdData.n32Data[2]);
+	pDiluterRef1 := ADR(aFbDiluterRef[nChannel]);
+END_IF
+
+//Spritzengröße
+IF NOT (refCmdData.n32Data[3] = 50 OR 
+		refCmdData.n32Data[3] = 100 OR 
+		refCmdData.n32Data[3] = 250 OR 
+		refCmdData.n32Data[3] = 500 OR 
+		refCmdData.n32Data[3] = 1000 OR
+		refCmdData.n32Data[3] = 2500 OR
+		refCmdData.n32Data[3] = 5000) THEN
+		M_SetAllProps := E_ErrorIdObjMgmt.ERRORID_InvalidSyringeSize;
+ELSE
+	nSyringeSize := refCmdData.n32Data[3];
+END_IF
+
+//ReloadSpeed
+nConfigReloadSpeed := refCmdData.n32Data[4];
+
+//Liquidbottle 1
+IF refCmdData.n32Data[5] >= 0 AND refCmdData.n32Data[5] <= cNoOfLiquidBottles THEN
+	aLiquidBottle[1] := DINT_TO_USINT(refCmdData.n32Data[5]);
+ELSE
+	M_SetAllProps := E_ErrorIdObjMgmt.ERRORID_InvalidLiquidbottle;
+	RETURN;
+END_IF
+
+//Liquidbottle 2
+IF refCmdData.n32Data[6] >= 0 AND refCmdData.n32Data[6] <= cNoOfLiquidBottles THEN
+	aLiquidBottle[2] := DINT_TO_USINT(refCmdData.n32Data[6]);
+ELSE
+	M_SetAllProps := E_ErrorIdObjMgmt.ERRORID_InvalidLiquidbottle;
+	RETURN;
+END_IF
+
+//Liquidbottle 3
+IF refCmdData.n32Data[7] >= 0 AND refCmdData.n32Data[7] <= cNoOfLiquidBottles THEN
+	aLiquidBottle[3] := DINT_TO_USINT(refCmdData.n32Data[7]);
+ELSE
+	M_SetAllProps := E_ErrorIdObjMgmt.ERRORID_InvalidLiquidbottle;
+	RETURN;
+END_IF
+
+//Achtung, ValvePos muss einen Wert von 1 bis 4 annehmen, denn dieser Diluter ist fix mit einem 4Way-Valve ausgestattet.
+aValvePosInput[1] := DINT_TO_SINT(refCmdData.n32Data[8]);
+aValvePosInput[2] := DINT_TO_SINT(refCmdData.n32Data[9]);
+aValvePosInput[3] := DINT_TO_SINT(refCmdData.n32Data[10]);
+nValvePosOutput := DINT_TO_SINT(refCmdData.n32Data[11]);
+]]></ST>
+      </Implementation>
+    </Method>
+    <LineIds Name="FB_Diluter3Inputs">
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="FB_Diluter3Inputs.A_Prepare">
+      <LineId Id="20" Count="1" />
+      <LineId Id="32" Count="0" />
+      <LineId Id="84" Count="2" />
+      <LineId Id="141" Count="0" />
+      <LineId Id="191" Count="0" />
+      <LineId Id="129" Count="0" />
+      <LineId Id="97" Count="0" />
+      <LineId Id="89" Count="2" />
+      <LineId Id="146" Count="0" />
+      <LineId Id="148" Count="0" />
+      <LineId Id="93" Count="0" />
+      <LineId Id="98" Count="0" />
+      <LineId Id="94" Count="1" />
+      <LineId Id="49" Count="0" />
+      <LineId Id="82" Count="1" />
+      <LineId Id="75" Count="0" />
+      <LineId Id="108" Count="2" />
+      <LineId Id="112" Count="0" />
+      <LineId Id="116" Count="1" />
+      <LineId Id="120" Count="0" />
+      <LineId Id="113" Count="0" />
+      <LineId Id="139" Count="0" />
+      <LineId Id="111" Count="0" />
+      <LineId Id="76" Count="3" />
+      <LineId Id="130" Count="1" />
+      <LineId Id="133" Count="0" />
+      <LineId Id="137" Count="0" />
+      <LineId Id="135" Count="1" />
+      <LineId Id="134" Count="0" />
+      <LineId Id="138" Count="0" />
+      <LineId Id="132" Count="0" />
+      <LineId Id="80" Count="0" />
+      <LineId Id="152" Count="0" />
+      <LineId Id="168" Count="1" />
+      <LineId Id="190" Count="0" />
+      <LineId Id="171" Count="18" />
+      <LineId Id="24" Count="0" />
+      <LineId Id="67" Count="0" />
+      <LineId Id="26" Count="1" />
+      <LineId Id="29" Count="2" />
+      <LineId Id="1" Count="0" />
+    </LineIds>
+    <LineIds Name="FB_Diluter3Inputs.A_Pump">
+      <LineId Id="2" Count="20" />
+      <LineId Id="24" Count="34" />
+      <LineId Id="1" Count="0" />
+    </LineIds>
+    <LineIds Name="FB_Diluter3Inputs.FB_init">
+      <LineId Id="7" Count="1" />
+      <LineId Id="14" Count="0" />
+    </LineIds>
+    <LineIds Name="FB_Diluter3Inputs.M_CheckBottles">
+      <LineId Id="14" Count="1" />
+      <LineId Id="18" Count="1" />
+      <LineId Id="17" Count="0" />
+      <LineId Id="13" Count="0" />
+    </LineIds>
+    <LineIds Name="FB_Diluter3Inputs.M_ExeAction">
+      <LineId Id="306" Count="0" />
+      <LineId Id="303" Count="0" />
+      <LineId Id="307" Count="0" />
+      <LineId Id="505" Count="0" />
+      <LineId Id="346" Count="11" />
+      <LineId Id="570" Count="0" />
+      <LineId Id="522" Count="1" />
+      <LineId Id="608" Count="0" />
+      <LineId Id="525" Count="2" />
+      <LineId Id="565" Count="0" />
+      <LineId Id="528" Count="1" />
+      <LineId Id="610" Count="1" />
+      <LineId Id="539" Count="0" />
+      <LineId Id="556" Count="0" />
+      <LineId Id="575" Count="0" />
+      <LineId Id="578" Count="1" />
+      <LineId Id="577" Count="0" />
+      <LineId Id="541" Count="0" />
+      <LineId Id="514" Count="1" />
+      <LineId Id="583" Count="2" />
+      <LineId Id="589" Count="10" />
+      <LineId Id="588" Count="0" />
+      <LineId Id="586" Count="0" />
+      <LineId Id="367" Count="21" />
+      <LineId Id="409" Count="2" />
+      <LineId Id="506" Count="0" />
+      <LineId Id="508" Count="1" />
+      <LineId Id="459" Count="4" />
+      <LineId Id="626" Count="0" />
+      <LineId Id="624" Count="1" />
+      <LineId Id="627" Count="0" />
+      <LineId Id="629" Count="2" />
+      <LineId Id="639" Count="0" />
+      <LineId Id="623" Count="0" />
+      <LineId Id="465" Count="3" />
+      <LineId Id="641" Count="1" />
+      <LineId Id="621" Count="0" />
+      <LineId Id="471" Count="3" />
+      <LineId Id="619" Count="0" />
+      <LineId Id="475" Count="0" />
+      <LineId Id="477" Count="1" />
+      <LineId Id="510" Count="0" />
+      <LineId Id="479" Count="0" />
+      <LineId Id="496" Count="0" />
+      <LineId Id="480" Count="0" />
+      <LineId Id="3" Count="1" />
+      <LineId Id="482" Count="0" />
+      <LineId Id="5" Count="4" />
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="FB_Diluter3Inputs.M_GetAllProps">
+      <LineId Id="5" Count="3" />
+      <LineId Id="24" Count="1" />
+      <LineId Id="11" Count="0" />
+      <LineId Id="13" Count="0" />
+      <LineId Id="16" Count="0" />
+      <LineId Id="32" Count="2" />
+      <LineId Id="18" Count="1" />
+      <LineId Id="2" Count="0" />
+      <LineId Id="30" Count="1" />
+    </LineIds>
+    <LineIds Name="FB_Diluter3Inputs.M_GetValvePosInput">
+      <LineId Id="5" Count="0" />
+      <LineId Id="7" Count="1" />
+    </LineIds>
+    <LineIds Name="FB_Diluter3Inputs.M_SetAllProps">
+      <LineId Id="87" Count="0" />
+      <LineId Id="179" Count="0" />
+      <LineId Id="95" Count="0" />
+      <LineId Id="178" Count="0" />
+      <LineId Id="103" Count="9" />
+      <LineId Id="125" Count="11" />
+      <LineId Id="202" Count="1" />
+      <LineId Id="201" Count="0" />
+      <LineId Id="137" Count="6" />
+      <LineId Id="171" Count="0" />
+      <LineId Id="185" Count="15" />
+      <LineId Id="212" Count="0" />
+      <LineId Id="211" Count="0" />
+      <LineId Id="164" Count="0" />
+      <LineId Id="204" Count="1" />
+      <LineId Id="165" Count="0" />
+      <LineId Id="2" Count="0" />
+    </LineIds>
+  </POU>
+</TcPlcObject>

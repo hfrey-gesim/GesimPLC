@@ -1,0 +1,14 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<TcPlcObject Version="1.1.0.1" ProductVersion="3.1.0.25">
+  <DUT Name="ST_CANopenObject" Id="{df42f89a-c89f-4ccf-9f19-8fd8c891891a}">
+    <Declaration><![CDATA[TYPE ST_CANopenObject :
+STRUCT
+	nIndex 		: DWORD;
+	nSubIndex 	: DWORD;
+	nLength 	: DWORD;
+END_STRUCT
+END_TYPE
+]]></Declaration>
+    <ObjectProperties />
+  </DUT>
+</TcPlcObject>

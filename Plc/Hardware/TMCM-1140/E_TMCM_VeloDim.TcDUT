@@ -1,0 +1,14 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<TcPlcObject Version="1.1.0.1" ProductVersion="3.1.4024.11">
+  <DUT Name="E_TMCM_VeloDim" Id="{0c3047c7-0c8c-4c8e-99ed-79cd4800aaef}">
+    <Declaration><![CDATA[{attribute 'qualified_only'}
+{attribute 'strict'}
+TYPE E_TMCM_VeloDim :
+(
+	INTERN := 0,
+	RPM := 164,
+	PPS := 181
+)USINT;
+END_TYPE]]></Declaration>
+  </DUT>
+</TcPlcObject>

@@ -1,0 +1,510 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<TcPlcObject Version="1.1.0.1">
+  <POU Name="PC_Control" Id="{0326ee08-52e9-4208-b223-b85a66cc8d5d}" SpecialFunc="None">
+    <Declaration><![CDATA[PROGRAM PC_Control
+VAR
+	fbWriteInd  	: ADSWRITEIND;
+	fbWriteRes  	: ADSWRITERES;
+	fbReadInd		: ADSREADIND;
+	fbReadRes		: ADSREADRES;
+	fbReadWriteInd	: ADSRDWRTIND;
+	fbReadWriteRes	: ADSRDWRTRES;
+	
+	fbGetObjPropChecksum : FB_GetObjPropChecksum;
+	
+	uData			: U_AdsData;
+	
+	aBytes			: ARRAY[0..5] OF BYTE;
+	nReadDataUSINT	: USINT;
+	nDataUSINT		: USINT;	
+ 	nDataUINT		: UINT;
+	nDataDINT		: DINT;
+	nDataINT		: INT;
+	stHardwareId	: ST_HardwareId;
+	nObjectId		: UINT;
+	stError			: ST_Error;
+	stStepStatus	: ST_StepStatus;
+	pMzTool			: POINTER TO FB_MzBase;
+	pSequence		: POINTER TO FB_Sequence;
+	pObject			: POINTER TO FB_Object;
+	
+	//Variablen für A_ExeAction
+	eAction			: E_Action;
+	
+	stHardwareInfo	: ST_HardwareInfo;
+	stPlcInfo		: ST_PlcInfo;
+	aActiveActions	: ARRAY[0..9] OF ST_ActionStatus;
+	
+END_VAR
+
+VAR CONSTANT
+        READ_OBJECT_CHECKSUM	: UDINT := 16#80000002;
+        READ_CONFIG_CHECKSUM	: UDINT := 16#80000003;
+        ACTIVATE_CONFIG 		: UDINT := 16#80000004;
+        READ_ACTIVATE_STATE 	: UDINT := 16#80000005;
+        DELETE_ALL_OBJECTS 		: UDINT := 16#80000006;
+        DELETE_OBJECT 			: UDINT := 16#80000007;
+        CREATE_OBJECT 			: UDINT := 16#80000008;
+        WRITE_ALL_PROPS 		: UDINT := 16#80000009;
+        WRITE_SINGLE_PROP 		: UDINT := 16#8000000A;
+        READ_ALL_PROPS 			: UDINT := 16#8000000B;
+		READ_OBJECT_IDS 		: UDINT := 16#8000000D;
+        UPLOAD_SEQU_STEP 		: UDINT := 16#80000011;
+        UPLOAD_SEQU_CONDI 		: UDINT := 16#80000012;
+        DELETE_SEQUENCE 		: UDINT := 16#80000013;
+        CHANGE_MODE 			: UDINT := 16#80000018;
+        RESET_ERROR 			: UDINT := 16#80000019;
+        WRITE_HW_PROP 			: UDINT := 16#8000001A;
+        READ_HW_PROP 			: UDINT := 16#8000001B;
+        INTERACT_RESPONSE 		: UDINT := 16#8000001C;
+        SETUP_AXIS 				: UDINT := 16#8000001D;
+        FIRMWARE_UPDATE_CAN 	: UDINT := 16#8000001E;
+		READ_ERROR				: UDINT := 16#8000001F;
+		CREATE_SEQUENCE			: UDINT := 16#80000020;
+		STOP					: UDINT := 16#80000021;
+		GET_MODIFIED_OBJECT		: UDINT := 16#80000022;
+		READ_HW_INFO			: UDINT := 16#80000023;
+		READ_PLC_INFO			: UDINT := 16#80000024;
+		INTERLOCK				: UDINT := 16#80000025;
+		SAVE_CURR_CONFIG		: UDINT := 16#80000026;
+		DELETE_CURR_CONFIG		: UDINT := 16#80000027;
+		READ_MINMAXACT_POS		: UDINT := 16#80000028;
+		RESET_PLC				: UDINT := 16#80000029;
+        EXECUTE_ACTION 			: UDINT := 16#800000F0;
+		STOP_ACTION 			: UDINT := 16#800000F1;
+		PAUSE_ACTION 			: UDINT := 16#800000F2;
+		CONTINUE_ACTION			: UDINT := 16#800000F3;
+		READ_ACTIVE_ACTIONS		: UDINT := 16#800000F4;
+END_VAR]]></Declaration>
+    <Implementation>
+      <ST><![CDATA[fbWriteRes(RESPOND:= FALSE );(* Reset response function block *)
+fbWriteInd(CLEAR:= FALSE );(* Trigger indication function block *)
+fbReadRES(RESPOND:= FALSE );(* Reset response function block *)
+fbReadInd(CLEAR:= FALSE );(* Trigger indication function block *)
+fbReadWriteRes(RESPOND:= FALSE );(* Reset response function block *)
+fbReadWriteInd(CLEAR:= FALSE );(* Trigger indication function block *)
+
+IF fbWriteInd.VALID THEN
+	fbWriteRes.RESULT := 0;
+	CASE fbWriteInd.IDXGRP OF
+		ACTIVATE_CONFIG:	//ActivateConfig
+			fbWriteRes.RESULT := MainDispacher.M_ActivateConfig();
+		SAVE_CURR_CONFIG:	//Aktuelle Konfiguration speichern - wird beim Plc-Neustart wieder geladen
+			fbWriteRes.RESULT := MainDispacher.M_SaveConfig();
+		DELETE_CURR_CONFIG:	//Gespeicherte Konfiguration löschen
+			fbWriteRes.RESULT := MainDispacher.M_DeleteConfig();
+		DELETE_ALL_OBJECTS:	//DeleteAllObjects
+			//Länge überprüfen
+			IF fbWriteInd.LENGTH = 0 THEN
+				IF MainDispacher.eCurrentMode = E_MachineMode.MACHINEMODE_Config THEN //im Config-Modus?
+					fbWriteRes.RESULT := fbObjectDirectory.M_DeleteAllObj();
+				ELSE
+					fbWriteRes.RESULT := E_ErrorIdCmd.ERRORID_WrongMode;	//Error: nicht im Config-Modus
+				END_IF
+			ELSE
+				fbWriteRes.RESULT := DEVICE_INVALIDSIZE;
+			END_IF
+		DELETE_OBJECT:
+			IF fbWriteInd.LENGTH = 0 THEN
+				IF MainDispacher.eCurrentMode = E_MachineMode.MACHINEMODE_Config THEN //im Config-Modus?
+					IF MainDispacher.eCurrentState = E_MachineState.MACHINESTATE_Idle THEN
+						fbWriteRes.RESULT := fbObjectDirectory.M_DeleteObject(UDINT_TO_UINT(fbWriteInd.IDXOFFS));
+					ELSE
+						fbWriteRes.RESULT := E_ErrorIdCmd.ERRORID_InvalidState; //Error: nicht in Idle
+					END_IF
+				ELSE
+					fbWriteRes.RESULT := E_ErrorIdCmd.ERRORID_WrongMode; //Error: nicht im Config-Modus
+				END_IF
+			ELSE
+				fbWriteRes.RESULT := DEVICE_INVALIDSIZE;
+			END_IF
+		WRITE_ALL_PROPS: //WriteAllProps
+			//Länge überprüfen
+			IF fbWriteInd.LENGTH > 0 AND fbWriteInd.LENGTH <= SIZEOF(uData.stCmdData) THEN
+				IF MainDispacher.eCurrentMode = E_MachineMode.MACHINEMODE_Config THEN //im Config-Modus?
+					MEMSET(ADR(uData.stCmdData),0,SIZEOF(uData.stCmdData));
+					MEMCPY(ADR(uData.stCmdData),fbWriteInd.DATAADDR,fbWriteInd.LENGTH);
+					//Existiert Object?
+					nObjectId := uData.stCmdData.aHeader[0];
+					pObject := fbObjectDirectory.M_GetObjPointer(nObjectId);
+					IF pObject > 0 THEN
+						fbWriteRes.RESULT := pObject^.M_SetAllProps(uData.stCmdData);
+					ELSE
+						fbWriteRes.RESULT := E_ErrorIdCmd.ERRORID_ObjectNotExists;	//Error: Object existiert nicht
+					END_IF
+				ELSE
+					fbWriteRes.RESULT := E_ErrorIdCmd.ERRORID_WrongMode;	//Error: nicht im Config-Modus
+				END_IF
+			ELSE
+				fbWriteRes.RESULT := DEVICE_INVALIDSIZE;
+			END_IF
+		WRITE_SINGLE_PROP:	//WriteSingleProp
+			//Länge überprüfen
+			IF fbWriteInd.LENGTH > 0 AND fbWriteInd.LENGTH <= SIZEOF(uData.stCmdData) THEN
+				MEMSET(ADR(uData.stCmdData),0,SIZEOF(uData.stCmdData));
+				MEMCPY(ADR(uData.stCmdData),fbWriteInd.DATAADDR,fbWriteInd.LENGTH);
+				//Existiert Object?
+				nObjectId := uData.stCmdData.aHeader[0];
+				pObject := fbObjectDirectory.M_GetObjPointer(nObjectId);
+				IF pObject > 0 THEN
+					fbWriteRes.RESULT := pObject^.M_SetSingleProp(uData.stCmdData);
+				ELSE
+					fbWriteRes.RESULT := E_ErrorIdCmd.ERRORID_ObjectNotExists;	//Error: Object existiert nicht
+				END_IF
+			ELSE
+				fbWriteRes.RESULT := DEVICE_INVALIDSIZE;
+			END_IF
+		CREATE_SEQUENCE:	//Neue Sequence erstellen
+			//Länge überprüfen
+			IF fbWriteInd.LENGTH = 2 THEN
+				IF MainDispacher.P_eCurrentState = E_MachineState.MACHINESTATE_Idle THEN
+					MEMCPY(ADR(nDataUINT),fbWriteInd.DATAADDR,fbWriteInd.LENGTH);
+					IF NOT fbSequenceList.M_Add(fbWriteInd.IDXOFFS,nDataUINT) THEN
+						RETURN;
+					END_IF
+				ELSE
+					fbWriteRes.RESULT := E_ErrorIdCmd.ERRORID_InvalidState;
+				END_IF
+			ELSE
+				fbWriteRes.RESULT := DEVICE_INVALIDSIZE;
+			END_IF
+		UPLOAD_SEQU_STEP:	//Upload SequenceStep
+			//Länge überprüfen
+			IF fbWriteInd.LENGTH >= 32 AND fbWriteInd.LENGTH <= SIZEOF(uData.stCmdData) THEN
+				IF MainDispacher.P_eCurrentState = E_MachineState.MACHINESTATE_Idle THEN
+					MEMSET(ADR(uData.stCmdData),0,SIZEOF(uData.stCmdData));
+					MEMCPY(ADR(uData.stCmdData),fbWriteInd.DATAADDR,fbWriteInd.LENGTH);
+					pSequence := fbSequenceList.M_Get(fbWriteInd.IDXOFFS);
+					IF pSequence > 0 THEN
+						fbWriteRes.RESULT := pSequence^.M_AddStep(uData.stCmdData);
+					ELSE
+						fbWriteRes.RESULT := E_ErrorIdCmd.ERRORID_SequenceNotExists;
+					END_IF
+				ELSE
+					fbWriteRes.RESULT := E_ErrorIdCmd.ERRORID_InvalidState;
+				END_IF
+			ELSE
+				fbWriteRes.RESULT := DEVICE_INVALIDSIZE;
+			END_IF
+		UPLOAD_SEQU_CONDI:	//Upload SequenceCondi
+			//Länge überprüfen
+			IF fbWriteInd.LENGTH = 24 THEN
+				MEMSET(ADR(uData.stCmdData),0,SIZEOF(uData.stCmdData));
+				MEMCPY(ADR(uData.stCmdData),fbWriteInd.DATAADDR,fbWriteInd.LENGTH);
+				IF MainDispacher.P_eCurrentState = E_MachineState.MACHINESTATE_Idle THEN
+					pSequence := fbSequenceList.M_Get(fbWriteInd.IDXOFFS);
+					IF pSequence > 0 THEN
+						fbWriteRes.RESULT := pSequence^.M_AddCondi(uData.stCmdData);
+					ELSE
+						fbWriteRes.RESULT := E_ErrorIdCmd.ERRORID_SequenceNotExists;
+					END_IF
+				ELSE
+					fbWriteRes.RESULT := E_ErrorIdCmd.ERRORID_InvalidState;
+				END_IF
+			ELSE
+				fbWriteRes.RESULT := DEVICE_INVALIDSIZE;
+			END_IF
+		DELETE_SEQUENCE: //Alle Sequenzen löschen
+			IF MainDispacher.eCurrentState = E_MachineState.MACHINESTATE_Idle THEN
+				fbWriteRes.RESULT := 0;
+				//Alle Sequencen löschen
+				IF NOT fbSequenceList.M_Delete() THEN
+					fbWriteRes.RESULT := 1;
+				END_IF
+			ELSE
+				fbWriteRes.RESULT := E_ErrorIdCmd.ERRORID_InvalidState;
+			END_IF
+ 		CHANGE_MODE: //Change Mode
+			//Länge überprüfen
+			IF fbWriteInd.LENGTH = 0 THEN
+				fbWriteRes.RESULT := MainDispacher.M_ChangeMode(UDINT_TO_USINT(fbWriteInd.IDXOFFS));
+			ELSE
+				fbWriteRes.RESULT := DEVICE_INVALIDSIZE;
+			END_IF
+		RESET_ERROR:
+			//Länge überprüfen
+			IF fbWriteInd.LENGTH = 0 THEN
+				MainDispacher.M_ResetError();
+			ELSE
+				fbWriteRes.RESULT := DEVICE_INVALIDSIZE;
+			END_IF
+		WRITE_HW_PROP:	//HardwareProp schreiben
+			//Länge überprüfen
+			IF fbWriteInd.LENGTH = 10 THEN
+				IF MainDispacher.eCurrentMode = E_MachineMode.MACHINEMODE_Config OR 
+					MainDispacher.eCurrentMode = E_MachineMode.MACHINEMODE_Maintenance THEN
+					MEMCPY(ADR(stHardwareId),fbWriteInd.DATAADDR, 3);
+					MEMCPY(ADR(nDataUINT), fbWriteInd.DATAADDR + 4, 2);
+					MEMCPY(ADR(nDataDINT), fbWriteInd.DATAADDR + 6, 4);
+					fbWriteRes.RESULT := fbSettings.M_WriteProp(stHardwareId:= stHardwareId,ePropType:= nDataUINT,nValue:= nDataDINT); 
+				ELSE
+					fbWriteRes.RESULT := E_ErrorIdCmd.ERRORID_WrongMode;	//Error: nicht im Config bzw. Maintenance-Mode
+				END_IF
+			ELSE
+				fbWriteRes.RESULT := DEVICE_INVALIDSIZE;
+			END_IF
+		INTERACT_RESPONSE:	//Antwort auf einen InterRequest
+			//Länge überprüfen
+			IF fbWriteInd.LENGTH = 24 THEN
+				MEMSET(ADR(uData.stCmdData),0,SIZEOF(uData.stCmdData));
+				MEMCPY(ADR(uData.stCmdData),fbWriteInd.DATAADDR,fbWriteInd.LENGTH);
+				stInterResponse.nObjectId := uData.stCmdData.aHeader[0];
+				stInterResponse.eInteractMessageType := uData.stCmdData.aHeader[1];
+				stInterResponse.nArg1 := uData.stCmdData.n32Data[0];
+				stInterResponse.nArg2 := uData.stCmdData.n32Data[1];
+				stInterResponse.nArg3 := uData.stCmdData.n32Data[2];
+				stInterResponse.nArg4 := uData.stCmdData.n32Data[3];
+			ELSE
+				fbWriteRes.RESULT := DEVICE_INVALIDSIZE;
+			END_IF
+		SETUP_AXIS:
+			//Länge überprüfen
+			IF fbWriteInd.LENGTH = 24 THEN
+				MEMSET(ADR(uData.stCmdData),0,SIZEOF(uData.stCmdData));
+				MEMCPY(ADR(uData.stCmdData.n32Data) ,fbWriteInd.DATAADDR,fbWriteInd.LENGTH);
+				fbWriteRes.RESULT := MainDispacher.M_SetupAxis(uData.stCmdData);
+			ELSE
+				fbWriteRes.RESULT := DEVICE_INVALIDSIZE;
+			END_IF
+		STOP:
+			MainDispacher.M_StopAll();
+			
+		STOP_ACTION:
+			IF fbWriteInd.LENGTH = 0 THEN
+				fbWriteRes.RESULT := MainDispacher.M_StopAction(UDINT_TO_UINT(fbWriteInd.IDXOFFS));
+			ELSE
+				fbWriteRes.RESULT := DEVICE_INVALIDSIZE;
+			END_IF
+		PAUSE_ACTION:
+			IF fbWriteInd.LENGTH = 0 THEN
+				fbWriteRes.RESULT := MainDispacher.M_PauseAction(UDINT_TO_UINT(fbWriteInd.IDXOFFS));
+			ELSE
+				fbWriteRes.RESULT := DEVICE_INVALIDSIZE;
+			END_IF
+		CONTINUE_ACTION:
+			IF fbWriteInd.LENGTH = 0 THEN
+				fbWriteRes.RESULT := MainDispacher.M_ContinueAction(UDINT_TO_UINT(fbWriteInd.IDXOFFS));
+			ELSE
+				fbWriteRes.RESULT := DEVICE_INVALIDSIZE;
+			END_IF
+		INTERLOCK:
+			//Länge überprüfen
+			IF fbWriteInd.LENGTH = 1 THEN
+				MEMCPY(ADR(nDataUSINT),fbWriteInd.DATAADDR,fbWriteInd.LENGTH);
+				IF fbWriteInd.IDXOFFS = 0 OR fbWriteInd.IDXOFFS = 1 THEN
+					fbWriteRes.RESULT := pFbSafety^.M_Control(nDataUSINT);
+				ELSIF fbWriteInd.IDXOFFS = 2 THEN
+					{IF defined(variable: fbSafetyStacker)}
+					fbWriteRes.RESULT := fbSafetyStacker.M_Control(nDataUSINT);
+					{ELSE}
+					fbWriteRes.RESULT := DEVICE_INVALIDOFFSET;
+					{END_IF}
+				ELSE
+					fbWriteRes.RESULT := DEVICE_INVALIDOFFSET;
+				END_IF
+			ELSE
+				fbWriteRes.RESULT := DEVICE_INVALIDSIZE;
+			END_IF
+		FIRMWARE_UPDATE_CAN:
+			IF fbWriteInd.LENGTH = 0 THEN
+				fbWriteRes.RESULT := MainDispacher.M_DeviceFirmwUpdate(UDINT_TO_USINT(fbWriteInd.IDXOFFS));
+			ELSE
+				fbWriteRes.RESULT := DEVICE_INVALIDSIZE;
+			END_IF
+		RESET_PLC:
+			IF fbWriteInd.LENGTH = 0 THEN
+				fbWriteRes.RESULT := MainDispacher.M_ResetPlc();
+			ELSE
+				fbWriteRes.RESULT := DEVICE_INVALIDSIZE;
+			END_IF
+	ELSE //Ads-Error InvalidIndexOffset
+		fbWriteRes.RESULT := DEVICE_INVALIDGRP;
+	END_CASE
+	fbWriteRes(NETID:= fbWriteInd.NETID,PORT:= fbWriteInd.PORT, INVOKEID:= fbWriteInd.INVOKEID, RESPOND:= TRUE);
+	fbWriteInd(CLEAR := TRUE);
+ELSIF fbReadInd.VALID THEN
+	fbReadRES.RESULT := NOERR;
+	CASE fbReadInd.IDXGRP OF
+		READ_OBJECT_CHECKSUM:	//ReadObjectCheckSum	
+			//Länge überprüfen
+			IF fbReadInd.LENGTH = 2 THEN
+				//Checksum aller Properties aller Objecte ermitteln
+				fbGetObjPropChecksum(bExecute:= TRUE, ObjectDirectoryRef:= fbObjectDirectory);
+				IF fbGetObjPropChecksum.bBusy THEN
+					RETURN;
+				ELSE
+					nDataUINT := fbGetObjPropChecksum.nResult;
+					fbGetObjPropChecksum(bExecute:= FALSE, ObjectDirectoryRef:= fbObjectDirectory);
+				END_IF
+				fbReadRES.DATAADDR := ADR(nDataUINT);
+			ELSE
+				fbReadRES.RESULT := DEVICE_INVALIDSIZE;
+			END_IF
+		READ_CONFIG_CHECKSUM:	//ReadConfigCheckSum
+			//Länge überprüfen
+			IF fbReadInd.LENGTH = 2 THEN
+				nDataUINT := fbObjectDirectory.M_GetConfigCheckSum();	
+				fbReadRES.DATAADDR := ADR(nDataUINT);
+			ELSE
+				fbReadRES.RESULT := DEVICE_INVALIDSIZE;
+			END_IF
+		READ_ACTIVATE_STATE:	//Read AktivateState
+			//Länge überprüfen
+			IF fbReadInd.LENGTH = 1 THEN
+				nReadDataUSINT := BOOL_TO_USINT(fbConfiguration.P_bActivated);
+				fbReadRES.DATAADDR := ADR(nReadDataUSINT);
+			ELSE
+				fbReadRES.RESULT := DEVICE_INVALIDSIZE;
+			END_IF
+		READ_ALL_PROPS:	//ReadAllProps
+			//Länge überprüfen
+			IF fbReadInd.LENGTH > 0  AND fbReadInd.LENGTH <= SIZEOF(uData.stCmdData) THEN
+				MEMSET(ADR(uData.stCmdData),0,SIZEOF(uData.stCmdData));
+				nObjectId := UDINT_TO_UINT(fbReadInd.IDXOFFS);
+				pObject := fbObjectDirectory.M_GetObjPointer(nObjectId);
+				IF pObject > 0 THEN
+					fbReadRES.RESULT :=  pObject^.M_GetAllProps(uData.stCmdData);
+					//Crc bilden und in Header[3] schreiben
+					
+					uData.stCmdData.aHeader[3] := F_DATA_TO_CRC16_CCITT(ADR(uData.stCmdData.n32Data[0]),pObject^.P_nNoOfProps * 4,16#FFFF);
+				ELSE
+					fbReadRES.RESULT := E_ErrorIdCmd.ERRORID_ObjectNotExists;	//Error: Object existiert nicht
+				END_IF
+				IF fbObjectDirectory.M_GetObjType(nObjectId) <> E_ObjectType.OBJECTTYPE_UNDEFINED THEN
+					fbReadRES.RESULT :=  fbObjectDirectory.M_GetObjPointer(nObjectId)^.M_GetAllProps(uData.stCmdData);
+					//Crc bilden und in Header[3] schreiben
+					uData.stCmdData.aHeader[3] := F_DATA_TO_CRC16_CCITT(ADR(uData.stCmdData.n32Data[0]),fbObjectDirectory.M_GetObjPointer(nObjectId)^.P_nNoOfProps * 4,16#FFFF);
+					fbReadRES.DATAADDR := ADR(uData.stCmdData);
+				ELSE
+					fbReadRES.RESULT := E_ErrorIdCmd.ERRORID_ObjectNotExists;	//Error: Object existiert nicht
+				END_IF
+			ELSE
+				fbReadRES.RESULT := DEVICE_INVALIDSIZE;
+			END_IF
+		GET_MODIFIED_OBJECT:
+			//Länge überprüfen
+			MEMSET(ADR(uData.stCmdData),0,SIZEOF(uData.stCmdData));
+			IF fbReadInd.LENGTH = 2 THEN
+				//nächtses Object aus List holen
+				nObjectId := fbObjectDirectory.M_GetChangedObjId();
+				IF nObjectId > 0 THEN
+					fbObjectDirectory.M_RemoveObjChange(nObjectId);
+					nDataUINT := nObjectId;
+				ELSE
+					nDataUINT := 0;
+				END_IF
+				fbReadRES.DATAADDR := ADR(nDataUINT);
+			ELSE
+				fbReadRES.RESULT := DEVICE_INVALIDSIZE;
+			END_IF
+		READ_HW_INFO:
+			//Länge überprüfen
+			IF fbReadInd.LENGTH = 44 THEN
+				IF fbReadInd.IDXOFFS = 0 THEN
+					HwInfoList.M_ResetPointer();
+				END_IF
+				stHardwareInfo := HwInfoList.M_GetNext();
+				fbReadRES.DATAADDR := ADR(stHardwareInfo);
+			ELSE
+				fbReadRES.RESULT := DEVICE_INVALIDSIZE;
+			END_IF
+		READ_PLC_INFO:
+			//Länge überprüfen
+			IF fbReadInd.LENGTH = SIZEOF(stPlcInfo) THEN
+				stPlcInfo := GVL_Hardware.stPlcInfo;
+				fbReadRES.DATAADDR := ADR(stPlcInfo);
+			ELSE
+				fbReadRES.RESULT := DEVICE_INVALIDSIZE;
+			END_IF
+		READ_MINMAXACT_POS:
+			//Länge überprüfen
+			IF fbReadInd.LENGTH <= 36 THEN
+				//Checken, ob Object ein MzTool
+				nObjectId := UDINT_TO_UINT(fbReadInd.IDXOFFS);
+				IF fbObjectDirectory.M_ObjIsMzTool(nObjectId) THEN
+					pMzTool := fbObjectDirectory.M_GetObjPointer(nObjectId);
+					pMzTool^.M_GetMinMaxActPos(ADR(uData.aDINT_20));
+					fbReadRES.DATAADDR := ADR(uData.aDINT_20);
+				ELSE
+					fbReadRES.RESULT := E_ErrorIdObjMgmt.ERRORID_IsNoMzTool;
+				END_IF
+			ELSE
+				fbReadRES.RESULT := DEVICE_INVALIDSIZE;
+			END_IF
+		READ_ACTIVE_ACTIONS:
+			//Länge überprüfen
+			IF fbReadInd.LENGTH = 90 THEN
+				ActionDispacher.M_GetActionInfoArray(ADR(aActiveActions));
+				fbReadRES.DATAADDR := ADR(aActiveActions);
+			ELSE
+				fbReadRES.RESULT := DEVICE_INVALIDSIZE;
+			END_IF
+		READ_OBJECT_IDS:
+			//Länge überprüfen (muss genau Anzahl Objekte * 2 sein)
+			IF fbReadInd.LENGTH = fbObjectDirectory.nCntObject * 2 THEN
+				//Die ObjectIDs stehen nacheinander in einem ARRAY[0..n] OF UINT
+				fbReadRES.RESULT := fbObjectDirectory.M_GetObjIdStream(uData.aUINT_1000);
+				fbReadRES.DATAADDR := ADR(uData);
+			ELSE
+				fbReadRES.RESULT := DEVICE_INVALIDSIZE;
+			END_IF
+	ELSE //Ads-Error InvalidIndexOffset
+		fbReadRES.RESULT := DEVICE_INVALIDGRP;
+	END_CASE
+	fbReadRes(NETID:= fbReadInd.NETID, PORT:= fbReadInd.PORT, INVOKEID:= fbReadInd.INVOKEID, LEN:= fbReadInd.LENGTH, RESPOND:= TRUE); 
+	fbReadInd(CLEAR := TRUE ); 
+ELSIF fbReadWriteInd.VALID THEN
+	CASE fbReadWriteInd.IDXGRP OF
+		CREATE_OBJECT:	//CreateObject
+			//Längen überprüfen
+			IF fbReadWriteInd.WRTLENGTH <= (SIZEOF(uData.stCmdData) + 2) AND fbReadWriteInd.RDLENGTH = 6 THEN
+				IF MainDispacher.eCurrentMode = E_MachineMode.MACHINEMODE_Config THEN //im Config-Modus?
+					MEMCPY(ADR(nDataINT),fbReadWriteInd.DATAADDR,2); //Index
+					MEMSET(ADR(uData.stCmdData),0,SIZEOF(uData.stCmdData));
+					MEMCPY(ADR(uData.stCmdData),fbReadWriteInd.DATAADDR + 2,fbReadWriteInd.WRTLENGTH);
+					fbReadWriteRes.RESULT := fbObjectDirectory.M_CreateObject(nDataINT, refCmdData:= uData.stCmdData,nNotifyId=>nDataDINT);
+					MEMCPY(ADR(aBytes),ADR(nDataDINT),4); //NotifyId zurückgeben
+					MEMCPY(ADR(aBytes)+4,ADR(uData.stCmdData.aHeader[0]),2); //ObjectId zurückgeben
+					fbReadWriteRes.DATAADDR := ADR(aBytes); 
+				ELSE
+					fbReadWriteRes.RESULT := E_ErrorIdCmd.ERRORID_WrongMode; //Error: nicht im Config-Modus
+				END_IF				
+			ELSE
+				fbReadWriteRes.RESULT := DEVICE_INVALIDSIZE;
+			END_IF
+		READ_HW_PROP:	//Read HardwareProp
+			//Längen überprüfen
+			IF fbReadWriteInd.WRTLENGTH = 6 AND fbReadWriteInd.RDLENGTH = 4 THEN
+				MEMCPY(ADR(stHardwareId),fbReadWriteInd.DATAADDR,3);
+				MEMCPY(ADR(nDataUINT),fbReadWriteInd.DATAADDR + 4,2);
+				fbReadWriteRes.RESULT := fbSettings.M_ReadProp(stHardwareId:= stHardwareId, ePropType:= nDataUINT,nValue=> nDataDINT);
+				fbReadWriteRes.DATAADDR := ADR(nDataDINT);
+			ELSE
+				fbReadWriteRes.RESULT := DEVICE_INVALIDSIZE;
+			END_IF
+		EXECUTE_ACTION:	//ExecuteAction
+			//Länge überprüfen
+			IF fbReadWriteInd.WRTLENGTH <= 160 AND fbReadWriteInd.RDLENGTH = 2 THEN
+				eAction := UDINT_TO_UINT(fbReadWriteInd.IDXOFFS);
+				MEMSET(ADR(uData.aDINT_40),0,SIZEOF(uData.aDINT_40));
+				MEMCPY(ADR(uData.aDINT_40),fbReadWriteInd.DATAADDR,fbReadWriteInd.WRTLENGTH);
+				stError := MainDispacher.M_ExeAction(eAction:= eAction, uData.aDINT_40,nActionId=>nDataUINT);
+				fbReadWriteRes.DATAADDR := ADR(nDataUINT);
+				fbReadWriteRes.RESULT := stError.ErrorId;
+			ELSE
+				fbWriteRes.RESULT := DEVICE_INVALIDSIZE;
+			END_IF			
+	ELSE //Ads-Error InvalidIndexOffset
+		fbReadWriteRes.RESULT := DEVICE_INVALIDGRP;
+	END_CASE
+	fbReadWriteRes(NETID:= fbReadWriteInd.NETID, PORT:= fbReadWriteInd.PORT, INVOKEID:= fbReadWriteInd.INVOKEID, LEN:= fbReadWriteInd.RDLENGTH, RESPOND:= TRUE);
+	fbReadWriteInd(CLEAR:= TRUE );
+END_IF
+]]></ST>
+    </Implementation>
+    <LineIds Name="PC_Control">
+      <LineId Id="4292" Count="422" />
+      <LineId Id="2" Count="0" />
+    </LineIds>
+  </POU>
+</TcPlcObject>

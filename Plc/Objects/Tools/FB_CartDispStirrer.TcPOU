@@ -1,0 +1,365 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<TcPlcObject Version="1.1.0.1" ProductVersion="3.1.4022.18">
+  <POU Name="FB_CartDispStirrer" Id="{8c652989-d66f-4662-bab0-da280ce3e46b}" SpecialFunc="None">
+    <Declaration><![CDATA[FUNCTION_BLOCK FB_CartDispStirrer EXTENDS FB_CartDispenser
+
+VAR_OUTPUT
+END_VAR
+VAR
+	
+	//Specproperties
+	nPWM_Channel	: USINT;
+	nStartSpeed		: UINT;
+	tStartTime		: TIME;
+	//****************************************Aktionsvariablen****************************************************
+	
+	nStateA_Stirr	: USINT;
+	bStirrerOn		: BOOL;
+	nStirrSpeed		: UINT;
+	tStirrTimeOn	: TIME;
+	tStirrTimeOff	: TIME;
+	timerStirr		: TON;
+	
+END_VAR]]></Declaration>
+    <Implementation>
+      <ST><![CDATA[A_Stirr();
+SUPER^();
+stProcessData.n32Data[10] := BOOL_TO_DINT(nStateA_Stirr > 0);
+aObjProcData[nNotifyId] := stProcessData;]]></ST>
+    </Implementation>
+    <Action Name="A_Stirr" Id="{6212b9c9-091d-4a99-982d-87f7810aa873}">
+      <Implementation>
+        <ST><![CDATA[IF nPWM_Channel = 0 THEN
+	RETURN;
+END_IF
+
+IF NOT bStirrerOn THEN
+	timerStirr(IN:= FALSE);
+	fbMultiZPWM.M_Off(nPWM_Channel);
+	nStateA_Stirr := 0;
+END_IF
+
+CASE nStateA_Stirr OF
+	0:	//Off
+		IF bStirrerOn THEN
+			nStateA_Stirr := 1;
+		END_IF
+		
+	1:	//StartUp
+		timerStirr(IN:= TRUE, PT:= tStartTime);
+		IF timerStirr.Q THEN
+			timerStirr(IN:= FALSE);
+			IF tStirrTimeOn = T#0MS OR tStirrTimeOff = T#0MS THEN
+				nStateA_Stirr := 2;
+			ELSE
+				nStateA_Stirr := 2;
+			END_IF
+		END_IF
+		fbMultiZPWM.M_On(nPWM_Channel, nStartSpeed);
+
+	2:	//ContiOn
+		IF tStirrTimeOn = T#0MS OR tStirrTimeOff = T#0MS THEN
+			fbMultiZPWM.M_On(nPWM_Channel, nStirrSpeed);
+		ELSE
+			nStateA_Stirr := 3;
+		END_IF
+	
+	3:	//Alternating On
+		IF tStirrTimeOn = T#0MS OR tStirrTimeOff = T#0MS THEN
+			timerStirr(IN:= FALSE);
+			nStateA_Stirr := 2;
+		ELSE
+			timerStirr(IN:= TRUE, PT:= tStirrTimeOn);
+			IF timerStirr.Q THEN
+				timerStirr(IN:= FALSE);
+				fbMultiZPWM.M_Off(nPWM_Channel);
+				nStateA_Stirr := 4;
+			ELSE
+				fbMultiZPWM.M_On(nPWM_Channel, nStirrSpeed);
+			END_IF
+		END_IF
+	
+	4:	//Alternating Off
+		IF tStirrTimeOn = T#0MS OR tStirrTimeOff = T#0MS THEN
+			timerStirr(IN:= FALSE);
+			nStateA_Stirr := 1;
+		ELSE
+			timerStirr(IN:= TRUE, PT:= tStirrTimeOff);
+			IF timerStirr.Q THEN
+				timerStirr(IN:= FALSE);
+				nStateA_Stirr := 1;
+			END_IF
+		END_IF
+END_CASE]]></ST>
+      </Implementation>
+    </Action>
+    <Method Name="FB_init" Id="{42956535-73c0-4e6a-ae53-fde88aed04ff}">
+      <Declaration><![CDATA[METHOD FB_init : BOOL
+VAR_INPUT
+	bInitRetains : BOOL; // if TRUE, the retain variables are initialized (warm start / cold start)
+	bInCopyCode : BOOL;  // if TRUE, the instance afterwards gets moved into the copy code (online change)
+END_VAR
+]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[eObjectType := E_ObjectType.OBJECTTYPE_CartDispStirrer;]]></ST>
+      </Implementation>
+    </Method>
+    <Method Name="M_CheckAction" Id="{ce16ba8b-db64-4dcf-84f5-abf3217e1a97}">
+      <Declaration><![CDATA[METHOD M_CheckAction : ERRORID
+VAR_INPUT
+	refActionData : REFERENCE TO ST_ActionData;
+	pCorrelObject	: POINTER TO FB_Object;
+END_VAR
+]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[CASE refActionData.eAction OF
+	(*E_Action.ACTION_CleanTip,
+	E_Action.ACTION_MeasureTool,
+	E_Action.ACTION_SwitchPressure, //BasicAction für ActionOnArray
+	E_Action.ACTION_TeachTarget:
+		RETURN;*)
+ELSE
+	M_CheckAction := SUPER^.M_CheckAction(refActionData, pCorrelObject);
+END_CASE]]></ST>
+      </Implementation>
+    </Method>
+    <Method Name="M_ClearAllProps" Id="{977fa7a2-874a-4a53-bc03-78aff4449033}">
+      <Declaration><![CDATA[METHOD M_ClearAllProps
+VAR_INPUT
+	bIgnoreParent : BOOL; //Es wird das gesamte OD gelöscht. -> Zeiger auf Parent nicht mehr gültig!
+END_VAR
+]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[nPWM_Channel := 0;
+bStirrerOn := FALSE;
+SUPER^.M_ClearAllProps(bIgnoreParent);]]></ST>
+      </Implementation>
+    </Method>
+    <Method Name="M_ExeAction" Id="{5343e1c1-dae5-48c0-b266-d48e988f089b}">
+      <Declaration><![CDATA[METHOD M_ExeAction : ERRORID
+VAR_INPUT
+	refActionData : REFERENCE TO ST_ActionData;	
+END_VAR]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[IF NOT (eCurrentState = E_MachineState.MACHINESTATE_Idle OR
+	eCurrentState = E_MachineState.MACHINESTATE_Active OR
+	eCurrentState = E_MachineState.MACHINESTATE_Ready) THEN
+	M_ExeAction := E_ErrorIdCmd.ERRORID_InvalidState;
+	RETURN;
+END_IF
+
+CASE refActionData.eAction OF
+	E_Action.ACTION_StirrCartridge:
+		bStirrerOn := DINT_TO_BOOL(refActionData.aParams[1]);
+		nStirrSpeed := DINT_TO_UINT(refActionData.aParams[2]);
+		tStirrTimeOn := DINT_TO_TIME(refActionData.aParams[3]);
+		tStirrTimeOff := DINT_TO_TIME(refActionData.aParams[4]);
+	ELSE
+		M_ExeAction := SUPER^.M_ExeAction(refActionData);
+		RETURN;
+END_CASE
+
+bBusy := TRUE;
+eCurrentState := E_MachineState.MACHINESTATE_Active;]]></ST>
+      </Implementation>
+    </Method>
+    <Method Name="M_GetAllProps" Id="{d477e8b4-506f-4f61-aa73-fc308cd1f94a}">
+      <Declaration><![CDATA[METHOD M_GetAllProps : ERRORID
+VAR_INPUT
+	refCmdData : REFERENCE TO  ST_CmdData;
+END_VAR
+]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[//Basisproperties lesen
+SUPER^.M_GetAllProps(refCmdData);
+//Specialproperties lesen
+nCurrentPropIndex := nCurrentPropIndex + 1;
+refCmdData.n32Data[nCurrentPropIndex] := nPWM_Channel;
+nCurrentPropIndex := nCurrentPropIndex + 1;
+refCmdData.n32Data[nCurrentPropIndex] := nStartSpeed;
+nCurrentPropIndex := nCurrentPropIndex + 1;
+refCmdData.n32Data[nCurrentPropIndex] := TIME_TO_DINT(tStartTime);
+]]></ST>
+      </Implementation>
+    </Method>
+    <Method Name="M_SetAllProps" Id="{e62be699-839c-462e-ae78-7e358aaf0007}">
+      <Declaration><![CDATA[METHOD M_SetAllProps : ERRORID
+VAR_INPUT
+	refCmdData : REFERENCE TO  ST_CmdData;
+END_VAR
+
+VAR
+	nPneuChannel : USINT;
+END_VAR]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[M_SetAllProps := SUPER^.M_SetAllProps(refCmdData);
+
+IF M_SetAllProps > 0 THEN
+	RETURN;
+END_IF
+
+nCurrentPropIndex := nCurrentPropIndex + 1;
+nPWM_Channel := DINT_TO_USINT(refCmdData.n32Data[nCurrentPropIndex]);
+IF NOT (nPWM_Channel >= 1 AND nPWM_Channel <= 2) THEN
+	M_SetAllProps := E_ErrorIdObjMgmt.ERRORID_InvalidPWMChannel;
+	RETURN;
+END_IF
+nCurrentPropIndex := nCurrentPropIndex + 1;
+nStartSpeed := DINT_TO_UINT(refCmdData.n32Data[nCurrentPropIndex]);
+IF NOT (nStartSpeed >= 1 AND nStartSpeed <= 1000) THEN
+	M_SetAllProps := E_ErrorIdObjMgmt.ERRORID_InvalidStartSpeed;
+	RETURN;
+END_IF
+nCurrentPropIndex := nCurrentPropIndex + 1;
+tStartTime := DINT_TO_TIME(refCmdData.n32Data[nCurrentPropIndex]);
+
+nNoOfProps := nCurrentPropIndex + 1;
+
+]]></ST>
+      </Implementation>
+    </Method>
+    <Method Name="M_SetSingleProp" Id="{5d39e1f2-88f3-4bdb-af8f-38c9695577b9}">
+      <Declaration><![CDATA[METHOD M_SetSingleProp : ERRORID
+VAR_INPUT
+	refCmdData : REFERENCE TO  ST_CmdData;
+END_VAR
+
+VAR
+	nPneuChannel : USINT;
+END_VAR]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[IF nSpecPropIndex + 4 = refCmdData.aHeader[1] THEN	//PWM-Channel
+	IF (refCmdData.n32Data[0] >= 1 AND refCmdData.n32Data[0] <= 2) THEN
+		nPWM_Channel := DINT_TO_USINT(refCmdData.n32Data[0]);
+	ELSE
+		M_SetSingleProp := E_ErrorIdObjMgmt.ERRORID_InvalidPWMChannel;
+		RETURN;		
+	END_IF
+ELSIF nSpecPropIndex + 5 = refCmdData.aHeader[1] THEN	//StartSpeed
+	IF (refCmdData.n32Data[0] >= 1 AND refCmdData.n32Data[0] <= 1000) THEN
+		nStartSpeed := DINT_TO_UINT(refCmdData.n32Data[0]);
+	ELSE
+		M_SetSingleProp := E_ErrorIdObjMgmt.ERRORID_InvalidStartSpeed;
+		RETURN;		
+	END_IF
+ELSIF nSpecPropIndex + 6 = refCmdData.aHeader[1] THEN	//StartTime
+	tStartTime := DINT_TO_TIME(refCmdData.n32Data[0]);
+ELSE
+	M_SetSingleProp := SUPER^.M_SetSingleProp(refCmdData);
+END_IF]]></ST>
+      </Implementation>
+    </Method>
+    <LineIds Name="FB_CartDispStirrer">
+      <LineId Id="223" Count="2" />
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="FB_CartDispStirrer.A_Stirr">
+      <LineId Id="152" Count="3" />
+      <LineId Id="116" Count="1" />
+      <LineId Id="119" Count="1" />
+      <LineId Id="118" Count="0" />
+      <LineId Id="25" Count="0" />
+      <LineId Id="24" Count="0" />
+      <LineId Id="26" Count="0" />
+      <LineId Id="76" Count="2" />
+      <LineId Id="37" Count="0" />
+      <LineId Id="40" Count="0" />
+      <LineId Id="86" Count="2" />
+      <LineId Id="147" Count="1" />
+      <LineId Id="150" Count="1" />
+      <LineId Id="149" Count="0" />
+      <LineId Id="89" Count="1" />
+      <LineId Id="31" Count="0" />
+      <LineId Id="30" Count="0" />
+      <LineId Id="111" Count="2" />
+      <LineId Id="121" Count="0" />
+      <LineId Id="115" Count="0" />
+      <LineId Id="33" Count="1" />
+      <LineId Id="122" Count="0" />
+      <LineId Id="135" Count="0" />
+      <LineId Id="123" Count="0" />
+      <LineId Id="125" Count="0" />
+      <LineId Id="127" Count="7" />
+      <LineId Id="124" Count="0" />
+      <LineId Id="35" Count="1" />
+      <LineId Id="136" Count="1" />
+      <LineId Id="146" Count="0" />
+      <LineId Id="139" Count="0" />
+      <LineId Id="141" Count="4" />
+      <LineId Id="138" Count="0" />
+      <LineId Id="27" Count="0" />
+    </LineIds>
+    <LineIds Name="FB_CartDispStirrer.FB_init">
+      <LineId Id="7" Count="0" />
+    </LineIds>
+    <LineIds Name="FB_CartDispStirrer.M_CheckAction">
+      <LineId Id="16" Count="0" />
+      <LineId Id="33" Count="0" />
+      <LineId Id="21" Count="0" />
+      <LineId Id="26" Count="0" />
+      <LineId Id="31" Count="0" />
+      <LineId Id="27" Count="2" />
+      <LineId Id="22" Count="0" />
+    </LineIds>
+    <LineIds Name="FB_CartDispStirrer.M_ClearAllProps">
+      <LineId Id="17" Count="0" />
+      <LineId Id="22" Count="0" />
+      <LineId Id="6" Count="0" />
+    </LineIds>
+    <LineIds Name="FB_CartDispStirrer.M_ExeAction">
+      <LineId Id="503" Count="18" />
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="FB_CartDispStirrer.M_GetAllProps">
+      <LineId Id="3" Count="1" />
+      <LineId Id="41" Count="0" />
+      <LineId Id="40" Count="0" />
+      <LineId Id="42" Count="1" />
+      <LineId Id="5" Count="0" />
+      <LineId Id="45" Count="0" />
+      <LineId Id="44" Count="0" />
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="FB_CartDispStirrer.M_SetAllProps">
+      <LineId Id="3" Count="4" />
+      <LineId Id="50" Count="0" />
+      <LineId Id="49" Count="0" />
+      <LineId Id="51" Count="0" />
+      <LineId Id="56" Count="0" />
+      <LineId Id="59" Count="0" />
+      <LineId Id="61" Count="0" />
+      <LineId Id="60" Count="0" />
+      <LineId Id="58" Count="0" />
+      <LineId Id="52" Count="0" />
+      <LineId Id="63" Count="0" />
+      <LineId Id="67" Count="0" />
+      <LineId Id="64" Count="1" />
+      <LineId Id="69" Count="0" />
+      <LineId Id="68" Count="0" />
+      <LineId Id="78" Count="0" />
+      <LineId Id="77" Count="0" />
+      <LineId Id="8" Count="0" />
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="FB_CartDispStirrer.M_SetSingleProp">
+      <LineId Id="78" Count="0" />
+      <LineId Id="121" Count="0" />
+      <LineId Id="123" Count="0" />
+      <LineId Id="125" Count="0" />
+      <LineId Id="128" Count="0" />
+      <LineId Id="126" Count="0" />
+      <LineId Id="124" Count="0" />
+      <LineId Id="64" Count="0" />
+      <LineId Id="108" Count="0" />
+      <LineId Id="129" Count="0" />
+      <LineId Id="131" Count="0" />
+      <LineId Id="134" Count="1" />
+      <LineId Id="130" Count="0" />
+      <LineId Id="56" Count="0" />
+      <LineId Id="55" Count="0" />
+      <LineId Id="47" Count="0" />
+      <LineId Id="45" Count="0" />
+      <LineId Id="2" Count="0" />
+    </LineIds>
+  </POU>
+</TcPlcObject>

@@ -1,0 +1,14 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<TcPlcObject Version="1.1.0.1" ProductVersion="3.1.4022.10">
+  <DUT Name="E_SafetyCtrl" Id="{c8f2db75-2d69-4f8b-b49a-2493fb65634f}">
+    <Declaration><![CDATA[{attribute 'qualified_only'}
+TYPE E_SafetyCtrl :
+(
+	Unlock,
+	Lock,
+	Quit
+);
+END_TYPE
+]]></Declaration>
+  </DUT>
+</TcPlcObject>

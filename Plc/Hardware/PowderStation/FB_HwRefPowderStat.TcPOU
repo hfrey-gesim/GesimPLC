@@ -1,0 +1,401 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<TcPlcObject Version="1.1.0.1" ProductVersion="3.1.4024.11">
+  <POU Name="FB_HwRefPowderStat" Id="{6a2585a5-00bc-4e3d-9d35-6f46d0f3aa59}" SpecialFunc="None">
+    <Declaration><![CDATA[FUNCTION_BLOCK FB_HwRefPowderStat EXTENDS FB_CanNodeBase
+VAR_INPUT
+END_VAR
+VAR_OUTPUT
+END_VAR
+VAR
+	//Eingänge
+	nTempActual 	AT %I* : UINT;	//aktuelle Temperatur in 1/100tel °C
+	
+	//Anfang StatusByte 
+	bLevelOk		AT %I* : BOOL;	//Bit0 - Level erreicht
+	bOnReloadPos	AT %I* : BOOL;	//Bit1 - Stößel ganz unten
+	bHeaterIsOn		AT %I* : BOOL;	//Bit2 - Heizung aktiv
+	bVibrationIsOn	AT %I* : BOOL;	//Bit3 - Vibrationmotoren sind ein
+	bLevelLow		AT %I* : BOOL;	//Bit4 - Level wurde nicht erreicht 
+	//bCoverIsClosed	(*AT %I**) : BOOL := TRUE;	//Bit5 - Deckel ist offen (obsolet für Generation 2)
+	bVialSensor		AT %I* : BOOL;	//Bit5 - VialSensor
+	bLevelSensor	AT %I* : BOOL;	//Bit6 - LevelSensor
+	bErr			AT %I* : BOOL; 	//Bit7 - Error
+	//Ende StatusByte
+	
+	nError			AT %I* : USINT;	//ErrorValue
+	
+	//Ausgänge
+	nPidKp 			AT %Q* : UINT; 	//PID-Reglerparameter KP
+	nPidKi 			AT %Q* : UINT;	//PID-Reglerparameter KI
+	nPidKd 			AT %Q* : UINT;	//PID-Reglerparameter KD
+	nPidTa 			AT %Q* : USINT;	//PID-Reglerparameter TA
+	bHeatingOn		AT %Q* : BOOL;	//Heizer EIN
+	
+	nTempSetpoint	AT %Q* : USINT;	//Solltemperatur in °C (ohne Kommastellen)
+	//Anfang ControlByte
+	bStartLeveling	AT %Q* : BOOL;	//Bit0 - Start Leveling
+	bStartReload	AT %Q* : BOOL;	//Bit1 - Bewege Stöße zu ReloadPos
+	bVibrationOn	AT %Q* : BOOL;	//Bit2 - Vibrationsmotoren ein
+	bResetErr		AT %Q* : BOOL;	//Bit3 - Error zurücksetzen
+	//Ende ControlByte
+	
+	nVibrationPower1 AT %Q* : UINT;
+	nVibrationPower2 AT %Q* : UINT;
+	nVibrationPower3 AT %Q* : UINT;	
+	
+	nCameraLight	AT %Q* : UINT;
+END_VAR
+]]></Declaration>
+    <Implementation>
+      <ST><![CDATA[IF bNodeEnabled THEN
+	SUPER^();	
+END_IF]]></ST>
+    </Implementation>
+    <Property Name="P_bResetError" Id="{bf3911b9-fbfc-4440-a550-6c18c4908c9b}">
+      <Declaration><![CDATA[PROPERTY P_bResetError : BOOL]]></Declaration>
+      <Set Name="Set" Id="{b6accd69-26f5-4d0e-9af9-23a4d93420d1}">
+        <Declaration><![CDATA[VAR
+END_VAR
+]]></Declaration>
+        <Implementation>
+          <ST><![CDATA[bResetErr := P_bResetError;]]></ST>
+        </Implementation>
+      </Set>
+    </Property>
+    <Property Name="P_bStartLeveling" Id="{388061dc-dcc8-4454-a184-fecb3d574116}">
+      <Declaration><![CDATA[PROPERTY P_bStartLeveling : BOOL]]></Declaration>
+      <Get Name="Get" Id="{9a09888d-9698-49b8-9ecc-74b7b370ee02}">
+        <Declaration><![CDATA[VAR
+END_VAR
+]]></Declaration>
+        <Implementation>
+          <ST><![CDATA[P_bStartLeveling := bStartLeveling;]]></ST>
+        </Implementation>
+      </Get>
+      <Set Name="Set" Id="{a8813bd6-9117-412b-9b0e-0aa64e7b52f7}">
+        <Declaration><![CDATA[VAR
+END_VAR
+]]></Declaration>
+        <Implementation>
+          <ST><![CDATA[bStartLeveling := P_bStartLeveling;]]></ST>
+        </Implementation>
+      </Set>
+    </Property>
+    <Property Name="P_bStartReload" Id="{d35395ad-9333-424e-83e4-a05ea9550b56}">
+      <Declaration><![CDATA[PROPERTY P_bStartReload : BOOL]]></Declaration>
+      <Get Name="Get" Id="{443938d5-e9e7-43aa-89e1-13d02a38e52e}">
+        <Declaration><![CDATA[VAR
+END_VAR
+]]></Declaration>
+        <Implementation>
+          <ST><![CDATA[P_bStartReload := bStartReload;]]></ST>
+        </Implementation>
+      </Get>
+      <Set Name="Set" Id="{a90695ed-0a43-4602-bce3-28641d89d895}">
+        <Declaration><![CDATA[VAR
+END_VAR
+]]></Declaration>
+        <Implementation>
+          <ST><![CDATA[bStartReload := P_bStartReload;]]></ST>
+        </Implementation>
+      </Set>
+    </Property>
+    <Property Name="P_bVialSensor" Id="{fa5b0ee4-fa04-4d97-b80b-32ded3b18336}">
+      <Declaration><![CDATA[PROPERTY P_bVialSensor : BOOL]]></Declaration>
+      <Get Name="Get" Id="{2ec85213-b98e-4b25-b47a-a10758c93ff3}">
+        <Declaration><![CDATA[VAR
+END_VAR
+]]></Declaration>
+        <Implementation>
+          <ST><![CDATA[P_bVialSensor := bVialSensor;]]></ST>
+        </Implementation>
+      </Get>
+    </Property>
+    <Property Name="P_bVibrationOn" Id="{53264ec4-6d2e-41eb-99d3-cdff2763ca55}">
+      <Declaration><![CDATA[PROPERTY P_bVibrationOn : BOOL]]></Declaration>
+      <Get Name="Get" Id="{98ed4de2-f622-417a-a3ca-b36fd24a0412}">
+        <Declaration><![CDATA[VAR
+END_VAR
+]]></Declaration>
+        <Implementation>
+          <ST><![CDATA[P_bVibrationOn := bVibrationOn;]]></ST>
+        </Implementation>
+      </Get>
+      <Set Name="Set" Id="{d6cb7b94-6bb8-4f8c-b246-fc8b8c031e05}">
+        <Declaration><![CDATA[VAR
+END_VAR
+]]></Declaration>
+        <Implementation>
+          <ST><![CDATA[bVibrationOn := P_bVibrationOn;]]></ST>
+        </Implementation>
+      </Set>
+    </Property>
+    <Property Name="P_nCameraLight" Id="{e720aac8-f6b0-46ab-9265-4e5e39d69a79}">
+      <Declaration><![CDATA[PROPERTY P_nCameraLight : UINT]]></Declaration>
+      <Get Name="Get" Id="{8f377455-d31e-46e3-8f8a-64dc848d4d00}">
+        <Declaration><![CDATA[VAR
+END_VAR
+]]></Declaration>
+        <Implementation>
+          <ST><![CDATA[P_nCameraLight := nCameraLight;]]></ST>
+        </Implementation>
+      </Get>
+      <Set Name="Set" Id="{6d0f863f-847a-408f-8b01-67b85e07e22a}">
+        <Declaration><![CDATA[VAR
+END_VAR
+]]></Declaration>
+        <Implementation>
+          <ST><![CDATA[nCameraLight := P_nCameraLight;]]></ST>
+        </Implementation>
+      </Set>
+    </Property>
+    <Property Name="P_nPidKd" Id="{7e247007-1c95-4d44-9c0f-96ebfca8109a}">
+      <Declaration><![CDATA[PROPERTY P_nPidKd : UINT]]></Declaration>
+      <Get Name="Get" Id="{2b265d32-02cc-4818-9c6e-9ca4c512e269}">
+        <Declaration><![CDATA[VAR
+END_VAR
+]]></Declaration>
+        <Implementation>
+          <ST><![CDATA[P_nPidKd := nPidKd;]]></ST>
+        </Implementation>
+      </Get>
+      <Set Name="Set" Id="{52004e67-622d-4ab7-8a69-345b893d0ab4}">
+        <Declaration><![CDATA[VAR
+END_VAR
+]]></Declaration>
+        <Implementation>
+          <ST><![CDATA[nPidKd := P_nPidKd;]]></ST>
+        </Implementation>
+      </Set>
+    </Property>
+    <Property Name="P_nPidKi" Id="{d43ebad0-58f5-4971-943b-bfb5bfa61a46}">
+      <Declaration><![CDATA[PROPERTY P_nPidKi : UINT]]></Declaration>
+      <Get Name="Get" Id="{ebdd1c5b-e002-432a-8bda-13c7feef8e74}">
+        <Declaration><![CDATA[VAR
+END_VAR
+]]></Declaration>
+        <Implementation>
+          <ST><![CDATA[P_nPidKi := nPidKi;]]></ST>
+        </Implementation>
+      </Get>
+      <Set Name="Set" Id="{36d25f97-8259-4082-9039-fccbeafd4d68}">
+        <Declaration><![CDATA[VAR
+END_VAR
+]]></Declaration>
+        <Implementation>
+          <ST><![CDATA[nPidKi := P_nPidKi;]]></ST>
+        </Implementation>
+      </Set>
+    </Property>
+    <Property Name="P_nPidKp" Id="{2a2cf907-bbb0-46c2-98c4-714f2f61a1ed}">
+      <Declaration><![CDATA[PROPERTY P_nPidKp : UINT]]></Declaration>
+      <Get Name="Get" Id="{21c9defa-fe3f-457c-9058-bb2f6cda345f}">
+        <Declaration><![CDATA[VAR
+END_VAR
+]]></Declaration>
+        <Implementation>
+          <ST><![CDATA[P_nPidKp := nPidKp;]]></ST>
+        </Implementation>
+      </Get>
+      <Set Name="Set" Id="{4280de0d-e7c3-4970-a8ba-e966946d2470}">
+        <Declaration><![CDATA[VAR
+END_VAR
+]]></Declaration>
+        <Implementation>
+          <ST><![CDATA[nPidKp := P_nPidKp;]]></ST>
+        </Implementation>
+      </Set>
+    </Property>
+    <Property Name="P_nPidTa" Id="{fb0f0748-3c4d-4359-9884-73c3f977510a}">
+      <Declaration><![CDATA[PROPERTY P_nPidTa : USINT]]></Declaration>
+      <Get Name="Get" Id="{f9da8a6a-80b9-4950-9b57-3843a4ce5f60}">
+        <Declaration><![CDATA[VAR
+END_VAR
+]]></Declaration>
+        <Implementation>
+          <ST><![CDATA[P_nPidTa := nPidTa;]]></ST>
+        </Implementation>
+      </Get>
+      <Set Name="Set" Id="{64792905-5135-4a8c-84ea-0eb3f3727700}">
+        <Declaration><![CDATA[VAR
+END_VAR
+]]></Declaration>
+        <Implementation>
+          <ST><![CDATA[nPidTa := P_nPidTa;]]></ST>
+        </Implementation>
+      </Set>
+    </Property>
+    <Property Name="P_nTempActual" Id="{3c87a73e-1455-4bc0-a525-e459e88313b7}">
+      <Declaration><![CDATA[PROPERTY P_nTempActual : UINT]]></Declaration>
+      <Get Name="Get" Id="{64500984-71f7-4f1b-8a74-7d07d291f83b}">
+        <Declaration><![CDATA[VAR
+END_VAR
+]]></Declaration>
+        <Implementation>
+          <ST><![CDATA[P_nTempActual := nTempActual;]]></ST>
+        </Implementation>
+      </Get>
+    </Property>
+    <Property Name="P_nTempSetpoint" Id="{6916bacb-c03e-4c8f-a932-2d3bc40c76ef}">
+      <Declaration><![CDATA[PROPERTY P_nTempSetpoint : USINT]]></Declaration>
+      <Get Name="Get" Id="{61926af8-87cc-44d9-90fd-6436084c6444}">
+        <Declaration><![CDATA[VAR
+END_VAR
+]]></Declaration>
+        <Implementation>
+          <ST><![CDATA[P_nTempSetpoint := nTempSetpoint;]]></ST>
+        </Implementation>
+      </Get>
+      <Set Name="Set" Id="{256e470f-3f07-4073-8557-457b758a8c7e}">
+        <Declaration><![CDATA[VAR
+END_VAR
+]]></Declaration>
+        <Implementation>
+          <ST><![CDATA[nTempSetpoint := P_nTempSetpoint;]]></ST>
+        </Implementation>
+      </Set>
+    </Property>
+    <Property Name="P_nVibrationPower1" Id="{03ec3351-b8fe-4461-8f93-46c13a25a025}">
+      <Declaration><![CDATA[PROPERTY P_nVibrationPower1 : UINT]]></Declaration>
+      <Get Name="Get" Id="{2e5402b6-0241-4c01-bb31-970a3f6e09ed}">
+        <Declaration><![CDATA[VAR
+END_VAR
+]]></Declaration>
+        <Implementation>
+          <ST><![CDATA[P_nVibrationPower1 := nVibrationPower1;]]></ST>
+        </Implementation>
+      </Get>
+      <Set Name="Set" Id="{154ecfc6-1e18-49cb-bd6c-8b4a2f85f8ce}">
+        <Declaration><![CDATA[VAR
+END_VAR
+]]></Declaration>
+        <Implementation>
+          <ST><![CDATA[nVibrationPower1 := P_nVibrationPower1;]]></ST>
+        </Implementation>
+      </Set>
+    </Property>
+    <Property Name="P_nVibrationPower2" Id="{0d318936-8dd3-400b-a5bf-9c4274da197a}">
+      <Declaration><![CDATA[PROPERTY P_nVibrationPower2 : UINT]]></Declaration>
+      <Get Name="Get" Id="{58a12617-38f4-4a85-a71a-1a5953264ae1}">
+        <Declaration><![CDATA[VAR
+END_VAR
+]]></Declaration>
+        <Implementation>
+          <ST><![CDATA[P_nVibrationPower2 := nVibrationPower2;]]></ST>
+        </Implementation>
+      </Get>
+      <Set Name="Set" Id="{0b68d6bb-e9b2-49f9-9425-63ee6067c79e}">
+        <Declaration><![CDATA[VAR
+END_VAR
+]]></Declaration>
+        <Implementation>
+          <ST><![CDATA[nVibrationPower2 := P_nVibrationPower2;]]></ST>
+        </Implementation>
+      </Set>
+    </Property>
+    <Property Name="P_nVibrationPower3" Id="{8a552bac-2aa4-4394-a034-9544e2aa63a7}">
+      <Declaration><![CDATA[PROPERTY P_nVibrationPower3 : UINT]]></Declaration>
+      <Get Name="Get" Id="{edb2bff4-1740-4785-b3f8-342f4d226e18}">
+        <Declaration><![CDATA[VAR
+END_VAR
+]]></Declaration>
+        <Implementation>
+          <ST><![CDATA[P_nVibrationPower3 := nVibrationPower3;]]></ST>
+        </Implementation>
+      </Get>
+      <Set Name="Set" Id="{e2fc83d9-2424-4d23-94b1-9cbb658a7f1a}">
+        <Declaration><![CDATA[VAR
+END_VAR
+]]></Declaration>
+        <Implementation>
+          <ST><![CDATA[nVibrationPower3 := P_nVibrationPower3;]]></ST>
+        </Implementation>
+      </Set>
+    </Property>
+    <LineIds Name="FB_HwRefPowderStat">
+      <LineId Id="3" Count="1" />
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="FB_HwRefPowderStat.P_bResetError.Set">
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="FB_HwRefPowderStat.P_bStartLeveling.Get">
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="FB_HwRefPowderStat.P_bStartLeveling.Set">
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="FB_HwRefPowderStat.P_bStartReload.Get">
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="FB_HwRefPowderStat.P_bStartReload.Set">
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="FB_HwRefPowderStat.P_bVialSensor.Get">
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="FB_HwRefPowderStat.P_bVibrationOn.Get">
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="FB_HwRefPowderStat.P_bVibrationOn.Set">
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="FB_HwRefPowderStat.P_nCameraLight.Get">
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="FB_HwRefPowderStat.P_nCameraLight.Set">
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="FB_HwRefPowderStat.P_nPidKd.Get">
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="FB_HwRefPowderStat.P_nPidKd.Set">
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="FB_HwRefPowderStat.P_nPidKi.Get">
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="FB_HwRefPowderStat.P_nPidKi.Set">
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="FB_HwRefPowderStat.P_nPidKp.Get">
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="FB_HwRefPowderStat.P_nPidKp.Set">
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="FB_HwRefPowderStat.P_nPidTa.Get">
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="FB_HwRefPowderStat.P_nPidTa.Set">
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="FB_HwRefPowderStat.P_nTempActual.Get">
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="FB_HwRefPowderStat.P_nTempSetpoint.Get">
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="FB_HwRefPowderStat.P_nTempSetpoint.Set">
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="FB_HwRefPowderStat.P_nVibrationPower1.Get">
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="FB_HwRefPowderStat.P_nVibrationPower1.Set">
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="FB_HwRefPowderStat.P_nVibrationPower2.Get">
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="FB_HwRefPowderStat.P_nVibrationPower2.Set">
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="FB_HwRefPowderStat.P_nVibrationPower3.Get">
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="FB_HwRefPowderStat.P_nVibrationPower3.Set">
+      <LineId Id="2" Count="0" />
+    </LineIds>
+  </POU>
+</TcPlcObject>

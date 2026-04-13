@@ -1,0 +1,1679 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<TcPlcObject Version="1.1.0.1" ProductVersion="3.1.4024.11">
+  <POU Name="FB_MzTool" Id="{45a6f2ce-bc51-44a7-8698-c2a47c95f873}" SpecialFunc="None">
+    <Declaration><![CDATA[FUNCTION_BLOCK FB_MzTool EXTENDS FB_MzBase
+VAR_INPUT
+END_VAR
+VAR_OUTPUT
+END_VAR
+VAR
+	pParentMzTool		: POINTER TO FB_MzBase;
+	
+	nParentSlotNr		: UINT;	//LÖSCHEN!!!!!!!!!!!!!!!
+	pZAxisRef 			: POINTER TO FB_ZAxisRef;
+	pCurrentTarget		: POINTER TO FB_TargetBase;
+	
+	bIsMESTool			: BOOL;
+	
+	//Action: "JogZ"
+	bJogZ				: BOOL;
+	nStateA_JogZ		: USINT;			//State von A_Jog()
+	fbZmJog				: FB_ZM_Jog;
+	eJogZDirectionNew	: E_MoveDirection;
+	eJogZDirection		: E_MoveDirection;
+	bJogZForward		: BOOL;
+	bJogZBackwards		: BOOL;
+	bJogZClock			: BOOL;
+	bJogZModeInchingNew	: BOOL;				//wenn True dann Tipbetrieb sonst kontinuierlich
+	bJogZModeInching	: BOOL;				//wenn True dann Tipbetrieb sonst kontinuierlich
+	rJogZDistance		: REAL;
+	rJogZSpeed			: REAL;
+	bJogZImpuls			: BOOL;
+	
+	//Ergänzung zu Action: MoveZ"
+	nReducedMoveZSpeed	: DINT;
+	nReducedMoveZDist	: DINT;
+	
+END_VAR
+]]></Declaration>
+    <Implementation>
+      <ST><![CDATA[IF eCurrentState = E_MachineState.MACHINESTATE_Active THEN
+	//BasicActions ausführen
+	IF bJogZ THEN
+		A_JogZ();
+		IF nStateA_JogZ >= 80 THEN
+			IF nStateA_JogZ >= 99 THEN
+				bStopAllOnError := TRUE;
+				bError := TRUE;
+			END_IF
+		bJogZ := FALSE;
+		nStateA_JogZ := 0; 
+		M_RemoveListEntry(nSearchValue:= E_Action.ACTION_Jog);
+		END_IF
+	END_IF
+END_IF
+
+
+SUPER^();	//FB_MzBase() aufrufen
+
+//Prozessdaten aktualisieren
+IF pZAxisRef > 0 THEN
+	stProcessData.n32Data[3] := REAL_TO_DINT(pZAxisRef^.P_rCurrentPos);
+END_IF
+stCurrentPos := P_stCurrentPosTotal;
+stProcessData.n32Data[4] := REAL_TO_DINT(stCurrentPos.X);
+stProcessData.n32Data[5] := REAL_TO_DINT(stCurrentPos.Y);
+stProcessData.n32Data[6] := REAL_TO_DINT(stCurrentPos.Z);
+]]></ST>
+    </Implementation>
+    <Action Name="A_Init" Id="{b80f9a7f-8186-47a1-82e5-ea3b9bda9ea5}">
+      <Implementation>
+        <ST><![CDATA[	IF nStateA_InitAxis = 0 THEN
+		bInitAxisOk := FALSE;
+		//Ist Z-Achse physikalisch vorhanden?
+		IF NOT pZAxisRef^.stInput.nStatus.7 THEN
+			stError.ErrorId := E_ErrorIdMultiZ.ERRORID_NoZAxis;
+			stError.HardwareGrp := E_HardwareGrp.AxisZ;
+			stError.HardwareNr	:= pZAxisRef^.nChannel;
+			stError.POUState := nStateA_InitAxis;
+			nStateA_InitAxis := 99;
+		ELSE
+			IF pZAxisRef^.stStatus.bIsHoming THEN //Homing dieser Achse wurde bereits durch ein anderes Tool oder Head angestoßen
+				nStateA_InitAxis := 2;
+			ELSE
+				nStateA_InitAxis := 1;
+			END_IF		
+		END_IF
+	END_IF
+	
+	IF nStateA_InitAxis = 1 THEN
+		fbZmHome(bExecute:= TRUE, pFbZAxisRef:= pZAxisRef, bMoveToHome:= TRUE);
+		P_bZIsMoving := TRUE;
+		pParentMzTool^.P_bZIsMoving := TRUE;		
+		IF NOT fbZmHome.bBusy THEN
+			IF fbZmHome.bError THEN
+				stError.ErrorId := fbZmHome.nErrorId;
+				stError.HardwareGrp := E_HardwareGrp.AxisZ;
+				stError.HardwareNr	:= pZAxisRef^.nChannel;
+				stError.POUState := nStateA_InitAxis;
+				nStateA_InitAxis := 99;
+			ELSE
+				bInitAxisOk := TRUE;
+				nStateA_InitAxis := 80;
+			END_IF
+			fbZmHome(bExecute:= FALSE);
+			pParentMzTool^.P_bZIsMoving := FALSE;
+			P_bZIsMoving := FALSE;
+		END_IF			
+	END_IF
+	
+	//Achse wurde durch anderes Tool angestoßen -> warten bis Homing fertig
+	IF nStateA_InitAxis = 2 THEN
+		IF NOT pZAxisRef^.stStatus.bIsHoming THEN
+			IF pZAxisRef^.stStatus.bError THEN
+				nStateA_InitAxis := 99;
+			ELSIF pZAxisRef^.stStatus.bCmdAborted THEN
+				nStateA_InitAxis := 80;	
+			ELSIF pZAxisRef^.stStatus.bIsHomed THEN
+				bInitAxisOk := TRUE;
+				nStateA_InitAxis := 80;
+			END_IF
+		END_IF
+	END_IF
+
+	IF nStateA_InitAxis = 70 THEN
+		pParentMzTool^.P_bZIsMoving := FALSE;
+		P_bZIsMoving := FALSE;
+		fbZmHome(bExecute:= FALSE);
+		nStateA_InitAxis := 80;
+	END_IF
+
+//Errorhandling
+IF nStateA_InitAxis = 99 THEN
+	stError.ObjectId := nObjectID;
+	stError.Cmd := E_Action.ACTION_Init;
+	stError.POU := E_POU.POU_FB_MzTool;
+	stError.POUAction := E_POUACT.POUACT_A_Init;
+	fbErrorList.M_Add(stError);
+END_IF]]></ST>
+      </Implementation>
+    </Action>
+    <Action Name="A_JogZ" Id="{7a2f8222-3f53-4920-bd91-7d4c9887f949}">
+      <Implementation>
+        <ST><![CDATA[IF nStateA_JogZ = 0 THEN
+	IF bJogZModeInching THEN
+		nStateA_JogZ := 1;	//Incr
+	ELSE
+		nStateA_JogZ := 3;	//Continous
+	END_IF
+END_IF
+ 
+IF nStateA_JogZ = 1 THEN	//incrementellen Jog-Befehl 1x absetzen
+	CASE eJogZDirection OF
+		E_MoveDirection.DIRECTION_ZPLUS:
+			IF pZAxisRef > 0 THEN
+				fbZmJog(bJogForward:= TRUE, bJogBackwards:= FALSE, bClock:= bJogZClock, bInching:= TRUE,
+						rSpeed:= rJogZSpeed, rDistance:= rJogZDistance, pfbZAxisRef:= pZAxisRef);					
+			END_IF
+			bZIsMoving := TRUE;
+		E_MoveDirection.DIRECTION_ZMINUS:
+			IF pZAxisRef > 0 THEN
+				fbZmJog(bJogForward:= FALSE, bJogBackwards:= TRUE, bClock:= bJogZClock, bInching:= TRUE,
+						rSpeed:= rJogZSpeed, rDistance:= rJogZDistance, pfbZAxisRef:= pZAxisRef);					
+			END_IF
+			bZIsMoving := TRUE;		
+	END_CASE
+	nStateA_JogZ := 2;
+END_IF
+
+IF nStateA_JogZ = 2 THEN //warten bis inkrementelles Joggen fertig bzw auf neuen Befehl warten
+	IF NOT bJogZModeInching THEN //Wechseln zu kontinulierlichem Joggen
+		nStateA_JogZ := 3;
+	END_IF
+	
+	IF eJogZDirection = E_MoveDirection.DIRECTION_STOP THEN
+		nStateA_JogZ := 4;
+	END_IF
+END_IF
+
+IF nStateA_JogZ = 3 THEN //zyclisches Absetzen des kontinuierlichen Jog-Befehls, hier kann auch Stop abgesetzt werden, bzw neuer inkr. Befehl
+	IF bJogZImpuls THEN
+		CASE eJogZDirection OF
+			E_MoveDirection.DIRECTION_STOP:
+				nStateA_JogZ := 4;
+			E_MoveDirection.DIRECTION_ZPLUS:
+				IF pZAxisRef > 0 THEN
+					fbZmJog(bJogForward:= TRUE, bJogBackwards:= FALSE, bClock:= bJogZClock, bInching:= FALSE,
+							rSpeed:= rJogZSpeed, rDistance:= rJogZDistance, pfbZAxisRef:= pZAxisRef);						
+				END_IF
+				bZIsMoving := TRUE;
+			E_MoveDirection.DIRECTION_ZMINUS:
+				IF pZAxisRef > 0 THEN
+					fbZmJog(bJogForward:= FALSE, bJogBackwards:= TRUE, bClock:= bJogZClock, bInching:= FALSE,
+							rSpeed:= rJogZSpeed, rDistance:= rJogZDistance, pfbZAxisRef:= pZAxisRef);					
+				END_IF
+				bZIsMoving := TRUE;	
+		END_CASE
+	END_IF
+	bJogZImpuls := FALSE;
+END_IF
+
+IF nStateA_JogZ = 4 THEN //STOP
+	IF fbZmJog.bBusy THEN
+		fbZmJog(bJogForward:= FALSE, bJogBackwards:= FALSE, pfbZAxisRef:= pZAxisRef);
+	END_IF
+	nStateA_JogZ := 5;
+END_IF
+
+//Abfragen, ob Jogging fertig
+fbZmJog(pfbZAxisRef:= pZAxisRef);
+IF NOT fbZmJog.bBusy THEN
+	nStateA_JogZ := 80;
+	IF fbZmJog.bError THEN
+		stError.Cmd := E_Action.ACTION_Jog;
+		stError.ErrorId := fbZmJog.nErrorID;
+		stError.HardwareGrp := E_HardwareGrp.AxisZ;
+		stError.HardwareNr	:= pZAxisRef^.nChannel;
+		stError.POU := E_POU.POU_FB_MzTool;
+		stError.POUAction := E_POUACT.POUACT_A_JogZ;
+		stError.POUState := nStateA_JogZ;
+		fbErrorList.M_Add(stError);
+		nStateA_JogZ := 99;
+		fbZmJog.M_Reset();
+	END_IF
+	bZIsMoving := FALSE;
+END_IF
+]]></ST>
+      </Implementation>
+    </Action>
+    <Action Name="A_MoveZ" Id="{38ed9034-abc6-405c-8e37-69af5a8fcc16}">
+      <Implementation>
+        <ST><![CDATA[CASE nStateA_MoveZ OF
+	0:
+	IF bFlagMoveZ THEN
+		//Wenn Achse von einem anderen Tool bereits Fahrauftrag, dann warten bis dieser abgearbeitet
+		IF pZAxisRef^.stStatus.bHasJob THEN
+			RETURN;
+		END_IF
+
+		fbZmMove.eMoveMode := eMoveModeZ;
+		fbZmMove.rSpeed := rMoveSpeedZ;
+		fbZmMove.rPosition := rMovePositionZ;
+		
+		CASE eMoveModeZ OF
+			E_MoveMode.MODE_AbsWithOffset:
+				//TargetPosition in Achsenposition umgerechnen
+				//Die Targetposition der ZAchse ergibt sich: AxisPosZ = TargetPosZ - AbsPos.Z
+				//zu beachten ist, dass sich Bedeutung von AbsPos.Z zu AbsPos.X und AbsPos.Y unterscheidet (siehe Property P_AbsPos)
+				st3DPoint := P_stAbsPosTotal;
+				fbZmMove.rPosition := rMovePositionZ - st3DPoint.Z;
+				
+			E_MoveMode.MODE_Free:
+				//aus dem kollisionsgefährdetem Bereich herausfahren
+				st3DPoint := P_stCurrentPosPhys;
+				IF st3DPoint.Z >= pAssignWorkplate^.P_rCollHeight THEN //ist bereits außerhalb des Bereichs
+					nStateA_MoveZ := 80;
+					RETURN;
+				END_IF
+				
+				IF nReducedMoveZSpeed > 0 THEN //Zuerst einen Move relativ um nReducedMoveZDistance
+					fbZmMove.eMoveMode := E_MoveMode.MODE_Relative;
+					fbZmMove.rPosition := DINT_TO_REAL(nReducedMoveZDist);
+					fbZmMove.rSpeed := DINT_TO_REAL(nReducedMoveZSpeed);
+				ELSE
+					//TargetPosition in Achsenposition umgerechnen
+					//Die Targetposition der ZAchse ergibt sich: AxisPosZ = TargetPosZ - AbsPos.Z
+					//zu beachten ist, dass sich Bedeutung von AbsPos.Z zu AbsPos.X und AbsPos.Y unterscheidet (siehe Property P_AbsPos)
+					//st3DPoint := P_stAbsPosTotal;	//Summe aller Offsets
+					st3DPoint := P_stAbsPosPhys;
+					fbZmMove.rPosition := pAssignWorkplate^.P_rCollHeight - st3DPoint.Z;
+				END_IF				
+				
+				stAreaCollFree.M_Clear();
+			E_MoveMode.MODE_Home:	
+				//bei "Home wird vorerst keine Position übergeben, nur bei unterem Kopf?
+				IF nReducedMoveZSpeed > 0 THEN //Zuerst einen Move relativ um nReducedMoveZDistance
+					fbZmMove.eMoveMode := E_MoveMode.MODE_Relative;
+					fbZmMove.rPosition := DINT_TO_REAL(nReducedMoveZDist);
+					fbZmMove.rSpeed := DINT_TO_REAL(nReducedMoveZSpeed);
+				END_IF				
+				stAreaCollFree.M_Clear();
+		END_CASE
+	END_IF
+	
+	IF bFlagMoveZ XOR fbZmMove.bBusy THEN
+		bFlagMoveZ := FALSE;
+		fbZmMove(bExecute:= TRUE, pfbZAxisRef:= pZAxisRef);
+	END_IF 
+
+	IF NOT fbZmMove.bBusy THEN
+		IF fbZmMove.bError THEN
+			stError.ErrorId := fbZmMove.nErrorID;
+			stError.Cmd := E_Action.ACTION_MoveZ;
+			stError.HardwareGrp := E_HardwareGrp.AxisZ;
+			stError.HardwareNr	:= pZAxisRef^.nChannel;
+			stAreaCollFree.M_Clear();
+			stError.POUState := nStateA_MoveZ;					 
+			nStateA_MoveZ := 99;
+		ELSE
+			st3DPoint := P_stCurrentPosTotal;
+			stAreaCollFree.X1 := st3DPoint.X - stAreaCollFree.X1;
+			stAreaCollFree.X2 := st3DPoint.X + stAreaCollFree.X2;
+			stAreaCollFree.Y1 := st3DPoint.Y - stAreaCollFree.Y1;
+			stAreaCollFree.Y2 := st3DPoint.Y + stAreaCollFree.Y2;
+			IF (eMoveModeZ = E_MoveMode.MODE_Free  OR eMoveModeZ = E_MoveMode.MODE_Home) AND nReducedMoveZSpeed > 0 THEN
+				nReducedMoveZSpeed := 0;
+				nReducedMoveZDist := 0;
+				nStateA_MoveZ := 0;
+			ELSE
+				nStateA_MoveZ := 80;
+			END_IF
+		END_IF
+		fbZmMove(bExecute:= FALSE);
+		bFlagMoveZ := TRUE;
+	END_IF			
+	
+	70:	//Stoppen
+		fbZmStop(pFbZAxisRef:= pZAxisRef, bExecute:= TRUE);
+		IF NOT fbZmStop.bBusy THEN
+			IF fbZmStop.bError THEN
+				stError.Cmd := E_Action.ACTION_Stop;
+				stError.ErrorId := fbZmStop.nErrorID;
+				stError.HardwareGrp := E_HardwareGrp.AxisZ;
+				stError.HardwareNr	:= pZAxisRef^.nChannel;
+				stError.POUState := nStateA_MoveZ;
+				nStateA_MoveZ := 99;
+			ELSE
+				nStateA_MoveZ := 80;
+				nReducedMoveZSpeed := 0;
+				nReducedMoveZDist := 0;
+			END_IF
+			fbZmMove(bExecute:= FALSE,pfbZAxisRef:= pZAxisRef);
+			fbZmStop(bExecute:= FALSE,pfbZAxisRef:= pZAxisRef);
+			bFlagMoveZ := TRUE;
+			stAreaCollFree.M_Clear();
+		END_IF;
+END_CASE
+
+//Errorhandling
+IF nStateA_MoveZ = 99 THEN
+	stError.ObjectId := nObjectID;
+	stError.POU := E_POU.POU_FB_MzTool;
+	stError.POUAction := E_POUACT.POUACT_A_MoveZ;
+	fbErrorList.M_Add(stError);
+END_IF]]></ST>
+      </Implementation>
+    </Action>
+    <Action Name="A_Reset" Id="{e8fdab5c-a7da-4976-8f66-cb599830f94e}">
+      <Implementation>
+        <ST><![CDATA[IF bJogZ THEN
+	bJogZ := FALSE;
+	nStateA_JogZ := 0;
+END_IF		
+
+IF nStateA_ResetTool = 0 THEN
+	//Warten, bis Axis wieder fehlerfrei
+	IF NOT pFbMultiZ^.bBusy THEN
+		IF NOT pZAxisRef^.stStatus.bError THEN
+			nStateA_ResetTool := 1;				
+		END_IF
+	END_IF
+END_IF
+
+IF nStateA_ResetTool = 1 THEN
+	IF nStateA_ResetSpec = 80 THEN
+		nStateA_ResetTool := 80;
+	END_IF
+END_IF
+
+SUPER^.A_Reset();]]></ST>
+      </Implementation>
+    </Action>
+    <Action Name="A_Stop" Id="{49d3ffa3-3a18-4aa0-97c8-333d9142661c}">
+      <Implementation>
+        <ST><![CDATA[//Diese Aktion wird in der Regel vom "FB_Spec.A_stop()" aufgerufen
+//kommt der Aufruf von "FB_Spec.A_stop()" das erste mal, ist "nStateA_Stop" = 1
+
+//Abgebrochen werden muss "JogZ" und "MoveZ" 
+IF nStateA_Stop <= 1 THEN
+	IF bJogZ AND nStateA_JogZ < 4 THEN
+		nStateA_JogZ := 4;
+	END_IF
+
+	nStateA_Stop := 2;
+END_IF
+
+SUPER^.A_Stop();]]></ST>
+      </Implementation>
+    </Action>
+    <Method Name="M_AddChild" Id="{deadf796-d973-48dd-aae4-6cafe3f642f3}">
+      <Declaration><![CDATA[METHOD M_AddChild : ERRORID
+VAR_INPUT
+	pObject : POINTER TO FB_Object;
+	nSlotNr	: UINT;
+	nIndex : INT;
+END_VAR
+
+VAR
+	pSlot : POINTER TO FB_Slot;
+END_VAR]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[//In den abgeleiteten Tool-FBs wird überprüft, ob das entsprechende Objekt als Child geeignet ist
+IF pObject > 0 THEN
+	pSlot := fbSlotList.M_GetAtNr(nSlotNr);
+	IF pSlot > 0 THEN
+		IF pSlot^.P_pChild = 0 THEN
+			//Object darf selber noch an keinem Parent hängen
+			IF pObject^.P_pParentObject = 0 THEN
+				pSlot^.P_pChild := pObject;
+				IF pObject^.M_bIsGroup(E_ObjectGroup.OBJECTGROUP_Piece) THEN
+					//Piece gehört immer an den letzten Slot
+					IF pSlot^.P_nNr = nNumberOfSlots THEN
+						pPiece := pObject;
+					ELSE
+						M_AddChild := E_ErrorIdObjMgmt.ERRORID_InvalidSlotNumber;
+						RETURN;
+					END_IF
+				END_IF
+ 				pObject^.P_pObjCollectNode := pObjCollectNode^.nodes.M_AddNewNode(pObject,nIndex);
+				pObject^.M_UpdateParent();
+			ELSE
+				M_AddChild := E_ErrorIdObjMgmt.ERRORID_ObjectAlreadyOnAnotherParent;
+			END_IF
+		ELSE //Slot bereits belegt
+			M_AddChild := E_ErrorIdObjMgmt.ERRORID_SlotIsAlreadyOccupied;
+		END_IF		
+	ELSE
+		M_AddChild := E_ErrorIdObjMgmt.ERRORID_InvalidSlotNumber;			
+	END_IF
+ELSE
+	M_AddChild := E_ErrorIdObjMgmt.ERRORID_InvalidParentObject;
+END_IF]]></ST>
+      </Implementation>
+    </Method>
+    <Method Name="M_AnswerSiblingForAction" Id="{7f7a18e9-f253-4184-9f3f-7b1a2279b595}">
+      <Declaration><![CDATA[METHOD M_AnswerSiblingForAction : ERRORID
+VAR_INPUT
+	eAction : E_Action;
+END_VAR
+]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[]]></ST>
+      </Implementation>
+    </Method>
+    <Method Name="M_AskSiblingForAction" Id="{504bb3f7-49aa-4bf1-8f90-cf7845307d9f}">
+      <Declaration><![CDATA[METHOD M_AskSiblingForAction : ERRORID
+VAR_INPUT
+	eAction : E_Action;
+END_VAR
+
+VAR
+	iter : FB_ObjCollectIteratorDeep;
+	pTool : POINTER TO FB_MzTool;
+END_VAR]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[//Mit dieser Methode wird überprüft, ob ein an dieser Achse hängendes anderes Tool ein spezielle Methode
+//für dieses Tool verhindert. Z.B. wird dadurch verhindert, dass eine einzelne Pipette am TitrationsTool
+//einen MoveToTarget ausführt, obwohl am TitrationsTool ein Cap steckt.
+
+//Das Tool ermitteln, welches an der Achse selber hängt, denn dort kann nur eines hängen
+P_pUpperParentTool^.P_pObjCollectNode^.nodes.M_GetIterator(iter);
+WHILE iter.pNode > 0 DO
+	IF iter.pNode^.P_pObject > 0 AND_THEN iter.pNode^.P_pObject^.M_bIsGroup(E_ObjectGroup.OBJECTGROUP_MzTool) THEN
+		pTool := iter.pNode^.P_pObject;
+		IF pTool <> THIS THEN
+			M_AskSiblingForAction := pTool^.M_AnswerSiblingForAction(eAction);
+			IF M_AskSiblingForAction > 0 THEN
+				RETURN;
+			END_IF
+		END_IF
+	END_IF
+	iter.M_Increment();	
+END_WHILE]]></ST>
+      </Implementation>
+    </Method>
+    <Method Name="M_CancelAction" Id="{e87d482c-06ee-4856-ada1-41365c56f27c}">
+      <Declaration><![CDATA[METHOD M_CancelAction
+VAR_INPUT
+	eAction : E_Action;
+END_VAR
+]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[IF eAction = E_Action.ACTION_MoveZ THEN
+	IF bMoveZ AND nStateA_MoveZ < 70 THEN
+		nStateA_MoveZ := 70;
+	END_IF
+ELSIF eAction = E_Action.ACTION_Jog THEN
+	IF bJogZ AND nStateA_JogZ < 4 THEN
+		nStateA_JogZ := 4;
+	ELSE
+		SUPER^.M_CancelAction(eAction);	
+	END_IF
+ELSE
+	SUPER^.M_CancelAction(eAction);
+END_IF]]></ST>
+      </Implementation>
+    </Method>
+    <Method Name="M_CheckAction" Id="{c10f6f71-fc6b-42ae-9053-adce9305a4d7}">
+      <Declaration><![CDATA[METHOD M_CheckAction : ERRORID
+VAR_INPUT
+	refActionData 	: REFERENCE TO ST_ActionData;
+	pCorrelObject	: POINTER TO FB_Object;
+END_VAR
+]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[//abgeleiteten Klassen separat eingeschränkt
+IF refActionData.eAction = E_Action.ACTION_MoveToTarget THEN
+	//MoveToTarget darf nicht aufgeführt werden, wenn Tool ChildTools besitzt und diese
+	//näher zur Worlplate sind (bsp. CartrideHolder und CartridgeDispenser)
+	IF M_GetClosestTool(bAllOnAxis:= FALSE) <> THIS THEN
+		M_CheckAction := E_ErrorIdCmd.ERRORID_ActionLocked;
+	END_IF
+ELSIF refActionData.eAction = E_Action.ACTION_ActionOnArray THEN
+	RETURN;
+ELSE
+	M_CheckAction := SUPER^.M_CheckAction(refActionData,pCorrelObject);
+END_IF
+]]></ST>
+      </Implementation>
+    </Method>
+    <Method Name="M_CheckMoveLimit" Id="{7e97085d-d9b6-4b71-a5a9-ecbe8e529ba2}">
+      <Declaration><![CDATA[METHOD M_CheckMoveLimit : BOOL
+VAR_INPUT
+	sAxis			: STRING[2];
+	eMoveMode		: E_MoveMode;
+	rMovePosition	: REAL;
+END_VAR
+
+VAR
+	st3DPoint		: ST_3DPoint;
+	rMovePosTemp	: REAL;
+END_VAR
+]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[IF sAxis = 'Z' THEN 
+	IF eMoveMode = E_MoveMode.MODE_Relative OR eMoveMode = E_MoveMode.MODE_Measure THEN	//Relativ
+		rMovePosTemp := pZAxisRef^.P_rCurrentPos + rMovePosition;
+	ELSIF eMoveMode = E_MoveMode.MODE_AbsWithOffset THEN	//Absolut mit Offsets
+		st3DPoint := P_stAbsPosTotal;	//Summe aller Offsets
+		rMovePosTemp :=  rMovePosition - st3DPoint.Z;
+	ELSIF eMoveMode = E_MoveMode.MODE_AbsNoneOffset THEN	//Absolut OHNE Offsets!!
+		rMovePosTemp := rMovePosition;
+	ELSIF eMoveMode = E_MoveMode.MODE_Free OR eMoveMode = E_MoveMode.MODE_Home THEN	//Free
+		M_CheckMoveLimit := TRUE;
+	END_IF
+	
+	IF rMovePosTemp >= pZAxisRef^.P_rMinPos AND rMovePosTemp <= pZAxisRef^.P_rMaxPos THEN
+		M_CheckMoveLimit := TRUE;
+	END_IF
+ELSE
+	M_CheckMoveLimit := SUPER^.M_CheckMoveLimit(sAxis,eMoveMode,rMovePosition);
+END_IF
+]]></ST>
+      </Implementation>
+    </Method>
+    <Method Name="M_CheckMoveLimitEx" Id="{66df8f3c-8abb-4597-891b-869e239bc124}">
+      <Declaration><![CDATA[METHOD M_CheckMoveLimitEx : ERRORID
+VAR_INPUT
+	LimitCuboid : REFERENCE TO FB_Cuboid;
+END_VAR
+
+VAR
+	stAbsPosTotal : ST_3DPoint;
+END_VAR
+]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[stAbsPosTotal := P_stAbsPosTotal;
+
+IF LimitCuboid.P_rXMin < pXDrive^.P_rMinPos + stAbsPosTotal.X OR LimitCuboid.P_rXMax > pXDrive^.P_rMaxPos + stAbsPosTotal.X THEN
+	M_CheckMoveLimitEx := E_ErrorIdGCode.ERRORID_ScaffoldWidthExceeded; 
+END_IF
+
+IF LimitCuboid.P_rYMin < pYDrive^.P_rMinPos + stAbsPosTotal.Y OR LimitCuboid.P_rYMax > pYDrive^.P_rMaxPos + stAbsPosTotal.Y THEN
+	M_CheckMoveLimitEx := E_ErrorIdGCode.ERRORID_ScaffoldDepthExceeded;
+END_IF
+
+IF LimitCuboid.P_rZMin < pZAxisRef^.P_rMinPos + stAbsPosTotal.Z OR LimitCuboid.P_rZMax > pZAxisRef^.P_rMaxPos + stAbsPosTotal.Z THEN
+	M_CheckMoveLimitEx := E_ErrorIdGCode.ERRORID_ScaffoldHeightExceeded;
+END_IF]]></ST>
+      </Implementation>
+    </Method>
+    <Method Name="M_CheckProps" Id="{48c37dc2-392f-4097-8ad8-a9ad2c698e00}">
+      <Declaration><![CDATA[METHOD M_CheckProps : ERRORID
+VAR_INPUT
+END_VAR
+]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[M_CheckProps := SUPER^.M_CheckProps();
+pAssignWorkplate := pParentMzTool^.P_pAssignWorkplate;
+IF pZAxisRef = 0 THEN
+	M_CheckProps := E_ErrorIdObjMgmt.ERRORID_InvalidParentMzTool;
+END_IF]]></ST>
+      </Implementation>
+    </Method>
+    <Method Name="M_ClearAllProps" Id="{ce7fe27c-d49c-4071-91f4-be177e9d5b15}">
+      <Declaration><![CDATA[METHOD M_ClearAllProps
+VAR_INPUT
+	bIgnoreParent : BOOL; //Es wird das gesamte OD gelöscht. -> Zeiger auf Parent nicht mehr gültig!
+END_VAR
+VAR
+	pSlot : POINTER TO FB_Slot;
+END_VAR
+]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[//Vom Parent lösen, falls dieses noch existiert
+IF NOT bIgnoreParent AND_THEN pParentMzTool > 0 THEN
+	pSlot := pParentMzTool^.M_GetSlotFromChild(THIS); 
+	IF pSlot > 0 THEN
+		IF pSlot^.P_pChild^.P_nObjectID = nObjectID THEN
+			pSlot^.P_pChild := 0;
+		END_IF
+	END_IF
+END_IF
+
+pParentMzTool := 0;
+
+IF pZAxisRef > 0 THEN
+	pZAxisRef^.eFixedToolType := E_MzToolType.TOOL_TYPE_None;
+END_IF
+
+SUPER^.M_ClearAllProps(bIgnoreParent);]]></ST>
+      </Implementation>
+    </Method>
+    <Method Name="M_ExeAction" Id="{bf236901-5fbf-40ee-aae6-0085453af584}">
+      <Declaration><![CDATA[METHOD M_ExeAction : ERRORID
+VAR_INPUT
+	refActionData : REFERENCE TO ST_ActionData;	
+END_VAR
+
+VAR
+	rAbsFreeHeight : REAL; 
+END_VAR]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[//In dieser Methode muss gecheckt werden, ob die entsprechende BasicAction auch zum aktuellen Zeitpunkt auch ausgeführt werden kann
+bCanceled := FALSE;
+
+IF NOT (eCurrentState = E_MachineState.MACHINESTATE_Idle OR
+	eCurrentState = E_MachineState.MACHINESTATE_Active OR
+	eCurrentState = E_MachineState.MACHINESTATE_Ready) THEN
+	M_ExeAction := E_ErrorIdCmd.ERRORID_InvalidState;
+	RETURN;
+END_IF
+
+CASE refActionData.eAction OF
+	E_Action.ACTION_Init:
+		IF NOT bInitAxis THEN
+			bReInit := DINT_TO_BOOL(refActionData.aParams[1]);
+			bInitAxis := TRUE;			
+			fbList.A_AddHeadValue(hList := hList, putValue := E_Action.ACTION_Init); 
+			//bIsInit := FALSE;
+		ELSE
+			RETURN;
+		END_IF
+		
+	E_Action.ACTION_Jog:
+		//Action darf eingetragen werden wenn:
+		//wenn Action noch nicht aktiv oder
+		//wenn Action aktiv und nJogDirection = 0
+		//wenn Action aktiv und Jogmode = Continous und aktueller Jogmode = Continous
+		
+		//Wenn X ode Y dann auf FB_MzBase verweisen
+
+		eJogZDirectionNew := DINT_TO_USINT(refActionData.aParams[2]);
+		bJogZModeInchingNew := DINT_TO_BOOL(refActionData.aParams[1]);
+		
+		//Speed auf max Axisspeed begrenzen
+		rJogZSpeed := MIN(DINT_TO_REAL(refActionData.aParams[3]),pZAxisRef^.P_rMaxSpeed);
+		rJogZDistance := DINT_TO_REAL(refActionData.aParams[4]);
+		
+		IF eJogZDirectionNew < 5 THEN //X,Y oder Stop
+			M_ExeAction := SUPER^.M_ExeAction(refActionData);
+			IF 	eJogZDirectionNew > 0 THEN
+				RETURN;
+			END_IF
+		END_IF
+
+		//Wenn es einen Richtungswechsel gibt, dann darf "bJog" nicht aktiv sein
+		IF NOT bJogZ THEN 
+			IF eJogZDirectionNew  = E_MoveDirection.DIRECTION_ZMINUS THEN //Z nach unten
+				//ermitteln, über welchem Target sich MzTool befindet und die maximale Joggingdistanz ermitteln
+				{warning 'Noch implementieren'}
+				//Aufgabe für später: hängen an einer Achse mehrere MzTools, dann muss das für diese auch ermittelt werden
+				IF rJogZSpeed > 5000.0 THEN
+					pCurrentTarget := pAssignWorkplate^.M_GetHighestTarget(P_stCurrentXYArea,0);
+					//nJogDistance aus TargetPosition Z umrechnen in Raw-Position
+					MEMSET(ADR(st3DPoint1),0,SIZEOF(st3DPoint1));
+					IF pCurrentTarget > 0 THEN
+						rAbsFreeHeight := pCurrentTarget^.P_rAbsFreeHeight;
+					ELSE
+						RETURN;
+					END_IF
+					
+					IF bJogZModeInchingNew THEN
+						//st3DPoint := P_stCurrentPosPhys;
+						st3DPoint := M_GetClosestTool(bAllOnAxis:= TRUE)^.P_stCurrentPosPhys;
+						//nJogDistance reduzieren, so dass nicht aufsetzt
+						//aktuelle Position
+						IF P_pMzHead^.P_bIsTopHead THEN	//oberhalb der Workplate
+							IF st3DPoint.Z <= rAbsFreeHeight + 3000.0 THEN
+								RETURN;
+							END_IF
+							rJogZDistance := MIN(st3DPoint.Z - rAbsFreeHeight - 3000.0, rJogZDistance);
+						END_IF
+ 					ELSE //Continous
+						IF P_pMzHead^.P_bIsTopHead THEN	//oberhalb der Workplate
+							//Fall das Target im Weg, dann die JogDistance berechnen und Sicherheitsabstand abziehen
+							//st3DPoint := P_stCurrentPosPhys;
+							st3DPoint := M_GetClosestTool(bAllOnAxis:= TRUE)^.P_stCurrentPosPhys;
+							rJogZDistance := MAX(st3DPoint.Z - rAbsFreeHeight -3000.0,0.0);
+						ELSE
+							rJogZDistance := 999999.9;	
+						END_IF
+					END_IF
+				ELSE
+					IF NOT bJogZModeInchingNew THEN
+						rJogZDistance := 999999.9;
+					END_IF
+				END_IF
+			ELSE
+				IF NOT bJogZModeInchingNew THEN
+					rJogZDistance := 999999.9;
+				END_IF
+			END_IF
+		END_IF
+		
+		IF bJogZ THEN	//Aktion schon akiv
+			//nJogDirection = 0 oder bleibt oder neuer und alter JogMode = Continous
+			IF NOT ((eJogZDirectionNew = E_MoveDirection.DIRECTION_STOP) OR 
+					((eJogZDirectionNew = eJogZDirection) AND
+					(bJogZModeInchingNew = FALSE AND bJogZModeInching = FALSE))) THEN
+				RETURN;
+			END_IF
+ 		END_IF
+	
+		eJogZDirection := eJogZDirectionNew;
+		bJogZModeInching := bJogZModeInchingNew;
+		
+		//In LinkedListCtrl eintragen - wenn schon vorhanden, dann überschreiben!!
+		getPosPtr := 0;	//nach vorhandenem Eintrag suchen - beginnen an Anfang
+		fbList.A_FindNext(hList := hList, putPosPtr := getPosPtr, putValue := E_Action.ACTION_Jog, getValue=>getValue, getPosPtr=>getPosPtr );
+
+		IF NOT fbList.bOk THEN	//Eintrag wurde nicht gefunden
+			//Übeprüfen, ob Achse referenziert
+			 IF NOT pZAxisRef^.stStatus.bIsHomed THEN
+				M_ExeAction := E_ErrorIdMultiZ.ERRORID_AxisNotHomed;
+				RETURN;
+			 END_IF
+			bJogZ := TRUE;
+			bJogZImpuls := TRUE;
+			bJogZClock := TRUE;			
+			fbList.A_AddHeadValue(hList := hList, putValue := E_Action.ACTION_Jog);
+			bBusy := TRUE;
+		ELSE	//Eintrag wurde gefunden
+			bJogZClock := NOT bJogZClock;
+			bJogZImpuls := TRUE;
+		END_IF
+	
+	E_Action.ACTION_MoveZ:
+		IF NOT bMoveZ THEN
+			//Checken, ob Achse initialisiert
+			IF NOT P_bIsInit THEN
+				M_ExeAction := E_ErrorIdCmd.ERRORID_DeviceNotInitialized;
+				RETURN;
+			END_IF
+			
+			//Check MoveMode nicht notwendig, da für Z alle zulässig sind
+			eMoveModeZ := DINT_TO_USINT(refActionData.aParams[1]);
+			
+			IF eMoveModeZ = E_MoveMode.MODE_Free AND bDisableFreeMove THEN
+				bDisableFreeMove := FALSE;
+				RETURN;
+			END_IF
+			
+			bDisableFreeMove := FALSE;
+			
+			//Action darf nicht ausgeführt werden wenn:
+			IF eObjectType = E_ObjectType.OBJECTTYPE_MZHead THEN
+				//Head darf nur alle in ihm hängende Tools freifahren oder auf "0" fahren
+				IF eMoveModeZ = E_MoveMode.MODE_Free OR eMoveModeZ = E_MoveMode.MODE_Home THEN
+					bMoveZ := TRUE;			
+					fbList.A_AddHeadValue(hList := hList, putValue := E_Action.ACTION_MoveZ);
+				ELSE
+					M_ExeAction := E_ErrorIdObjMgmt.ERRORID_IsNoMzTool;
+					RETURN;
+				END_IF
+			ELSE
+				IF bZIsMoving THEN	//Z-Achse selber schon in Bewegung
+					M_ExeAction := E_ErrorIdMultiZ.ERRORID_MultiZIsStillMoving;
+					RETURN;
+				ELSIF pParentMzTool^.P_bXYIsMoving THEN	//Kopf ist in XY schon in Bewegung (hier sind allerding die Home und Free Modi erlaubt)
+					IF NOT (eMoveModeZ = E_MoveMode.MODE_Free OR eMoveModeZ = E_MoveMode.MODE_Home) THEN
+						M_ExeAction := E_ErrorIdMultiZ.ERRORID_MultiZIsStillMoving;
+						RETURN;
+					END_IF
+				ELSIF NOT pZAxisRef^.stStatus.bIsHomed THEN //sie nicht referenziert ist
+					M_ExeAction := E_ErrorIdMultiZ.ERRORID_AxisNotHomed;
+					RETURN;
+				END_IF
+				
+				rMovePositionZ := DINT_TO_REAL(refActionData.aParams[2]);
+				
+				//"E_MoveMode.MODE_Measure" nur für ZSensor zulässig
+				IF eMoveModeZ = E_MoveMode.MODE_Measure THEN
+				  IF eObjectType = E_ObjectType.OBJECTTYPE_ZSensor THEN
+					 //Im Mode "Measure" ist die MovePos negativ (Vermessung nach unten)
+					 //falls die MovePos außerhalb der Erreichbarkeit der Achse liegt, dann auf MinPos beschränken
+					 //ist notwendig, da der ZSensor zum Vermessen etwas tiefer fahren muss als das Target liegt
+					 //und bei Targets, die geradeso erreichbar wären, ein Limit-Error auftreten würde
+					 //siehe ToDo #465
+					 rMovePositionZ := MAX((pZAxisRef^.P_rMinPos - pZAxisRef^.P_rCurrentPos),rMovePositionZ);
+				  ELSE
+					M_ExeAction := E_ErrorIdCmd.ERRORID_InvalidMoveMode;
+					RETURN;
+				  END_IF
+				END_IF
+	
+				//Position auf Limits checken
+				IF NOT M_CheckMoveLimit(sAxis:= 'Z', eMoveMode:= eMoveModeZ,rMovePosition:= rMovePositionZ) THEN
+					M_ExeAction := E_ErrorIdCmd.ERRORID_TargetPosOutOfRangeZ;
+					RETURN;
+				END_IF
+				
+				rMoveSpeedZ := MIN(DINT_TO_REAL(refActionData.aParams[3]),pZAxisRef^.P_rMaxSpeed);
+				
+				 //Geschwindigkeitsangabe -1 = max. Geschwindigkeit
+				IF rMoveSpeedZ < 0 OR eMoveModeZ = E_MoveMode.MODE_Home OR eMoveModeZ = E_MoveMode.MODE_Free THEN
+					rMoveSpeedZ := pZAxisRef^.P_rMaxSpeed;
+				END_IF
+				
+				stAreaCollFree.X1 := DINT_TO_REAL(refActionData.aParams[4]);
+				stAreaCollFree.X2 := DINT_TO_REAL(refActionData.aParams[5]);
+				stAreaCollFree.Y1 := DINT_TO_REAL(refActionData.aParams[6]);
+				stAreaCollFree.Y2 := DINT_TO_REAL(refActionData.aParams[7]);
+				
+				bZIsMoving := TRUE;
+				bMoveZ := TRUE;			
+				fbList.A_AddHeadValue(hList := hList, putValue := E_Action.ACTION_MoveZ);
+			END_IF
+		ELSE
+			M_ExeAction := E_ErrorIdCmd.ERRORID_BasicActionActive;  //Error
+			RETURN;				
+		END_IF
+	ELSE
+		M_ExeAction := SUPER^.M_ExeAction(refActionData);
+		RETURN;;
+END_CASE
+
+eCurrentState := E_MachineState.MACHINESTATE_Active;
+bBusy := TRUE;]]></ST>
+      </Implementation>
+    </Method>
+    <Method Name="M_GetAllProps" Id="{fa201724-541c-4544-ae08-4c27d0649703}">
+      <Declaration><![CDATA[METHOD M_GetAllProps : ERRORID
+VAR_INPUT
+	refCmdData : REFERENCE TO  ST_CmdData;
+END_VAR
+]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[//Basisproperties lesen
+SUPER^.M_GetAllProps(refCmdData);
+
+refCmdData.n32Data[0] := pParentMzTool^.P_nObjectID;
+
+IF pParentSlot > 0 THEN
+	refCmdData.n32Data[1] := pParentSlot^.P_nNr;
+ELSE
+	refCmdData.n32Data[1] := 0;
+END_IF
+
+ 
+]]></ST>
+      </Implementation>
+    </Method>
+    <Method Name="M_GetClosestTool" Id="{dc83ee4b-861c-4f28-954d-b6e6812913fd}">
+      <Declaration><![CDATA[METHOD M_GetClosestTool : POINTER TO FB_MzTool
+VAR_INPUT
+	bAllOnAxis : BOOL; //Es werden alle Tools an der selben Achse betrachtet, ansonsten werden nur das Tool selber und seine Childs betrachtet	
+END_VAR
+
+VAR
+	pTempTool : POINTER TO FB_MzTool;
+	pTempTool2 : POINTER TO FB_MzTool;
+	iter : FB_ObjCollectIteratorDeep;
+	stAbsPosTemp : ST_3DPoint;
+	stAbsPosTemp2 : ST_3DPoint;
+END_VAR
+
+]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[IF bAllOnAxis THEN
+	pTempTool := P_pUpperParentTool;
+ELSE
+	pTempTool := THIS;
+END_IF
+stAbsPosTemp := pTempTool^.P_stAbsPosPhys;
+pTempTool^.P_pObjCollectNode^.nodes.M_GetIterator(iter);
+WHILE iter.pNode > 0 DO
+	IF iter.pNode^.P_pObject > 0 AND_THEN iter.pNode^.P_pObject^.M_bIsGroup(E_ObjectGroup.OBJECTGROUP_MzTool) THEN
+		pTempTool2 := iter.pNode^.P_pObject;
+		//Falls das Tool ein ZSensor ist, wird es nur beachtet wenn er auch angebaut ist.
+		IF pTempTool2^.P_eObjectType <> E_ObjectType.OBJECTTYPE_ZSensor OR pTempTool2^.P_bSensorMounted THEN
+			stAbsPosTemp2 := pTempTool2^.P_stAbsPosPhys;
+			IF stAbsPosTemp2.Z < stAbsPosTemp.Z THEN
+				stAbsPosTemp := stAbsPosTemp2;
+				pTempTool := pTempTool2;
+			END_IF			
+		END_IF
+	END_IF
+	iter.M_Increment();
+END_WHILE
+M_GetClosestTool := pTempTool;
+
+]]></ST>
+      </Implementation>
+    </Method>
+    <Method Name="M_GetMaxSpeed" Id="{0a1ccfa8-1f3d-4caa-8620-88da636f0e1d}">
+      <Declaration><![CDATA[METHOD M_GetMaxSpeed : REAL
+VAR_INPUT
+	eDirection : E_MoveDirection;
+END_VAR
+]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[IF eDirection = E_MoveDirection.DIRECTION_ZMINUS OR eDirection = E_MoveDirection.DIRECTION_ZPLUS THEN
+	IF pZAxisRef > 0 THEN
+		M_GetMaxSpeed := pZAxisRef^.P_rMaxSpeed;
+	END_IF
+ELSE
+	M_GetMaxSpeed := SUPER^.M_GetMaxSpeed(eDirection);
+END_IF]]></ST>
+      </Implementation>
+    </Method>
+    <Method Name="M_GetMinMaxActPos" Id="{db301806-1d76-4b87-8d00-aff455737f8b}">
+      <Declaration><![CDATA[METHOD M_GetMinMaxActPos
+VAR_INPUT
+	pData : POINTER TO ARRAY[0..19] OF DINT;
+END_VAR
+VAR
+	stCurrPosTotal : ST_3DPoint;
+END_VAR]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[SUPER^.M_GetMinMaxActPos(pData);
+
+//Z weiter verrechnen
+pData^[4] := pData^[4] + REAL_TO_DINT(pZAxisRef^.P_rMinPos);
+pData^[5] := pData^[5] + REAL_TO_DINT(pZAxisRef^.P_rMaxPos);
+stCurrPosTotal := P_stCurrentPosTotal;
+pData^[6] := REAL_TO_DINT(stCurrPosTotal.X);
+pData^[7] := REAL_TO_DINT(stCurrPosTotal.Y);
+pData^[8] := REAL_TO_DINT(stCurrPosTotal.Z);]]></ST>
+      </Implementation>
+    </Method>
+    <Method Name="M_GetNozzle" Id="{df28c69e-e341-4805-9b2d-2eb85ee196a4}">
+      <Declaration><![CDATA[METHOD M_GetNozzle : POINTER TO FB_Nozzle
+VAR_INPUT
+END_VAR
+
+VAR
+	the: INT;
+END_VAR]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[IF pPiece > 0 THEN
+	IF pPiece^.P_eObjectType = E_ObjectType.OBJECTTYPE_Nozzle THEN
+		M_GetNozzle := pPiece;
+	END_IF
+END_IF]]></ST>
+      </Implementation>
+    </Method>
+    <Method Name="M_GetZAxisRef" Id="{6bc36e3f-1dcd-4fa1-8a87-39e322e75527}">
+      <Declaration><![CDATA[METHOD M_GetZAxisRef : POINTER TO FB_ZAxisRef
+VAR_INPUT
+	pTool : POINTER TO FB_MzTool;
+	pToolSlot : POINTER TO FB_Slot;
+END_VAR
+]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[M_GetZAxisRef := pParentMzTool^.M_GetZAxisRef(pTool, pParentSlot);]]></ST>
+      </Implementation>
+    </Method>
+    <Method Name="M_RawPosToRealPos" Id="{94bc8f7b-c736-4ce4-99cc-e5a6a6f15375}">
+      <Declaration><![CDATA[METHOD M_RawPosToRealPos : ST_3DPoint
+VAR_INPUT
+	stRawPos : ST_3DPoint;
+END_VAR
+
+VAR
+	stTemp		: ST_3DPoint;
+	stAbsPos : ST_3DPoint;
+END_VAR]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[stAbsPos := P_stAbsPosTotal;
+stTemp.X := stRawPos.X + stAbsPos.X;
+stTemp.Y := stRawPos.Y + stAbsPos.Y;
+stTemp.Z := stAbsPos.Z - stRawPos.Z;
+M_RawPosToRealPos := stTemp;]]></ST>
+      </Implementation>
+    </Method>
+    <Method Name="M_RemoveChild" Id="{5440a1e0-80ae-409a-9263-8b98b79e27d5}">
+      <Declaration><![CDATA[METHOD M_RemoveChild : ERRORID
+VAR_INPUT
+	pObject	: POINTER TO FB_Object;
+END_VAR
+
+VAR
+END_VAR]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[M_RemoveChild := SUPER^.M_RemoveChild(pObject);
+IF M_RemoveChild = 0 AND pObject^.M_bIsGroup(E_ObjectGroup.OBJECTGROUP_Piece) THEN
+	pPiece := 0;
+END_IF]]></ST>
+      </Implementation>
+    </Method>
+    <Method Name="M_SetAllProps" Id="{77a4b4ba-ecf8-4cd6-9222-0ac35da79600}">
+      <Declaration><![CDATA[METHOD M_SetAllProps : ERRORID
+VAR_INPUT
+	refCmdData : REFERENCE TO  ST_CmdData;
+END_VAR]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[M_SetAllProps := SUPER^.M_SetAllProps(refCmdData);
+IF M_SetAllProps > 0 THEN
+	RETURN;
+END_IF
+
+//ZAxisRef vom Parent holen
+pZAxisRef := pParentMzTool^.M_GetZAxisRef(THIS, pParentSlot);
+
+IF pZAxisRef = 0 THEN
+	M_SetAllProps := E_ErrorIdObjMgmt.ERRORID_InvalidAxisRef;
+	RETURN;
+END_IF
+
+pZAxisRef^.bHasTool := TRUE;
+
+pXDrive := pParentMzTool^.P_pXDrive;
+pYDrive := pParentMzTool^.P_pYDrive;
+pFbMultiZ := pParentMzTool^.P_pFbMultiZ;]]></ST>
+      </Implementation>
+    </Method>
+    <Method Name="M_SetCurrentPos" Id="{71125da6-2793-48f6-8834-944d7749555b}">
+      <Declaration><![CDATA[METHOD M_SetCurrentPos
+VAR_INPUT
+	nDimension : USINT;
+	rValue : REAL;
+END_VAR
+
+VAR
+	rAbsPos : REAL;
+	stAbsPosParent : ST_3DPoint;
+	stHelpPoint : ST_3DPoint;
+END_VAR]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[IF nDimension = 1 THEN //X
+	rAbsPos := rValue - pXDrive^.P_rActPos;
+	stOffset.X := 0;
+	IF pParentMzTool > 0 THEN
+		stAbsPosParent := pParentMzTool^.P_stAbsPosTotal;
+	END_IF
+	stRelPos.X := rAbsPos - stAbsPosParent.X;
+ELSIF nDimension = 2 THEN //Y
+	rAbsPos := rValue - pYDrive^.P_rActPos;
+	stOffset.Y := 0;
+	IF pParentMzTool > 0 THEN
+		stAbsPosParent := pParentMzTool^.P_stAbsPosTotal;
+	END_IF
+	stRelPos.Y := rAbsPos - stAbsPosParent.Y;
+ELSIF nDimension = 3 THEN //Z
+	stOffset.Z := 0;
+	stHelpPoint := P_stAbsPosTotal;
+	IF eObjectType <> E_ObjectType.OBJECTTYPE_MZHead THEN
+		IF pParentMzTool > 0 THEN
+			stAbsPosParent := pParentMzTool^.P_stAbsPosTotal;
+		END_IF
+		rAbsPos := pZAxisRef^.P_rCurrentPos + rValue;
+	END_IF
+	stRelPos.Z := rAbsPos - stAbsPosParent.Z;
+END_IF]]></ST>
+      </Implementation>
+    </Method>
+    <Method Name="M_UpdateParent" Id="{662dfd38-8b8c-4778-808b-3953bb9f0d4a}">
+      <Declaration><![CDATA[METHOD M_UpdateParent
+VAR_INPUT
+END_VAR
+
+VAR
+	pObject : POINTER TO FB_Object;
+END_VAR]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[IF pObjCollectNode > 0 AND_THEN pObjCollectNode^.pOwnerColl > 0 THEN
+	pObject := pObjCollectNode^.P_pOwnerColl^.pOwnerNode^.P_pObject;	
+END_IF
+
+IF pObject > 0 THEN
+	pParentMzTool := pObject;
+	pParentSlot := pObject^.M_GetSlotFromChild(THIS);
+ELSE
+	pParentMzTool := 0;
+	pParentSlot := 0;
+END_IF
+ ]]></ST>
+      </Implementation>
+    </Method>
+    <Property Name="P_bCollFree" Id="{fd35c421-fbb4-4937-b32b-a8d16ecb8443}">
+      <Declaration><![CDATA[PROPERTY P_bCollFree : BOOL]]></Declaration>
+      <Get Name="Get" Id="{771ac373-6282-4b97-bf72-0f744135adc6}">
+        <Declaration><![CDATA[VAR
+	st3DPoint 		: ST_3DPoint;
+	rAbsZOffsetHead	: REAL;
+END_VAR
+]]></Declaration>
+        <Implementation>
+          <ST><![CDATA[//Ermittlung, ob Tool in kollisionsfreiem Bereich
+//Kollisionsfreihheit ist gegeben, wenn Unterkante Z-Wert von Tool >= kollissiongefährdete Höhe Workplate
+//MzHead und die Tools unterhalb der Workplate sind immer kollisionsfrei
+IF eObjectType = E_ObjectType.OBJECTTYPE_MZHead THEN
+	P_bCollFree := TRUE;
+ELSE
+	IF NOT P_pMzHead^.P_bIsTopHead THEN
+		P_bCollFree := TRUE;
+		RETURN;
+	END_IF
+	
+	IF NOT bInitAxisOk THEN
+		P_bCollFree := FALSE;
+		RETURN;
+	END_IF
+	
+	//Aktuelle Position Tool ermitteln
+	st3DPoint := P_stCurrentPosPhys;
+	st3DPoint.Z := st3DPoint.Z + 11;
+	IF st3DPoint.Z >  pAssignWorkplate^.P_rCollHeight THEN
+		P_bCollFree := TRUE;
+	END_IF
+	
+END_IF
+]]></ST>
+        </Implementation>
+      </Get>
+    </Property>
+    <Property Name="P_bIsInit" Id="{e57ff160-5563-4593-9eca-095895752752}">
+      <Declaration><![CDATA[PROPERTY P_bIsInit : BOOL]]></Declaration>
+      <Get Name="Get" Id="{1bbf8558-8e09-45db-a89c-2df7d75de5dc}">
+        <Declaration><![CDATA[VAR
+END_VAR
+]]></Declaration>
+        <Implementation>
+          <ST><![CDATA[P_bIsInit := bInitAxisOk AND pZAxisRef^.stStatus.bIsHomed;]]></ST>
+        </Implementation>
+      </Get>
+    </Property>
+    <Property Name="P_bIsMESTool" Id="{e352bd93-4101-4e2a-b4bc-d86ca0c23717}">
+      <Declaration><![CDATA[PROPERTY P_bIsMESTool : BOOL]]></Declaration>
+      <Get Name="Get" Id="{5a82ca18-6e11-441e-8966-7da5742f2658}">
+        <Declaration><![CDATA[VAR
+END_VAR
+]]></Declaration>
+        <Implementation>
+          <ST><![CDATA[P_bIsMESTool := bIsMESTool;]]></ST>
+        </Implementation>
+      </Get>
+    </Property>
+    <Property Name="P_bSensorMounted" Id="{5656fc85-9b6e-439b-bdfe-9a3d9808dbe0}">
+      <Declaration><![CDATA[PROPERTY P_bSensorMounted : BOOL]]></Declaration>
+      <Get Name="Get" Id="{91d82d8f-2a7a-414e-bd66-08f8fb66bfd4}">
+        <Declaration><![CDATA[VAR
+END_VAR
+]]></Declaration>
+        <Implementation>
+          <ST><![CDATA[]]></ST>
+        </Implementation>
+      </Get>
+    </Property>
+    <Property Name="P_bXYIsMoving" Id="{ee6b196e-0005-4e68-9708-e0e2dccc8b9d}">
+      <Declaration><![CDATA[PROPERTY P_bXYIsMoving : BOOL]]></Declaration>
+      <Get Name="Get" Id="{b6efbedb-d006-4512-90c9-938a3c34179f}">
+        <Declaration><![CDATA[VAR
+	i		: UINT;
+	bTemp	: BOOL;
+END_VAR
+]]></Declaration>
+        <Implementation>
+          <ST><![CDATA[P_bXYIsMoving:= bXYIsMoving;]]></ST>
+        </Implementation>
+      </Get>
+      <Set Name="Set" Id="{010556c7-25d8-481a-8f65-7f8e20d17373}">
+        <Declaration><![CDATA[VAR
+END_VAR
+]]></Declaration>
+        <Implementation>
+          <ST><![CDATA[bXYIsMoving := P_bXYIsMoving; ]]></ST>
+        </Implementation>
+      </Set>
+    </Property>
+    <Property Name="P_nParentObjectId" Id="{e2d26a73-ea54-4219-9541-7eeb8f156127}">
+      <Declaration><![CDATA[PROPERTY P_nParentObjectId : UINT]]></Declaration>
+      <Get Name="Get" Id="{7a425497-0bb2-4b71-9090-3512a838e6ea}">
+        <Declaration><![CDATA[VAR
+END_VAR
+]]></Declaration>
+        <Implementation>
+          <ST><![CDATA[IF pParentMzTool > 0 THEN
+	P_nParentObjectId := pParentMzTool^.P_nObjectID;
+END_IF
+ ]]></ST>
+        </Implementation>
+      </Get>
+    </Property>
+    <Property Name="P_nReducedMoveZDist" Id="{b45b1bfb-97d5-4ab7-9f38-9f7e7fd84f54}">
+      <Declaration><![CDATA[PROPERTY P_nReducedMoveZDist : DINT]]></Declaration>
+      <Get Name="Get" Id="{d6cb7eda-f959-4ba8-a4af-794fc63ffca4}">
+        <Declaration><![CDATA[VAR
+END_VAR
+]]></Declaration>
+        <Implementation>
+          <ST><![CDATA[P_nReducedMoveZDist := nReducedMoveZDist;]]></ST>
+        </Implementation>
+      </Get>
+      <Set Name="Set" Id="{6b691169-97a0-462e-874c-88f23afa01c3}">
+        <Declaration><![CDATA[VAR
+END_VAR
+]]></Declaration>
+        <Implementation>
+          <ST><![CDATA[nReducedMoveZDist := P_nReducedMoveZDist;]]></ST>
+        </Implementation>
+      </Set>
+    </Property>
+    <Property Name="P_nReducedMoveZSpeed" Id="{961ac923-40ec-458f-af75-6f37c7e4ce90}">
+      <Declaration><![CDATA[PROPERTY P_nReducedMoveZSpeed : DINT]]></Declaration>
+      <Get Name="Get" Id="{e345d614-3de8-47f0-a320-0a3c0d685896}">
+        <Declaration><![CDATA[VAR
+END_VAR
+]]></Declaration>
+        <Implementation>
+          <ST><![CDATA[P_nReducedMoveZSpeed := nReducedMoveZSpeed;]]></ST>
+        </Implementation>
+      </Get>
+      <Set Name="Set" Id="{d7c2501c-0884-42f0-925e-3ee449e1fd09}">
+        <Declaration><![CDATA[VAR
+END_VAR
+]]></Declaration>
+        <Implementation>
+          <ST><![CDATA[nReducedMoveZSpeed := P_nReducedMoveZSpeed;]]></ST>
+        </Implementation>
+      </Set>
+    </Property>
+    <Property Name="P_nZAxisNr" Id="{a5912562-efc0-4f0e-a10f-27c8c33eff43}">
+      <Declaration><![CDATA[PROPERTY P_nZAxisNr : USINT]]></Declaration>
+      <Get Name="Get" Id="{cf71cfa1-bce8-4193-a3a8-93d46e18d8ad}">
+        <Declaration><![CDATA[VAR
+END_VAR
+]]></Declaration>
+        <Implementation>
+          <ST><![CDATA[IF pZAxisRef > 0 THEN
+	P_nZAxisNr := pZAxisRef^.nChannel;
+END_IF]]></ST>
+        </Implementation>
+      </Get>
+    </Property>
+    <Property Name="P_pMzHead" Id="{d6946f01-10ec-44bc-82d9-bb7f8248ffd4}">
+      <Declaration><![CDATA[PROPERTY P_pMzHead : POINTER TO FB_MzHead]]></Declaration>
+      <Get Name="Get" Id="{8b378295-657b-4a1b-b621-b7b6b833c80d}">
+        <Declaration><![CDATA[VAR
+END_VAR
+]]></Declaration>
+        <Implementation>
+          <ST><![CDATA[P_pMzHead := pParentMzTool^.P_pMzHead;]]></ST>
+        </Implementation>
+      </Get>
+    </Property>
+    <Property Name="P_pParentMzTool" Id="{a4604c73-5848-471e-b049-f77fead5a7d4}">
+      <Declaration><![CDATA[PROPERTY P_pParentMzTool : POINTER TO FB_MzBase]]></Declaration>
+      <Get Name="Get" Id="{e03b9502-6269-45dc-a841-e7e83a537faa}">
+        <Declaration><![CDATA[VAR
+END_VAR
+]]></Declaration>
+        <Implementation>
+          <ST><![CDATA[P_pParentMzTool := pParentMzTool;]]></ST>
+        </Implementation>
+      </Get>
+    </Property>
+    <Property Name="P_pUpperParentTool" Id="{f0ac7dbf-2486-4a44-971c-a5e727b8e765}">
+      <Declaration><![CDATA[//Das Tool, was als Parent den Head hat bzw. direkt an der Achse befindet
+PROPERTY P_pUpperParentTool : POINTER TO FB_MzTool]]></Declaration>
+      <Get Name="Get" Id="{e4240c03-6a89-4e31-a643-f567c2690628}">
+        <Declaration><![CDATA[VAR
+	pTool : POINTER TO FB_MzTool;
+END_VAR
+]]></Declaration>
+        <Implementation>
+          <ST><![CDATA[IF pParentMzTool^.P_eObjectType = E_ObjectType.OBJECTTYPE_MZHead THEN
+	P_pUpperParentTool := THIS;
+ELSE
+	pTool := pParentMzTool;
+	P_pUpperParentTool := pTool^.P_pUpperParentTool;
+END_IF]]></ST>
+        </Implementation>
+      </Get>
+    </Property>
+    <Property Name="P_pZAxisRef" Id="{80ce9f15-f5e5-47fc-bd90-71374cbb9fcd}">
+      <Declaration><![CDATA[PROPERTY P_pZAxisRef : POINTER TO FB_ZAxisRef]]></Declaration>
+      <Get Name="Get" Id="{a924c3a1-18e5-4c5f-b87f-23bfad2eb2e3}">
+        <Declaration><![CDATA[VAR
+END_VAR
+]]></Declaration>
+        <Implementation>
+          <ST><![CDATA[P_pZAxisRef := pZAxisRef;]]></ST>
+        </Implementation>
+      </Get>
+    </Property>
+    <Property Name="P_rToolRadius" Id="{699da09b-d3fa-490d-9904-e64d414ff74a}">
+      <Declaration><![CDATA[PROPERTY P_rToolRadius : REAL]]></Declaration>
+      <Get Name="Get" Id="{dd03e77c-26e5-439a-9e4b-a3f29844f35c}">
+        <Declaration><![CDATA[VAR
+	stDim : ST_3DDimension;
+END_VAR
+]]></Declaration>
+        <Implementation>
+          <ST><![CDATA[//Manche abgeleitete Tools definieren ihren eigenen Tool-Radius
+IF pPiece > 0 THEN
+	stDim := pPiece^.P_stDimension;
+	P_rToolRadius := stDim.Width / 2.0;
+ELSE
+	P_rToolRadius := 10000.0;	
+END_IF]]></ST>
+        </Implementation>
+      </Get>
+    </Property>
+    <Property Name="P_stAbsPosPhys" Id="{5599b342-d998-44ea-bf15-7bf33080e3f5}">
+      <Declaration><![CDATA[PROPERTY P_stAbsPosPhys : ST_3DPoint]]></Declaration>
+      <Get Name="Get" Id="{68317d0c-6560-4849-8cc9-8ca5e48474a0}">
+        <Declaration><![CDATA[VAR
+	stTemp	: ST_3DPoint;
+	stDim	: ST_3DDimension;
+END_VAR
+]]></Declaration>
+        <Implementation>
+          <ST><![CDATA[//Die absolute Postion eines Tool in "Z" hat nicht den gleichen Bezug wie X und Y
+//X und Y beziehen sich auf den Koordinatenursprung, wenn die Achsen theoretisch aus Antrieb (0;0) stehen
+//Z bezieht sich auf die Sliderunterkante des Z-Antriebes verechnet mit AbsPos vom Head(Ergebnis ist in den meisten Fällen negativ)
+
+stTemp := F_Add3DPoints(stRelPos,stOffset);
+//Offsets der Pieces verrechnen
+IF pPiece > 0 THEN
+	stDim := pPiece^.P_stDimension;
+	IF NOT pPiece^.P_bIgnoreOffset THEN
+		stTemp := F_Add3DPoints(stTemp,pPiece^.P_stOffset);	
+	END_IF
+	stTemp.Z := stTemp.Z + pPiece^.P_rZOverlapTool - stDim.Height;
+	IF pPiece^.P_pParentSlot > 0 THEN
+		stTemp := F_Add3DPoints(stTemp,pPiece^.P_pParentSlot^.P_stRelPos);
+	END_IF
+END_IF
+//AbsPos vom ParentSlot holen
+IF pParentSlot > 0 THEN
+	stTemp := F_Add3DPoints(stTemp,pParentSlot^.P_stAbsPos);
+END_IF
+
+P_stAbsPosPhys := stTemp;]]></ST>
+        </Implementation>
+      </Get>
+    </Property>
+    <Property Name="P_stAbsPosPhysExclPiece" Id="{05041368-fa69-4523-976d-dfa9118de286}">
+      <Declaration><![CDATA[PROPERTY P_stAbsPosPhysExclPiece : ST_3DPoint]]></Declaration>
+      <Get Name="Get" Id="{d7903e48-e77e-4181-bd62-2ad2614615dd}">
+        <Declaration><![CDATA[VAR
+	stTemp	: ST_3DPoint;
+END_VAR
+]]></Declaration>
+        <Implementation>
+          <ST><![CDATA[//Die absolute Postion eines Tool in "Z" hat nicht den gleichen Bezug wie X und Y
+//X und Y beziehen sich auf den Koordinatenursprung, wenn die Achsen theoretisch aus Antrieb (0;0) stehen
+//Z bezieht sich auf die Sliderunterkante des Z-Antriebes verechnet mit AbsPos vom Head(Ergebnis ist in den meisten Fällen negativ)
+
+stTemp := F_Add3DPoints(stRelPos,stOffset);
+//AbsPos vom ParentSlot holen
+IF pParentSlot > 0 THEN
+	stTemp := F_Add3DPoints(stTemp,pParentSlot^.P_stAbsPos);
+END_IF
+
+P_stAbsPosPhysExclPiece := stTemp;]]></ST>
+        </Implementation>
+      </Get>
+    </Property>
+    <Property Name="P_stCurrentPosPhys" Id="{46d9fc97-0df4-4bdb-a54b-a49821b2afd3}">
+      <Declaration><![CDATA[PROPERTY P_stCurrentPosPhys : ST_3DPoint]]></Declaration>
+      <Get Name="Get" Id="{cc78202b-f575-4b08-865f-704a133e2335}">
+        <Declaration><![CDATA[VAR
+	stTemp		: ST_3DPoint;
+	stAbsPos : ST_3DPoint;
+END_VAR
+]]></Declaration>
+        <Implementation>
+          <ST><![CDATA[stAbsPos := P_stAbsPosPhys;
+stTemp.X := pXDrive^.P_rActPos + stAbsPos.X;
+stTemp.Y := pYDrive^.P_rActPos + stAbsPos.Y;
+
+IF pZAxisRef > 0  THEN
+	stTemp.Z := stAbsPos.Z + pZAxisRef^.P_rCurrentPos;
+END_IF
+P_stCurrentPosPhys := stTemp;
+ 
+]]></ST>
+        </Implementation>
+      </Get>
+    </Property>
+    <Property Name="P_stCurrentXYArea" Id="{9e4cea2b-6cfd-418f-a0d7-d59a4f73b73b}">
+      <Declaration><![CDATA[PROPERTY P_stCurrentXYArea : FB_RectAngle]]></Declaration>
+      <Get Name="Get" Id="{c8e457c8-43f0-4360-8dd8-88418c004958}">
+        <Declaration><![CDATA[VAR
+	stPoint : ST_3DPoint;
+END_VAR
+]]></Declaration>
+        <Implementation>
+          <ST><![CDATA[stPoint := P_stCurrentPosPhys;
+P_stCurrentXYArea.X1 := stPoint.X - 1.0;
+P_stCurrentXYArea.X2 := stPoint.X + 1.0;
+P_stCurrentXYArea.Y1 := stPoint.Y - 1.0;
+P_stCurrentXYArea.Y2 := stPoint.Y + 1.0;]]></ST>
+        </Implementation>
+      </Get>
+    </Property>
+    <LineIds Name="FB_MzTool">
+      <LineId Id="3" Count="26" />
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="FB_MzTool.A_Init">
+      <LineId Id="2" Count="66" />
+      <LineId Id="1" Count="0" />
+    </LineIds>
+    <LineIds Name="FB_MzTool.A_JogZ">
+      <LineId Id="2" Count="82" />
+      <LineId Id="1" Count="0" />
+    </LineIds>
+    <LineIds Name="FB_MzTool.A_MoveZ">
+      <LineId Id="2" Count="36" />
+      <LineId Id="117" Count="0" />
+      <LineId Id="39" Count="10" />
+      <LineId Id="51" Count="29" />
+      <LineId Id="82" Count="19" />
+      <LineId Id="103" Count="13" />
+      <LineId Id="1" Count="0" />
+    </LineIds>
+    <LineIds Name="FB_MzTool.A_Reset">
+      <LineId Id="2" Count="2" />
+      <LineId Id="6" Count="16" />
+      <LineId Id="1" Count="0" />
+    </LineIds>
+    <LineIds Name="FB_MzTool.A_Stop">
+      <LineId Id="2" Count="11" />
+      <LineId Id="1" Count="0" />
+    </LineIds>
+    <LineIds Name="FB_MzTool.M_AddChild">
+      <LineId Id="8" Count="0" />
+      <LineId Id="16" Count="0" />
+      <LineId Id="9" Count="0" />
+      <LineId Id="20" Count="3" />
+      <LineId Id="42" Count="0" />
+      <LineId Id="44" Count="0" />
+      <LineId Id="55" Count="2" />
+      <LineId Id="59" Count="2" />
+      <LineId Id="58" Count="0" />
+      <LineId Id="43" Count="0" />
+      <LineId Id="25" Count="2" />
+      <LineId Id="29" Count="2" />
+      <LineId Id="33" Count="0" />
+      <LineId Id="11" Count="0" />
+      <LineId Id="15" Count="0" />
+      <LineId Id="12" Count="2" />
+      <LineId Id="10" Count="0" />
+      <LineId Id="7" Count="0" />
+    </LineIds>
+    <LineIds Name="FB_MzTool.M_AnswerSiblingForAction">
+      <LineId Id="5" Count="0" />
+    </LineIds>
+    <LineIds Name="FB_MzTool.M_AskSiblingForAction">
+      <LineId Id="3" Count="16" />
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="FB_MzTool.M_CancelAction">
+      <LineId Id="3" Count="3" />
+      <LineId Id="14" Count="0" />
+      <LineId Id="16" Count="3" />
+      <LineId Id="15" Count="0" />
+      <LineId Id="7" Count="1" />
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="FB_MzTool.M_CheckAction">
+      <LineId Id="9" Count="1" />
+      <LineId Id="22" Count="0" />
+      <LineId Id="30" Count="0" />
+      <LineId Id="35" Count="0" />
+      <LineId Id="37" Count="1" />
+      <LineId Id="15" Count="1" />
+      <LineId Id="11" Count="0" />
+      <LineId Id="14" Count="0" />
+      <LineId Id="12" Count="0" />
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="FB_MzTool.M_CheckMoveLimit">
+      <LineId Id="3" Count="17" />
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="FB_MzTool.M_CheckMoveLimitEx">
+      <LineId Id="20" Count="0" />
+      <LineId Id="19" Count="0" />
+      <LineId Id="21" Count="0" />
+      <LineId Id="27" Count="0" />
+      <LineId Id="24" Count="0" />
+      <LineId Id="29" Count="1" />
+      <LineId Id="35" Count="0" />
+      <LineId Id="32" Count="0" />
+      <LineId Id="37" Count="1" />
+      <LineId Id="43" Count="0" />
+      <LineId Id="36" Count="0" />
+    </LineIds>
+    <LineIds Name="FB_MzTool.M_CheckProps">
+      <LineId Id="3" Count="3" />
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="FB_MzTool.M_ClearAllProps">
+      <LineId Id="60" Count="15" />
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="FB_MzTool.M_ExeAction">
+      <LineId Id="3" Count="12" />
+      <LineId Id="17" Count="16" />
+      <LineId Id="210" Count="1" />
+      <LineId Id="214" Count="0" />
+      <LineId Id="35" Count="15" />
+      <LineId Id="227" Count="0" />
+      <LineId Id="51" Count="0" />
+      <LineId Id="53" Count="1" />
+      <LineId Id="229" Count="0" />
+      <LineId Id="231" Count="1" />
+      <LineId Id="230" Count="0" />
+      <LineId Id="233" Count="0" />
+      <LineId Id="57" Count="1" />
+      <LineId Id="280" Count="0" />
+      <LineId Id="59" Count="2" />
+      <LineId Id="220" Count="2" />
+      <LineId Id="62" Count="0" />
+      <LineId Id="65" Count="4" />
+      <LineId Id="279" Count="0" />
+      <LineId Id="70" Count="39" />
+      <LineId Id="111" Count="50" />
+      <LineId Id="259" Count="1" />
+      <LineId Id="162" Count="1" />
+      <LineId Id="251" Count="1" />
+      <LineId Id="268" Count="3" />
+      <LineId Id="258" Count="0" />
+      <LineId Id="254" Count="3" />
+      <LineId Id="164" Count="0" />
+      <LineId Id="167" Count="2" />
+      <LineId Id="171" Count="4" />
+      <LineId Id="243" Count="0" />
+      <LineId Id="177" Count="5" />
+      <LineId Id="186" Count="4" />
+      <LineId Id="192" Count="13" />
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="FB_MzTool.M_GetAllProps">
+      <LineId Id="3" Count="3" />
+      <LineId Id="25" Count="4" />
+      <LineId Id="8" Count="0" />
+      <LineId Id="14" Count="1" />
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="FB_MzTool.M_GetClosestTool">
+      <LineId Id="82" Count="22" />
+      <LineId Id="5" Count="0" />
+    </LineIds>
+    <LineIds Name="FB_MzTool.M_GetMaxSpeed">
+      <LineId Id="3" Count="5" />
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="FB_MzTool.M_GetMinMaxActPos">
+      <LineId Id="3" Count="3" />
+      <LineId Id="2" Count="0" />
+      <LineId Id="8" Count="3" />
+    </LineIds>
+    <LineIds Name="FB_MzTool.M_GetNozzle">
+      <LineId Id="5" Count="0" />
+      <LineId Id="11" Count="2" />
+      <LineId Id="7" Count="0" />
+    </LineIds>
+    <LineIds Name="FB_MzTool.M_GetZAxisRef">
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="FB_MzTool.M_RawPosToRealPos">
+      <LineId Id="3" Count="3" />
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="FB_MzTool.M_RemoveChild">
+      <LineId Id="3" Count="2" />
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="FB_MzTool.M_SetAllProps">
+      <LineId Id="196" Count="16" />
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="FB_MzTool.M_SetCurrentPos">
+      <LineId Id="3" Count="23" />
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="FB_MzTool.M_UpdateParent">
+      <LineId Id="26" Count="10" />
+      <LineId Id="5" Count="0" />
+    </LineIds>
+    <LineIds Name="FB_MzTool.P_bCollFree.Get">
+      <LineId Id="30" Count="23" />
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="FB_MzTool.P_bIsInit.Get">
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="FB_MzTool.P_bIsMESTool.Get">
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="FB_MzTool.P_bSensorMounted.Get">
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="FB_MzTool.P_bXYIsMoving.Get">
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="FB_MzTool.P_bXYIsMoving.Set">
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="FB_MzTool.P_nParentObjectId.Get">
+      <LineId Id="3" Count="2" />
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="FB_MzTool.P_nReducedMoveZDist.Get">
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="FB_MzTool.P_nReducedMoveZDist.Set">
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="FB_MzTool.P_nReducedMoveZSpeed.Get">
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="FB_MzTool.P_nReducedMoveZSpeed.Set">
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="FB_MzTool.P_nZAxisNr.Get">
+      <LineId Id="3" Count="1" />
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="FB_MzTool.P_pMzHead.Get">
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="FB_MzTool.P_pParentMzTool.Get">
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="FB_MzTool.P_pUpperParentTool.Get">
+      <LineId Id="3" Count="4" />
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="FB_MzTool.P_pZAxisRef.Get">
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="FB_MzTool.P_rToolRadius.Get">
+      <LineId Id="17" Count="5" />
+      <LineId Id="14" Count="0" />
+    </LineIds>
+    <LineIds Name="FB_MzTool.P_stAbsPosPhys.Get">
+      <LineId Id="3" Count="20" />
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="FB_MzTool.P_stAbsPosPhysExclPiece.Get">
+      <LineId Id="3" Count="9" />
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="FB_MzTool.P_stCurrentPosPhys.Get">
+      <LineId Id="3" Count="8" />
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="FB_MzTool.P_stCurrentXYArea.Get">
+      <LineId Id="3" Count="3" />
+      <LineId Id="2" Count="0" />
+    </LineIds>
+  </POU>
+</TcPlcObject>

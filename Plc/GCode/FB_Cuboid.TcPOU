@@ -1,0 +1,249 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<TcPlcObject Version="1.1.0.1" ProductVersion="3.1.4022.12">
+  <POU Name="FB_Cuboid" Id="{54a26e8b-966e-4562-9660-746b8f8ae43a}" SpecialFunc="None">
+    <Declaration><![CDATA[FUNCTION_BLOCK FB_Cuboid
+VAR_INPUT
+END_VAR
+VAR_OUTPUT
+END_VAR
+VAR
+	stRefPoint : ST_3DPoint;
+	//die  4 Eckpunkte
+	aPointsBottom : ARRAY[0..3] OF ST_3DPoint;
+	aPointsTop : ARRAY[0..3] OF ST_3DPoint;
+	lrAngle: LREAL;	//Verdrehung um Z-Achse
+END_VAR]]></Declaration>
+    <Implementation>
+      <ST><![CDATA[]]></ST>
+    </Implementation>
+    <Method Name="M_IsPointInnerXY" Id="{bd0c43b9-b54a-4866-8ce8-533a518c1665}">
+      <Declaration><![CDATA[METHOD M_IsPointInnerXY : BOOL
+VAR_INPUT
+	stTestPoint : ST_3DPoint;
+END_VAR
+VAR
+	A : REAL;	//Fläche
+	i : USINT;
+	p1 : ST_2DPoint;
+	p2 : ST_2DPoint;
+	bFlag : BOOL;	
+END_VAR
+]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[M_IsPointInnerXY := TRUE;
+//jeweils mit allen 4 Seiten des Vierecks und dem Testpunkt ein Dreieck bilden und dessen Flächeninhalt berechen (Vektorprodukt)
+FOR i := 0 TO 3 BY 1 DO
+	p1.X := aPointsBottom[i].X;
+	p1.Y := aPointsBottom[i].Y;
+	IF i = 3 THEN
+		p2.X := aPointsBottom[0].X;
+		p2.Y := aPointsBottom[0].Y;
+	ELSE
+		p2.X := aPointsBottom[i+1].X;
+		p2.Y := aPointsBottom[i+1].Y;
+	END_IF
+	A := 0.5 * (p1.X*p2.Y + p2.X*stTestPoint.Y + stTestPoint.X*p1.Y - p2.X*P1.Y - stTestPoint.X*p2.Y - p1.X*stTestPoint.y);
+	IF A < 0.0 THEN
+		M_IsPointInnerXY := FALSE;
+		RETURN;
+	END_IF
+END_FOR]]></ST>
+      </Implementation>
+    </Method>
+    <Method Name="M_SetDimension" Id="{3bbfc456-bbe0-4d06-b762-f63e37cacf06}">
+      <Declaration><![CDATA[METHOD M_SetDimension
+VAR_INPUT
+	lrX_Min : LREAL;
+	lrX_Max : LREAL;
+	lrY_Min : LREAL;
+	lrY_Max : LREAL;
+	lrZ_Min : LREAL;
+	lrZ_Max : LREAL;
+END_VAR
+VAR
+	i : USINT;
+END_VAR]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[//in XY den Bereich etwas vergrößern (Rundungsfehler und Encoderschwankungen)
+aPointsBottom[0].X := stRefPoint.X + LREAL_TO_REAL(lrX_Min) - 500.0;
+aPointsBottom[0].Y := stRefPoint.Y + LREAL_TO_REAL(lrY_Min) - 500.0;
+aPointsBottom[0].Z := stRefPoint.Z + LREAL_TO_REAL(lrZ_Min);
+
+aPointsBottom[1].X := stRefPoint.X + LREAL_TO_REAL(lrX_Max) + 500.0;
+aPointsBottom[1].Y := stRefPoint.Y + LREAL_TO_REAL(lrY_Min) - 500.0;
+aPointsBottom[1].Z := stRefPoint.Z + LREAL_TO_REAL(lrZ_Min);
+
+aPointsBottom[2].X := stRefPoint.X + LREAL_TO_REAL(lrX_Max) + 500.0;
+aPointsBottom[2].Y := stRefPoint.Y + LREAL_TO_REAL(lrY_Max) + 500.0;
+aPointsBottom[2].Z := stRefPoint.Z + LREAL_TO_REAL(lrZ_Min);
+
+aPointsBottom[3].X := stRefPoint.X + LREAL_TO_REAL(lrX_Min) - 500.0;
+aPointsBottom[3].Y := stRefPoint.Y + LREAL_TO_REAL(lrY_Max) + 500.0;
+aPointsBottom[3].Z := stRefPoint.Z + LREAL_TO_REAL(lrZ_Min);
+
+//Alle 4 Punkte drehen
+FOR i := 0 TO 3 BY 1 DO
+	aPointsBottom[i] := F_RotatePoint(aPointsBottom[i],stRefPoint,lrAngle);
+	aPointsTop[i] := aPointsBottom[i];
+ 	aPointsTop[i].Z := stRefPoint.Z + LREAL_TO_REAL(lrZ_Max);
+END_FOR
+]]></ST>
+      </Implementation>
+    </Method>
+    <Property Name="P_lrAngle" Id="{dd982765-d4a9-4d25-80dc-e630ca1cbe11}">
+      <Declaration><![CDATA[PROPERTY P_lrAngle : LREAL]]></Declaration>
+      <Set Name="Set" Id="{7db52855-1584-48e4-823d-b27a6f5e4349}">
+        <Declaration><![CDATA[VAR
+END_VAR
+]]></Declaration>
+        <Implementation>
+          <ST><![CDATA[lrAngle := P_lrAngle;]]></ST>
+        </Implementation>
+      </Set>
+    </Property>
+    <Property Name="P_rXMax" Id="{23cffe4a-c4f9-4456-90ca-920965f2363d}">
+      <Declaration><![CDATA[PROPERTY P_rXMax : REAL]]></Declaration>
+      <Get Name="Get" Id="{3864db94-50a6-4baa-99fb-5eff93de3160}">
+        <Declaration><![CDATA[VAR
+END_VAR
+]]></Declaration>
+        <Implementation>
+          <ST><![CDATA[P_rXMax := MAX(MAX(MAX(aPointsBottom[0].X,aPointsBottom[1].X),aPointsBottom[2].X),aPointsBottom[3].X);]]></ST>
+        </Implementation>
+      </Get>
+    </Property>
+    <Property Name="P_rXMin" Id="{81e0e3c8-03e4-4fea-918f-12896adf23ee}">
+      <Declaration><![CDATA[PROPERTY P_rXMin : REAL]]></Declaration>
+      <Get Name="Get" Id="{0d47e63e-179e-43d8-a69c-d4ad3edbb74b}">
+        <Declaration><![CDATA[VAR
+END_VAR
+]]></Declaration>
+        <Implementation>
+          <ST><![CDATA[P_rXMin := MIN(MIN(MIN(aPointsBottom[0].X,aPointsBottom[1].X),aPointsBottom[2].X),aPointsBottom[3].X);]]></ST>
+        </Implementation>
+      </Get>
+    </Property>
+    <Property Name="P_rYMax" Id="{4b0b7622-8fec-4b98-9bcd-11a48e7b038a}">
+      <Declaration><![CDATA[PROPERTY P_rYMax : REAL]]></Declaration>
+      <Get Name="Get" Id="{d138dfb5-fef9-439e-a4ba-138072cbf2fc}">
+        <Declaration><![CDATA[VAR
+END_VAR
+]]></Declaration>
+        <Implementation>
+          <ST><![CDATA[P_rYMax := MAX(MAX(MAX(aPointsBottom[0].Y,aPointsBottom[1].Y),aPointsBottom[2].Y),aPointsBottom[3].Y);]]></ST>
+        </Implementation>
+      </Get>
+    </Property>
+    <Property Name="P_rYMin" Id="{3e35aa2f-26d9-4c6b-aeb4-a71203980106}">
+      <Declaration><![CDATA[PROPERTY P_rYMin : REAL]]></Declaration>
+      <Get Name="Get" Id="{ccd8c06d-bc44-4cae-8028-77f91c802a4d}">
+        <Declaration><![CDATA[VAR
+END_VAR
+]]></Declaration>
+        <Implementation>
+          <ST><![CDATA[P_rYMin := MIN(MIN(MIN(aPointsBottom[0].Y,aPointsBottom[1].Y),aPointsBottom[2].Y),aPointsBottom[3].Y);]]></ST>
+        </Implementation>
+      </Get>
+    </Property>
+    <Property Name="P_rZMax" Id="{4234bc43-c2b1-48b5-97a7-d32127131072}">
+      <Declaration><![CDATA[PROPERTY P_rZMax : REAL]]></Declaration>
+      <Get Name="Get" Id="{d571a4ee-29c7-48d4-8e8c-aabf17ee08d7}">
+        <Declaration><![CDATA[VAR
+END_VAR
+]]></Declaration>
+        <Implementation>
+          <ST><![CDATA[P_rZMax := aPointsTOP[0].Z;]]></ST>
+        </Implementation>
+      </Get>
+    </Property>
+    <Property Name="P_rZMin" Id="{6e71def0-d242-4292-afd8-92c136113887}">
+      <Declaration><![CDATA[PROPERTY P_rZMin : REAL]]></Declaration>
+      <Get Name="Get" Id="{775f3dcb-53b2-431d-b917-d56af10db614}">
+        <Declaration><![CDATA[VAR
+END_VAR
+]]></Declaration>
+        <Implementation>
+          <ST><![CDATA[P_rZMin := aPointsBottom[0].Z;]]></ST>
+        </Implementation>
+      </Get>
+    </Property>
+    <Property Name="P_stRefPoint" Id="{82222433-4393-4e61-980a-72d336916df3}">
+      <Declaration><![CDATA[PROPERTY P_stRefPoint : ST_3DPoint]]></Declaration>
+      <Get Name="Get" Id="{fa238c9c-6589-4ae6-a4b8-d3f43c4ab05d}">
+        <Declaration><![CDATA[VAR
+END_VAR
+]]></Declaration>
+        <Implementation>
+          <ST><![CDATA[P_stRefPoint := stRefPoint;]]></ST>
+        </Implementation>
+      </Get>
+      <Set Name="Set" Id="{7db311db-40ed-4918-b32d-26b1614bc71e}">
+        <Declaration><![CDATA[VAR
+END_VAR
+]]></Declaration>
+        <Implementation>
+          <ST><![CDATA[stRefPoint := P_stRefPoint;]]></ST>
+        </Implementation>
+      </Set>
+    </Property>
+    <LineIds Name="FB_Cuboid">
+      <LineId Id="9" Count="0" />
+    </LineIds>
+    <LineIds Name="FB_Cuboid.M_IsPointInnerXY">
+      <LineId Id="29" Count="0" />
+      <LineId Id="12" Count="0" />
+      <LineId Id="5" Count="0" />
+      <LineId Id="13" Count="0" />
+      <LineId Id="15" Count="0" />
+      <LineId Id="17" Count="5" />
+      <LineId Id="16" Count="0" />
+      <LineId Id="23" Count="0" />
+      <LineId Id="25" Count="1" />
+      <LineId Id="30" Count="0" />
+      <LineId Id="27" Count="0" />
+      <LineId Id="14" Count="0" />
+    </LineIds>
+    <LineIds Name="FB_Cuboid.M_SetDimension">
+      <LineId Id="57" Count="0" />
+      <LineId Id="28" Count="0" />
+      <LineId Id="35" Count="1" />
+      <LineId Id="38" Count="3" />
+      <LineId Id="37" Count="0" />
+      <LineId Id="42" Count="2" />
+      <LineId Id="34" Count="0" />
+      <LineId Id="45" Count="2" />
+      <LineId Id="29" Count="0" />
+      <LineId Id="48" Count="2" />
+      <LineId Id="55" Count="1" />
+      <LineId Id="51" Count="0" />
+      <LineId Id="22" Count="0" />
+    </LineIds>
+    <LineIds Name="FB_Cuboid.P_lrAngle.Set">
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="FB_Cuboid.P_rXMax.Get">
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="FB_Cuboid.P_rXMin.Get">
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="FB_Cuboid.P_rYMax.Get">
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="FB_Cuboid.P_rYMin.Get">
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="FB_Cuboid.P_rZMax.Get">
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="FB_Cuboid.P_rZMin.Get">
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="FB_Cuboid.P_stRefPoint.Get">
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="FB_Cuboid.P_stRefPoint.Set">
+      <LineId Id="2" Count="0" />
+    </LineIds>
+  </POU>
+</TcPlcObject>

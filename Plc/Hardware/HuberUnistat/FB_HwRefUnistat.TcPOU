@@ -1,0 +1,213 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<TcPlcObject Version="1.1.0.1" ProductVersion="3.1.4024.6">
+  <POU Name="FB_HwRefUnistat" Id="{1f3a8ac2-b2e6-4c49-959b-680e319c841a}" SpecialFunc="None">
+    <Declaration><![CDATA[FUNCTION_BLOCK FB_HwRefUnistat
+VAR_INPUT
+END_VAR
+VAR_OUTPUT
+END_VAR
+VAR
+	SerialPort 	: REFERENCE TO FB_SerialComPort_Base;
+	fbSendCmd 	: FB_Unistat_SendCmd;
+	
+	bPolling			: BOOL := TRUE;
+	nCurrentTempIntern 	: DINT;
+	nCurrentTempExtern 	: DINT;
+	eState				: E_UnistatState;
+	nState				: USINT;
+	nStateNext			: USINT := 1;
+END_VAR
+]]></Declaration>
+    <Implementation>
+      <ST><![CDATA[IF NOT __ISVALIDREF(SerialPort) THEN
+	RETURN;
+END_IF
+fbSendCmd.SerialPort REF= SerialPort;
+IF NOT SerialPort.bIsWorking THEN
+	RETURN;
+END_IF
+
+IF nState = 0 THEN
+	IF bPolling THEN
+		nState := nStateNext;
+	END_IF
+END_IF
+
+CASE nState OF
+	1:	//Status abrufen
+		fbSendCmd(bExecute:= TRUE, eCommand:= E_Unitstat_Command.Get_Status);
+		IF NOT fbSendCmd.bBusy THEN
+			IF NOT fbSendCmd.bError THEN
+				eState := fbSendCmd.nReceiveData;
+			END_IF
+			fbSendCmd(bExecute:= FALSE);
+			nState := 0;
+			nStateNext := 2;
+		END_IF	
+
+	2:	//Temp intern abrufen
+		fbSendCmd(bExecute:= TRUE, eCommand:= E_Unitstat_Command.Get_TempActualIntern);
+		IF NOT fbSendCmd.bBusy THEN
+			IF fbSendCmd.bError THEN
+				nCurrentTempIntern := 16#FFFF;
+			ELSE
+				nCurrentTempIntern := fbSendCmd.nReceiveData;
+			END_IF
+			fbSendCmd(bExecute:= FALSE);
+			nState := 0;
+			nStateNext := 3;
+		END_IF
+	3:	//Temp extern abrufen
+		fbSendCmd(bExecute:= TRUE, eCommand:= E_Unitstat_Command.Get_TempActualExtern);
+		IF NOT fbSendCmd.bBusy THEN
+			IF fbSendCmd.bError THEN
+				nCurrentTempExtern := 16#FFFF;
+			ELSE
+				IF fbSendCmd.nReceiveData = -1510 THEN
+					nCurrentTempExtern := 16#FFFF;
+				ELSE
+					nCurrentTempExtern := fbSendCmd.nReceiveData;	
+				END_IF
+			END_IF
+			fbSendCmd(bExecute:= FALSE);
+			nState := 1;
+			nStateNext := 1;
+		END_IF
+END_CASE
+
+
+	
+
+ ]]></ST>
+    </Implementation>
+    <Method Name="FB_init" Id="{1f73a08f-2ff2-4e08-8f4d-0dc18f6f5e64}">
+      <Declaration><![CDATA[METHOD FB_init : BOOL
+VAR_INPUT
+	bInitRetains : BOOL; // if TRUE, the retain variables are initialized (warm start / cold start)
+	bInCopyCode : BOOL;  // if TRUE, the instance afterwards gets moved into the copy code (online change)
+	SerialPort 	: REFERENCE TO FB_SerialComPort_Base;
+END_VAR
+]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[THIS^.SerialPort REF= SerialPort;]]></ST>
+      </Implementation>
+    </Method>
+    <Property Name="P_bPolling" Id="{d13d508d-beeb-4fad-a4ce-076834ef14cf}">
+      <Declaration><![CDATA[PROPERTY P_bPolling : BOOL]]></Declaration>
+      <Get Name="Get" Id="{e456d63c-5196-4245-a923-8be93098698b}">
+        <Declaration><![CDATA[VAR
+END_VAR
+]]></Declaration>
+        <Implementation>
+          <ST><![CDATA[P_bPolling := bPolling;]]></ST>
+        </Implementation>
+      </Get>
+      <Set Name="Set" Id="{d6d04eff-5b7a-4369-a2eb-edd357694c15}">
+        <Declaration><![CDATA[VAR
+END_VAR
+]]></Declaration>
+        <Implementation>
+          <ST><![CDATA[bPolling := P_bPolling;]]></ST>
+        </Implementation>
+      </Set>
+    </Property>
+    <Property Name="P_eState" Id="{bd46d361-6428-4034-86d8-31d3303ed681}">
+      <Declaration><![CDATA[PROPERTY P_eState : E_UnistatState]]></Declaration>
+      <Get Name="Get" Id="{c96501a0-02f6-41e9-891d-452874b7b320}">
+        <Declaration><![CDATA[VAR
+END_VAR
+]]></Declaration>
+        <Implementation>
+          <ST><![CDATA[P_eState := eState;]]></ST>
+        </Implementation>
+      </Get>
+    </Property>
+    <Property Name="P_nCurrentTempExtern" Id="{8a82704e-acd0-4223-965e-f51141a53834}">
+      <Declaration><![CDATA[PROPERTY P_nCurrentTempExtern : DINT]]></Declaration>
+      <Get Name="Get" Id="{6a668fbc-75c3-4c5f-84ab-d6c3be276904}">
+        <Declaration><![CDATA[VAR
+END_VAR
+]]></Declaration>
+        <Implementation>
+          <ST><![CDATA[P_nCurrentTempExtern := nCurrentTempExtern;]]></ST>
+        </Implementation>
+      </Get>
+    </Property>
+    <Property Name="P_nCurrentTempIntern" Id="{c43559a4-6e4d-41e8-a347-5d499abeb97e}">
+      <Declaration><![CDATA[PROPERTY P_nCurrentTempIntern : DINT]]></Declaration>
+      <Get Name="Get" Id="{13b5494c-6c55-476e-96f5-de6d9ca9a1f2}">
+        <Declaration><![CDATA[VAR
+END_VAR
+]]></Declaration>
+        <Implementation>
+          <ST><![CDATA[P_nCurrentTempIntern := nCurrentTempIntern;]]></ST>
+        </Implementation>
+      </Get>
+    </Property>
+    <Property Name="P_SerialPort" Id="{214c704f-4340-4806-bd93-a6e2ab295c46}">
+      <Declaration><![CDATA[PROPERTY P_SerialPort : REFERENCE TO FB_SerialComPort_Base]]></Declaration>
+      <Get Name="Get" Id="{263613bc-57b9-4fde-a42d-74be543a7534}">
+        <Declaration><![CDATA[VAR
+END_VAR
+]]></Declaration>
+        <Implementation>
+          <ST><![CDATA[P_SerialPort REF= SerialPort;]]></ST>
+        </Implementation>
+      </Get>
+    </Property>
+    <LineIds Name="FB_HwRefUnistat">
+      <LineId Id="9" Count="0" />
+      <LineId Id="12" Count="1" />
+      <LineId Id="183" Count="0" />
+      <LineId Id="248" Count="2" />
+      <LineId Id="321" Count="0" />
+      <LineId Id="320" Count="0" />
+      <LineId Id="322" Count="0" />
+      <LineId Id="324" Count="1" />
+      <LineId Id="323" Count="0" />
+      <LineId Id="279" Count="0" />
+      <LineId Id="282" Count="0" />
+      <LineId Id="332" Count="3" />
+      <LineId Id="370" Count="0" />
+      <LineId Id="348" Count="3" />
+      <LineId Id="330" Count="1" />
+      <LineId Id="283" Count="0" />
+      <LineId Id="310" Count="8" />
+      <LineId Id="327" Count="0" />
+      <LineId Id="284" Count="0" />
+      <LineId Id="328" Count="0" />
+      <LineId Id="354" Count="4" />
+      <LineId Id="387" Count="1" />
+      <LineId Id="390" Count="1" />
+      <LineId Id="389" Count="0" />
+      <LineId Id="360" Count="4" />
+      <LineId Id="280" Count="0" />
+      <LineId Id="210" Count="0" />
+      <LineId Id="168" Count="0" />
+      <LineId Id="43" Count="0" />
+      <LineId Id="42" Count="0" />
+      <LineId Id="20" Count="0" />
+    </LineIds>
+    <LineIds Name="FB_HwRefUnistat.FB_init">
+      <LineId Id="7" Count="0" />
+    </LineIds>
+    <LineIds Name="FB_HwRefUnistat.P_bPolling.Get">
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="FB_HwRefUnistat.P_bPolling.Set">
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="FB_HwRefUnistat.P_eState.Get">
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="FB_HwRefUnistat.P_nCurrentTempExtern.Get">
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="FB_HwRefUnistat.P_nCurrentTempIntern.Get">
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="FB_HwRefUnistat.P_SerialPort.Get">
+      <LineId Id="2" Count="0" />
+    </LineIds>
+  </POU>
+</TcPlcObject>

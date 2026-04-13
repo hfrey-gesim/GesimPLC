@@ -1,0 +1,80 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<TcPlcObject Version="1.1.0.1" ProductVersion="3.1.4022.10">
+  <POU Name="FB_Dil_GetValvePos" Id="{b2a78453-d2a0-4a08-93f1-f2a233d95607}" SpecialFunc="None">
+    <Declaration><![CDATA[FUNCTION_BLOCK FB_Dil_GetValvePos
+VAR_INPUT
+	bExecute	: BOOL;
+	pDilRef		: POINTER TO FB_HwRefDiluter;
+END_VAR
+VAR_OUTPUT
+	bBusy		: BOOL;
+	bError		: BOOL;
+	nErrorId	: ERRORID;
+	nValue		: SINT;
+	bStatus		: BOOL;
+END_VAR
+VAR
+	sString		: STRING;
+	rTrig 		: R_TRIG;
+	pDilRefIntern : POINTER TO FB_HwRefDiluter;	
+END_VAR
+VAR_IN_OUT
+	DilSendCmd 	: FB_Dil_SendCmd;
+END_VAR
+]]></Declaration>
+    <Implementation>
+      <ST><![CDATA[rTrig(CLK:= bExecute);
+IF rTrig.Q THEN
+	IF pDilRef = 0 THEN
+		bError := TRUE;
+		RETURN;	
+	ELSE
+		pDilRefIntern := pDilRef;
+	END_IF	
+END_IF
+
+IF bExecute THEN
+	bBusy := TRUE;
+
+	DilSendCmd(bExecute:= TRUE, bExpectReply:= TRUE, sSendData:= CONCAT(USINT_TO_STRING(pDilRefIntern^.nChannel),'?6'));
+	
+	IF NOT DilSendCmd.bBusy THEN
+		IF DilSendCmd.bError THEN
+			bError := TRUE;
+			nErrorId := DilSendCmd.nErrorId;
+		ELSE
+				nValue := 0;
+			IF DilSendCmd.bDataIsNumeric THEN
+				nValue := STRING_TO_SINT(DilSendCmd.sReceiveData);
+			ELSE
+				sString := F_ToUCase(DilSendCmd.sReceiveData);
+				IF sString = 'I' THEN
+					nValue := 1;
+				ELSIF sString = 'O' THEN
+					nValue := 2;
+				ELSIF sString = 'B' THEN
+					nValue := 3;
+				ELSIF sString = 'E' THEN
+					nValue := 4;
+				END_IF
+			END_IF
+			pDilRefIntern^.nActValvePos := nValue;
+			bStatus := DilSendCmd.bStatus;
+		END_IF
+		DilSendCmd(bExecute:= FALSE);
+		bBusy := FALSE;
+	END_IF
+ELSE
+	bBusy := FALSE;
+	bError := FALSE;
+	nErrorId := 0;
+	nValue := 0;
+	bStatus := FALSE;
+END_IF]]></ST>
+    </Implementation>
+    <LineIds Name="FB_Dil_GetValvePos">
+      <LineId Id="3" Count="46" />
+      <LineId Id="2" Count="0" />
+    </LineIds>
+  </POU>
+</TcPlcObject>

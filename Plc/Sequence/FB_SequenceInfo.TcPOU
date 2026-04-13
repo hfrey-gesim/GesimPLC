@@ -1,0 +1,126 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<TcPlcObject Version="1.1.0.1" ProductVersion="3.1.4024.5">
+  <POU Name="FB_SequenceInfo" Id="{691cfe89-534a-4122-aac5-860483ed1257}" SpecialFunc="None">
+    <Declaration><![CDATA[FUNCTION_BLOCK FB_SequenceInfo
+VAR_INPUT
+END_VAR
+VAR_OUTPUT
+END_VAR
+VAR
+	pHead : POINTER TO ST_Pointer;
+	pTail : POINTER TO ST_Pointer;
+END_VAR
+]]></Declaration>
+    <Implementation>
+      <ST><![CDATA[]]></ST>
+    </Implementation>
+    <Method Name="M_AddTail" Id="{79bb4d66-9ca4-4546-b17a-8dc3177f1d87}">
+      <Declaration><![CDATA[METHOD M_AddTail
+VAR_INPUT
+	nSequenceNr		: UDINT;
+	eSequenceState	: E_SequenceState;
+	pStep			: POINTER TO ST_Step;
+END_VAR
+
+VAR
+	pSeekPointer: POINTER TO ST_Pointer;
+	pSeekContent: POINTER TO ST_SequenceInfo;		
+
+	pNewPointer : POINTER TO ST_Pointer;
+	pNewContent : POINTER TO ST_SequenceInfo;
+END_VAR
+]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[IF pStep > 0 THEN
+	IF pStep^.bInfoChanged THEN
+		pSeekPointer := pHead; //Step schon mit geleichem State schon vorhanden? Wenn ja, dann nur Info überschreiben.
+								//Bei Timern trat das Problem auf, dass mehr Infos generiert werden, als dass in dieser Zeit diese
+								//auch ausgelesen werden.
+		WHILE(pSeekPointer > 0) DO
+			pSeekContent := pSeekPointer^.pContent;
+			IF pSeekContent^.nStepNr = pStep^.nStepNr AND_THEN pSeekContent^.nSequId = nSequenceNr THEN
+				IF pSeekContent^.eStepState = pStep^.eState AND pSeekContent^.eSequenceState = eSequenceState THEN
+					//nur Info ändern
+					pSeekContent^.nInfo := pStep^.nInfo;
+					RETURN;
+				END_IF
+			END_IF
+			pSeekPointer := pSeekPointer^.pNext;
+		END_WHILE
+		
+		pNewPointer := __NEW(ST_Pointer);
+		pNewContent := __NEW(ST_SequenceInfo);
+		MEMSET(pNewPointer,0,SIZEOF(ST_Pointer));
+		pNewContent^.nSequId := nSequenceNr;
+		pNewContent^.eSequenceState := eSequenceState;
+		pNewContent^.nStepNr := pStep^.nStepNr;
+		pNewContent^.eStepState := pStep^.eState;
+		pNewContent^.nInfo := pStep^.nInfo;
+		pStep^.bInfoChanged := FALSE;
+	ELSE
+		RETURN;
+	END_IF
+ELSE
+	pNewPointer := __NEW(ST_Pointer);
+	pNewContent := __NEW(ST_SequenceInfo);
+	MEMSET(pNewPointer,0,SIZEOF(ST_Pointer));
+	pNewContent^.nSequId := nSequenceNr;
+	pNewContent^.eSequenceState := eSequenceState;
+	pNewContent^.nStepNr := 0;
+	pNewContent^.eStepState := E_StepState.STEPSTATUS_Idle;
+END_IF
+
+pNewPointer^.pContent := pNewContent;
+
+IF pTail = 0 THEN
+	pHead := pTail := pNewPointer;
+ELSE
+	pNewPointer^.pPrev := pTail;
+	pTail^.pNext := pNewPointer;
+	pTail := pNewPointer;
+END_IF]]></ST>
+      </Implementation>
+    </Method>
+    <Method Name="M_GetHead" Id="{f1b5b675-9488-4cff-8bcb-c74e9caa7078}">
+      <Declaration><![CDATA[METHOD M_GetHead
+VAR_INPUT
+END_VAR
+VAR_IN_OUT
+	stSequenceStatus : ST_SequenceInfo;
+END_VAR
+
+VAR
+	pContent	: POINTER TO ST_SequenceInfo;
+	pTemp		: POINTER TO ST_Pointer;
+END_VAR]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[//Immer vom Head holen und dann löschen
+IF pHead > 0 THEN
+	MEMCPY(ADR(stSequenceStatus),pHead^.pContent,SIZEOF(ST_SequenceInfo));
+	__DELETE(pHead^.pContent);
+	IF pHead^.pNext > 0 THEN //Next wird zu Head
+		pTemp := pHead^.pNext;
+		__DELETE(pHead);
+		pTemp^.pPrev := 0;
+		pHead := pTemp;
+	ELSE
+		__DELETE(pHead);
+		pTail := 0;
+	END_IF
+END_IF
+]]></ST>
+      </Implementation>
+    </Method>
+    <LineIds Name="FB_SequenceInfo">
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="FB_SequenceInfo.M_AddTail">
+      <LineId Id="98" Count="46" />
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="FB_SequenceInfo.M_GetHead">
+      <LineId Id="3" Count="13" />
+      <LineId Id="2" Count="0" />
+    </LineIds>
+  </POU>
+</TcPlcObject>

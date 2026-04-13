@@ -1,0 +1,210 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<TcPlcObject Version="1.1.0.1">
+  <POU Name="FB_SingelPiezoHolder" Id="{27479d34-a1f7-4b97-8ce9-efea2527356b}" SpecialFunc="None">
+    <Declaration><![CDATA[FUNCTION_BLOCK FB_SingelPiezoHolder EXTENDS FB_MzTool
+VAR_INPUT
+END_VAR
+VAR_OUTPUT
+END_VAR
+VAR
+	//SpecProperties
+	//****************************************Aktionvariablen****************************************************
+	
+END_VAR]]></Declaration>
+    <Implementation>
+      <ST><![CDATA[IF eCurrentState = E_MachineState.MACHINESTATE_Active THEN
+	;
+
+END_IF
+
+SUPER^();	//FB_MzTool aufrufen
+
+//Prozessdaten aktualisieren
+
+aObjProcData[nNotifyId] := stProcessData;
+]]></ST>
+    </Implementation>
+    <Action Name="A_Reset" Id="{306e4920-6115-4bbb-a3b5-436fecd08f58}">
+      <Implementation>
+        <ST><![CDATA[IF nStateA_ResetSpec = 0 THEN 
+	nStateA_ResetSpec := 80;		
+END_IF
+
+SUPER^.A_Reset();]]></ST>
+      </Implementation>
+    </Action>
+    <Action Name="A_Stop" Id="{af78e38c-72db-44e8-a52a-6dfeb8f97974}">
+      <Implementation>
+        <ST><![CDATA[IF nStateA_Stop = 0 THEN
+	nStateA_Stop := 1;
+END_IF
+
+SUPER^.A_Stop();]]></ST>
+      </Implementation>
+    </Action>
+    <Method Name="FB_init" Id="{292ee0c2-46d4-4ac2-a459-94a947c83a36}">
+      <Declaration><![CDATA[METHOD FB_init : BOOL
+VAR_INPUT
+	bInitRetains : BOOL; // if TRUE, the retain variables are initialized (warm start / cold start)
+	bInCopyCode : BOOL;  // if TRUE, the instance afterwards gets moved into the copy code (online change)
+END_VAR
+]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[eObjectType := E_ObjectType.OBJECTTYPE_SinglePiezoHolder;
+eObjectGroup := E_ObjectGroup.OBJECTGROUP_MzTool OR E_ObjectGroup.OBJECTGROUP_Device;]]></ST>
+      </Implementation>
+    </Method>
+    <Method Name="M_AddChild" Id="{8f1ed34e-7a4c-4b4e-ab92-ebc51ef942b9}">
+      <Declaration><![CDATA[METHOD M_AddChild : ERRORID
+VAR_INPUT
+	pObject : POINTER TO FB_Object;
+	nSlotNr	: UINT;
+	nIndex 	: INT;
+END_VAR
+]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[//Kann folgende Objekt-Typen aufnehmen
+//ZSensor, Piezo, PassivPip, Solenoid
+IF pObject > 0 THEN
+	IF pObject^.P_eObjectType = E_ObjectType.OBJECTTYPE_ZSensor OR
+		pObject^.P_eObjectType = E_ObjectType.OBJECTTYPE_PiezoPip OR
+		pObject^.P_eObjectType = E_ObjectType.OBJECTTYPE_PassivPip OR
+		pObject^.P_eObjectType = E_ObjectType.OBJECTTYPE_DummyTool OR
+		pObject^.P_eObjectType = E_ObjectType.OBJECTTYPE_Camera OR
+		pObject^.P_eObjectType = E_ObjectType.OBJECTTYPE_SolenoidPip THEN
+		M_AddChild := SUPER^.M_AddChild(pObject,nSlotNr,nIndex);
+	ELSE
+		M_AddChild := E_ErrorIdObjMgmt.ERRORID_InvalidParentObject;
+	END_IF
+ELSE
+	M_AddChild := E_ErrorIdObjMgmt.ERRORID_InvalidParentObject;
+END_IF]]></ST>
+      </Implementation>
+    </Method>
+    <Method Name="M_CheckAction" Id="{abb19519-78a5-42af-b107-cca4b1a63743}">
+      <Declaration><![CDATA[METHOD M_CheckAction : ERRORID
+VAR_INPUT
+	refActionData 	: REFERENCE TO ST_ActionData;
+	pCorrelObject	: POINTER TO FB_Object;
+END_VAR
+
+VAR
+END_VAR]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[CASE refActionData.eAction OF
+	E_Action.ACTION_ActionOnArray,
+	E_Action.ACTION_MoveToTarget:
+		M_CheckAction := E_ErrorIdCmd.ERRORID_InvalidAction; //würde sonst durch Base erlaubt werden
+ELSE
+	M_CheckAction := SUPER^.M_CheckAction(refActionData, pCorrelObject);
+END_CASE]]></ST>
+      </Implementation>
+    </Method>
+    <Method Name="M_ExeAction" Id="{5b215e2d-4648-4166-be89-80872cf64947}">
+      <Declaration><![CDATA[METHOD M_ExeAction : ERRORID
+VAR_INPUT
+	refActionData : REFERENCE TO ST_ActionData;	
+END_VAR]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[IF NOT (eCurrentState = E_MachineState.MACHINESTATE_Idle OR
+	eCurrentState = E_MachineState.MACHINESTATE_Active OR
+	eCurrentState = E_MachineState.MACHINESTATE_Ready) THEN
+	M_ExeAction := E_ErrorIdCmd.ERRORID_InvalidState;
+	RETURN;
+END_IF
+
+CASE refActionData.eAction OF
+	
+	
+	ELSE
+		M_ExeAction := SUPER^.M_ExeAction(refActionData);
+		RETURN;
+END_CASE
+
+bBusy := TRUE;
+eCurrentState := E_MachineState.MACHINESTATE_Active;]]></ST>
+      </Implementation>
+    </Method>
+    <Method Name="M_GetPiezoRef" Id="{caef380e-defe-4a21-8be8-dbd7af86ebdd}">
+      <Declaration><![CDATA[METHOD M_GetPiezoRef : POINTER TO FB_PiezoRef
+VAR_INPUT
+	pToolSlot	: POINTER TO FB_Slot;
+END_VAR
+]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[M_GetPiezoRef := ADR(pFbMultiZ^.aFbPiezoRef[pParentSlot^.P_nNr]);]]></ST>
+      </Implementation>
+    </Method>
+    <Method Name="M_SetAllProps" Id="{c8335143-d8d8-451b-a2b0-12bc846c63eb}">
+      <Declaration><![CDATA[METHOD M_SetAllProps : ERRORID
+VAR_INPUT
+	refCmdData : REFERENCE TO  ST_CmdData;
+END_VAR
+]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[M_SetAllProps := SUPER^.M_SetAllProps(refCmdData);
+
+IF M_SetAllProps > 0 THEN
+	RETURN;
+END_IF
+
+pZAxisRef^.eFixedToolType := E_MzToolType.TOOL_TYPE_PiezoPip;]]></ST>
+      </Implementation>
+    </Method>
+    <Property Name="P_bHasZSensorSlot" Id="{d5f76f44-3f43-4ef2-b00c-58820698b9cf}">
+      <Declaration><![CDATA[PROPERTY P_bHasZSensorSlot : BOOL]]></Declaration>
+      <Get Name="Get" Id="{32bbedf2-442a-442d-a551-dfc2aa5a8db7}">
+        <Declaration><![CDATA[VAR
+END_VAR
+]]></Declaration>
+        <Implementation>
+          <ST><![CDATA[IF eObjectType = E_ObjectType.OBJECTTYPE_SinglePiezoHolder THEN
+	P_bHasZSensorSlot := TRUE;	
+END_IF
+]]></ST>
+        </Implementation>
+      </Get>
+    </Property>
+    <LineIds Name="FB_SingelPiezoHolder">
+      <LineId Id="3" Count="9" />
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="FB_SingelPiezoHolder.A_Reset">
+      <LineId Id="2" Count="3" />
+      <LineId Id="1" Count="0" />
+    </LineIds>
+    <LineIds Name="FB_SingelPiezoHolder.A_Stop">
+      <LineId Id="2" Count="3" />
+      <LineId Id="1" Count="0" />
+    </LineIds>
+    <LineIds Name="FB_SingelPiezoHolder.FB_init">
+      <LineId Id="7" Count="1" />
+    </LineIds>
+    <LineIds Name="FB_SingelPiezoHolder.M_AddChild">
+      <LineId Id="23" Count="14" />
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="FB_SingelPiezoHolder.M_CheckAction">
+      <LineId Id="10" Count="1" />
+      <LineId Id="14" Count="0" />
+      <LineId Id="17" Count="0" />
+      <LineId Id="20" Count="1" />
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="FB_SingelPiezoHolder.M_ExeAction">
+      <LineId Id="3" Count="15" />
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="FB_SingelPiezoHolder.M_GetPiezoRef">
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="FB_SingelPiezoHolder.M_SetAllProps">
+      <LineId Id="3" Count="5" />
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="FB_SingelPiezoHolder.P_bHasZSensorSlot.Get">
+      <LineId Id="3" Count="2" />
+      <LineId Id="2" Count="0" />
+    </LineIds>
+  </POU>
+</TcPlcObject>

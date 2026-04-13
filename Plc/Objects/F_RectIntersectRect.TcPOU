@@ -1,0 +1,34 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<TcPlcObject Version="1.1.0.1" ProductVersion="3.1.4022.18">
+  <POU Name="F_RectIntersectRect" Id="{11e4e757-f481-41ae-8f93-23890945945a}" SpecialFunc="None">
+    <Declaration><![CDATA[FUNCTION F_RectIntersectRect : BOOL
+VAR_INPUT
+	stRect1 : FB_Rectangle;
+	stRect2 : FB_Rectangle;
+END_VAR
+VAR
+END_VAR
+]]></Declaration>
+    <Implementation>
+      <ST><![CDATA[//schneidet Rechteck1 Rechteck2?
+F_RectIntersectRect := TRUE;
+IF stRect1.X1 > stRect2.X2 OR stRect2.X1 > stRect1.X2 THEN
+	F_RectIntersectRect := FALSE;
+END_IF
+
+IF stRect1.Y1 > stRect2.Y2 OR stRect2.Y1 > stRect1.Y2 THEN
+	F_RectIntersectRect := FALSE;
+END_IF]]></ST>
+    </Implementation>
+    <LineIds Name="F_RectIntersectRect">
+      <LineId Id="41" Count="0" />
+      <LineId Id="36" Count="0" />
+      <LineId Id="29" Count="0" />
+      <LineId Id="34" Count="0" />
+      <LineId Id="32" Count="0" />
+      <LineId Id="38" Count="0" />
+      <LineId Id="37" Count="0" />
+      <LineId Id="39" Count="1" />
+    </LineIds>
+  </POU>
+</TcPlcObject>

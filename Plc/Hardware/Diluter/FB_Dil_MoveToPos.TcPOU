@@ -1,0 +1,121 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<TcPlcObject Version="1.1.0.1" ProductVersion="3.1.4024.5">
+  <POU Name="FB_Dil_MoveToPos" Id="{a4a3a763-d819-40f0-8536-51f849be591b}" SpecialFunc="None">
+    <Declaration><![CDATA[FUNCTION_BLOCK FB_Dil_MoveToPos
+VAR_INPUT
+	bExecute	: BOOL;
+	pDilRef		: POINTER TO FB_HwRefDiluter;
+	nTopSpeed	: UINT;
+	nPosition	: UINT;
+	nValvePos	: SINT;	
+	
+END_VAR
+VAR_OUTPUT
+	bBusy		: BOOL;
+	bError		: BOOL;
+	nErrorId	: ERRORID;
+END_VAR
+VAR
+	rTrig : R_TRIG;
+	//pDilRefIntern : POINTER TO ST_DiluterRef;
+	pDilRefIntern : POINTER TO FB_HwRefDiluter;	
+	nState		: USINT;
+	sValvePos	: STRING[2];
+	sString		: STRING;
+	bStatus		: BOOL;	
+END_VAR
+VAR_IN_OUT
+	DilSendCmd 	: FB_Dil_SendCmd;
+END_VAR
+]]></Declaration>
+    <Implementation>
+      <ST><![CDATA[rTrig(CLK:= bExecute);
+IF rTrig.Q THEN
+	IF pDilRef = 0 THEN
+		bError := TRUE;
+		RETURN;	
+	ELSE
+		pDilRefIntern := pDilRef;
+	END_IF	
+END_IF
+
+IF bExecute THEN
+	IF nState = 0 THEN	//Command senden
+		sValvePos := F_GetValveCode(nValvePos,pDilRefIntern^.nActValvePos,pDilRefIntern^.eValveType);
+		IF sValvePos = '' THEN
+			bError := TRUE;
+			nErrorId := E_ErrorIdDiluter.ERRORID_InvalidValveParam;
+			RETURN;
+		END_IF
+		
+		sString := CONCAT(USINT_TO_STRING(pDilRefIntern^.nChannel),'v100c100V');	//Startspeed,CutOffSpeed + Kennung für Topspeed
+		sString := CONCAT(sString,UINT_TO_STRING(nTopSpeed));	//Topspeed
+		sString := CONCAT(sString,sValvePos);					//Ventilposition
+		sString := CONCAT(sString,'A');							//Kennung für Move
+		sString := CONCAT(sString, UINT_TO_STRING(nPosition));	//Position
+		sString := CONCAT(sString,'R');							//Execute-Zeichen	
+	
+		pDilRefIntern^.bBusy := bBusy := TRUE;
+		
+		DilSendCmd(bExecute:= TRUE, bExpectReply:= TRUE, sSendData:= sString);
+		
+		IF NOT DilSendCmd.bBusy THEN
+			IF DilSendCmd.bError THEN
+				pDilRefIntern^.bBusy := bBusy := FALSE;
+				bError := TRUE;
+				nErrorId := DilSendCmd.nErrorId;
+			ELSE
+				pDilRefIntern^.nActValvePos := nValvePos;
+				nState := 1;
+			END_IF
+			DilSendCmd(bExecute:= FALSE);
+		END_IF
+		
+	ELSE //Move-Pos fertig? (Durch Abfrage der Plunger-Pos)
+		DilSendCmd(bExecute:= TRUE, bExpectReply:= TRUE, sSendData:= CONCAT(USINT_TO_STRING(pDilRefIntern^.nChannel),'?0'));
+		IF NOT DilSendCmd.bBusy THEN
+			IF DilSendCmd.bError THEN
+				pDilRefIntern^.bBusy := bBusy := FALSE;
+				bError := TRUE;
+				nErrorId := DilSendCmd.nErrorId;
+			ELSE
+				IF DilSendCmd.bDataIsNumeric THEN
+					pDilRefIntern^.nActPlungerPos := STRING_TO_UINT(DilSendCmd.sReceiveData);
+				END_IF
+				IF DilSendCmd.bStatus THEN
+					pDilRefIntern^.bBusy := bBusy := FALSE;
+				END_IF
+			END_IF
+			DilSendCmd(bExecute:= FALSE);
+		END_IF
+	END_IF
+ELSE
+	IF bBusy THEN //DilSendCmd moch zu Ende führen
+		DilSendCmd();
+		IF NOT DilSendCmd.bBusy THEN
+			IF DilSendCmd.bError THEN
+				bError := TRUE;
+				nErrorId := DilSendCmd.nErrorId;
+			END_IF
+			DilSendCmd(bExecute:= FALSE);
+			pDilRefIntern^.bBusy := bBusy := FALSE;
+			nState := 0;
+		END_IF
+	ELSE
+		nState := 0;
+		bError := FALSE;
+		nErrorId := 0;		
+		IF pDilRefIntern > 0 THEN
+			pDilRefIntern^.bBusy := bBusy := FALSE;	
+		END_IF
+	END_IF
+END_IF]]></ST>
+    </Implementation>
+    <LineIds Name="FB_Dil_MoveToPos">
+      <LineId Id="3" Count="35" />
+      <LineId Id="108" Count="0" />
+      <LineId Id="39" Count="42" />
+      <LineId Id="2" Count="0" />
+    </LineIds>
+  </POU>
+</TcPlcObject>

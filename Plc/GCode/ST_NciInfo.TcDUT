@@ -1,0 +1,13 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<TcPlcObject Version="1.1.0.1" ProductVersion="3.1.4020.6">
+  <DUT Name="ST_NciInfo" Id="{345ab2a5-41ef-4494-9bb4-1405dd3596f2}">
+    <Declaration><![CDATA[TYPE ST_NciInfo :
+STRUCT
+	Mode : UDINT;
+	FileOffset : UDINT;
+	FileName : ARRAY[1..260] OF USINT;
+END_STRUCT
+END_TYPE
+]]></Declaration>
+  </DUT>
+</TcPlcObject>

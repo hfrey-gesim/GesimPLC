@@ -1,0 +1,24 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<TcPlcObject Version="1.1.0.1" ProductVersion="3.1.4022.7">
+  <POU Name="F_Sub3DPoints" Id="{7f7bab44-4bb0-4fb2-b65b-2fa44992593b}" SpecialFunc="None">
+    <Declaration><![CDATA[FUNCTION F_Sub3DPoints : ST_3DPoint
+VAR_INPUT
+	stPoint1	: ST_3DPoint;
+	stPoint2	: ST_3DPoint;
+END_VAR
+VAR
+	_stPoint	: ST_3DPoint;
+END_VAR
+]]></Declaration>
+    <Implementation>
+      <ST><![CDATA[_stPoint.X := stPoint1.X - stPoint2.X;
+_stPoint.Y := stPoint1.Y - stPoint2.Y;
+_stPoint.Z := stPoint1.Z - stPoint2.Z;
+F_Sub3DPoints := _stPoint;]]></ST>
+    </Implementation>
+    <LineIds Name="F_Sub3DPoints">
+      <LineId Id="3" Count="2" />
+      <LineId Id="2" Count="0" />
+    </LineIds>
+  </POU>
+</TcPlcObject>

@@ -1,0 +1,57 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<TcPlcObject Version="1.1.0.1">
+  <POU Name="FB_SerialComPort_USB" Id="{f976c4af-2fd2-4b96-8341-f5c2233f7dd7}" SpecialFunc="None">
+    <Declaration><![CDATA[FUNCTION_BLOCK FB_SerialComPort_USB EXTENDS FB_SerialComPort_Base
+VAR_INPUT
+END_VAR
+VAR_OUTPUT
+END_VAR
+VAR
+	nState : USINT;
+	fbSerialLineControlADS 	: SerialLineControlADS;
+	stComSerialConfig 		: ComSerialConfig := (ComPort:= 3);
+	timer					: TON;
+	nAttemps				: USINT;
+END_VAR
+]]></Declaration>
+    <Implementation>
+      <ST><![CDATA[SUPER^();
+CASE nState OF
+	0:	//Search virtual ComPort
+		timer(IN:= TRUE, PT:= T#2S);
+		IF timer.Q THEN
+			fbSerialLineControlADS(Connect:= TRUE, SerialCfg:= stComSerialConfig, TxBuffer:= TxBufferSerialCom, RxBuffer:= RxBufferSerialCom);
+			IF fbSerialLineControlADS.Error THEN
+				IF fbSerialLineControlADS.ErrorID = 6 THEN	//Der SerialAdsServer ist noch nicht gestartet
+					RETURN;
+				END_IF
+				IF fbSerialLineControlADS.ErrorID = 36915 THEN //Port schon connected
+					RETURN;
+				END_IF
+				IF stComSerialConfig.ComPort = 6 THEN
+					nAttemps := nAttemps + 1;
+					stComSerialConfig.ComPort := 2; //Dadurch wird wieder bei 3 begonnen
+					fbSerialLineControlADS(Connect:= FALSE, SerialCfg:= stComSerialConfig, TxBuffer:= TxBufferSerialCom, RxBuffer:= RxBufferSerialCom);
+				END_IF
+				stComSerialConfig.ComPort := stComSerialConfig.ComPort + 1;
+			ELSE
+				IF fbSerialLineControlADS.PortOpened THEN
+					nState := 1;
+				END_IF
+			END_IF
+		END_IF
+	
+	1: //Running
+		fbSerialLineControlADS(Connect:= TRUE, SerialCfg:= stComSerialConfig, TxBuffer:= TxBufferSerialCom, RxBuffer:= RxBufferSerialCom);
+		bIsWorking := TRUE;
+		IF fbSerialLineControlADS.Error THEN
+			fbSerialLineControlADS(Connect:= FALSE, SerialCfg:= stComSerialConfig, TxBuffer:= TxBufferSerialCom, RxBuffer:= RxBufferSerialCom);
+		END_IF	
+END_CASE]]></ST>
+    </Implementation>
+    <LineIds Name="FB_SerialComPort_USB">
+      <LineId Id="81" Count="31" />
+      <LineId Id="2" Count="0" />
+    </LineIds>
+  </POU>
+</TcPlcObject>

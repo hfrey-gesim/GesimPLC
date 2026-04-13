@@ -1,0 +1,41 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<TcPlcObject Version="1.1.0.1" ProductVersion="3.1.0.25">
+  <POU Name="F_GetCoDS402State" Id="{6edb21aa-7101-4b78-a195-405f89ca0388}">
+    <Declaration><![CDATA[FUNCTION F_GetCoDS402State : E_CoDS402States
+VAR_INPUT
+	nStatus	: UINT;
+END_VAR
+VAR
+	nStatusTemp	: UINT;
+END_VAR
+]]></Declaration>
+    <Implementation>
+      <ST><![CDATA[IF (nStatus AND 16#4F) = 0 THEN
+	F_GetCoDS402State := E_CoDS402States.DS402STATE_NotReadyToSwitchOn;
+ELSIF (nStatus AND 16#4F) = 16#40 THEN
+	F_GetCoDS402State := E_CoDS402States.DS402STATE_SwitchOnDisabled;
+ELSIF (nStatus AND 16#6F) = 16#21 THEN
+	F_GetCoDS402State := E_CoDS402States.DS402STATE_ReadyToSwitchOn;
+ELSIF (nStatus AND 16#6F) = 16#23 THEN
+	F_GetCoDS402State := E_CoDS402States.DS402STATE_SwitchedOn;
+ELSIF (nStatus AND 16#6F) = 16#27 THEN
+	F_GetCoDS402State := E_CoDS402States.DS402STATE_OperationEnabled;
+ELSIF (nStatus AND 16#6F) = 16#07 THEN
+	F_GetCoDS402State := E_CoDS402States.DS402STATE_QuickStopActive;
+ELSIF (nStatus AND 16#1400) = 16#1400 THEN
+	F_GetCoDS402State := E_CoDS402States.DS402STATE_HomingCompleted;
+ELSIF (nStatus AND 16#4F) = 16#0F THEN
+	F_GetCoDS402State := E_CoDS402States.DS402STATE_FaultReactionActive;
+ELSIF (nStatus AND 16#4F) = 16#08 THEN
+	F_GetCoDS402State := E_CoDS402States.DS402STATE_Fault;
+ELSE
+	F_GetCoDS402State := E_CoDS402States.DS402STATE_Notspecified;
+END_IF
+
+
+
+]]></ST>
+    </Implementation>
+    <ObjectProperties />
+  </POU>
+</TcPlcObject>

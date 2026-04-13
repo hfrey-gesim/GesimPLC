@@ -1,0 +1,2657 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<TcPlcObject Version="1.1.0.1">
+  <POU Name="FB_MzBase" Id="{b81da648-b95e-47ec-864e-12282447efac}" SpecialFunc="None">
+    <Declaration><![CDATA[FUNCTION_BLOCK FB_MzBase EXTENDS FB_Object IMPLEMENTS I_Device
+
+VAR_OUTPUT
+	bBusy				: BOOL;
+END_VAR
+
+VAR
+	bInitFB				: BOOL := TRUE;			//zum erstmaligen Initialisieren des FB
+	
+
+	fbSlotList			: FB_SlotList;
+	nNumberOfSlots		: UINT;
+	nFirstSlotPropIndex	: UINT;	//erster Index für Slots (benötigt in M_SetSingleProps)
+	nLastSlotPropIndex	: UINT;	//letzte Index für Slots (benötigt in M_SetSingleProps)
+	
+	//Variablen allgemeine Statemachine
+	bCanceled			: BOOL;
+	bError				: BOOL;
+	stError				: ST_Error;
+	bStopAllOnError		: BOOL;
+	eCurrentState		: E_MachineState := E_MachineState.MACHINESTATE_Idle;
+	i					: UINT;					//allg. Zählvariable
+
+	nDeviceIdx			: UINT;			//eigener Index in aI_Device[Idx]
+	nCurrentPropIndex	: UINT;
+
+	nSpecPropIndex		: UINT;			//erster Index für Specialproperties (ab direkter Erbe von FB_MzTool) (benötigt in M_SetSingleProps + M_GetSingleProp)
+	
+	pAssignWorkplate	: POINTER TO FB_Workplate;
+	nNotifyId			: UINT;
+	stRelPos			: ST_3DPoint;	//Relative Position zum Parent
+	stOffset			: ST_3DPoint;	//Offset
+
+	
+	pFbMultiZ			: POINTER TO FB_MultiZRef;
+	pXDrive				: POINTER TO FB_XYDriveBase;
+	pYDrive				: POINTER TO FB_XYDriveBase;
+	pPiece				: POINTER TO FB_PieceBase;
+
+	//****************************************Aktionvariablen****************************************************
+	
+	//Verkettete Liste für BasicActions
+	fbList				: FB_LinkedListCtrl;
+	hList				: T_HLINKEDLIST;
+	aNodes           	: ARRAY[0..4] OF T_LinkedListEntry;
+	getValue			: PVOID;
+	getPosPtr       	: POINTER TO T_LinkedListEntry := 0;
+
+	//Action: "InitBase"
+	bInitAxisOk			: BOOL;
+	bInitToolOk			: BOOL;
+	bInitAxis			: BOOL;
+	bReInit				: BOOL;
+	nStateA_InitAxis	: USINT;			//State von A_Init() BasisFb
+	bInitReadyX			: BOOL;
+	bInitReadyY			: BOOL;
+	bInitErrorX			: BOOL;
+	bInitErrorY			: BOOL;
+	fbZmHome			: FB_ZM_Home;
+	nCurInitZAxis		: USINT;
+	timeoutInit			: TON;
+	
+	bMeasured			: BOOL;				//als Merker, ob bei Tipvermessung bereits komplette Vermessung durchgeführt wurde
+	bDisableFreeMove	: BOOL;
+	
+	//Action: "JogXY"
+	bJogXY				: BOOL;
+	nStateA_JogXY		: USINT;			//State von A_JogXY()
+	eJogXYDirectionNew	: E_MoveDirection;
+	eJogXYDirection		: E_MoveDirection;
+	nCurrentJogXYAxis	: USINT;			//1= X, 2=Y, 3=Z;(Z wird in FB_MzTool verarbeitet)
+	bJogXYForward		: BOOL;
+	bJogXYBackwards		: BOOL;
+	bJogXYClock			: BOOL;
+	bJogXYModeInchingNew: BOOL;				//wenn True dann Tipbetrieb sonst kontinuierlich
+	bJogXYModeInching	: BOOL;				//wenn True dann Tipbetrieb sonst kontinuierlich
+	rJogXYDistance		: REAL;
+	rJogXYSpeed			: REAL;
+	bJogXYImpuls		: BOOL;	
+	
+	//Action: "MoveX"
+	bMoveX				: BOOL;
+	nStateA_MoveX		: USINT;			//State von A_MoveX()
+	bFlagMoveX			: BOOL := TRUE;		//Hilfsflag
+	
+	//Action: "MoveY"	
+	bMoveY				: BOOL;
+	nStateA_MoveY		: USINT;			//State von A_MoveX()
+	bFlagMoveY			: BOOL := TRUE;		//Hilfsflag
+	
+	//Action: "MoveXY"	
+	bMoveXY				: BOOL;
+	nStateA_MoveXY		: USINT;			//State von A_MoveXY()
+	bFlagMoveXY			: BOOL := TRUE;		//Hilfsflag
+	bMoveXReady			: BOOL;
+	bMoveXError			: BOOL;
+	bMoveYReady			: BOOL;
+	bMoveYError			: BOOL;
+	bMoveXYReady		: BOOL;
+	recteMoveRange		: FB_Rectangle;
+	pHighestTarget		: POINTER TO FB_TargetBase;
+	bSynchron			: BOOL;	//beide Achsen kommen zeitgleich an
+	stCurrentPosPhys	: ST_3DPoint;
+	
+	//Action: "MoveZ"
+	bMoveZ				: BOOL;
+	nStateA_MoveZ		: USINT;			//State von A_Move()
+	bFlagMoveZ			: BOOL := TRUE;		//Hilfsflag
+	eMoveModeZ			: E_MoveMode;
+	
+	fbZmMove			: FB_ZM_Move;
+	fbZmStop			: FB_ZM_Stop;
+
+	//Action: "Move allgemein"
+	eMoveMode			: E_MoveMode;
+	bMoveModeXYRelativ	: BOOL;
+	rMovePositionX		: REAL;
+	rMovePositionY		: REAL;
+	rMovePositionZ		: REAL;
+	rMoveSpeedX			: REAL;
+	rMoveSpeedY			: REAL;
+	rMoveSpeedZ			: REAL;
+	rDistanceX			: REAL;
+	rDistanceY			: REAL;
+	st3DPoint			: ST_3DPoint;
+	st3DPoint1			: ST_3DPoint;
+	//stDimension			: ST_3DDimension;
+	stAreaCollFree		: FB_Rectangle;		//kollisionsfreier XY-Bereich um die aktuelle XY-Position des Tools(wird bei Z-Zustellung gesetzt)
+	bIgnoreZCollision	: BOOL;
+	eCrashAvoidanceMode	: E_CrashAvoidanceMode;
+	stActionData		: ST_ActionData;
+	bZIsMoving			: BOOL;
+	bXYIsMoving			: BOOL;
+	pMtp				: POINTER TO FB_Mtp;
+	pHead				: POINTER TO FB_MzHead;
+	pCustomUnitType1	: POINTER TO FB_CustomUnitType1;
+	
+	//Action: "Stop"
+	bStop				: BOOL;
+	nStateA_Stop		: USINT;			//State von A_Stop()
+	bFlagStop			: BOOL := TRUE;		//Hilfsflag
+	
+	//Action: "Reset"
+	nStateA_ResetBase	: USINT;			//State von A_Reset() BasisFB
+	nStateA_ResetTool	: USINT;
+	nStateA_ResetSpec	: USINT;			//State von A_Reset() SpecialFB
+	bFlagA_ResetBase	: BOOL := TRUE;		//Hilfsflag von A_Reset() BasisFB
+	bFlagA_ResetSpec	: BOOL := TRUE;		//Hilfsflag von A_Reset() SpecialFB
+	timeoutReset		: TON;
+	
+	//Prozessdaten
+	stProcessData		: ST_ObjectProcData;	//werden am Ende in globales Array übertragen, welches per Notifiction zum PC übertragen werden 
+	stCurrentPos		: ST_3DPoint;
+	
+END_VAR
+]]></Declaration>
+    <Implementation>
+      <ST><![CDATA[IF bInitFB THEN
+	bInitFB := FALSE;
+	F_CreateLinkedListHnd( ADR( aNodes ), SIZEOF( aNodes ), hList );
+	stError.ObjectId := nObjectID;
+	stError.HardwareGrp := E_HardwareGrp.Nothing;
+END_IF
+
+CASE eCurrentState OF
+	E_MachineState.MACHINESTATE_Active:
+		bBusy := TRUE;
+		IF bInitAxis THEN	//Initialisieren
+			A_Init();
+			IF nStateA_InitAxis >= 80 THEN
+				IF nStateA_InitAxis >= 99 THEN
+					bError := TRUE;
+				END_IF
+				bInitAxis := FALSE;
+				nStateA_InitAxis := 0;
+				M_RemoveListEntry(nSearchValue:= E_Action.ACTION_Init);
+			END_IF
+		END_IF
+		
+		IF bJogXY THEN	//Joggen
+			A_JogXY();
+			IF nStateA_JogXY >= 80 THEN
+				IF nStateA_JogXY >= 99 THEN
+					bError := TRUE;
+				END_IF
+				bJogXY := FALSE;
+				nStateA_JogXY := 0;
+				M_RemoveListEntry(nSearchValue:= E_Action.ACTION_Jog);
+			END_IF
+		END_IF
+
+		IF bMoveX THEN	//Move X absolut oder relativ
+			A_MoveX();
+			IF nStateA_MoveX >= 80 THEN
+				IF nStateA_MoveX >= 99 THEN
+					bStopAllOnError := TRUE; 
+					bError := TRUE;
+				END_IF
+				bMoveX := FALSE;
+				bXYIsMoving := FALSE;
+				nStateA_MoveX := 0;
+				M_RemoveListEntry(nSearchValue:= E_Action.ACTION_MoveX);
+			END_IF
+		END_IF		
+		
+		IF bMoveY THEN	//Move Y absolut oder relativ
+			A_MoveY();
+			IF nStateA_MoveY >= 80 THEN
+				IF nStateA_MoveY >= 99 THEN
+					bStopAllOnError := TRUE;
+					bError := TRUE;
+				END_IF
+				bMoveY := FALSE;
+				bXYIsMoving := FALSE;
+				nStateA_MoveY := 0;
+				M_RemoveListEntry(nSearchValue:= E_Action.ACTION_MoveY);
+			END_IF
+		END_IF	
+
+		IF bMoveXY THEN	//Move XY absolut oder relativ
+			A_MoveXY();
+			IF nStateA_MoveXY >= 80 THEN
+				IF nStateA_MoveXY >= 99 THEN
+					bStopAllOnError := TRUE; 
+					bError := TRUE;
+				END_IF
+				bMoveXY := FALSE;
+				bXYIsMoving := FALSE;
+				nStateA_MoveXY := 0;
+				M_RemoveListEntry(nSearchValue:= E_Action.ACTION_MoveXY);
+			END_IF
+		END_IF
+		
+		IF bMoveZ THEN	//Move Z absolut oder relativ
+			A_MoveZ();
+			IF nStateA_MoveZ >= 80 THEN
+				IF nStateA_MoveZ >= 99 THEN
+					bStopAllOnError := TRUE;
+					bError := TRUE;
+				END_IF
+				bMoveZ := FALSE;
+				bZIsMoving := FALSE;
+				nStateA_MoveZ := 0;
+				M_RemoveListEntry(nSearchValue:= E_Action.ACTION_MoveZ);
+			END_IF
+		END_IF		
+		
+		IF bStop THEN	//alle Actions stoppen
+			A_Stop();
+			IF nStateA_Stop >= 80 THEN
+				IF nStateA_Stop >= 99 THEN
+					bError := TRUE;					
+				END_IF
+				M_RemoveListEntry(nSearchValue:= E_Action.ACTION_Stop);
+				bStop := FALSE;
+				nStateA_Stop := 0;
+				bCanceled := TRUE;
+			END_IF							
+		END_IF
+
+		IF hList.nCount = 0 THEN
+			eCurrentState := E_MachineState.MACHINESTATE_Ready;
+		END_IF
+		
+		IF bError THEN
+			IF hList.nCount > 1 THEN	//mehr Aktionen als die den Fehler verursachende
+				bStop := TRUE;
+			ELSE
+				eCurrentState := E_MachineState.MACHINESTATE_Error;	
+			END_IF
+		END_IF
+
+	E_MachineState.MACHINESTATE_Reset:
+		A_Reset();
+		//Wenn A_Reset() in SpezialFB existiert, dann wird sie dort aufgerufen
+		//in diesem Fall wird FB_MzBase.A_Reset() von SpezialFB über SUPER^.A_Reset() aufgerufen
+		
+		IF nStateA_ResetBase >= 80 THEN
+			IF nStateA_ResetBase >= 99 THEN
+				bError := TRUE;
+				eCurrentState := E_MachineState.MACHINESTATE_Error;
+			ELSE
+				fbList.A_Reset(hList := hList);
+				bStopAllOnError := FALSE;
+				bError := FALSE;
+				eCurrentState := E_MachineState.MACHINESTATE_Idle;
+			END_IF
+			bBusy := FALSE;
+			nStateA_ResetBase := 0;
+			nStateA_ResetTool := 0;
+			nStateA_ResetSpec := 0;
+		END_IF
+END_CASE
+
+//Nicht im CASE-Block, damit busy in gleichem Zyklus zurückgesetzt wird		
+IF eCurrentState = E_MachineState.MACHINESTATE_Ready THEN
+		bBusy := FALSE;
+		eCurrentState := E_MachineState.MACHINESTATE_Idle;
+ELSIF eCurrentState = E_MachineState.MACHINESTATE_Error THEN
+		bBusy := FALSE;
+END_IF
+
+//Prozessdaten aktualisieren
+stProcessData.nObjId := nObjectID;
+stProcessData.n32Data[0] := BOOL_TO_DINT(P_bIsInit);
+stProcessData.n32Data[1] := eCurrentState;
+stProcessData.n32Data[2] := stError.ErrorId;]]></ST>
+    </Implementation>
+    <Action Name="A_Init" Id="{cb8fb62f-1258-4748-a841-7a6a21b68ff2}">
+      <Implementation>
+        <ST><![CDATA[//Initilaisierung erfolgt jeweils in FB_MzTool.A_Init() und FB_XXXX.A_Init()]]></ST>
+      </Implementation>
+    </Action>
+    <Action Name="A_JogXY" Id="{9935cac7-87cf-40f5-8564-df273a66c940}">
+      <Implementation>
+        <ST><![CDATA[IF nStateA_JogXY = 0 THEN
+	IF bJogXYModeInching THEN
+		nStateA_JogXY := 1;	//Incr
+	ELSE
+		nStateA_JogXY := 3;	//Continous
+	END_IF
+END_IF
+ 
+IF nStateA_JogXY = 1 THEN	//incrementellen Jog-Befehl 1x absetzen
+	CASE eJogXYDirection OF
+		E_MoveDirection.DIRECTION_XPLUS:
+			nCurrentJogXYAxis := 1;
+			pXDrive^.M_Jog(bForward:= TRUE, bBackward:= FALSE, bInching:= TRUE, rDistance:= rJogXYDistance, rSpeed:= rJogXYSpeed);
+			bXYIsMoving := TRUE;
+		E_MoveDirection.DIRECTION_XMINUS:	
+			nCurrentJogXYAxis := 1;
+			pXDrive^.M_Jog(bForward:= FALSE, bBackward:= TRUE, bInching:= TRUE, rDistance:= rJogXYDistance, rSpeed:= rJogXYSpeed);
+			bXYIsMoving := TRUE;
+			bXYIsMoving := TRUE;
+		E_MoveDirection.DIRECTION_YPLUS:
+			nCurrentJogXYAxis := 2;
+			pYDrive^.M_Jog(bForward:= TRUE, bBackward:= FALSE, bInching:= TRUE, rDistance:= rJogXYDistance, rSpeed:= rJogXYSpeed);
+			bXYIsMoving := TRUE;
+		E_MoveDirection.DIRECTION_YMINUS:
+			nCurrentJogXYAxis := 2;
+			pYDrive^.M_Jog(bForward:= FALSE, bBackward:= TRUE, bInching:= TRUE, rDistance:= rJogXYDistance, rSpeed:= rJogXYSpeed);
+			bXYIsMoving := TRUE;
+	END_CASE
+	nStateA_JogXY := 2;
+END_IF
+
+IF nStateA_JogXY = 2 THEN //warten bis inkrementelles Joggen fertig bzw auf neuen Befehl warten
+	IF NOT bJogXYModeInching THEN //Wechseln zu kontinulierlichem Joggen
+		nStateA_JogXY := 3;
+	END_IF
+	
+	IF eJogXYDirection = E_MoveDirection.DIRECTION_STOP THEN
+		nStateA_JogXY := 4;
+	END_IF
+END_IF
+
+IF nStateA_JogXY = 3 THEN //zyklisches Absetzen des kontinuierlichen Jog-Befehls, hier kann auch Stop abgesetzt werden, bzw neuer inkr. Befehl
+	IF bJogXYImpuls THEN
+		CASE eJogXYDirection OF
+			E_MoveDirection.DIRECTION_STOP:
+				nStateA_JogXY := 4;
+			E_MoveDirection.DIRECTION_XPLUS:
+				nCurrentJogXYAxis := 1;
+				pXDrive^.M_Jog(bForward:= TRUE, bBackward:= FALSE, bInching:= FALSE, rDistance:= rJogXYDistance, rSpeed:= rJogXYSpeed);
+				bXYIsMoving := TRUE;
+			E_MoveDirection.DIRECTION_XMINUS:	
+				nCurrentJogXYAxis := 1;
+				pXDrive^.M_Jog(bForward:= FALSE, bBackward:= TRUE, bInching:= FALSE, rDistance:= rJogXYDistance, rSpeed:= rJogXYSpeed);
+				bXYIsMoving := TRUE;
+				bXYIsMoving := TRUE;
+			E_MoveDirection.DIRECTION_YPLUS:
+				nCurrentJogXYAxis := 2;
+				pYDrive^.M_Jog(bForward:= TRUE, bBackward:= FALSE, bInching:= FALSE, rDistance:= rJogXYDistance, rSpeed:= rJogXYSpeed);
+				bXYIsMoving := TRUE;
+			E_MoveDirection.DIRECTION_YMINUS:
+				nCurrentJogXYAxis := 2;
+				pYDrive^.M_Jog(bForward:= FALSE, bBackward:= TRUE, bInching:= FALSE, rDistance:= rJogXYDistance, rSpeed:= rJogXYSpeed);
+				bXYIsMoving := TRUE;
+		END_CASE
+	END_IF
+	bJogXYImpuls := FALSE;
+END_IF
+
+IF nStateA_JogXY = 4 THEN //Stop
+	pXDrive^.M_Jog(bForward:= FALSE, bBackward:= FALSE, bInching:= FALSE, rDistance:= 0.0, rSpeed:= 0.0);
+	pYDrive^.M_Jog(bForward:= FALSE, bBackward:= FALSE, bInching:= FALSE, rDistance:= 0.0, rSpeed := 0.0);
+	//IF bJogXYModeInching THEN
+		pXDrive^.M_Stop();
+		pYDrive^.M_Stop();
+	//END_IF
+	nStateA_JogXY := 5;
+END_IF
+
+//Abfragen, ob Jogging fertig
+IF nCurrentJogXYAxis = 1 THEN	//X
+	IF NOT pXDrive^.P_bBusy THEN
+		IF pXDrive^.P_bError THEN
+			stError.ErrorId := pXDrive^.P_nErrorId;
+			stError.HardwareGrp := E_HardwareGrp.AxisX;
+			stError.HardwareNr	:= 1;
+			stError.POUState := nStateA_JogXY;
+			nStateA_JogXY := 99;
+		ELSE
+			nStateA_JogXY := 80;	
+		END_IF
+		nCurrentJogXYAxis := 0;
+		bXYIsMoving := FALSE;
+	END_IF
+ELSIF nCurrentJogXYAxis = 2 THEN	//Y
+	IF NOT pYDrive^.P_bBusy THEN
+		IF pYDrive^.P_bError THEN
+			stError.ErrorId := pYDrive^.P_nErrorId;
+			stError.HardwareGrp := E_HardwareGrp.AxisY;
+			stError.HardwareNr	:= 1;
+			stError.POUState := nStateA_JogXY;
+			nStateA_JogXY := 99;
+		ELSE
+			nStateA_JogXY := 80;	
+		END_IF
+		nCurrentJogXYAxis := 0;
+		bXYIsMoving := FALSE;
+	END_IF
+ELSE
+	nStateA_JogXY := 80;
+END_IF
+
+//Errorhandling
+IF nStateA_JogXY = 99 THEN
+	stError.Cmd := E_Action.ACTION_Jog;
+	stError.POU := E_POU.POU_FB_MzBase;
+	stError.POUAction := E_POUACT.POUACT_A_JogXY;
+	fbErrorList.M_Add(stError);
+END_IF]]></ST>
+      </Implementation>
+    </Action>
+    <Action Name="A_MoveX" Id="{1ea90e71-51ae-49b2-a6d4-cbb93cc272e3}">
+      <Implementation>
+        <ST><![CDATA[stError.POUState := nStateA_MoveX;
+
+CASE nStateA_MoveX OF
+	0:	
+		IF NOT bIgnoreZCollision THEN
+			//Distanz ermitteln, für ev. Freifahren der Z-Achsen
+			IF eMoveMode = E_MoveMode.MODE_Relative THEN
+				rDistanceX := rMovePositionX;
+			ELSIF eMoveMode = E_MoveMode.MODE_AbsWithOffset THEN
+				st3DPoint := P_stCurrentPosTotal;
+				rDistanceX := ABS(rMovePositionX - st3DPoint.X);
+			ELSIF eMoveMode = E_MoveMode.MODE_AbsNoneOffset THEN
+				rDistanceX := ABS(rMovePositionX - pXDrive^.P_rActPos);
+			END_IF
+			
+			stActionData.eAction := E_Action.ACTION_MoveZ;
+			stActionData.aParams[1] := E_MoveMode.MODE_Free;
+			stActionData.aParams[3] := -1;
+			
+			//Bei MoveX müssen definitiv die Achsen aller Heads kollisionsfrei sein
+			nStateA_MoveX := 1;
+			FOR i:= 1 TO fbObjectDirectory.nCntMZHead BY 1 DO
+				IF NOT afbMzHead[i].P_bCollFree THEN
+					stError.ErrorId := afbMzHead[i].M_ExeAction(stActionData);
+					IF stError.ErrorId > 0 THEN
+						stError.HardwareGrp := E_HardwareGrp.AxisZ;
+						stError.HardwareNr := 0;
+						nStateA_MoveX := 99;
+						EXIT;
+					END_IF
+				END_IF
+			END_FOR
+		ELSE
+			nStateA_MoveX := 2;
+		END_IF
+		
+	1:	//warten bis beide Köpfe fertig
+		nStateA_MoveX := 2;
+		FOR i:= 1 TO fbObjectDirectory.nCntMZHead BY 1 DO
+			IF afbMzHead[i].M_GetActionBusy(E_Action.ACTION_MoveZ) THEN
+				nStateA_MoveX := 1;
+			END_IF
+			IF afbMzHead[i].P_bError THEN
+				stError.ErrorId := afbMzHead[i].P_nErrorId;
+				stError.HardwareGrp := E_HardwareGrp.AxisZ;
+				nStateA_MoveX := 99;
+				EXIT;
+			END_IF
+		END_FOR			
+		
+	2:	//In Abhängigkeit von MoveMode absolut oder relativ fahren
+		IF eMoveMode = E_MoveMode.MODE_Relative THEN	//Relativ
+			stError.ErrorId := pXDrive^.M_MoveRel(rDistance:= rMovePositionX, rSpeed:= rMoveSpeedX, rAcceleration:= 0.0, rDeceleration:= 0.0);
+			nStateA_MoveX := 3; 
+		ELSIF eMoveMode = E_MoveMode.MODE_AbsWithOffset THEN	//Absolut mit Offsets
+			//Achsenposition berechnen
+			//Position ergibt sich aus Zielposition abzüglich aller Offsets
+			st3DPoint := P_stAbsPosTotal;	//Summe aller Offsets
+			rMovePositionX := rMovePositionX - st3DPoint.X;
+			stError.ErrorId := pXDrive^.M_MoveAbs(rPosition:= rMovePositionX, rSpeed:= rMoveSpeedX, rAcceleration:= 0.0, rDeceleration:= 0.0);
+			nStateA_MoveX := 3; 
+		ELSIF eMoveMode = E_MoveMode.MODE_AbsNoneOffset THEN	//Absolut OHNE Offsets!!
+			stError.ErrorId := pXDrive^.M_MoveAbs(rPosition:= rMovePositionX, rSpeed:= rMoveSpeedX, rAcceleration:= 0.0, rDeceleration:= 0.0);
+ 			nStateA_MoveX := 3;
+		ELSIF eMoveMode = E_MoveMode.MODE_Home THEN	//auf 0 fahren
+			stError.ErrorId := pXDrive^.M_MoveAbs(rPosition:= 0.0, rSpeed:= rMoveSpeedX, rAcceleration:= 0.0, rDeceleration:= 0.0);
+ 			nStateA_MoveX := 3;
+		ELSE
+			nStateA_MoveX := 99; //Error (Dieser Fall sollte nicht auftreten. MoveMode wird in M_ExeAction() abgefangen)
+		END_IF
+		
+		IF stError.ErrorId > 0 THEN
+			stError.HardwareGrp := E_HardwareGrp.AxisX;
+			nStateA_MoveX := 99;
+		END_IF
+		
+	3:	//Warten bis Positionierung fertig
+		IF NOT pXDrive^.P_bBusy THEN
+			IF pXDrive^.P_bError THEN
+				stError.ErrorId := pXDrive^.P_nErrorId;
+				stError.HardwareNr	:= 1;
+				//fbXDrive resetten!!
+ 				nStateA_MoveX := 99;
+			ELSE
+				nStateA_MoveX := 80;
+			END_IF
+		END_IF
+	
+	70:	//Stoppen
+		pXDrive^.M_Stop();
+		IF NOT pXDrive^.P_bBusy THEN
+			nStateA_MoveX := 80;
+		END_IF
+END_CASE
+
+//Errorhandling
+IF nStateA_MoveX = 99 THEN
+	stError.ObjectId := nObjectID;
+	stError.Cmd := E_Action.ACTION_MoveX;
+	stError.POU := E_POU.POU_FB_MzBase;
+	stError.POUAction := E_POUACT.POUACT_A_MoveX;
+	fbErrorList.M_Add(stError);
+END_IF]]></ST>
+      </Implementation>
+    </Action>
+    <Action Name="A_MoveXY" Id="{a18248e0-4505-4f01-ad91-ed9dee680559}">
+      <Implementation>
+        <ST><![CDATA[stError.POUState := nStateA_MoveXY;
+
+//States sind in separaten IF-Blöcken, um Zyklen zu sparen
+IF nStateA_MoveXY = 0 THEN
+	stCurrentPosPhys := P_stCurrentPosPhys;
+	nStateA_MoveXY := 1;
+	//Distanz ermitteln, für ev. Freifahren der Z-Achsen
+	IF eMoveMode = E_MoveMode.MODE_Relative THEN
+		rDistanceX := rMovePositionX;
+		rDistanceY := rMovePositionY;
+	ELSIF eMoveMode = E_MoveMode.MODE_AbsWithOffset THEN
+		st3DPoint := P_stCurrentPosTotal;
+		rDistanceX := ABS(rMovePositionX - st3DPoint.X);
+		rDistanceY := ABS(rMovePositionY - st3DPoint.Y);
+	ELSIF eMoveMode = E_MoveMode.MODE_AbsNoneOffset THEN
+		rDistanceX := ABS(rMovePositionX - pXDrive^.P_rActPos);
+		rDistanceY := ABS(rMovePositionY - pYDrive^.P_rActPos);
+	END_IF
+	
+	IF eCrashAvoidanceMode = E_CrashAvoidanceMode.MoveAllFree THEN
+		stActionData.eAction := E_Action.ACTION_MoveZ;
+		stActionData.aParams[1] := E_MoveMode.MODE_Free;
+		stActionData.aParams[3] := -1; //MaxSpeed
+		
+		//Die Achsen ermitteln, bei denen der CollFreeArea in den Verfahrweg passt
+		//und diese dann vom Freifahren ausschließen
+		
+		//Wenn nur X-Speed = 0 -> X wird nicht bewegt, dann müssen nur die Achsen des eigenen Heads
+		//freigefahren werden
+		IF rMoveSpeedX = 0 THEN
+			IF NOT P_pMzHead^.M_GetCollFree(rDistanceX,rDistanceY) THEN
+				stError.ErrorId := P_pMzHead^.M_ExeAction(stActionData);
+				IF stError.ErrorId > 0 THEN
+					stError.HardwareGrp := E_HardwareGrp.AxisZ;
+					stError.HardwareNr := 0;
+					nStateA_MoveXY := 99;
+				END_IF
+			END_IF
+		ELSE
+			FOR i:= 1 TO fbObjectDirectory.nCntMZHead BY 1 DO
+				IF NOT afbMzHead[i].M_GetCollFree(rDistanceX,rDistanceY) THEN
+					stError.ErrorId := afbMzHead[i].M_ExeAction(stActionData);
+					IF stError.ErrorId > 0 THEN
+						stError.HardwareGrp := E_HardwareGrp.AxisZ;
+						stError.HardwareNr := 0;
+						nStateA_MoveXY := 99;
+					END_IF
+				END_IF
+			END_FOR				
+		END_IF
+	ELSIF eCrashAvoidanceMode = E_CrashAvoidanceMode.MoveNoneFree THEN //Crash-Vermeidung ist deaktiviert
+		nStateA_MoveXY := 2;
+	ELSIF eCrashAvoidanceMode = E_CrashAvoidanceMode.MoveUnusedFree THEN //Alle anderen Tools werden auf FreeHeight gefahren, für sich selbst erfolgt Targetüberwachung
+		//Rechteck bilden aus aktueller Position und Zielposition
+		//In diesem Rechteck darf sich auf aktueller Höhe kein Target befinden
+		recteMoveRange.M_Clear();
+		stCurrentPos := P_stCurrentPosTotal;
+		 
+		IF (rDistanceX > 0.0) THEN
+			recteMoveRange.X1 := stCurrentPos.X;
+			recteMoveRange.X2 := stCurrentPos.X + rDistanceX + P_rToolRadius;
+		ELSE
+			recteMoveRange.X2 := stCurrentPos.X;
+			recteMoveRange.X1 := stCurrentPos.X + rDistanceX - P_rToolRadius;
+		END_IF
+		
+		IF (rDistanceY > 0.0) THEN
+			recteMoveRange.Y1 := stCurrentPos.Y;
+			recteMoveRange.Y2 := stCurrentPos.Y + rDistanceY + P_rToolRadius;
+		ELSE
+			recteMoveRange.Y2 := stCurrentPos.Y;
+			recteMoveRange.Y1 := stCurrentPos.Y + rDistanceY - P_rToolRadius;
+		END_IF
+		
+		IF P_pMzHead^.P_bIsTopHead THEN
+			pHighestTarget := pAssignWorkplate^.M_GetHighestTarget(recteMoveRange,0.0);	
+		END_IF
+		
+		IF pHighestTarget > 0 THEN //bei unteren Head gibt es kein highest target
+			//Ist pHighestTarget eine MTP? und recteMoveRange innerhalb eines Wells?
+			IF pHighestTarget^.P_eObjectType = E_ObjectType.OBJECTTYPE_Mtp THEN
+				//Mtp erhält einen Methode M_RectIsInnerWell
+				pMtp := pHighestTarget;
+				IF NOT pMtp^.M_GetRectIsInnerWell(recteMoveRange) THEN
+					stError.ErrorId := E_ErrorIdCmd.ERRORID_MoveXYRiskOfCrash;
+					nStateA_MoveXY := 99;
+				END_IF
+			ELSIF pHighestTarget^.P_eObjectType = E_ObjectType.OBJECTTYPE_CustomUnitType1 THEN
+				//CustomUnitType1 erhält eine Methode M_RectIsInnerSlot
+				pCustomUnitType1 := pHighestTarget;
+				IF NOT pCustomUnitType1^.M_GetRectIsInnerSlot(recteMoveRange) THEN
+					stError.ErrorId := E_ErrorIdCmd.ERRORID_MoveXYRiskOfCrash;
+					nStateA_MoveXY := 99;
+				END_IF
+			ELSIF pHighestTarget^.P_eObjectType = E_ObjectType.OBJECTTYPE_Slide OR 
+					pHighestTarget^.P_eObjectType = E_ObjectType.OBJECTTYPE_SpotArray OR
+					pHighestTarget^.P_eObjectType = E_ObjectType.OBJECTTYPE_TargetTray THEN
+				IF NOT F_RectInnerRect(recteMoveRange, pHighestTarget^.P_fbAbsRect) THEN
+					stError.ErrorId := E_ErrorIdCmd.ERRORID_MoveXYRiskOfCrash;
+					nStateA_MoveXY := 99;
+				END_IF
+			ELSIF pHighestTarget^.P_eObjectType = E_ObjectType.OBJECTTYPE_HighVoltTray THEN
+				//Hier sind manchmal Slides in das Tray eingelassen
+				IF NOT F_RectInnerRect(recteMoveRange, pHighestTarget^.P_fbAbsRect) THEN
+					stError.ErrorId := E_ErrorIdCmd.ERRORID_MoveXYRiskOfCrash;
+					nStateA_MoveXY := 99;
+				END_IF
+			ELSIF (pHighestTarget^.P_rAbsFreeHeight > stCurrentPosPhys.Z) THEN
+				stError.ErrorId := E_ErrorIdCmd.ERRORID_MoveXYRiskOfCrash;
+				nStateA_MoveXY := 99;
+			END_IF
+		END_IF
+		
+		IF nStateA_MoveXY <> 99 THEN
+			//Alle anderen Tools freifahren
+			IF rMoveSpeedX = 0 THEN	//Falls kein X-Move, dann braucht CoHead nicht freigefahren werden
+				IF NOT P_pMzHead^.M_GetCollFree(rDistanceX,rDistanceY) THEN
+					stError.ErrorId := P_pMzHead^.M_MoveFree(THIS);
+					IF stError.ErrorId > 0 THEN
+						stError.HardwareGrp := E_HardwareGrp.AxisZ;
+						stError.HardwareNr := 0;
+						nStateA_MoveXY := 99;
+					END_IF
+				END_IF				
+			ELSE
+				
+				IF NOT P_pMzHead^.M_GetCollFree(rDistanceX,rDistanceY) THEN
+					stError.ErrorId := P_pMzHead^.M_MoveFree(THIS);
+					IF stError.ErrorId > 0 THEN
+						stError.HardwareGrp := E_HardwareGrp.AxisZ;
+						stError.HardwareNr := 0;
+						nStateA_MoveXY := 99;
+					END_IF
+				END_IF
+				
+				IF nStateA_MoveXY <> 99 THEN
+					IF P_pMzHead^.P_pCoHead > 0 THEN
+						IF NOT P_pMzHead^.P_pCoHead^.M_GetCollFree(rDistanceX,rDistanceY) THEN
+							stError.ErrorId := P_pMzHead^.P_pCoHead^.M_MoveFree(0);
+							IF stError.ErrorId > 0 THEN
+								stError.HardwareGrp := E_HardwareGrp.AxisZ;
+								stError.HardwareNr := 0;
+								nStateA_MoveXY := 99;
+							END_IF
+						END_IF
+					END_IF
+				END_IF
+			END_IF
+		END_IF
+	ELSE
+		stError.ErrorId := E_ErrorIdCmd.ERRORID_InvalidCrashAvoidanceMode;
+		nStateA_MoveXY := 99;
+	END_IF
+END_IF
+		
+//warten bis beide Köpfe fertig
+IF nStateA_MoveXY = 1 THEN
+	//nochmal zu State 0 wechseln, dadurch wird erneut festgestellt, ob alles frei??
+	//würde allerdings noch einen Zyklus kosten
+	nStateA_MoveXY := 2;
+	FOR i:= 1 TO fbObjectDirectory.nCntMZHead BY 1 DO
+		IF afbMzHead[i].M_GetActionBusy(E_Action.ACTION_MoveZ) THEN
+			nStateA_MoveXY := 1;
+		END_IF
+		IF afbMzHead[i].P_bError THEN
+			stError.ErrorId := afbMzHead[i].P_nErrorId;
+			stError.HardwareGrp := E_HardwareGrp.AxisZ;
+			nStateA_MoveXY := 99;
+			EXIT;
+		END_IF
+	END_FOR
+END_IF
+
+//In Abhängigkeit von MoveMode absolut oder relativ fahren
+IF nStateA_MoveXY = 2 THEN
+	IF bSynchron THEN
+		F_SynchronizeSpeeds(rSpeedSum:= rMoveSpeedX, rDistance1:= rDistanceX, rDistance2:= rDistanceY, rSpeed1:= rMoveSpeedX, rSpeed2 := rMoveSpeedY);	
+	END_IF
+	nStateA_MoveXY := 3;
+	IF eMoveMode = E_MoveMode.MODE_Relative THEN	//Relativ
+		stError.ErrorId := pXDrive^.M_MoveRel(rDistance:= rMovePositionX, rSpeed:= rMoveSpeedX, rAcceleration:= 0.0, rDeceleration:= 0.0);
+		IF stError.ErrorId > 0 THEN
+			stError.HardwareGrp := E_HardwareGrp.AxisX;
+			stError.POUState := nStateA_MoveXY;
+			nStateA_MoveXY := 99;
+		ELSE
+			stError.ErrorId := pYDrive^.M_MoveRel(rDistance:= rMovePositionY, rSpeed:= rMoveSpeedY, rAcceleration:= 0.0 ,rDeceleration:= 0.0);
+			IF stError.ErrorId > 0 THEN //XDrive muss abgebrochen werden
+				pXDrive^.M_Stop();
+				stError.HardwareGrp := E_HardwareGrp.AxisY;
+				nStateA_MoveXY := 99;
+			END_IF
+		END_IF
+	ELSIF eMoveMode = E_MoveMode.MODE_AbsWithOffset THEN	//Absolut mit Offsets
+		//Position ergibt sich aus Zielposition abzüglich aller Offsets
+		st3DPoint := P_stAbsPosTotal;	//Summe aller Offsets
+		rMovePositionX := rMovePositionX - st3DPoint.X;
+		rMovePositionY := rMovePositionY - st3DPoint.Y;
+		IF rDistanceX <> 0 THEN
+			stError.ErrorId := pXDrive^.M_MoveAbs(rPosition:= rMovePositionX, rSpeed:= rMoveSpeedX ,rAcceleration:= 0.0, rDeceleration:= 0.0);	
+		END_IF
+		
+		IF stError.ErrorId > 0 THEN
+			stError.HardwareGrp := E_HardwareGrp.AxisX;
+			nStateA_MoveXY := 99;
+		ELSE
+			IF rDistanceY <> 0 THEN
+				stError.ErrorId := pYDrive^.M_MoveAbs(rPosition:= rMovePositionY, rSpeed:= rMoveSpeedY ,rAcceleration:= 0.0, rDeceleration:= 0.0);	
+			END_IF
+			IF stError.ErrorId > 0 THEN //XDrive muss abgebrochen werden
+				pXDrive^.M_Stop();
+				stError.HardwareGrp := E_HardwareGrp.AxisY;
+				nStateA_MoveXY := 99;
+			END_IF
+		END_IF
+	ELSIF eMoveMode = E_MoveMode.MODE_AbsNoneOffset THEN	//Absolut OHNE Offsets!!
+		stError.ErrorId := pXDrive^.M_MoveAbs(rPosition:= rMovePositionX, rSpeed:= rMoveSpeedX ,rAcceleration:= 0.0, rDeceleration:= 0.0);
+		IF stError.ErrorId > 0 THEN
+			stError.HardwareGrp := E_HardwareGrp.AxisX;
+			nStateA_MoveXY := 99;
+		ELSE
+			stError.ErrorId := pYDrive^.M_MoveAbs(rPosition:= rMovePositionY, rSpeed:= rMoveSpeedY ,rAcceleration:= 0.0, rDeceleration:= 0.0);
+			IF stError.ErrorId > 0 THEN //XDrive muss abgebrochen werden
+				pXDrive^.M_Stop();
+				stError.HardwareGrp := E_HardwareGrp.AxisY;
+				nStateA_MoveXY := 99;
+			END_IF
+		END_IF
+	ELSIF eMoveMode = E_MoveMode.MODE_Home THEN	//auf 0 fahren
+		stError.ErrorId := pXDrive^.M_MoveAbs(rPosition:= 0.0, rSpeed:= rMoveSpeedX ,rAcceleration:= 0.0, rDeceleration:= 0.0);
+		IF stError.ErrorId > 0 THEN
+			stError.HardwareGrp := E_HardwareGrp.AxisX;
+			nStateA_MoveXY := 99;
+		ELSE
+			stError.ErrorId := pYDrive^.M_MoveAbs(rPosition:= 0.0, rSpeed:= rMoveSpeedY ,rAcceleration:= 0.0, rDeceleration:= 0.0);
+			IF stError.ErrorId > 0 THEN //XDrive muss abgebrochen werden
+				pXDrive^.M_Stop();
+				stError.HardwareGrp := E_HardwareGrp.AxisY;
+				nStateA_MoveXY := 99;
+			END_IF
+		END_IF
+	END_IF
+//Warten bis Positionierung fertig
+ELSIF nStateA_MoveXY = 3 THEN
+	IF pXDrive^.P_bError THEN
+		pYDrive^.M_Stop();
+		stError.ErrorId := pXDrive^.P_nErrorId;
+		stError.HardwareGrp := E_HardwareGrp.AxisX;
+		stError.HardwareNr	:= 1;
+		nStateA_MoveXY := 99;
+	ELSIF pYDrive^.P_bError THEN
+		pXDrive^.M_Stop();
+		stError.ErrorId := pYDrive^.P_nErrorId;
+		stError.HardwareGrp := E_HardwareGrp.AxisY;
+		stError.HardwareNr	:= 1;
+		nStateA_MoveXY := 99;
+	ELSE
+		IF NOT (pXDrive^.P_bBusy OR pYDrive^.P_bBusy) THEN
+			nStateA_MoveXY := 80;
+		END_IF
+	END_IF
+//Stoppen
+ELSIF nStateA_MoveXY = 70 THEN
+	pXDrive^.M_Stop();
+	pYDrive^.M_Stop();
+	IF NOT (pXDrive^.P_bBusy OR pYDrive^.P_bBusy) THEN
+		nStateA_MoveXY := 80;
+	END_IF
+END_IF
+
+//Errorhandling
+IF nStateA_MoveXY = 99 THEN
+	stError.ObjectId := nObjectID;
+	stError.Cmd := E_Action.ACTION_MoveXY;
+	stError.POU := E_POU.POU_FB_MzBase;
+	stError.POUAction := E_POUACT.POUACT_A_MoveXY;
+	fbErrorList.M_Add(stError);
+END_IF]]></ST>
+      </Implementation>
+    </Action>
+    <Action Name="A_MoveY" Id="{113dd112-03a5-4cd4-ace6-40d021133d39}">
+      <Implementation>
+        <ST><![CDATA[stError.POUState := nStateA_MoveY;
+
+CASE nStateA_MoveY OF
+	0:
+		IF NOT bIgnoreZCollision THEN
+			//Distanz ermitteln, für ev. Freifahren der Z-Achsen
+			IF eMoveMode = E_MoveMode.MODE_Relative THEN
+				rDistanceY := rMovePositionY;
+			ELSIF eMoveMode = E_MoveMode.MODE_AbsWithOffset THEN
+				st3DPoint := P_stCurrentPosTotal;
+				rDistanceY := ABS(rMovePositionY - st3DPoint.Y);
+			ELSIF eMoveMode = E_MoveMode.MODE_AbsNoneOffset THEN
+				rDistanceY := ABS(rMovePositionY - pYDrive^.P_rActPos);
+			END_IF
+			
+			stActionData.eAction := E_Action.ACTION_MoveZ;
+			stActionData.aParams[1] := E_MoveMode.MODE_Free;
+			stActionData.aParams[3] := -1;	//MaxSpeed
+			
+			//MoveY erfordert nur, dass die Achsen am selben Head OK sind
+			nStateA_MoveY := 1;
+			IF NOT P_pMzHead^.P_bCollFree THEN
+				stError.ErrorId := P_pMzHead^.M_ExeAction(stActionData);
+				IF stError.ErrorId > 0 THEN
+					stError.Cmd := E_Action.ACTION_MoveZ;
+					nStateA_MoveY := 99;
+				END_IF
+			END_IF
+		ELSE
+			nStateA_MoveY := 2;		
+		END_IF		
+
+	1:	//warten bis alle Achsen fertig
+		nStateA_MoveY := 2;
+		pHead := P_pMzHead;
+		IF pHead^.M_CheckChildsForActionBusy(E_Action.ACTION_MoveZ) THEN
+			nStateA_MoveY := 1;
+		END_IF
+		
+		stError.ErrorId := pHead^.M_CheckChildsForError(); 
+		IF stError.ErrorId > 0 THEN
+			nStateA_MoveY := 99;
+		END_IF
+
+	2:	//In Abhängigkeit von MoveMode absolut oder relativ fahren
+		IF eMoveMode = E_MoveMode.MODE_Relative THEN	//Relativ
+			stError.ErrorId := pYDrive^.M_MoveRel(rDistance:= rMovePositionY, rSpeed:= rMoveSpeedY, rAcceleration:= 0.0, rDeceleration:= 0.0);
+			nStateA_MoveY := 3; 
+		ELSIF eMoveMode = E_MoveMode.MODE_AbsWithOffset THEN	//Absolut mit Offsets
+			//Achsenposition berechnen
+			//Position ergibt sich aus Zielposition abzüglich aller Offsets
+			st3DPoint := P_stAbsPosTotal;	//Summe aller Offsets
+			rMovePositionY := rMovePositionY - st3DPoint.Y;
+			stError.ErrorId := pYDrive^.M_MoveAbs(rPosition:= rMovePositionY, rSpeed:= rMoveSpeedY, rAcceleration:= 0.0, rDeceleration:= 0.0);
+			nStateA_MoveY := 3; 
+		ELSIF eMoveMode = E_MoveMode.MODE_AbsNoneOffset THEN	//Absolut OHNE Offsets!!
+			stError.ErrorId := pYDrive^.M_MoveAbs(rPosition:= rMovePositionY, rSpeed:= rMoveSpeedY, rAcceleration:= 0.0, rDeceleration:= 0.0); 
+			nStateA_MoveY := 3;
+		ELSIF eMoveMode = E_MoveMode.MODE_Home THEN	//auf 0 fahren
+			stError.ErrorId := pYDrive^.M_MoveAbs(rPosition:= 0.0, rSpeed:= rMoveSpeedY, rAcceleration:= 0.0, rDeceleration:= 0.0); 
+			nStateA_MoveY := 3;
+		ELSE
+			nStateA_MoveY := 99; //Error (Dieser Fall sollte nicht auftreten. MoveMode wird in M_ExeAction() abgefangen)
+		END_IF
+		
+		IF stError.ErrorId > 0 THEN
+			nStateA_MoveY := 99;
+		END_IF	
+
+	3:	//Warten bis Positionierung fertig
+		IF NOT pYDrive^.P_bBusy THEN
+			IF pYDrive^.P_bError THEN
+				stError.ErrorId := pYDrive^.P_nErrorId;
+				//fbYDrive resetten!!
+ 				nStateA_MoveY := 99;
+			ELSE
+				nStateA_MoveY := 80;
+			END_IF
+		END_IF
+
+	70:	//Stoppen
+		pYDrive^.M_Stop();
+		IF NOT pYDrive^.P_bBusy THEN
+			nStateA_MoveY := 80;
+		END_IF		
+END_CASE
+
+//Errorhandling
+IF nStateA_MoveY = 99 THEN
+	stError.HardwareGrp := E_HardwareGrp.AxisY;
+	stError.HardwareNr := 1;
+	stError.Cmd := E_Action.ACTION_MoveY;
+	stError.POU := E_POU.POU_FB_MzBase;
+	stError.POUAction := E_POUACT.POUACT_A_MoveY;
+	fbErrorList.M_Add(stError);
+END_IF]]></ST>
+      </Implementation>
+    </Action>
+    <Action Name="A_MoveZ" Id="{d7ea602f-5929-4cb4-a373-a1f189b6a250}">
+      <Implementation>
+        <ST><![CDATA[]]></ST>
+      </Implementation>
+    </Action>
+    <Action Name="A_Reset" Id="{cbb5ad01-db84-4e48-86cd-ad7643722f0c}">
+      <Implementation>
+        <ST><![CDATA[IF nStateA_ResetBase = 0 THEN //ist noch irgendeine Action aktiv?		
+	IF bJogXY THEN
+		bJogXY := FALSE;
+		nStateA_JogXY := 0;
+	END_IF
+	IF bMoveX THEN
+		bMoveX := FALSE;
+		bXYIsMoving := FALSE;
+		nStateA_MoveX := 0;
+	END_IF
+	IF bMoveY THEN
+		bMoveY := FALSE;
+		bXYIsMoving := FALSE;
+		nStateA_MoveY := 0;
+	END_IF		
+	IF bMoveXY THEN
+		bMoveXY := FALSE;
+		bXYIsMoving := FALSE;
+		nStateA_MoveXY := 0;
+	END_IF
+	IF bMoveZ THEN
+		bMoveZ := FALSE;
+		nStateA_MoveZ := 80;
+	END_IF		
+	nStateA_InitAxis := 0;
+	nStateA_JogXY := 0;
+	nStateA_Stop := 0;
+	nStateA_MoveX := 0;
+	nStateA_MoveY := 0;
+	nStateA_MoveXY := 0;
+	nStateA_MoveZ := 0;
+	nStateA_ResetBase := 0;
+	nStateA_ResetSpec := 0;
+	bXYIsMoving := FALSE;
+	bZIsMoving := FALSE;		
+	nStateA_ResetBase := 1;
+ELSIF nStateA_ResetBase = 1 THEN //Warten, bis Drives zurückgesetzt
+	IF NOT (pXDrive^.P_bError OR pYDrive^.P_bError) THEN 
+		nStateA_ResetBase := 2;
+	END_IF
+ELSIF nStateA_ResetBase = 2 THEN	//ResetTool ready?		
+	IF nStateA_ResetTool = 80 THEN
+		stError.ErrorId := 0;
+		nStateA_ResetBase := 80;
+	ELSIF nStateA_ResetTool >= 80 THEN
+		nStateA_ResetBase := 99;
+	END_IF
+END_IF]]></ST>
+      </Implementation>
+    </Action>
+    <Action Name="A_Stop" Id="{b95c87f5-2a1c-433a-8c5c-254cfae199a6}">
+      <Implementation>
+        <ST><![CDATA[//Diese Aktion wird in der Regel vom "FB_Tool.A_stop()" aufgerufen
+//kommt der Aufruf von "FB_Tool.A_stop()" das erst mal, ist "nStateA_Stop" = 2
+
+IF nStateA_Stop <= 2 THEN
+	IF bInitAxis AND nStateA_InitAxis < 70 THEN
+		nStateA_InitAxis := 70;
+	END_IF
+	
+	IF bJogXY AND nStateA_JogXY < 4 THEN
+		nStateA_JogXY := 4;
+	END_IF
+	
+	IF bMoveX AND nStateA_MoveX < 70 THEN	//X-Move stoppen
+		nStateA_MoveX := 70;
+	END_IF
+	
+	IF bMoveY AND nStateA_Movey < 70 THEN	//X-Move stoppen
+		nStateA_MoveY := 70;
+	END_IF	
+	
+	IF bMoveXY AND nStateA_MoveXY < 70 THEN	//X-Move stoppen
+		bFlagMoveX := TRUE;
+		bFlagMoveY := TRUE;
+		nStateA_MoveXY := 70;
+	END_IF
+
+	IF bMoveZ AND nStateA_MoveZ < 70 THEN	//Z-Move stoppen
+		nStateA_MoveZ := 70;
+	END_IF
+	
+	nStateA_Stop := 3;
+
+ELSIF nStateA_Stop = 3 THEN
+	//Warten bis alle Actions abgebrochen
+	IF hList.nCount = 1 THEN	//nur der Eintrag von Stop
+		nStateA_Stop := 80;
+	END_IF	
+END_IF]]></ST>
+      </Implementation>
+    </Action>
+    <Method Name="M_AddChild" Id="{f9cbc5dd-1d65-4f84-989e-945992d61b0a}">
+      <Declaration><![CDATA[METHOD M_AddChild : ERRORID
+VAR_INPUT
+	pObject	: POINTER TO FB_Object;
+	nSlotNr	: UINT;
+	nIndex : INT;
+END_VAR
+]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[//Die Methode muss zwingend von den abgeleiteten FBs implementiert werden]]></ST>
+      </Implementation>
+    </Method>
+    <Method Name="M_CancelAction" Id="{f56956bd-0a51-47ce-a58e-7af4e1b5406e}">
+      <Declaration><![CDATA[METHOD M_CancelAction
+VAR_INPUT
+	eAction : E_Action;
+END_VAR
+]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[CASE eAction OF
+	E_Action.ACTION_Init:
+		IF bInitAxis AND nStateA_InitAxis < 70 THEN
+			nStateA_InitAxis := 70;
+		END_IF	
+	E_Action.ACTION_Jog:
+		IF bJogXY AND nStateA_JogXY < 4 THEN	//Jogging stoppen
+			nStateA_JogXY := 4;
+		END_IF	
+	E_Action.ACTION_MoveX:
+		IF bMoveX AND nStateA_MoveX < 70 THEN	//X-Move stoppen
+			nStateA_MoveX := 70;
+		END_IF	
+	E_Action.ACTION_MoveY:
+		IF bMoveY AND nStateA_Movey < 70 THEN	//X-Move stoppen
+			nStateA_MoveY := 70;
+		END_IF	
+	E_Action.ACTION_MoveZ:
+		IF bMoveZ AND nStateA_MoveZ < 70 THEN	//Z-Move stoppen
+			nStateA_MoveZ := 70;
+		END_IF	
+	E_Action.ACTION_MoveXY:
+		IF bMoveXY AND nStateA_MoveXY < 70 THEN	//X-Move stoppen
+			bFlagMoveX := TRUE;
+			bFlagMoveY := TRUE;
+			nStateA_MoveXY := 70;
+		END_IF
+END_CASE]]></ST>
+      </Implementation>
+    </Method>
+    <Method Name="M_CheckAction" Id="{dd0b1c53-a238-45d2-b04e-3985e2e5af14}">
+      <Declaration><![CDATA[METHOD M_CheckAction : ERRORID
+VAR_INPUT
+	refActionData 	: REFERENCE TO ST_ActionData;
+	pCorrelObject	: POINTER TO FB_Object;
+END_VAR
+]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[M_CheckAction := E_ErrorIdCmd.ERRORID_InvalidAction;]]></ST>
+      </Implementation>
+    </Method>
+    <Method Name="M_CheckMoveLimit" Id="{8c322e7e-a3e8-4985-9143-233250777601}">
+      <Declaration><![CDATA[METHOD M_CheckMoveLimit : BOOL
+VAR_INPUT
+	sAxis			: STRING[2];
+	eMoveMode		: E_MoveMode;
+	rMovePosition	: REAL;
+END_VAR
+
+VAR
+	st3DPoint		: ST_3DPoint;
+	rMovePosTemp	: REAL;
+END_VAR
+]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[IF sAxis = 'X' THEN 
+	IF eMoveMode = E_MoveMode.MODE_Relative THEN	//Relativ
+		rMovePosTemp := pXDrive^.P_rActPos + rMovePosition; 
+	ELSIF eMoveMode = E_MoveMode.MODE_AbsWithOffset THEN	//Absolut mit Offsets
+		st3DPoint := P_stAbsPosTotal;	//Summe aller Offsets
+		rMovePosTemp := rMovePosition - st3DPoint.X;
+	ELSIF eMoveMode = E_MoveMode.MODE_AbsNoneOffset THEN	//Absolut OHNE Offsets!!
+		rMovePosTemp := rMovePosition;
+	END_IF
+	
+	IF rMovePosTemp >= pXDrive^.P_rMinPos AND rMovePosTemp <= pXDrive^.P_rMaxPos THEN
+		M_CheckMoveLimit := TRUE;
+	END_IF
+ELSIF sAxis = 'Y' THEN
+	IF eMoveMode = E_MoveMode.MODE_Relative THEN	//Relativ
+		rMovePosTemp := pYDrive^.P_rActPos + rMovePosition; 
+	ELSIF eMoveMode = E_MoveMode.MODE_AbsWithOffset THEN	//Absolut mit Offsets
+		st3DPoint := P_stAbsPosTotal;	//Summe aller Offsets
+		rMovePosTemp := rMovePosition - st3DPoint.Y;
+	ELSIF eMoveMode = E_MoveMode.MODE_AbsNoneOffset THEN	//Absolut OHNE Offsets!!
+		rMovePosTemp := rMovePosition;
+	END_IF
+
+	IF rMovePosTemp >= pYDrive^.P_rMinPos AND rMovePosTemp <= pYDrive^.P_rMaxPos THEN
+		M_CheckMoveLimit := TRUE;
+	END_IF
+END_IF]]></ST>
+      </Implementation>
+    </Method>
+    <Method Name="M_CheckProcDataType" Id="{4b3321e5-064a-4165-aa4d-ae6656bd053c}">
+      <Declaration><![CDATA[METHOD M_CheckProcDataType : BOOL
+VAR_INPUT
+	eProcDataType : E_ProcDataType;
+END_VAR
+]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[]]></ST>
+      </Implementation>
+    </Method>
+    <Method Name="M_CheckProps" Id="{53a87ef7-0927-4dd3-884b-fbb149dea396}">
+      <Declaration><![CDATA[METHOD M_CheckProps : ERRORID
+VAR_INPUT
+END_VAR
+]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[
+]]></ST>
+      </Implementation>
+    </Method>
+    <Method Name="M_ClearAllProps" Id="{101a82a6-5f12-4e11-9617-0a0b7da78993}">
+      <Declaration><![CDATA[METHOD M_ClearAllProps
+VAR_INPUT
+	bIgnoreParent : BOOL; //Es wird das gesamte OD gelöscht. -> Zeiger auf Parent nicht mehr gültig!
+END_VAR
+]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[pPiece := 0;
+bInitFB := TRUE;
+nObjectID := 0;
+nDeviceIdx := 0;
+nNotifyId := 0;
+fbSlotList.M_Reset();
+pObjCollectNode := 0;
+MEMSET(ADR(stProcessData),0,SIZEOF(stProcessData));]]></ST>
+      </Implementation>
+    </Method>
+    <Method Name="M_ClearOffset" Id="{f30682d4-eb73-4573-ac20-5af1f0c96308}">
+      <Declaration><![CDATA[METHOD M_ClearOffset
+VAR_INPUT
+END_VAR
+]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[stOffset.X := 0.0;
+stOffset.Y := 0.0;
+stOffset.Z := 0.0;]]></ST>
+      </Implementation>
+    </Method>
+    <Method Name="M_ExeAction" Id="{7a2d7270-d6b7-4fd8-a440-cf672c90a049}">
+      <Declaration><![CDATA[METHOD M_ExeAction : ERRORID
+VAR_INPUT
+	refActionData : REFERENCE TO ST_ActionData;	
+END_VAR
+VAR
+	bRiskOfCrash	: BOOL;
+END_VAR]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[//In dieser Methode muss gecheckt werden, ob die entsprechende BasicAction auch zum aktuellen Zeitpunkt auch ausgeführt werden kann
+bCanceled := FALSE;	//wozu das ??
+
+IF NOT (eCurrentState = E_MachineState.MACHINESTATE_Idle OR
+	eCurrentState = E_MachineState.MACHINESTATE_Active OR
+	eCurrentState = E_MachineState.MACHINESTATE_Ready) THEN
+	M_ExeAction := E_ErrorIdCmd.ERRORID_InvalidState;
+	RETURN;
+END_IF
+
+CASE refActionData.eAction OF
+	E_Action.ACTION_Init:
+		IF NOT bInitAxis THEN
+			bReInit := DINT_TO_BOOL(refActionData.aParams[1]);
+			bInitAxis := TRUE;			
+			fbList.A_AddHeadValue(hList := hList, putValue := E_Action.ACTION_Init); 
+			//bIsInit := FALSE;
+		ELSE
+			RETURN;
+		END_IF
+		
+	E_Action.ACTION_Jog:
+		
+		//XY-Axis muss initialisiert sein
+		//Wenn kein MzHead, dann fragen, ob übergeordneter MzHead initialisiert
+		IF NOT P_bXYIsInit THEN
+			M_ExeAction := E_ErrorIdCmd.ERRORID_DeviceNotInitialized;
+			RETURN;
+		END_IF
+		//Action darf eingetragen werden wenn:
+		//wenn Action noch nicht aktiv oder
+		//wenn Action aktiv und nJogDirection = 0
+		//wenn Action aktiv und Jogmode = Continous und aktueller Jogmode = Continous
+
+		eJogXYDirectionNew := DINT_TO_USINT(refActionData.aParams[2]);
+		bJogXYModeInchingNew := DINT_TO_BOOL(refActionData.aParams[1]);
+		//rJogXYSpeed wird weiter unten in Abhängigkeit von Richtung gesetzt
+		
+		rJogXYDistance := DINT_TO_REAL(refActionData.aParams[4]);
+		
+		//Wenn es einen Richtungswechsel gibt, dann darf "bJogXY" nicht aktiv sein
+		
+		IF bJogXY THEN //Action schon aktiv 
+			//Wird nur ausgeführt wenn:
+			//JogDirection = E_MoveDirection.DIRECTION_STOP
+			//neuer und alter JogMode = Continous
+			IF NOT ((eJogXYDirectionNew = E_MoveDirection.DIRECTION_STOP) OR 
+					((eJogXYDirectionNew = eJogXYDirection) AND
+					(bJogXYModeInchingNew = FALSE AND bJogXYModeInching = FALSE))) THEN
+				RETURN;
+			END_IF
+		ELSE
+			IF eJogXYDirectionNew = E_MoveDirection.DIRECTION_XPLUS OR eJogXYDirectionNew = E_MoveDirection.DIRECTION_XMINUS
+ 				OR eJogXYDirectionNew = E_MoveDirection.DIRECTION_YPLUS OR eJogXYDirectionNew = E_MoveDirection.DIRECTION_YMINUS THEN
+				//Checken ob bei im Inching-Mode die Endlagen überschritten werden
+				IF bJogXYModeInchingNew THEN	//Inching-Mode
+					CASE eJogXYDirectionNew OF
+						E_MoveDirection.DIRECTION_XPLUS:
+							IF (pXDrive^.P_rActPos + rJogXYDistance) > pXDrive^.P_rMaxPos THEN
+								rJogXYDistance := pXDrive^.P_rMaxPos - pXDrive^.P_rActPos - 5.0;
+							END_IF
+						E_MoveDirection.DIRECTION_XMINUS:
+							IF (pXDrive^.P_rActPos - rJogXYDistance) < pXDrive^.P_rMinPos THEN
+								//JogDistance auf aktuelle Distance - 5 verkleinern
+								rJogXYDistance := pXDrive^.P_rActPos - pXDrive^.P_rMinPos;
+								IF rJogXYDistance < 0.0 THEN
+									rJogXYDistance := 0.0;
+								END_IF
+							END_IF
+						E_MoveDirection.DIRECTION_YPLUS:
+							IF (pYDrive^.P_rActPos + rJogXYDistance) > pYDrive^.P_rMaxPos THEN
+								rJogXYDistance := pYDrive^.P_rMaxPos - pYDrive^.P_rActPos - 5.0;
+							END_IF
+						E_MoveDirection.DIRECTION_YMINUS:
+							IF (pYDrive^.P_rActPos - rJogXYDistance) < pYDrive^.P_rMinPos THEN
+								rJogXYDistance := pYDrive^.P_rActPos - 5.0;
+							END_IF
+					END_CASE
+				END_IF
+				//Checken ob MzTools kollisionsfrei und Speed setzen
+				IF eJogXYDirectionNew = E_MoveDirection.DIRECTION_YPLUS OR eJogXYDirectionNew = E_MoveDirection.DIRECTION_YMINUS THEN
+					rJogXYSpeed := MIN(DINT_TO_REAL(refActionData.aParams[3]),pYDrive^.P_rMaxSpeed);
+					IF NOT P_pMzHead^.P_bCollFree THEN
+						bRiskOfCrash := TRUE;
+					END_IF
+				ELSIF eJogXYDirectionNew = E_MoveDirection.DIRECTION_XPLUS OR eJogXYDirectionNew = E_MoveDirection.DIRECTION_XMINUS THEN
+					rJogXYSpeed := MIN(DINT_TO_REAL(refActionData.aParams[3]),pXDrive^.P_rMaxSpeed);
+					//Hier muss die Kollisionsgefährung aller Köpfe gecheckt werden
+					FOR i:= 1 TO fbObjectDirectory.nCntMZHead BY 1 DO
+						IF NOT afbMzHead[i].P_bCollFree THEN
+							bRiskOfCrash := TRUE;
+						END_IF
+					END_FOR
+				END_IF
+				
+				IF bRiskOfCrash THEN
+					IF bJogXYModeInchingNew THEN	//Modus Inching -> nur Schrittweite von max 1mm zulassen
+						IF rJogXYDistance > 1000.0 THEN
+							M_ExeAction := E_ErrorIdCmd.ERRORID_JogDistanceRiskOfCrash;
+							RETURN;
+						END_IF
+					ELSE	//Modus Continous -> nur Geschwindigkeit von max 1mm/sec
+						IF rJogXYSpeed > 5000.0 THEN
+							M_ExeAction := E_ErrorIdCmd.ERRORID_JogSpeedRiskOfCrash;
+							RETURN;
+						END_IF
+					END_IF
+				END_IF
+			ELSE
+				IF NOT bJogXYModeInchingNew THEN
+					rJogXYDistance := 999999.9;
+				END_IF
+			END_IF
+		END_IF
+
+		eJogXYDirection := eJogXYDirectionNew;
+		bJogXYModeInching := bJogXYModeInchingNew;
+		
+		//In LinkedListCtrl eintragen - wenn schon vorhanden, dann überschreiben!!
+		getPosPtr := 0;	//nach vorhandenem Eintrag suchen - beginnen an Anfang
+		fbList.A_FindNext(hList := hList, putPosPtr := getPosPtr, putValue := E_Action.ACTION_Jog, getValue=>getValue, getPosPtr=>getPosPtr );
+
+		IF NOT fbList.bOk THEN	//Eintrag wurde nicht gefunden
+			//Übeprüfen, ob jeweilige Achse referenziert
+			IF eJogXYDirection = E_MoveDirection.DIRECTION_XPLUS OR eJogXYDirection = E_MoveDirection.DIRECTION_XMINUS THEN	//X
+				IF NOT pXDrive^.P_bHomed THEN
+					M_ExeAction := E_ErrorIdMultiZ.ERRORID_AxisNotHomed;
+					RETURN;
+				END_IF
+			ELSIF eJogXYDirection = E_MoveDirection.DIRECTION_YPLUS OR eJogXYDirection = E_MoveDirection.DIRECTION_YMINUS THEN	//Y
+				IF NOT pYDrive^.P_bHomed THEN
+					M_ExeAction := E_ErrorIdMultiZ.ERRORID_AxisNotHomed;
+					RETURN;
+				END_IF
+			END_IF
+			bJogXY := TRUE;
+			bJogXYImpuls := TRUE;
+			bJogXYClock := TRUE;			
+			fbList.A_AddHeadValue(hList := hList, putValue := E_Action.ACTION_Jog);
+			bBusy := TRUE;
+		ELSE	//Eintrag wurde gefunden
+			bJogXYClock := NOT bJogXYClock;
+			bJogXYImpuls := TRUE;
+		END_IF
+	
+	E_Action.ACTION_MoveX:
+		IF NOT bMoveX THEN 
+			IF NOT pXDrive^.P_bHomed THEN
+				M_ExeAction := E_ErrorIdMultiZ.ERRORID_AxisNotHomed;
+				RETURN;
+			END_IF
+			
+			//Check MoveMode			
+			eMoveMode := DINT_TO_USINT(refActionData.aParams[1]);
+			IF NOT (eMoveMode = E_MoveMode.MODE_Relative OR eMoveMode = E_MoveMode.MODE_AbsWithOffset OR
+				eMoveMode = E_MoveMode.MODE_AbsWithOffset OR eMoveMode = E_MoveMode.MODE_AbsNoneOffset OR
+ 				eMoveMode = E_MoveMode.MODE_Home) THEN
+				M_ExeAction := E_ErrorIdCmd.ERRORID_InvalidMoveMode;  //Error
+				RETURN;			
+			END_IF
+			
+			rMovePositionX := DINT_TO_REAL(refActionData.aParams[2]);
+			//Targetposition auf Limits checken
+			IF NOT M_CheckMoveLimit(sAxis:= 'X', eMoveMode:= eMoveMode,rMovePosition:= rMovePositionX) THEN
+				M_ExeAction := E_ErrorIdCmd.ERRORID_TargetPosOutOfRangeX;  //Error
+				RETURN;
+			END_IF
+
+			rMoveSpeedX := MIN(DINT_TO_REAL(refActionData.aParams[3]),pXDrive^.P_rMaxSpeed);
+			
+			IF rMoveSpeedX < 0 THEN //Geschwindigkeitsangabe -1 = max. Geschwindigkeit
+				rMoveSpeedX := pXDrive^.P_rMaxSpeed;
+			END_IF
+			
+			bIgnoreZCollision := DINT_TO_BOOL(refActionData.aParams[4]);
+			bMoveXReady := FALSE;
+			bXYIsMoving := TRUE;
+			bMoveX := TRUE;
+			fbList.A_AddHeadValue(hList := hList, putValue := E_Action.ACTION_MoveX);
+		ELSE
+			M_ExeAction := E_ErrorIdCmd.ERRORID_BasicActionActive;  //Error
+			RETURN;			
+		END_IF
+		
+	E_Action.ACTION_MoveY:
+		IF NOT bMoveY THEN
+			IF NOT pYDrive^.P_bHomed THEN
+				M_ExeAction := E_ErrorIdMultiZ.ERRORID_AxisNotHomed;
+				RETURN;
+			END_IF
+			
+			//Check MoveMode			
+			eMoveMode := DINT_TO_USINT(refActionData.aParams[1]);
+			IF NOT (eMoveMode = E_MoveMode.MODE_Relative OR eMoveMode = E_MoveMode.MODE_AbsWithOffset OR
+				eMoveMode = E_MoveMode.MODE_AbsWithOffset OR eMoveMode = E_MoveMode.MODE_AbsNoneOffset OR
+ 				eMoveMode = E_MoveMode.MODE_Home) THEN
+				M_ExeAction := E_ErrorIdCmd.ERRORID_InvalidMoveMode;  //Error
+				RETURN;			
+			END_IF			
+
+			rMovePositionY := DINT_TO_REAL(refActionData.aParams[2]);
+			//Targetposition auf Limits checken
+			IF NOT M_CheckMoveLimit(sAxis:= 'Y', eMoveMode:= eMoveMode,rMovePosition:= rMovePositionY) THEN
+				M_ExeAction := E_ErrorIdCmd.ERRORID_TargetPosOutOfRangeY;
+				RETURN;
+			END_IF
+			
+			rMoveSpeedY := MIN(DINT_TO_REAL(refActionData.aParams[3]),pYDrive^.P_rMaxSpeed);
+			
+			IF rMoveSpeedY < 0 THEN //Geschwindigkeitsangabe -1 = max. Geschwindigkeit
+				rMoveSpeedY := pYDrive^.P_rMaxSpeed;
+			END_IF
+			
+			bIgnoreZCollision := DINT_TO_BOOL(refActionData.aParams[4]);			
+			bMoveYReady := FALSE;
+			bXYIsMoving := TRUE;
+			bMoveY := TRUE;							
+			fbList.A_AddHeadValue(hList := hList, putValue := E_Action.ACTION_MoveY);
+		ELSE
+			M_ExeAction := E_ErrorIdCmd.ERRORID_BasicActionActive;  //Error
+			RETURN;			
+		END_IF
+	
+	E_Action.ACTION_MoveXY:	
+		IF NOT bMoveXY THEN
+			IF NOT (pXDrive^.P_bHomed AND pYDrive^.P_bHomed) THEN
+				M_ExeAction := E_ErrorIdMultiZ.ERRORID_AxisNotHomed;
+				RETURN;
+			END_IF
+			
+			//Check MoveMode			
+			eMoveMode := DINT_TO_USINT(refActionData.aParams[1]);
+			IF NOT (eMoveMode = E_MoveMode.MODE_Relative OR eMoveMode = E_MoveMode.MODE_AbsWithOffset OR
+				eMoveMode = E_MoveMode.MODE_AbsWithOffset OR eMoveMode = E_MoveMode.MODE_AbsNoneOffset OR
+ 				eMoveMode = E_MoveMode.MODE_Home) THEN
+				M_ExeAction := E_ErrorIdCmd.ERRORID_InvalidMoveMode;  //Error
+				RETURN;			
+			END_IF			
+
+			//Targetposition X auf Limits checken
+			rMovePositionX := DINT_TO_REAL(refActionData.aParams[2]);
+			IF NOT M_CheckMoveLimit(sAxis:= 'X', eMoveMode:= eMoveMode,rMovePosition:= rMovePositionX) THEN
+				M_ExeAction := E_ErrorIdCmd.ERRORID_TargetPosOutOfRangeX;
+				RETURN;
+			END_IF
+			
+			//Targetposition Y auf Limits checken
+			rMovePositionY := DINT_TO_REAL(refActionData.aParams[3]);
+			IF NOT M_CheckMoveLimit(sAxis:= 'Y', eMoveMode:= eMoveMode,rMovePosition:= rMovePositionY) THEN
+				M_ExeAction := E_ErrorIdCmd.ERRORID_TargetPosOutOfRangeY;
+				RETURN;
+			END_IF
+			
+			rMoveSpeedX := MIN(DINT_TO_REAL(refActionData.aParams[4]),pXDrive^.P_rMaxSpeed);
+			rMoveSpeedY := MIN(DINT_TO_REAL(refActionData.aParams[5]),pYDrive^.P_rMaxSpeed);
+			
+			IF rMoveSpeedX < 0 THEN //Geschwindigkeitsangabe -1 = max. Geschwindigkeit
+				rMoveSpeedX := pXDrive^.P_rMaxSpeed;
+			END_IF
+
+			IF rMoveSpeedY < 0 THEN //Geschwindigkeitsangabe -1 = max. Geschwindigkeit
+				rMoveSpeedY := pYDrive^.P_rMaxSpeed;
+			END_IF
+
+			eCrashAvoidanceMode := DINT_TO_USINT(refActionData.aParams[6]);
+			bSynchron := DINT_TO_BOOL(refActionData.aParams[7]);
+			
+			bMoveXYReady := FALSE;
+			bMoveXReady := FALSE;
+			bMoveYReady := FALSE;
+			bXYIsMoving := TRUE;
+			bMoveXY := TRUE;							
+			fbList.A_AddHeadValue(hList := hList, putValue := E_Action.ACTION_MoveXY);
+		ELSE
+			M_ExeAction := E_ErrorIdCmd.ERRORID_BasicActionActive;  //Error
+			RETURN;
+		END_IF		
+		
+	E_Action.ACTION_Stop:
+		//Stop braucht nur ausgeführt werden, wenn irgendwas aktiv ist
+		IF bBusy AND NOT bStop AND hList.nCount > 0 THEN
+			bStop := TRUE;
+			fbList.A_AddHeadValue(hList := hList, putValue := E_Action.ACTION_Stop);
+		ELSE
+			RETURN;
+		END_IF
+	ELSE
+		M_ExeAction := E_ErrorIdCmd.ERRORID_InvalidAction; //Error
+		RETURN;
+END_CASE
+
+eCurrentState := E_MachineState.MACHINESTATE_Active;
+bBusy := TRUE;]]></ST>
+      </Implementation>
+    </Method>
+    <Method Name="M_GetActionBusy" Id="{cbfb3ee0-af62-4417-a2f4-bf6ff4e6915c}">
+      <Declaration><![CDATA[METHOD M_GetActionBusy : BOOL
+VAR_INPUT
+	eAction : E_Action;
+END_VAR
+]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[getPosPtr := 0;(* start from first node element *)
+fbList.A_FindNext( hList := hList, putPosPtr := getPosPtr, putValue := eAction, getValue=>getValue, getPosPtr=>getPosPtr );
+IF fbList.bOk THEN	//Eintrag wurde gefunden, d.h. Action ist noch busy
+	M_GetActionBusy := TRUE;
+END_IF]]></ST>
+      </Implementation>
+    </Method>
+    <Method Name="M_GetAllProps" Id="{a3afb593-03b6-4e9a-b0fc-14e722c8a4c6}">
+      <Declaration><![CDATA[METHOD M_GetAllProps : ERRORID
+VAR_INPUT
+	refCmdData : REFERENCE TO  ST_CmdData;
+END_VAR
+
+VAR
+	i 			: UINT;
+	pSlot		: POINTER TO FB_Slot;
+	stTempPos 	: ST_3DPoint;
+END_VAR]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[refCmdData.aHeader[0] := nObjectID;
+refCmdData.aHeader[1] := eObjectType;
+refCmdData.aHeader[2]:= nNotifyId;
+
+
+//Offset lesen
+refCmdData.n32Data[2] :=  REAL_TO_DINT(stRelPos.X);
+refCmdData.n32Data[3] :=  REAL_TO_DINT(stRelPos.Y);
+refCmdData.n32Data[4] :=  REAL_TO_DINT(stRelPos.Z);
+//Offset1 lesen
+refCmdData.n32Data[5] :=  REAL_TO_DINT(stOffset.X);
+refCmdData.n32Data[6] :=  REAL_TO_DINT(stOffset.Y);
+refCmdData.n32Data[7] :=  REAL_TO_DINT(stOffset.Z);
+
+refCmdData.n32Data[8] :=  nNumberOfSlots;
+
+nCurrentPropIndex := 8;
+
+fbSlotList.M_SetCurrentToHead();
+
+FOR i := 1 TO nNumberOfSlots BY 1 DO
+	pSlot := fbSlotList.M_GetNext();
+	IF pSlot > 0 THEN
+		nCurrentPropIndex := nCurrentPropIndex + 1;
+		refCmdData.n32Data[nCurrentPropIndex] := pSlot^.P_nNr;
+		stTempPos := pSlot^.P_stRelPos;
+		nCurrentPropIndex := nCurrentPropIndex + 1;
+		refCmdData.n32Data[nCurrentPropIndex] := REAL_TO_DINT(stTempPos.X);
+		nCurrentPropIndex := nCurrentPropIndex + 1;
+		refCmdData.n32Data[nCurrentPropIndex] := REAL_TO_DINT(stTempPos.Y);
+		nCurrentPropIndex := nCurrentPropIndex + 1;
+		refCmdData.n32Data[nCurrentPropIndex] := REAL_TO_DINT(stTempPos.Z);		
+	END_IF
+END_FOR]]></ST>
+      </Implementation>
+    </Method>
+    <Method Name="M_GetCollFree" Id="{f98cff53-b11e-40d8-af90-4d0681cb0fed}">
+      <Declaration><![CDATA[METHOD M_GetCollFree : BOOL
+VAR_INPUT
+	rDistanceX : REAL;
+	rDistanceY : REAL;
+END_VAR
+
+VAR
+	stCurrPos : ST_3DPoint;
+	fbRect : FB_Rectangle;
+END_VAR
+]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[stCurrPos := P_stCurrentPosPhys;
+fbRect.X1 := stCurrPos.X;
+fbRect.Y1 := stCurrPos.Y;
+fbRect.X2 := stCurrPos.X + rDistanceX;
+fbRect.Y2 := stCurrPos.Y + rDistanceY;
+bDisableFreeMove := FALSE;
+IF F_RectInnerRect(fbRect,stAreaCollFree) THEN
+	bDisableFreeMove := TRUE;
+	M_GetCollFree := TRUE;
+ELSIF P_bCollFree THEN
+	M_GetCollFree := TRUE;
+END_IF]]></ST>
+      </Implementation>
+    </Method>
+    <Method Name="M_GetDevice" Id="{36a8802a-d0df-494f-a599-4e2dddb02d09}">
+      <Declaration><![CDATA[METHOD M_GetDevice : I_Device
+VAR_INPUT
+END_VAR
+]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[M_GetDevice := THIS^;]]></ST>
+      </Implementation>
+    </Method>
+    <Method Name="M_GetFirstErrorChild" Id="{28507e5b-6db5-4c7e-b79f-eec58e006995}">
+      <Declaration><![CDATA[METHOD M_GetFirstErrorChild : POINTER TO FB_MzTool
+VAR_INPUT
+	bSelf : BOOL;
+END_VAR
+
+VAR
+	pSlot : POINTER TO FB_Slot;
+	pTool : POINTER TO FB_MzTool;
+END_VAR
+
+]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[IF bSelf AND P_bError THEN
+	M_GetFirstErrorChild := THIS;
+	RETURN;
+END_IF
+fbSlotList.M_SetCurrentToHead();
+REPEAT
+	pSlot := fbSlotList.M_GetNext();
+	IF pSlot > 0 THEN
+		IF pSlot^.P_pChild > 0 THEN
+			IF pSlot^.P_pChild^.M_bIsGroup(E_ObjectGroup.OBJECTGROUP_MzTool) THEN
+				pTool := pSlot^.P_pChild;
+				M_GetFirstErrorChild := pTool^.M_GetFirstErrorChild(TRUE);
+				IF M_GetFirstErrorChild > 0 THEN
+					RETURN;
+				END_IF
+			END_IF
+		END_IF
+	END_IF
+UNTIL (pSlot = 0)
+END_REPEAT
+]]></ST>
+      </Implementation>
+    </Method>
+    <Method Name="M_GetMaxSpeed" Id="{7e4db3a5-9ec3-40d1-8fff-033cd8ffc7d8}">
+      <Declaration><![CDATA[METHOD M_GetMaxSpeed : REAL
+VAR_INPUT
+	eDirection : E_MoveDirection;
+END_VAR
+]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[CASE eDirection OF
+	E_MoveDirection.DIRECTION_XMINUS, E_MoveDirection.DIRECTION_XPLUS:
+		IF pXDrive > 0 THEN
+			M_GetMaxSpeed := pXDrive^.P_rMaxSpeed;
+		END_IF
+	E_MoveDirection.DIRECTION_YMINUS, E_MoveDirection.DIRECTION_YPLUS:
+		IF pYDrive > 0 THEN
+			M_GetMaxSpeed := pYDrive^.P_rMaxSpeed;
+		END_IF
+END_CASE]]></ST>
+      </Implementation>
+    </Method>
+    <Method Name="M_GetMinMaxActPos" Id="{b33f5cc2-8641-46cf-9697-ec2d4267707b}">
+      <Declaration><![CDATA[METHOD M_GetMinMaxActPos
+VAR_INPUT
+	pData : POINTER TO ARRAY[0..19] OF DINT;
+END_VAR
+VAR
+	stAbsPosTotal : ST_3DPoint;
+END_VAR
+]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[MEMSET(pData,0,SIZEOF(pData^));
+stAbsPosTotal := P_stAbsPosTotal;
+IF pXDrive > 0 THEN
+	pData^[0] := REAL_TO_DINT(pXDrive^.P_rMinPos + stAbsPosTotal.X);
+	pData^[1] := REAL_TO_DINT(pXDrive^.P_rMaxPos + stAbsPosTotal.X);	
+END_IF
+IF pYDrive > 0 THEN
+	pData^[2] := REAL_TO_DINT(pYDrive^.P_rMinPos + stAbsPosTotal.Y);
+	pData^[3] := REAL_TO_DINT(pYDrive^.P_rMaxPos + stAbsPosTotal.Y);	
+END_IF
+
+//wird in den abgeleiteten FBs weiter verrechnet
+pData^[4] := REAL_TO_DINT(stAbsPosTotal.Z);
+pData^[5] := pData^[4];]]></ST>
+      </Implementation>
+    </Method>
+    <Method Name="M_GetProcData" Id="{9eba8649-4cb2-4199-a108-326be9f554ee}">
+      <Declaration><![CDATA[METHOD M_GetProcData : DINT
+VAR_INPUT
+	eProcDataType : E_ProcDataType;
+END_VAR
+]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[]]></ST>
+      </Implementation>
+    </Method>
+    <Method Name="M_GetPropCheckSum" Id="{beca6b54-e34a-43f6-bea3-13c1ece9c9bd}">
+      <Declaration><![CDATA[METHOD M_GetPropCheckSum : UINT
+VAR_INPUT
+END_VAR
+
+VAR
+	i			: UINT;
+	stData 		: ST_CmdData;
+END_VAR]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[M_GetAllProps(stData);
+wChecksum := F_DATA_TO_CRC16_CCITT(ADR(stData.n32Data[0]),nNoOfProps * 4,16#FFFF);
+M_GetPropCheckSum := wChecksum;]]></ST>
+      </Implementation>
+    </Method>
+    <Method Name="M_GetSlot" Id="{5bf38d48-7f66-4c09-8857-15ea2b2f15c2}">
+      <Declaration><![CDATA[METHOD M_GetSlot : POINTER TO FB_Slot
+VAR_INPUT
+	nSlotNr	: UINT;
+END_VAR
+]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[M_GetSlot := fbSlotList.M_GetAtNr(nSlotNr);]]></ST>
+      </Implementation>
+    </Method>
+    <Method Name="M_GetSlotFromChild" Id="{fd1fbe30-0179-4971-9021-dac75c59f2ea}">
+      <Declaration><![CDATA[METHOD M_GetSlotFromChild : POINTER TO FB_Slot
+VAR_INPUT
+	pObject : POINTER TO FB_Object;
+END_VAR
+
+VAR
+	pSlot : POINTER TO FB_Slot;
+END_VAR]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[//Die SlotList iterieren und vergleichen ob Objekte übereinstimmen
+fbSlotList.M_SetCurrentToHead();
+REPEAT
+	pSlot := fbSlotList.M_GetNext();
+	IF pSlot > 0 THEN
+		IF pSlot^.P_pChild = pObject THEN
+			M_GetSlotFromChild := pSlot;
+			EXIT;
+		END_IF
+	END_IF
+UNTIL pSlot = 0
+END_REPEAT]]></ST>
+      </Implementation>
+    </Method>
+    <Method Name="M_GetXYRange" Id="{ec18b085-89ad-49bb-a4b2-ac1e10f10a52}">
+      <Declaration><![CDATA[METHOD M_GetXYRange : ST_Rectangle
+VAR_INPUT
+END_VAR
+VAR
+	stAbsPosTotal : ST_3DPoint;
+END_VAR]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[stAbsPosTotal := P_stAbsPosTotal;
+IF pXDrive > 0 THEN
+	M_GetXYRange.X1 := pXDrive^.P_rMinPos + stAbsPosTotal.X;
+	M_GetXYRange.X2 := pXDrive^.P_rMaxPos + stAbsPosTotal.X;	
+END_IF
+IF pYDrive > 0 THEN
+	M_GetXYRange.Y1 := pYDrive^.P_rMinPos + stAbsPosTotal.Y;
+	M_GetXYRange.Y2 := pYDrive^.P_rMaxPos + stAbsPosTotal.Y;	
+END_IF]]></ST>
+      </Implementation>
+    </Method>
+    <Method Name="M_GetZAxisRef" Id="{e013dc49-53a7-4dd3-bdf7-fc0544c05953}">
+      <Declaration><![CDATA[METHOD M_GetZAxisRef : POINTER TO FB_ZAxisRef
+VAR_INPUT
+	pTool : POINTER TO FB_MzTool;
+	pToolSlot : POINTER TO FB_Slot;
+END_VAR
+]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[]]></ST>
+      </Implementation>
+    </Method>
+    <Method Name="M_RawPosToRealPos" Id="{65780fa5-37f0-41ae-9655-9c981755bbc3}">
+      <Declaration><![CDATA[METHOD M_RawPosToRealPos : ST_3DPoint
+VAR_INPUT
+	stRawPos : ST_3DPoint;
+END_VAR
+
+VAR
+	stTemp		: ST_3DPoint;
+	stAbsPos : ST_3DPoint;
+END_VAR]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[]]></ST>
+      </Implementation>
+    </Method>
+    <Method Name="M_RemoveListEntry" Id="{5dced78b-fb65-4483-8dc5-f4c70eb42ea3}">
+      <Declaration><![CDATA[METHOD M_RemoveListEntry : BOOL
+VAR_INPUT
+	nSearchValue	: E_Action;
+END_VAR
+]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[getPosPtr := 0;(* start from first node element *)
+fbList.A_FindNext( hList := hList, putPosPtr := getPosPtr, putValue := nSearchValue, getValue=>getValue, getPosPtr=>getPosPtr );
+IF fbList.bOk THEN	//Eintrag wurde gefunden
+	fbList.A_RemoveValueAtPosPtr(hList:= hList,	putPosPtr:= getPosPtr);
+	IF fbList.bOk THEN
+		M_RemoveListEntry := TRUE;
+	END_IF
+END_IF
+]]></ST>
+      </Implementation>
+    </Method>
+    <Method Name="M_Reset" Id="{e230c62a-0142-4b1f-8e24-d4e5fa14f7b8}">
+      <Declaration><![CDATA[METHOD M_Reset
+]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[bBusy := TRUE;
+bFlagA_ResetBase := TRUE;
+eCurrentState := E_MachineState.MACHINESTATE_Reset;]]></ST>
+      </Implementation>
+    </Method>
+    <Method Name="M_SetAllProps" Id="{374f7038-b5aa-4675-ae03-134893e7892b}">
+      <Declaration><![CDATA[METHOD M_SetAllProps : ERRORID
+VAR_INPUT
+	refCmdData : REFERENCE TO  ST_CmdData;
+END_VAR
+
+VAR
+	nMzToolObjId		: UINT;
+	nParentMzToolObjId	: UINT;
+	i 					: UINT;
+	pSlot 				: POINTER TO FB_Slot;
+	stTempPos 			: ST_3DPoint;
+END_VAR]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[
+//RelPos setzen
+stRelPos.X:= DINT_TO_REAL(refCmdData.n32Data[2]);
+stRelPos.Y:= DINT_TO_REAL(refCmdData.n32Data[3]);
+stRelPos.Z:= DINT_TO_REAL(refCmdData.n32Data[4]);
+//Offset setzen
+stOffset.X:= DINT_TO_REAL(refCmdData.n32Data[5]);
+stOffset.Y:= DINT_TO_REAL(refCmdData.n32Data[6]);
+stOffset.Z:= DINT_TO_REAL(refCmdData.n32Data[7]);
+
+nCurrentPropIndex := 8;
+
+//Slots parametrieren
+nFirstSlotPropIndex := nCurrentPropIndex;
+nNumberOfSlots := DINT_TO_UINT(refCmdData.n32Data[nCurrentPropIndex]);
+
+//Falls SlotList noch nicht existiert, dann neue erstellen
+IF fbSlotList.P_nCount = 0 THEN
+	FOR i:= 1 TO nNumberOfSlots BY 1 DO
+		pSlot := __NEW(FB_Slot(pOwner := THIS));
+		fbSlotList.M_Add(pSlot);
+		nCurrentPropIndex := nCurrentPropIndex + 1;
+		pSlot^.P_nNr := DINT_TO_USINT(refCmdData.n32Data[nCurrentPropIndex]);
+		nCurrentPropIndex := nCurrentPropIndex + 1;
+		stTempPos.X := DINT_TO_REAL(refCmdData.n32Data[nCurrentPropIndex]);
+		nCurrentPropIndex := nCurrentPropIndex + 1;
+		stTempPos.Y := DINT_TO_REAL(refCmdData.n32Data[nCurrentPropIndex]);
+		nCurrentPropIndex := nCurrentPropIndex + 1;
+		stTempPos.Z := DINT_TO_REAL(refCmdData.n32Data[nCurrentPropIndex]);
+		pSlot^.P_stRelPos := stTempPos;
+	END_FOR
+ELSE
+	IF nNumberOfSlots <> fbSlotList.P_nCount THEN
+		M_SetAllProps := E_ErrorIdObjMgmt.ERRORID_ChangeNoOfSlotsNotAllowed;
+		RETURN;
+	END_IF
+	FOR i:= 1 TO nNumberOfSlots BY 1 DO
+		nCurrentPropIndex := nCurrentPropIndex + 1;
+		pSlot := fbSlotList.M_GetAtNr(DINT_TO_USINT(refCmdData.n32Data[nCurrentPropIndex]));
+		IF pSlot > 0 THEN
+			nCurrentPropIndex := nCurrentPropIndex + 1;
+			stTempPos.X := DINT_TO_REAL(refCmdData.n32Data[nCurrentPropIndex]);
+			nCurrentPropIndex := nCurrentPropIndex + 1;
+			stTempPos.Y := DINT_TO_REAL(refCmdData.n32Data[nCurrentPropIndex]);
+			nCurrentPropIndex := nCurrentPropIndex + 1;
+			stTempPos.Z := DINT_TO_REAL(refCmdData.n32Data[nCurrentPropIndex]);
+			pSlot^.P_stRelPos := stTempPos;
+		ELSE
+			M_SetAllProps := 222;
+			RETURN;
+		END_IF
+	END_FOR
+END_IF
+nLastSlotPropIndex := nCurrentPropIndex;
+
+nNoOfProps := nCurrentPropIndex + 1;]]></ST>
+      </Implementation>
+    </Method>
+    <Method Name="M_SetSingleProp" Id="{5f29e294-b3c2-486b-956f-da1989a82a3d}">
+      <Declaration><![CDATA[METHOD M_SetSingleProp : ERRORID
+VAR_INPUT
+	refCmdData : REFERENCE TO  ST_CmdData;
+END_VAR
+
+VAR
+	nSlotIndex	: UINT;
+	nIndex		: UINT;
+	pSlot		: POINTER TO FB_Slot;
+END_VAR]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[//Basisproperties schreiben
+CASE refCmdData.aHeader[1] OF	//Property-Nr
+	2:	//RelPosX
+		stRelPos.X := DINT_TO_REAL(refCmdData.n32Data[0]);
+	3:	//RelPosY
+		stRelPos.Y := DINT_TO_REAL(refCmdData.n32Data[0]);
+	4:	//RelPosZ
+		stRelPos.Z := DINT_TO_REAL(refCmdData.n32Data[0]);
+	5:	//OffsetY
+		stOffset.X := DINT_TO_REAL(refCmdData.n32Data[0]);
+	6:	//OffsetY
+		stOffset.Y := DINT_TO_REAL(refCmdData.n32Data[0]);
+	7:	//OffsetY
+		stOffset.Z := DINT_TO_REAL(refCmdData.n32Data[0]);
+	8:	//NumberOfSlots
+		M_SetSingleProp := E_ErrorIdCmd.ERRORID_InvalidProperty;
+	ELSE
+		//Handelt es sich bei dem PropNr um eine SlotPropNr?
+		IF refCmdData.aHeader[1] >= nFirstSlotPropIndex AND refCmdData.aHeader[1] <= nLastSlotPropIndex THEN
+			nIndex := (refCmdData.aHeader[1]- nFirstSlotPropIndex);	
+			IF nIndex MOD 4 = 0 THEN
+				nSlotIndex := nIndex / 4;
+			ELSE
+				nSlotIndex := nIndex / 4 + 1;
+			END_IF		
+			pSlot := fbSlotList.M_GetAtIndex(nSlotIndex);
+			IF pSlot > 0 THEN
+				nIndex := nIndex - ((nSlotIndex - 1)* 4);
+				CASE nIndex OF
+					2:	pSlot^.P_rRelPosX := DINT_TO_REAL(refCmdData.n32Data[0]);
+					
+					3:	pSlot^.P_rRelPosY := DINT_TO_REAL(refCmdData.n32Data[0]);
+					
+					4:	pSlot^.P_rRelPosZ := DINT_TO_REAL(refCmdData.n32Data[0]);
+				END_CASE
+			END_IF			
+		ELSE
+			M_SetSingleProp := E_ErrorIdCmd.ERRORID_InvalidProperty;
+		END_IF
+END_CASE]]></ST>
+      </Implementation>
+    </Method>
+    <Method Name="M_Stop" Id="{a8f647f1-3dfe-4ec7-a0b7-cca9ad9c7510}">
+      <Declaration><![CDATA[METHOD M_Stop : ERRORID
+VAR_INPUT
+END_VAR
+
+]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[stActionData.eAction := E_Action.ACTION_Stop;
+M_ExeAction(stActionData);]]></ST>
+      </Implementation>
+    </Method>
+    <Method Name="M_UpdateParent" Id="{1d0e57c0-b9b0-48a9-b289-b3ae4e5123bd}">
+      <Declaration><![CDATA[METHOD M_UpdateParent
+VAR_INPUT
+END_VAR
+]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[
+]]></ST>
+      </Implementation>
+    </Method>
+    <Property Name="P_bBusy" Id="{ccc4f6d8-f2c9-4163-99df-2631a7bffafc}">
+      <Declaration><![CDATA[PROPERTY P_bBusy : BOOL]]></Declaration>
+      <Get Name="Get" Id="{37651f46-ebbd-4afc-aa8e-b8e53dfd8375}">
+        <Declaration><![CDATA[VAR
+END_VAR
+]]></Declaration>
+        <Implementation>
+          <ST><![CDATA[P_bBusy := bBusy;]]></ST>
+        </Implementation>
+      </Get>
+    </Property>
+    <Property Name="P_bCanceled" Id="{c5c87891-5c41-4da1-8cdb-389174517f65}">
+      <Declaration><![CDATA[PROPERTY P_bCanceled : BOOL]]></Declaration>
+      <Get Name="Get" Id="{752fc195-9e43-4c54-8ed1-77a7ed26240f}">
+        <Declaration><![CDATA[VAR
+END_VAR
+]]></Declaration>
+        <Implementation>
+          <ST><![CDATA[P_bCanceled := bCanceled;]]></ST>
+        </Implementation>
+      </Get>
+    </Property>
+    <Property Name="P_bCollFree" Id="{61840915-7a7d-4d85-bacd-97c1acd0b160}">
+      <Declaration><![CDATA[PROPERTY P_bCollFree : BOOL]]></Declaration>
+      <Get Name="Get" Id="{d7d97497-5aff-4759-b5ef-04a6eb033be2}">
+        <Declaration><![CDATA[VAR
+END_VAR
+]]></Declaration>
+        <Implementation>
+          <ST><![CDATA[P_bCollFree := TRUE;]]></ST>
+        </Implementation>
+      </Get>
+    </Property>
+    <Property Name="P_bError" Id="{d591e5bf-5570-4c56-98cf-807c25cc78ef}">
+      <Declaration><![CDATA[PROPERTY P_bError : BOOL]]></Declaration>
+      <Get Name="Get" Id="{925f93ef-1c90-4b4f-87a4-d7320f0dd5fa}">
+        <Declaration><![CDATA[VAR
+END_VAR
+]]></Declaration>
+        <Implementation>
+          <ST><![CDATA[IF eCurrentState = E_MachineState.MACHINESTATE_Error THEN
+	P_bError := TRUE;
+END_IF]]></ST>
+        </Implementation>
+      </Get>
+    </Property>
+    <Property Name="P_bHasZSensorSlot" Id="{29feb4df-9ff0-431c-b8fb-3a077306ed75}">
+      <Declaration><![CDATA[PROPERTY P_bHasZSensorSlot : BOOL]]></Declaration>
+      <Get Name="Get" Id="{26802882-75ea-4ed1-96d4-7995c50c2fe9}">
+        <Declaration><![CDATA[VAR
+END_VAR
+]]></Declaration>
+        <Implementation>
+          <ST><![CDATA[]]></ST>
+        </Implementation>
+      </Get>
+    </Property>
+    <Property Name="P_bIsHot" Id="{e29a9437-a9f9-4591-bcc1-ae33e0edccd1}">
+      <Declaration><![CDATA[PROPERTY P_bIsHot : BOOL]]></Declaration>
+      <Get Name="Get" Id="{9b114c43-2fa9-4b88-888e-82cd2a01ae11}">
+        <Declaration><![CDATA[VAR
+END_VAR
+]]></Declaration>
+        <Implementation>
+          <ST><![CDATA[]]></ST>
+        </Implementation>
+      </Get>
+    </Property>
+    <Property Name="P_bIsInit" Id="{5558be73-3cc5-4057-9a55-00ee17f575f9}">
+      <Declaration><![CDATA[PROPERTY P_bIsInit : BOOL]]></Declaration>
+      <Get Name="Get" Id="{b7aa6eef-bcfe-47a3-bcc2-9c9cd6a2c2be}">
+        <Declaration><![CDATA[VAR
+END_VAR
+]]></Declaration>
+        <Implementation>
+          <ST><![CDATA[]]></ST>
+        </Implementation>
+      </Get>
+    </Property>
+    <Property Name="P_bMeasured" Id="{4181dc72-8b40-48ef-af98-493d13f66ac9}">
+      <Declaration><![CDATA[PROPERTY P_bMeasured : BOOL]]></Declaration>
+      <Get Name="Get" Id="{4a78e940-6b1b-4d5e-94b2-a7ed6a15f2ed}">
+        <Declaration><![CDATA[VAR
+END_VAR
+]]></Declaration>
+        <Implementation>
+          <ST><![CDATA[P_bMeasured := bMeasured; ]]></ST>
+        </Implementation>
+      </Get>
+      <Set Name="Set" Id="{484ad96d-5b8e-4e24-a6bf-7bbffe341f9f}">
+        <Declaration><![CDATA[VAR
+END_VAR
+]]></Declaration>
+        <Implementation>
+          <ST><![CDATA[bMeasured := P_bMeasured;]]></ST>
+        </Implementation>
+      </Set>
+    </Property>
+    <Property Name="P_bStopAllOnError" Id="{d1cf8652-1681-4890-a009-4d5feecaf752}">
+      <Declaration><![CDATA[PROPERTY P_bStopAllOnError : BOOL]]></Declaration>
+      <Get Name="Get" Id="{363380a9-45c8-4f2f-892d-f12a1a7be755}">
+        <Declaration><![CDATA[VAR
+END_VAR
+]]></Declaration>
+        <Implementation>
+          <ST><![CDATA[P_bStopAllOnError := bStopAllOnError;]]></ST>
+        </Implementation>
+      </Get>
+    </Property>
+    <Property Name="P_bXYIsInit" Id="{7b9fe4ad-97c0-483f-936c-4c3e78e7df37}">
+      <Declaration><![CDATA[PROPERTY P_bXYIsInit : BOOL]]></Declaration>
+      <Get Name="Get" Id="{febd1332-4227-4f02-bbc1-8220612f515a}">
+        <Declaration><![CDATA[VAR
+END_VAR
+]]></Declaration>
+        <Implementation>
+          <ST><![CDATA[P_bXYIsInit :=  bInitAxisOk AND pXDrive^.P_bHomed AND pYDrive^.P_bHomed;]]></ST>
+        </Implementation>
+      </Get>
+    </Property>
+    <Property Name="P_bXYIsMoving" Id="{c2648689-9bb9-418d-9401-c3c240ac21ab}">
+      <Declaration><![CDATA[PROPERTY P_bXYIsMoving : BOOL]]></Declaration>
+      <Get Name="Get" Id="{cde52b9d-1cfa-4a31-aa27-3790218471dd}">
+        <Declaration><![CDATA[
+]]></Declaration>
+        <Implementation>
+          <ST><![CDATA[]]></ST>
+        </Implementation>
+      </Get>
+      <Set Name="Set" Id="{684f535d-df5e-4e77-acff-e99ea57fda42}">
+        <Declaration><![CDATA[]]></Declaration>
+        <Implementation>
+          <ST><![CDATA[]]></ST>
+        </Implementation>
+      </Set>
+    </Property>
+    <Property Name="P_bZIsMoving" Id="{997566e4-c052-4969-9d95-4ac75bab8963}">
+      <Declaration><![CDATA[PROPERTY P_bZIsMoving : BOOL]]></Declaration>
+      <Get Name="Get" Id="{bcd7fd20-f8f3-483e-affe-6ef18147fe1c}">
+        <Declaration><![CDATA[]]></Declaration>
+        <Implementation>
+          <ST><![CDATA[]]></ST>
+        </Implementation>
+      </Get>
+      <Set Name="Set" Id="{c30f6073-a0b8-4343-9173-d58b9e73c4ce}">
+        <Declaration><![CDATA[
+]]></Declaration>
+        <Implementation>
+          <ST><![CDATA[]]></ST>
+        </Implementation>
+      </Set>
+    </Property>
+    <Property Name="P_eCurrentState" Id="{1e171013-35aa-4d1f-910d-6922f1fc02aa}">
+      <Declaration><![CDATA[PROPERTY P_eCurrentState : E_MachineState]]></Declaration>
+      <Get Name="Get" Id="{aaf7477e-a4a6-4c3e-833e-44433754e8fc}">
+        <Declaration><![CDATA[VAR
+END_VAR
+]]></Declaration>
+        <Implementation>
+          <ST><![CDATA[P_eCurrentState := eCurrentState;]]></ST>
+        </Implementation>
+      </Get>
+      <Set Name="Set" Id="{2113ca62-5027-43d3-88e0-9d9e472c432b}">
+        <Declaration><![CDATA[VAR
+END_VAR
+]]></Declaration>
+        <Implementation>
+          <ST><![CDATA[]]></ST>
+        </Implementation>
+      </Set>
+    </Property>
+    <Property Name="P_nErrorId" Id="{73218876-0152-4fe3-9295-f8de4aa2ebfe}">
+      <Declaration><![CDATA[PROPERTY P_nErrorId : ERRORID]]></Declaration>
+      <Get Name="Get" Id="{7ac45fba-06fb-47b1-b206-5bf91f736851}">
+        <Declaration><![CDATA[
+VAR
+END_VAR
+]]></Declaration>
+        <Implementation>
+          <ST><![CDATA[P_nErrorId := stError.ErrorId;]]></ST>
+        </Implementation>
+      </Get>
+    </Property>
+    <Property Name="P_nNotifyId" Id="{20cbd24d-1802-4655-811b-0e10d0a0f312}">
+      <Declaration><![CDATA[PROPERTY P_nNotifyId : UINT]]></Declaration>
+      <Get Name="Get" Id="{bfcaa8d1-0b98-4c49-912d-a10feeba287e}">
+        <Declaration><![CDATA[VAR
+END_VAR
+]]></Declaration>
+        <Implementation>
+          <ST><![CDATA[P_nNotifyId := nNotifyId;]]></ST>
+        </Implementation>
+      </Get>
+      <Set Name="Set" Id="{66dc4885-7444-4413-9ab6-1660873b4def}">
+        <Declaration><![CDATA[VAR
+END_VAR
+]]></Declaration>
+        <Implementation>
+          <ST><![CDATA[nNotifyId := P_nNotifyId;]]></ST>
+        </Implementation>
+      </Set>
+    </Property>
+    <Property Name="P_nNumberOfSlots" Id="{4d073963-61aa-41c9-a733-f8f78c3dfdd2}">
+      <Declaration><![CDATA[PROPERTY P_nNumberOfSlots : UINT]]></Declaration>
+      <Get Name="Get" Id="{bcc99f38-11f3-45f3-94c3-fa4db36717a3}">
+        <Declaration><![CDATA[VAR
+END_VAR
+]]></Declaration>
+        <Implementation>
+          <ST><![CDATA[P_nNumberOfSlots := nNumberOfSlots;]]></ST>
+        </Implementation>
+      </Get>
+    </Property>
+    <Property Name="P_pAssignWorkplate" Id="{f452414c-5715-4d3d-a4e7-fa1915bd49fb}">
+      <Declaration><![CDATA[PROPERTY P_pAssignWorkplate : POINTER TO FB_TargetBase]]></Declaration>
+      <Get Name="Get" Id="{7319c693-14df-4ba0-9a46-7b084a5efd42}">
+        <Declaration><![CDATA[VAR
+END_VAR
+]]></Declaration>
+        <Implementation>
+          <ST><![CDATA[P_pAssignWorkplate := pAssignWorkplate;]]></ST>
+        </Implementation>
+      </Get>
+    </Property>
+    <Property Name="P_pFbMultiZ" Id="{20f6972f-a733-4d4c-9e7b-22886a64e768}">
+      <Declaration><![CDATA[PROPERTY P_pFbMultiZ : POINTER TO FB_MultiZRef]]></Declaration>
+      <Get Name="Get" Id="{03606eb5-1a17-42cb-ac12-860b2cb42e4e}">
+        <Declaration><![CDATA[VAR
+END_VAR
+]]></Declaration>
+        <Implementation>
+          <ST><![CDATA[P_pFbMultiZ := pFbMultiZ;]]></ST>
+        </Implementation>
+      </Get>
+    </Property>
+    <Property Name="P_pMzHead" Id="{161c76ee-b91d-44a7-81a4-d2c3ef86213a}">
+      <Declaration><![CDATA[PROPERTY P_pMzHead : POINTER TO FB_MzHead]]></Declaration>
+      <Get Name="Get" Id="{61f3fa2c-9d3a-4c79-a81c-422dc25ed105}">
+        <Declaration><![CDATA[VAR
+END_VAR
+]]></Declaration>
+        <Implementation>
+          <ST><![CDATA[]]></ST>
+        </Implementation>
+      </Get>
+    </Property>
+    <Property Name="P_pObject" Id="{a93310da-f41e-49f3-9f58-41a5cf029b1f}">
+      <Declaration><![CDATA[PROPERTY P_pObject : POINTER TO FB_Object]]></Declaration>
+      <Get Name="Get" Id="{c0c9b5af-1f59-498c-9138-6cfa5790ce45}">
+        <Declaration><![CDATA[VAR
+END_VAR
+]]></Declaration>
+        <Implementation>
+          <ST><![CDATA[P_pObject := THIS;]]></ST>
+        </Implementation>
+      </Get>
+    </Property>
+    <Property Name="P_pParentMzTool" Id="{bc53966f-9071-46a7-aa52-5fa84edc686e}">
+      <Declaration><![CDATA[PROPERTY P_pParentMzTool : POINTER TO FB_MzBase]]></Declaration>
+      <Get Name="Get" Id="{c59c58c7-650d-447e-86bb-1feaaef85b34}">
+        <Declaration><![CDATA[VAR
+END_VAR
+]]></Declaration>
+        <Implementation>
+          <ST><![CDATA[]]></ST>
+        </Implementation>
+      </Get>
+    </Property>
+    <Property Name="P_pPiece" Id="{d9b2d9d2-ed58-4aa8-bab2-ff237e28fc7d}">
+      <Declaration><![CDATA[PROPERTY P_pPiece : POINTER TO FB_PieceBase]]></Declaration>
+      <Get Name="Get" Id="{311d0a67-90fb-4bd0-8446-266dada02224}">
+        <Declaration><![CDATA[VAR
+END_VAR
+]]></Declaration>
+        <Implementation>
+          <ST><![CDATA[P_pPiece := pPiece;]]></ST>
+        </Implementation>
+      </Get>
+      <Set Name="Set" Id="{c33d735a-522a-42f4-a396-3abecae52116}">
+        <Declaration><![CDATA[VAR
+END_VAR
+]]></Declaration>
+        <Implementation>
+          <ST><![CDATA[pPiece := P_pPiece;]]></ST>
+        </Implementation>
+      </Set>
+    </Property>
+    <Property Name="P_pXDrive" Id="{c0d89c55-e3e2-4cfa-90c5-c0923c0c2847}">
+      <Declaration><![CDATA[PROPERTY P_pXDrive : POINTER TO FB_XYDriveBase]]></Declaration>
+      <Get Name="Get" Id="{ca2963aa-d817-488f-9ef3-a639d398ec2c}">
+        <Declaration><![CDATA[VAR
+END_VAR
+]]></Declaration>
+        <Implementation>
+          <ST><![CDATA[P_pXDrive := pXDrive;]]></ST>
+        </Implementation>
+      </Get>
+    </Property>
+    <Property Name="P_pYDrive" Id="{33728ccb-8b61-4d18-8f74-d217ff977607}">
+      <Declaration><![CDATA[PROPERTY P_pYDrive : POINTER TO FB_XYDriveBase]]></Declaration>
+      <Get Name="Get" Id="{326a684a-82fa-49bb-9256-d0d2343deff5}">
+        <Declaration><![CDATA[VAR
+END_VAR
+]]></Declaration>
+        <Implementation>
+          <ST><![CDATA[P_pYDrive := pYDrive;]]></ST>
+        </Implementation>
+      </Get>
+    </Property>
+    <Property Name="P_rToolRadius" Id="{8651ffbf-5608-4081-8cac-9216089138f3}">
+      <Declaration><![CDATA[PROPERTY P_rToolRadius : REAL]]></Declaration>
+      <Get Name="Get" Id="{1c02f900-f3c4-4de7-891b-90b9cbca4470}">
+        <Declaration><![CDATA[VAR
+END_VAR
+]]></Declaration>
+        <Implementation>
+          <ST><![CDATA[]]></ST>
+        </Implementation>
+      </Get>
+    </Property>
+    <Property Name="P_stAbsPosPhys" Id="{953029d0-2bd2-4346-800d-08788385a55e}">
+      <Declaration><![CDATA[PROPERTY P_stAbsPosPhys : ST_3DPoint]]></Declaration>
+      <Get Name="Get" Id="{a5408d62-630f-42c0-804c-62d176666730}">
+        <Declaration><![CDATA[VAR
+END_VAR
+]]></Declaration>
+        <Implementation>
+          <ST><![CDATA[]]></ST>
+        </Implementation>
+      </Get>
+    </Property>
+    <Property Name="P_stAbsPosTotal" Id="{35851d51-df09-4bab-8b5c-c4f508b0b6e1}">
+      <Declaration><![CDATA[PROPERTY P_stAbsPosTotal : ST_3DPoint]]></Declaration>
+      <Get Name="Get" Id="{9f232192-c35e-4460-9df0-d9c0966f7fb1}">
+        <Declaration><![CDATA[VAR
+END_VAR
+]]></Declaration>
+        <Implementation>
+          <ST><![CDATA[P_stAbsPosTotal := P_stAbsPosPhys;]]></ST>
+        </Implementation>
+      </Get>
+    </Property>
+    <Property Name="P_stCurrentPosPhys" Id="{a2611425-39fc-4f9e-ad94-a2501bde7793}">
+      <Declaration><![CDATA[PROPERTY P_stCurrentPosPhys : ST_3DPoint]]></Declaration>
+      <Get Name="Get" Id="{7b98ee52-9b0f-4f95-af67-b44984649aec}">
+        <Declaration><![CDATA[]]></Declaration>
+        <Implementation>
+          <ST><![CDATA[
+]]></ST>
+        </Implementation>
+      </Get>
+    </Property>
+    <Property Name="P_stCurrentPosTotal" Id="{f4575f0c-8eac-4606-8df8-73daa69d1eed}">
+      <Declaration><![CDATA[PROPERTY P_stCurrentPosTotal : ST_3DPoint]]></Declaration>
+      <Get Name="Get" Id="{92c2d6b0-216d-4dca-8237-7521cae29eef}">
+        <Declaration><![CDATA[]]></Declaration>
+        <Implementation>
+          <ST><![CDATA[P_stCurrentPosTotal := P_stCurrentPosPhys;
+]]></ST>
+        </Implementation>
+      </Get>
+    </Property>
+    <Property Name="P_stError" Id="{045833f8-2735-4e94-ad0a-e1cea075dda4}">
+      <Declaration><![CDATA[PROPERTY P_stError : ST_Error]]></Declaration>
+      <Get Name="Get" Id="{94970a87-e183-4e2d-a936-23640ea85aef}">
+        <Declaration><![CDATA[VAR
+END_VAR
+]]></Declaration>
+        <Implementation>
+          <ST><![CDATA[P_stError := stError;]]></ST>
+        </Implementation>
+      </Get>
+    </Property>
+    <Property Name="P_stOffset" Id="{c4d80bf2-a09e-425d-b2a2-1808268806a4}">
+      <Declaration><![CDATA[PROPERTY P_stOffset : ST_3DPoint]]></Declaration>
+      <Get Name="Get" Id="{588cd056-6ce4-4760-b60a-ca79a4a4c0cb}">
+        <Declaration><![CDATA[VAR
+END_VAR
+]]></Declaration>
+        <Implementation>
+          <ST><![CDATA[P_stOffset := stOffset;]]></ST>
+        </Implementation>
+      </Get>
+      <Set Name="Set" Id="{cf54a1bd-2e0c-4861-a9e9-41126e0f869c}">
+        <Declaration><![CDATA[VAR
+END_VAR
+]]></Declaration>
+        <Implementation>
+          <ST><![CDATA[stOffset := P_stOffset;]]></ST>
+        </Implementation>
+      </Set>
+    </Property>
+    <Property Name="P_stRelPos" Id="{d4d30b9c-e385-4307-9322-61b96ead83ec}">
+      <Declaration><![CDATA[PROPERTY P_stRelPos : ST_3DPoint]]></Declaration>
+      <Get Name="Get" Id="{0e7edf8f-b88c-4e66-a52c-7dfb2f87b11e}">
+        <Declaration><![CDATA[VAR
+END_VAR
+]]></Declaration>
+        <Implementation>
+          <ST><![CDATA[P_stRelPos := stRelPos;]]></ST>
+        </Implementation>
+      </Get>
+      <Set Name="Set" Id="{63d95fd3-8a6d-4a72-a8f4-79b56738e941}">
+        <Declaration><![CDATA[VAR
+END_VAR
+]]></Declaration>
+        <Implementation>
+          <ST><![CDATA[stRelPos := P_stRelPos;]]></ST>
+        </Implementation>
+      </Set>
+    </Property>
+    <LineIds Name="FB_MzBase">
+      <LineId Id="321" Count="0" />
+      <LineId Id="4" Count="16" />
+      <LineId Id="22" Count="11" />
+      <LineId Id="35" Count="13" />
+      <LineId Id="50" Count="13" />
+      <LineId Id="65" Count="13" />
+      <LineId Id="80" Count="13" />
+      <LineId Id="95" Count="9" />
+      <LineId Id="106" Count="29" />
+      <LineId Id="137" Count="22" />
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="FB_MzBase.A_Init">
+      <LineId Id="1" Count="0" />
+    </LineIds>
+    <LineIds Name="FB_MzBase.A_JogXY">
+      <LineId Id="2" Count="89" />
+      <LineId Id="93" Count="13" />
+      <LineId Id="108" Count="12" />
+      <LineId Id="1" Count="0" />
+    </LineIds>
+    <LineIds Name="FB_MzBase.A_MoveX">
+      <LineId Id="2" Count="84" />
+      <LineId Id="88" Count="6" />
+      <LineId Id="96" Count="9" />
+      <LineId Id="1" Count="0" />
+    </LineIds>
+    <LineIds Name="FB_MzBase.A_MoveXY">
+      <LineId Id="2216" Count="276" />
+      <LineId Id="1" Count="0" />
+    </LineIds>
+    <LineIds Name="FB_MzBase.A_MoveY">
+      <LineId Id="2" Count="33" />
+      <LineId Id="116" Count="3" />
+      <LineId Id="123" Count="0" />
+      <LineId Id="128" Count="1" />
+      <LineId Id="121" Count="1" />
+      <LineId Id="46" Count="33" />
+      <LineId Id="81" Count="6" />
+      <LineId Id="89" Count="10" />
+      <LineId Id="1" Count="0" />
+    </LineIds>
+    <LineIds Name="FB_MzBase.A_MoveZ">
+      <LineId Id="1" Count="0" />
+    </LineIds>
+    <LineIds Name="FB_MzBase.A_Reset">
+      <LineId Id="2" Count="3" />
+      <LineId Id="7" Count="4" />
+      <LineId Id="13" Count="4" />
+      <LineId Id="19" Count="4" />
+      <LineId Id="25" Count="27" />
+      <LineId Id="1" Count="0" />
+    </LineIds>
+    <LineIds Name="FB_MzBase.A_Stop">
+      <LineId Id="2" Count="36" />
+      <LineId Id="1" Count="0" />
+    </LineIds>
+    <LineIds Name="FB_MzBase.M_AddChild">
+      <LineId Id="5" Count="0" />
+    </LineIds>
+    <LineIds Name="FB_MzBase.M_CancelAction">
+      <LineId Id="3" Count="0" />
+      <LineId Id="34" Count="0" />
+      <LineId Id="37" Count="1" />
+      <LineId Id="35" Count="0" />
+      <LineId Id="26" Count="0" />
+      <LineId Id="28" Count="1" />
+      <LineId Id="27" Count="0" />
+      <LineId Id="4" Count="17" />
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="FB_MzBase.M_CheckAction">
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="FB_MzBase.M_CheckMoveLimit">
+      <LineId Id="3" Count="23" />
+      <LineId Id="40" Count="1" />
+      <LineId Id="27" Count="0" />
+    </LineIds>
+    <LineIds Name="FB_MzBase.M_CheckProcDataType">
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="FB_MzBase.M_CheckProps">
+      <LineId Id="3" Count="0" />
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="FB_MzBase.M_ClearAllProps">
+      <LineId Id="3" Count="6" />
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="FB_MzBase.M_ClearOffset">
+      <LineId Id="3" Count="1" />
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="FB_MzBase.M_ExeAction">
+      <LineId Id="345" Count="291" />
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="FB_MzBase.M_GetActionBusy">
+      <LineId Id="3" Count="3" />
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="FB_MzBase.M_GetAllProps">
+      <LineId Id="3" Count="1" />
+      <LineId Id="44" Count="1" />
+      <LineId Id="6" Count="28" />
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="FB_MzBase.M_GetCollFree">
+      <LineId Id="23" Count="11" />
+    </LineIds>
+    <LineIds Name="FB_MzBase.M_GetDevice">
+      <LineId Id="5" Count="0" />
+    </LineIds>
+    <LineIds Name="FB_MzBase.M_GetFirstErrorChild">
+      <LineId Id="3" Count="19" />
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="FB_MzBase.M_GetMaxSpeed">
+      <LineId Id="3" Count="8" />
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="FB_MzBase.M_GetMinMaxActPos">
+      <LineId Id="3" Count="12" />
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="FB_MzBase.M_GetProcData">
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="FB_MzBase.M_GetPropCheckSum">
+      <LineId Id="3" Count="0" />
+      <LineId Id="5" Count="0" />
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="FB_MzBase.M_GetSlot">
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="FB_MzBase.M_GetSlotFromChild">
+      <LineId Id="7" Count="2" />
+      <LineId Id="16" Count="1" />
+      <LineId Id="21" Count="0" />
+      <LineId Id="19" Count="1" />
+      <LineId Id="18" Count="0" />
+      <LineId Id="11" Count="0" />
+      <LineId Id="10" Count="0" />
+      <LineId Id="6" Count="0" />
+    </LineIds>
+    <LineIds Name="FB_MzBase.M_GetXYRange">
+      <LineId Id="8" Count="4" />
+      <LineId Id="22" Count="0" />
+      <LineId Id="14" Count="1" />
+      <LineId Id="5" Count="0" />
+    </LineIds>
+    <LineIds Name="FB_MzBase.M_GetZAxisRef">
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="FB_MzBase.M_RawPosToRealPos">
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="FB_MzBase.M_RemoveListEntry">
+      <LineId Id="3" Count="7" />
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="FB_MzBase.M_Reset">
+      <LineId Id="3" Count="1" />
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="FB_MzBase.M_SetAllProps">
+      <LineId Id="79" Count="54" />
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="FB_MzBase.M_SetSingleProp">
+      <LineId Id="3" Count="38" />
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="FB_MzBase.M_Stop">
+      <LineId Id="3" Count="0" />
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="FB_MzBase.M_UpdateParent">
+      <LineId Id="6" Count="0" />
+      <LineId Id="5" Count="0" />
+    </LineIds>
+    <LineIds Name="FB_MzBase.P_bBusy.Get">
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="FB_MzBase.P_bCanceled.Get">
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="FB_MzBase.P_bCollFree.Get">
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="FB_MzBase.P_bError.Get">
+      <LineId Id="3" Count="1" />
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="FB_MzBase.P_bHasZSensorSlot.Get">
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="FB_MzBase.P_bIsHot.Get">
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="FB_MzBase.P_bIsInit.Get">
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="FB_MzBase.P_bMeasured.Get">
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="FB_MzBase.P_bMeasured.Set">
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="FB_MzBase.P_bStopAllOnError.Get">
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="FB_MzBase.P_bXYIsInit.Get">
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="FB_MzBase.P_bXYIsMoving.Get">
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="FB_MzBase.P_bXYIsMoving.Set">
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="FB_MzBase.P_bZIsMoving.Get">
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="FB_MzBase.P_bZIsMoving.Set">
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="FB_MzBase.P_eCurrentState.Get">
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="FB_MzBase.P_eCurrentState.Set">
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="FB_MzBase.P_nErrorId.Get">
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="FB_MzBase.P_nNotifyId.Get">
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="FB_MzBase.P_nNotifyId.Set">
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="FB_MzBase.P_nNumberOfSlots.Get">
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="FB_MzBase.P_pAssignWorkplate.Get">
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="FB_MzBase.P_pFbMultiZ.Get">
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="FB_MzBase.P_pMzHead.Get">
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="FB_MzBase.P_pObject.Get">
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="FB_MzBase.P_pParentMzTool.Get">
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="FB_MzBase.P_pPiece.Get">
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="FB_MzBase.P_pPiece.Set">
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="FB_MzBase.P_pXDrive.Get">
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="FB_MzBase.P_pYDrive.Get">
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="FB_MzBase.P_rToolRadius.Get">
+      <LineId Id="5" Count="0" />
+    </LineIds>
+    <LineIds Name="FB_MzBase.P_stAbsPosPhys.Get">
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="FB_MzBase.P_stAbsPosTotal.Get">
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="FB_MzBase.P_stCurrentPosPhys.Get">
+      <LineId Id="3" Count="0" />
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="FB_MzBase.P_stCurrentPosTotal.Get">
+      <LineId Id="3" Count="0" />
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="FB_MzBase.P_stError.Get">
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="FB_MzBase.P_stOffset.Get">
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="FB_MzBase.P_stOffset.Set">
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="FB_MzBase.P_stRelPos.Get">
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="FB_MzBase.P_stRelPos.Set">
+      <LineId Id="2" Count="0" />
+    </LineIds>
+  </POU>
+</TcPlcObject>

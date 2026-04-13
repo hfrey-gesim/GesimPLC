@@ -1,0 +1,675 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<TcPlcObject Version="1.1.0.1" ProductVersion="3.1.4024.9">
+  <POU Name="FB_TwinExtruder" Id="{300af7ef-d10a-480b-b935-d39fdb3a4c95}" SpecialFunc="None">
+    <Declaration><![CDATA[FUNCTION_BLOCK FB_TwinExtruder EXTENDS FB_GCodeTool IMPLEMENTS I_Dispenser
+VAR
+	pFbHeaterRef	: POINTER TO FB_MZHeaterRef;
+	pFirstExtruder 	: POINTER TO FB_Extruder;
+	pSecondExtruder	: POINTER TO FB_Extruder;
+	///****************************************Aktionvariablen****************************************************
+	
+	//Action: "Extrude"
+	bExtrude			: BOOL;
+	nStateA_Extrude		: USINT;
+	nExtrudeDistance	: DINT;
+	nExtrudeCtrl		: DINT;
+	
+	nCurrentTemp		: UINT;
+END_VAR
+VAR CONSTANT
+	cNumberOfSlots: UINT := 4; //Slot für Exposure hinzugefügt
+END_VAR]]></Declaration>
+    <Implementation>
+      <ST><![CDATA[SUPER^();	//FB_MzTool aufrufen
+
+IF bExtrude THEN	//Extrudieren
+	A_Extrude();
+	IF nStateA_Extrude >= 80 THEN
+		IF nStateA_Extrude >= 99 THEN
+			bError := TRUE;
+		END_IF
+		bExtrude := FALSE;
+		nStateA_Extrude := 0;
+		M_RemoveListEntry(nSearchValue:= E_Action.ACTION_Extrude);
+	END_IF
+END_IF
+
+//Prozessdaten aktualisieren
+IF pFbHeaterRef > 0 THEN
+	stProcessData.n32Data[7] := BOOL_TO_DINT(pFbHeaterRef^.bHeaterIsOn);
+	nCurrentTemp := pFbHeaterRef^.nTemp3Actual;
+	stProcessData.n32Data[8] := nCurrentTemp;
+END_IF
+
+IF pFirstExtruder > 0 AND pSecondExtruder > 0 THEN
+	stProcessData.n32Data[9] := BOOL_TO_DINT(pFirstExtruder^.P_bIsExtruding OR pSecondExtruder^.P_bIsExtruding);
+END_IF
+
+aObjProcData[nNotifyId] := stProcessData;
+]]></ST>
+    </Implementation>
+    <Action Name="A_Extrude" Id="{1246c239-7047-421a-a83e-a0666c614861}">
+      <Implementation>
+        <ST><![CDATA[IF pFirstExtruder^.P_bError THEN
+	stError.ErrorId := pFirstExtruder^.P_nErrorId;
+	stError.POUState := nStateA_Extrude;
+	nStateA_Extrude := 99;
+END_IF
+
+IF nStateA_Extrude <> 99 THEN
+	IF pSecondExtruder^.P_bError THEN
+		stError.ErrorId := pSecondExtruder^.P_nErrorId;
+		stError.POUState := nStateA_Extrude;
+		nStateA_Extrude := 99;
+	END_IF	
+END_IF
+
+CASE nStateA_Extrude OF
+	0:	MEMSET(ADR(stActionData),0,SIZEOF(stActionData));
+		stActionData.eAction := E_Action.ACTION_Extrude;
+		stActionData.aParams[1] := nExtrudeDistance; 
+		stActionData.aParams[2] := nExtrudeCtrl;
+		stError.ErrorId := pFirstExtruder^.M_ExeAction(stActionData);
+		IF stError.ErrorId = 0 THEN
+			stError.ErrorId := pSecondExtruder^.M_ExeAction(stActionData);
+			IF stError.ErrorId = 0 THEN
+				nStateA_Extrude := 1;
+			ELSE //FirstExtruder wieder stoppen
+				nStateA_Extrude := 99;
+			END_IF
+		ELSE
+			nStateA_Extrude := 99;
+		END_IF
+		
+	1:	//ready ?
+		IF NOT(pFirstExtruder^.M_GetActionBusy(E_Action.ACTION_Extrude) OR 
+				pSecondExtruder^.M_GetActionBusy(E_Action.ACTION_Extrude)) THEN
+			nStateA_Extrude := 80;
+		END_IF
+		
+	70:	//Stoppen
+		pFirstExtruder^.M_CancelAction(E_Action.ACTION_Extrude);
+		pSecondExtruder^.M_CancelAction(E_Action.ACTION_Extrude);
+		nStateA_Extrude := 71;
+		
+	71:	IF NOT(pFirstExtruder^.M_GetActionBusy(E_Action.ACTION_Extrude) OR 
+			pSecondExtruder^.M_GetActionBusy(E_Action.ACTION_Extrude)) THEN
+			nStateA_Extrude := 80;
+		END_IF
+END_CASE
+
+IF nStateA_Extrude = 99 THEN
+	pFirstExtruder^.M_CancelAction(E_Action.ACTION_Extrude);
+	pSecondExtruder^.M_CancelAction(E_Action.ACTION_Extrude);
+	stError.Cmd := E_Action.ACTION_Extrude;
+	stError.POU := E_POU.POU_FB_TwinExtruder;
+	stError.POUAction := E_POUACT.POUACT_A_Extrude;
+	fbErrorList.M_Add(stError);	
+END_IF]]></ST>
+      </Implementation>
+    </Action>
+    <Action Name="A_Reset" Id="{ff7b46b0-98cf-4617-98ce-ed260c20d10b}">
+      <Implementation>
+        <ST><![CDATA[nStateA_ResetSpec := 80;
+SUPER^.A_Reset();]]></ST>
+      </Implementation>
+    </Action>
+    <Action Name="A_Stop" Id="{3aeb04dc-21fb-4fc7-a5d7-52fd59033583}">
+      <Implementation>
+        <ST><![CDATA[IF nStateA_Stop = 0 THEN
+
+	nStateA_Stop := 1;
+END_IF
+
+SUPER^.A_Stop();]]></ST>
+      </Implementation>
+    </Action>
+    <Method Name="FB_init" Id="{d3c5cb36-6527-4621-885b-df1928cb9d14}">
+      <Declaration><![CDATA[METHOD FB_init : BOOL
+VAR_INPUT
+	bInitRetains : BOOL; // if TRUE, the retain variables are initialized (warm start / cold start)
+	bInCopyCode : BOOL;  // if TRUE, the instance afterwards gets moved into the copy code (online change)
+END_VAR
+]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[eObjectType := E_ObjectType.OBJECTTYPE_TwinExtruder;
+eObjectGroup := E_ObjectGroup.OBJECTGROUP_MzTool OR E_ObjectGroup.OBJECTGROUP_Device;]]></ST>
+      </Implementation>
+    </Method>
+    <Method Name="M_AddChild" Id="{3c1e8d65-84d3-4441-bf9b-33b30da1b41c}">
+      <Declaration><![CDATA[METHOD M_AddChild : ERRORID
+VAR_INPUT
+	pObject : POINTER TO FB_Object;
+	nSlotNr	: UINT;
+	nIndex 	: INT;
+END_VAR
+]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[//Kann folgende Objekt-Typen aufnehmen
+//Extruder, Nozzle, Exposure
+IF pObject > 0 THEN
+	IF pObject^.P_eObjectType = E_ObjectType.OBJECTTYPE_Extruder OR
+		pObject^.P_eObjectType = E_ObjectType.OBJECTTYPE_DummyTool OR
+		pObject^.P_eObjectType = E_ObjectType.OBJECTTYPE_Exposure OR
+		pObject^.P_eObjectType = E_ObjectType.OBJECTTYPE_Nozzle THEN
+		M_AddChild := SUPER^.M_AddChild(pObject,nSlotNr,nIndex);
+	ELSE
+		M_AddChild := E_ErrorIdObjMgmt.ERRORID_InvalidParentObject;
+	END_IF
+ELSE
+	M_AddChild := E_ErrorIdObjMgmt.ERRORID_InvalidParentObject;
+END_IF]]></ST>
+      </Implementation>
+    </Method>
+    <Method Name="M_CancelAction" Id="{96a40542-11aa-4280-a016-195724e6cb6d}">
+      <Declaration><![CDATA[METHOD M_CancelAction
+VAR_INPUT
+	eAction : E_Action;
+END_VAR
+]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[IF eAction = E_Action.ACTION_Extrude THEN
+	IF bExtrude AND nStateA_Extrude < 70 THEN
+		nStateA_Extrude := 70;
+	END_IF
+ELSE
+	SUPER^.M_CancelAction(eAction);
+END_IF
+]]></ST>
+      </Implementation>
+    </Method>
+    <Method Name="M_CheckAction" Id="{bc514dc4-4725-42b0-b8ee-b3d6a89863d8}">
+      <Declaration><![CDATA[METHOD M_CheckAction : ERRORID
+VAR_INPUT
+	refActionData	: REFERENCE TO ST_ActionData;
+	pCorrelObject	: POINTER TO FB_Object;
+END_VAR
+]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[CASE refActionData.eAction OF
+	E_Action.ACTION_Extrude, //BasicAction für ActionOnArray
+	E_Action.ACTION_CleanTip,
+	E_Action.ACTION_MeasureTool,
+	E_Action.ACTION_TeachTarget:
+		RETURN;
+ELSE
+	M_CheckAction := SUPER^.M_CheckAction(refActionData, pCorrelObject);
+END_CASE]]></ST>
+      </Implementation>
+    </Method>
+    <Method Name="M_CheckProcDataType" Id="{fd295005-4c82-4b39-a70c-a2984e92f9ca}">
+      <Declaration><![CDATA[METHOD M_CheckProcDataType : BOOL
+VAR_INPUT
+	eProcDataType : E_ProcDataType;
+END_VAR
+]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[IF eProcDataType = E_ProcDataType.PROCDATATYPE_Temp1 THEN
+	M_CheckProcDataType := TRUE;
+END_IF]]></ST>
+      </Implementation>
+    </Method>
+    <Method Name="M_CheckProps" Id="{97e5631f-b319-4d49-bfd7-49976179b76b}">
+      <Declaration><![CDATA[METHOD M_CheckProps : ERRORID
+VAR_INPUT
+END_VAR
+
+VAR
+	pSlot : POINTER TO FB_Slot;
+END_VAR]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[M_CheckProps := SUPER^.M_CheckProps();
+//TwinExtruder muss zwingend zwei Childs als Extruder besitzen
+//auf Slot1 -> FirstExtruder
+//auf Slot2 -> SecondExtruder
+pFirstExtruder := 0;
+pSecondExtruder := 0;
+
+pSlot := fbSlotList.M_GetAtNr(1);
+IF pSlot > 0 THEN
+	IF pSlot^.P_pChild > 0 THEN
+		IF pSlot^.P_pChild^.P_eObjectType = E_ObjectType.OBJECTTYPE_Extruder THEN
+			pFirstExtruder := pSlot^.P_pChild;
+		END_IF
+	END_IF
+END_IF
+
+pSlot := fbSlotList.M_GetAtNr(2);
+IF pSlot > 0 THEN
+	IF pSlot^.P_pChild > 0 THEN
+		IF pSlot^.P_pChild^.P_eObjectType = E_ObjectType.OBJECTTYPE_Extruder THEN
+			pSecondExtruder := pSlot^.P_pChild;
+		END_IF
+	END_IF
+END_IF
+
+IF pFirstExtruder = 0 OR pSecondExtruder = 0 THEN
+	M_CheckProps := E_ErrorIdObjMgmt.ERRORID_UnusedExtruderSlot;
+END_IF
+
+IF pPiece = 0 THEN
+	M_CheckProps := E_ErrorIdObjMgmt.ERRORID_NoNozzleOnTool;
+END_IF]]></ST>
+      </Implementation>
+    </Method>
+    <Method Name="M_DispenserPrepare" Id="{5e5c0125-3449-47e8-82aa-e10ebee34902}">
+      <Declaration><![CDATA[METHOD M_DispenserPrepare : ERRORID
+VAR_INPUT
+END_VAR
+]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[]]></ST>
+      </Implementation>
+    </Method>
+    <Method Name="M_DispenserStart" Id="{5633c960-0ecb-4d8d-99c4-07fda63d317a}">
+      <Declaration><![CDATA[METHOD M_DispenserStart : ERRORID
+VAR_INPUT
+END_VAR
+
+VAR
+	stActionData : ST_ActionData;
+END_VAR
+]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[stActionData.eAction := E_ACTION.ACTION_Extrude;
+stActionData.aParams[2] := 1;
+M_DispenserStart := M_ExeAction(stActionData);
+]]></ST>
+      </Implementation>
+    </Method>
+    <Method Name="M_DispenserStop" Id="{2e7f500c-4ad5-4929-bb29-1ac8ba016c21}">
+      <Declaration><![CDATA[METHOD M_DispenserStop : ERRORID
+VAR_INPUT
+END_VAR
+
+VAR
+	stActionData : ST_ActionData;
+END_VAR
+]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[stActionData.eAction := E_ACTION.ACTION_Extrude;
+M_DispenserStop := M_ExeAction(stActionData);]]></ST>
+      </Implementation>
+    </Method>
+    <Method Name="M_ExeAction" Id="{07745b7b-a7f9-409d-80b6-804834e62aae}">
+      <Declaration><![CDATA[METHOD M_ExeAction : ERRORID
+VAR_INPUT
+	refActionData : REFERENCE TO ST_ActionData;	
+END_VAR]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[IF NOT (eCurrentState = E_MachineState.MACHINESTATE_Idle OR
+	eCurrentState = E_MachineState.MACHINESTATE_Active OR
+	eCurrentState = E_MachineState.MACHINESTATE_Ready) THEN
+	M_ExeAction := E_ErrorIdCmd.ERRORID_InvalidState;
+	RETURN;
+END_IF
+
+CASE refActionData.eAction OF
+		E_Action.ACTION_Extrude:
+			//Beide Extruder gelockt?
+			IF NOT (pFirstExtruder^.P_bIsLocked AND pSecondExtruder^.P_bIsLocked) THEN
+				M_ExeAction := E_ErrorIdCmd.ERRORID_DeviceNotLocked;
+				RETURN;				
+			END_IF
+			
+			nExtrudeDistance := refActionData.aParams[1]; 
+			nExtrudeCtrl := refActionData.aParams[2];
+			
+			IF NOT bExtrude AND nExtrudeCtrl = 1 THEN //Einschalten
+				bExtrude := TRUE;
+				fbList.A_AddHeadValue(hList := hList, putValue := E_Action.ACTION_Extrude);
+			ELSIF bExtrude AND nExtrudeCtrl = 0 THEN //Ausschalten
+				MEMSET(ADR(stActionData),0,SIZEOF(stActionData));
+				stActionData.eAction := E_Action.ACTION_Extrude;
+				stActionData.aParams[1] := nExtrudeDistance; 
+				stActionData.aParams[2] := nExtrudeCtrl := 0; 
+				pFirstExtruder^.M_ExeAction(stActionData);
+				pSecondExtruder^.M_ExeAction(stActionData);
+			ELSE
+				RETURN;
+			END_IF
+			
+	ELSE
+		M_ExeAction := SUPER^.M_ExeAction(refActionData);
+		RETURN;
+END_CASE
+
+bBusy := TRUE;
+eCurrentState := E_MachineState.MACHINESTATE_Active;]]></ST>
+      </Implementation>
+    </Method>
+    <Method Name="M_GetAllProps" Id="{c4cfc590-1c5d-4425-99f4-65f114c35961}">
+      <Declaration><![CDATA[METHOD M_GetAllProps : ERRORID
+VAR_INPUT
+	refCmdData : REFERENCE TO  ST_CmdData;
+END_VAR
+
+VAR
+	i : UINT;
+	pToolSlot	: POINTER TO FB_Slot;
+END_VAR]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[//BaseProperties lesen
+SUPER^.M_GetAllProps(refCmdData);
+
+nCurrentPropIndex := nCurrentPropIndex + 1;
+IF pFbHeaterRef > 0 THEN
+	refCmdData.n32Data[nCurrentPropIndex] := 1;	
+END_IF]]></ST>
+      </Implementation>
+    </Method>
+    <Method Name="M_GetProcData" Id="{3e859ee6-01a3-424b-8c8e-f9dfd14f4ff1}">
+      <Declaration><![CDATA[METHOD M_GetProcData : DINT
+VAR_INPUT
+	eProcDataType : E_ProcDataType;
+END_VAR
+]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[IF eProcDataType = E_ProcDataType.PROCDATATYPE_Temp1 THEN
+	M_GetProcData := nCurrentTemp;
+END_IF]]></ST>
+      </Implementation>
+    </Method>
+    <Method Name="M_SetAllProps" Id="{27d7e9a9-f223-4985-b808-da155916ea7c}">
+      <Declaration><![CDATA[METHOD M_SetAllProps : ERRORID
+VAR_INPUT
+	refCmdData : REFERENCE TO  ST_CmdData;
+END_VAR
+
+VAR
+	nParentMzToolObjId	: UINT;
+	pParentTool 		: POINTER TO FB_MzTool;
+	pParentHead 		: POINTER TO FB_MzHead;
+END_VAR]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[M_SetAllProps := SUPER^.M_SetAllProps(refCmdData);
+
+IF M_SetAllProps > 0 THEN
+	RETURN;
+END_IF
+
+//Spezi-Paramter schreiben
+nCurrentPropIndex := nCurrentPropIndex + 1;
+nSpecPropIndex := nCurrentPropIndex;
+
+IF refCmdData.n32Data[nCurrentPropIndex] = 1 THEN
+	pFbHeaterRef := ADR(pFbMultiZ^.aFbHeaterRef[7]);
+ELSE
+	pFbHeaterRef := 0;
+END_IF
+
+nNoOfProps := nCurrentPropIndex + 1;]]></ST>
+      </Implementation>
+    </Method>
+    <Method Name="M_SetPrintParams" Id="{6a71f872-c97d-4742-afc7-db499fe68c28}">
+      <Declaration><![CDATA[METHOD M_SetPrintParams : ST_MethResult
+VAR_INPUT
+	eType 		: E_PrintParamType;
+	nNumerator	: USINT;
+	nValue		: DINT;
+END_VAR
+
+VAR
+	stActionData : ST_ActionData;
+END_VAR]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[IF eType = E_PrintParamType.Feed THEN
+	IF nNumerator = 1 THEN
+		IF pFirstExtruder > 0 THEN
+			M_SetPrintParams.nErrorId := pFirstExtruder^.M_SetFeed(DINT_TO_UINT(nValue));	
+		END_IF	
+	ELSIF nNumerator = 2 THEN
+		IF pSecondExtruder > 0 THEN
+			M_SetPrintParams.nErrorId := pSecondExtruder^.M_SetFeed(DINT_TO_UINT(nValue));	
+		END_IF	
+	ELSE
+		M_SetPrintParams.nErrorId := E_ErrorIdCmd.ERRORID_InvalidPrintParamNumerator;
+	END_IF
+ELSE
+	M_SetPrintParams.nErrorId := E_ErrorIdCmd.ERRORID_InvalidPrintParamType;
+END_IF
+
+IF M_SetPrintParams.nErrorId > 0 THEN
+	M_SetPrintParams.bError := TRUE;
+END_IF]]></ST>
+      </Implementation>
+    </Method>
+    <Property Name="P_bSensorMounted" Id="{7f851516-e469-472b-9094-9da8664e4e9c}">
+      <Declaration><![CDATA[PROPERTY P_bSensorMounted : BOOL]]></Declaration>
+      <Get Name="Get" Id="{47688e52-0486-4486-9650-bb6762603ef3}">
+        <Declaration><![CDATA[VAR
+END_VAR
+]]></Declaration>
+        <Implementation>
+          <ST><![CDATA[P_bSensorMounted:= pFirstExtruder^.P_bSensorMounted OR pSecondExtruder^.P_bSensorMounted;]]></ST>
+        </Implementation>
+      </Get>
+    </Property>
+    <Property Name="P_eDispenserState" Id="{41ac99da-c9b4-4be3-a146-6c51e8b5ea5b}">
+      <Declaration><![CDATA[PROPERTY P_eDispenserState : E_DispenserState]]></Declaration>
+      <Get Name="Get" Id="{d0646265-c163-44ab-869c-b102d8d5253c}">
+        <Declaration><![CDATA[VAR
+END_VAR
+]]></Declaration>
+        <Implementation>
+          <ST><![CDATA[IF pFirstExtruder > 0 AND_THEN pFirstExtruder^.P_bIsExtruding THEN
+	P_eDispenserState := E_DispenserState.Dispensing;
+END_IF
+
+IF pSecondExtruder > 0 AND_THEN pSecondExtruder^.P_bIsExtruding THEN
+	P_eDispenserState := E_DispenserState.Dispensing;
+END_IF]]></ST>
+        </Implementation>
+      </Get>
+    </Property>
+    <Property Name="P_pFirstExtruder" Id="{36ec6037-7550-4176-a53c-28ebd74e826e}">
+      <Declaration><![CDATA[PROPERTY P_pFirstExtruder : POINTER TO FB_Extruder]]></Declaration>
+      <Get Name="Get" Id="{1bb52ad6-8ad7-4e29-a142-f33b69ebdc01}">
+        <Declaration><![CDATA[VAR
+END_VAR
+]]></Declaration>
+        <Implementation>
+          <ST><![CDATA[P_pFirstExtruder := pFirstExtruder;]]></ST>
+        </Implementation>
+      </Get>
+    </Property>
+    <Property Name="P_pSecondExtruder" Id="{23b1cd7c-6a53-48af-88d3-fb06bd77d5cd}">
+      <Declaration><![CDATA[PROPERTY P_pSecondExtruder : POINTER TO FB_Extruder]]></Declaration>
+      <Get Name="Get" Id="{e0c73aeb-6bd9-4576-9661-e309b4e00bee}">
+        <Declaration><![CDATA[VAR
+END_VAR
+]]></Declaration>
+        <Implementation>
+          <ST><![CDATA[P_pSecondExtruder := pSecondExtruder;]]></ST>
+        </Implementation>
+      </Get>
+    </Property>
+    <LineIds Name="FB_TwinExtruder">
+      <LineId Id="98" Count="0" />
+      <LineId Id="124" Count="10" />
+      <LineId Id="120" Count="0" />
+      <LineId Id="99" Count="1" />
+      <LineId Id="163" Count="1" />
+      <LineId Id="140" Count="1" />
+      <LineId Id="136" Count="0" />
+      <LineId Id="143" Count="0" />
+      <LineId Id="142" Count="0" />
+      <LineId Id="144" Count="1" />
+      <LineId Id="135" Count="0" />
+      <LineId Id="103" Count="0" />
+      <LineId Id="9" Count="0" />
+    </LineIds>
+    <LineIds Name="FB_TwinExtruder.A_Extrude">
+      <LineId Id="3" Count="0" />
+      <LineId Id="5" Count="0" />
+      <LineId Id="7" Count="1" />
+      <LineId Id="6" Count="0" />
+      <LineId Id="9" Count="0" />
+      <LineId Id="2" Count="0" />
+      <LineId Id="12" Count="3" />
+      <LineId Id="10" Count="1" />
+      <LineId Id="17" Count="0" />
+      <LineId Id="16" Count="0" />
+      <LineId Id="18" Count="0" />
+      <LineId Id="20" Count="0" />
+      <LineId Id="22" Count="2" />
+      <LineId Id="30" Count="1" />
+      <LineId Id="35" Count="1" />
+      <LineId Id="38" Count="0" />
+      <LineId Id="60" Count="0" />
+      <LineId Id="37" Count="0" />
+      <LineId Id="58" Count="1" />
+      <LineId Id="32" Count="0" />
+      <LineId Id="45" Count="0" />
+      <LineId Id="40" Count="1" />
+      <LineId Id="44" Count="0" />
+      <LineId Id="42" Count="1" />
+      <LineId Id="29" Count="0" />
+      <LineId Id="46" Count="2" />
+      <LineId Id="50" Count="2" />
+      <LineId Id="55" Count="2" />
+      <LineId Id="19" Count="0" />
+      <LineId Id="62" Count="0" />
+      <LineId Id="61" Count="0" />
+      <LineId Id="63" Count="0" />
+      <LineId Id="65" Count="0" />
+      <LineId Id="67" Count="0" />
+      <LineId Id="70" Count="0" />
+      <LineId Id="69" Count="0" />
+      <LineId Id="66" Count="0" />
+      <LineId Id="64" Count="0" />
+    </LineIds>
+    <LineIds Name="FB_TwinExtruder.A_Reset">
+      <LineId Id="2" Count="0" />
+      <LineId Id="1" Count="0" />
+    </LineIds>
+    <LineIds Name="FB_TwinExtruder.A_Stop">
+      <LineId Id="2" Count="0" />
+      <LineId Id="6" Count="3" />
+      <LineId Id="1" Count="0" />
+    </LineIds>
+    <LineIds Name="FB_TwinExtruder.FB_init">
+      <LineId Id="7" Count="1" />
+    </LineIds>
+    <LineIds Name="FB_TwinExtruder.M_AddChild">
+      <LineId Id="3" Count="4" />
+      <LineId Id="21" Count="0" />
+      <LineId Id="8" Count="6" />
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="FB_TwinExtruder.M_CancelAction">
+      <LineId Id="26" Count="6" />
+      <LineId Id="6" Count="0" />
+    </LineIds>
+    <LineIds Name="FB_TwinExtruder.M_CheckAction">
+      <LineId Id="20" Count="0" />
+      <LineId Id="33" Count="0" />
+      <LineId Id="22" Count="1" />
+      <LineId Id="35" Count="0" />
+      <LineId Id="34" Count="0" />
+      <LineId Id="30" Count="1" />
+      <LineId Id="17" Count="0" />
+    </LineIds>
+    <LineIds Name="FB_TwinExtruder.M_CheckProcDataType">
+      <LineId Id="3" Count="1" />
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="FB_TwinExtruder.M_CheckProps">
+      <LineId Id="6" Count="0" />
+      <LineId Id="10" Count="4" />
+      <LineId Id="27" Count="1" />
+      <LineId Id="30" Count="1" />
+      <LineId Id="33" Count="0" />
+      <LineId Id="35" Count="1" />
+      <LineId Id="34" Count="0" />
+      <LineId Id="32" Count="0" />
+      <LineId Id="37" Count="9" />
+      <LineId Id="18" Count="0" />
+      <LineId Id="47" Count="1" />
+      <LineId Id="50" Count="2" />
+      <LineId Id="49" Count="0" />
+    </LineIds>
+    <LineIds Name="FB_TwinExtruder.M_DispenserPrepare">
+      <LineId Id="5" Count="0" />
+    </LineIds>
+    <LineIds Name="FB_TwinExtruder.M_DispenserStart">
+      <LineId Id="40" Count="0" />
+      <LineId Id="42" Count="1" />
+      <LineId Id="41" Count="0" />
+    </LineIds>
+    <LineIds Name="FB_TwinExtruder.M_DispenserStop">
+      <LineId Id="10" Count="0" />
+      <LineId Id="12" Count="0" />
+    </LineIds>
+    <LineIds Name="FB_TwinExtruder.M_ExeAction">
+      <LineId Id="10" Count="7" />
+      <LineId Id="28" Count="0" />
+      <LineId Id="125" Count="1" />
+      <LineId Id="129" Count="0" />
+      <LineId Id="127" Count="1" />
+      <LineId Id="130" Count="0" />
+      <LineId Id="133" Count="0" />
+      <LineId Id="132" Count="0" />
+      <LineId Id="134" Count="1" />
+      <LineId Id="142" Count="2" />
+      <LineId Id="146" Count="2" />
+      <LineId Id="151" Count="0" />
+      <LineId Id="149" Count="1" />
+      <LineId Id="140" Count="1" />
+      <LineId Id="137" Count="0" />
+      <LineId Id="131" Count="0" />
+      <LineId Id="116" Count="5" />
+      <LineId Id="9" Count="0" />
+    </LineIds>
+    <LineIds Name="FB_TwinExtruder.M_GetAllProps">
+      <LineId Id="11" Count="1" />
+      <LineId Id="45" Count="0" />
+      <LineId Id="14" Count="0" />
+      <LineId Id="42" Count="2" />
+    </LineIds>
+    <LineIds Name="FB_TwinExtruder.M_GetProcData">
+      <LineId Id="3" Count="1" />
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="FB_TwinExtruder.M_SetAllProps">
+      <LineId Id="12" Count="8" />
+      <LineId Id="53" Count="0" />
+      <LineId Id="43" Count="0" />
+      <LineId Id="59" Count="2" />
+      <LineId Id="58" Count="0" />
+      <LineId Id="56" Count="0" />
+      <LineId Id="11" Count="0" />
+    </LineIds>
+    <LineIds Name="FB_TwinExtruder.M_SetPrintParams">
+      <LineId Id="86" Count="0" />
+      <LineId Id="95" Count="0" />
+      <LineId Id="103" Count="1" />
+      <LineId Id="96" Count="0" />
+      <LineId Id="98" Count="0" />
+      <LineId Id="105" Count="1" />
+      <LineId Id="99" Count="1" />
+      <LineId Id="102" Count="0" />
+      <LineId Id="97" Count="0" />
+      <LineId Id="91" Count="0" />
+      <LineId Id="94" Count="0" />
+      <LineId Id="92" Count="0" />
+      <LineId Id="74" Count="2" />
+      <LineId Id="7" Count="0" />
+    </LineIds>
+    <LineIds Name="FB_TwinExtruder.P_bSensorMounted.Get">
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="FB_TwinExtruder.P_eDispenserState.Get">
+      <LineId Id="2" Count="0" />
+      <LineId Id="5" Count="1" />
+      <LineId Id="8" Count="2" />
+      <LineId Id="7" Count="0" />
+    </LineIds>
+    <LineIds Name="FB_TwinExtruder.P_pFirstExtruder.Get">
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="FB_TwinExtruder.P_pSecondExtruder.Get">
+      <LineId Id="2" Count="0" />
+    </LineIds>
+  </POU>
+</TcPlcObject>

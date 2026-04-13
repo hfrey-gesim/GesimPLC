@@ -1,0 +1,1005 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<TcPlcObject Version="1.1.0.1" ProductVersion="3.1.4024.9">
+  <POU Name="FB_TargetBase" Id="{155010fd-8e02-406b-aee9-5b7ffffe2bfb}" SpecialFunc="None">
+    <Declaration><![CDATA[FUNCTION_BLOCK FB_TargetBase EXTENDS FB_Object
+VAR_INPUT
+END_VAR
+VAR_OUTPUT
+END_VAR
+VAR
+	//Targetproperties
+	pParentTarget		: POINTER TO FB_TargetBase;
+	stRelPos 			: ST_3DPoint;
+	stDimension			: ST_3DDimension;
+	rFreeHeight			: REAL;
+	rZOffset			: REAL;
+	nCurrentPropIndex	: UINT;
+	nSpecPropIndex		: UINT;			//erster Index für Specialproperties (ab direkter Erbe von FB_MzTool) (benötigt in M_SetSingleProps + M_GetSingleProp)
+END_VAR
+]]></Declaration>
+    <Implementation>
+      <ST><![CDATA[]]></ST>
+    </Implementation>
+    <Method Name="M_AddChild" Id="{72b95d09-14b1-4daf-8dec-f8dd1ef9e527}">
+      <Declaration><![CDATA[METHOD M_AddChild : ERRORID
+VAR_INPUT
+	pObject	: POINTER TO FB_Object;
+	nSlotNr	: UINT;
+	nIndex 	: INT;	
+END_VAR
+]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[//In den abgeleiteten Tool-FBs wird überprüft, ob das entsprechende Objekt als Child tauglich ist
+IF pObject > 0 THEN
+	IF nSlotNr = 0 THEN
+		//Object darf selber noch an keinem Parent hängen
+		IF pObject^.P_pParentObject = 0 THEN
+			pObject^.P_pObjCollectNode := pObjCollectNode^.nodes.M_AddNewNode(pObject,nIndex);
+			pObject^.M_UpdateParent();
+		ELSE
+			M_AddChild := E_ErrorIdObjMgmt.ERRORID_ObjectAlreadyOnAnotherParent;
+		END_IF
+	ELSE
+		M_AddChild := E_ErrorIdObjMgmt.ERRORID_InvalidSlotNumber;			
+	END_IF	
+ELSE
+	M_AddChild := E_ErrorIdObjMgmt.ERRORID_InvalidParentObject;
+END_IF]]></ST>
+      </Implementation>
+    </Method>
+    <Method Name="M_ApplyPos" Id="{374c8c7a-eb4f-45f3-b907-033f2f7eb470}">
+      <Declaration><![CDATA[METHOD M_ApplyPos : ERRORID
+VAR_INPUT
+	eTargetRef 		: E_TargetRef;
+	nPointSlotNr	: UINT;
+	stPos 			: ST_3DPoint;
+	bXPos			: BOOL;
+	bYPos			: BOOL;
+	bZPos			: BOOL;	
+END_VAR
+
+VAR
+	stParentPos	: ST_3DPoint;
+END_VAR]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[//Neue relative Position berechen
+//ZOffset (gemessener Wert wird auf "0" gesetzt) 
+rZOffset := 0;
+IF pParentTarget > 0 THEN
+	stParentPos := pParentTarget^.P_stAbsPosLB;
+	IF pParentSlot > 0 THEN
+		stParentPos := F_Add3DPoints(stParentPos,pParentSlot^.P_stRelPos);
+	END_IF
+END_IF
+
+CASE eTargetRef OF
+	E_TargetRef.TARGETREF_LeftBottom:
+		IF bXPos THEN
+			stRelPos.X := stPos.X - stParentPos.X;	
+		END_IF
+		IF bYPos THEN
+			stRelPos.Y := stPos.Y - stParentPos.Y;	
+		END_IF
+		IF bZPos THEN
+			stRelPos.Z := stPos.Z - stParentPos.Z - stDimension.Height;
+			P_pWorkplate^.P_bCalcCollisHeight := TRUE;		
+		END_IF
+	E_TargetRef.TARGETREF_LeftTop:
+		IF bXPos THEN
+			stRelPos.X := stPos.X - stParentPos.X;	
+		END_IF
+		IF bYPos THEN
+			stRelPos.Y := stPos.Y - stParentPos.Y - stDimension.Depth;	
+		END_IF
+		IF bZPos THEN
+			stRelPos.Z := stPos.Z - stParentPos.Z - stDimension.Height;	
+			P_pWorkplate^.P_bCalcCollisHeight := TRUE;
+		END_IF
+	E_TargetRef.TARGETREF_RightTop:
+		IF bXPos THEN
+			stRelPos.X := stPos.X - stParentPos.X - stDimension.Width;	
+		END_IF
+		IF bYPos THEN
+			stRelPos.Y := stPos.Y - stParentPos.Y - stDimension.Depth;	
+		END_IF
+		IF bZPos THEN
+			stRelPos.Z := stPos.Z - stParentPos.Z - stDimension.Height;	
+		END_IF
+	E_TargetRef.TARGETREF_RightBottom:
+		IF bXPos THEN
+			stRelPos.X := stPos.X - stParentPos.X - stDimension.Width;	
+		END_IF
+		IF bYPos THEN
+			stRelPos.Y := stPos.Y - stParentPos.Y;	
+		END_IF
+		IF bZPos THEN
+			stRelPos.Z := stPos.Z - stParentPos.Z - stDimension.Height;
+			P_pWorkplate^.P_bCalcCollisHeight := TRUE;
+		END_IF
+	E_TargetRef.TARGETREF_Center:
+		IF bXPos THEN
+			stRelPos.X := stPos.X - stParentPos.X - stDimension.Width / 2.0;	
+		END_IF
+		IF bYPos THEN
+			stRelPos.Y := stPos.Y - stParentPos.Y - stDimension.Depth / 2.0;	
+		END_IF
+		IF bZPos THEN
+			stRelPos.Z := stPos.Z - stParentPos.Z - stDimension.Height;
+			P_pWorkplate^.P_bCalcCollisHeight := TRUE;
+		END_IF
+END_CASE]]></ST>
+      </Implementation>
+    </Method>
+    <Method Name="M_CheckAction" Id="{6057e325-18b2-4f84-bca5-ad92b5960a80}">
+      <Declaration><![CDATA[METHOD M_CheckAction : ERRORID
+VAR_INPUT
+	refActionData : REFERENCE TO ST_ActionData;
+	pCorrelObject	: POINTER TO FB_Object;
+END_VAR
+]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[IF refActionData.eAction = E_Action.ACTION_TeachTarget THEN
+	IF NOT eObjectType = E_ObjectType.OBJECTTYPE_Point AND DINT_TO_UINT(refActionData.aParams[1]) = E_TargetRef.TARGETREF_Center THEN
+		M_CheckAction := E_ErrorIdCmd.ERRORID_InvalidTargetPointRef; 
+	END_IF
+END_IF]]></ST>
+      </Implementation>
+    </Method>
+    <Method Name="M_CheckProps" Id="{1a5c3761-d11e-4b5c-ad4d-33f06f18c0b3}">
+      <Declaration><![CDATA[METHOD M_CheckProps : ERRORID
+VAR_INPUT
+END_VAR
+]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[]]></ST>
+      </Implementation>
+    </Method>
+    <Method Name="M_ClearAllProps" Id="{34bedced-b40c-4a9a-9ab9-afd0473ba874}">
+      <Declaration><![CDATA[METHOD M_ClearAllProps
+VAR_INPUT
+	bIgnoreParent : BOOL; //Es wird das gesamte OD gelöscht. -> Zeiger auf Parent nicht mehr gültig!
+END_VAR
+
+]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[IF NOT bIgnoreParent THEN
+	IF pParentSlot > 0 THEN
+		pParentSlot^.P_pChild := 0;
+	END_IF
+END_IF
+
+nObjectID := 0;
+pParentTarget := 0;
+pParentSlot := 0;
+pObjCollectNode := 0;]]></ST>
+      </Implementation>
+    </Method>
+    <Method Name="M_GetAbsPos" Id="{4c82fe15-8f00-43b2-a20a-b074e7a36796}">
+      <Declaration><![CDATA[METHOD M_GetAbsPos : ST_3DPoint
+VAR_INPUT
+	pChildPos	: POINTER TO ST_3DPoint;
+	eTargetRef 	: E_TargetRef;
+	nParam1		: UINT;
+ 	nParam2		: UINT;
+	nParam3		: USINT;
+	nZLevel		: USINT;
+END_VAR
+VAR_OUTPUT
+	nErrorId 	: ERRORID;
+	lrAngle		: LREAL;
+END_VAR
+VAR
+	stLocPos : ST_3DPoint;
+	pSlot : POINTER TO FB_Slot;
+END_VAR
+]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[stLocPos := stRelPos;
+stLocPos.Z := stLocPos.Z + stDimension.Height + rZOffset;
+CASE eTargetRef OF
+	E_TargetRef.TARGETREF_LeftBottom:
+		;
+	E_TargetRef.TARGETREF_LeftTop:
+		stLocPos.Y := stLocPos.Y + stDimension.Depth;
+	E_TargetRef.TARGETREF_RightBottom:
+		stLocPos.X := stLocPos.X + stDimension.Width;
+	E_TargetRef.TARGETREF_RightTop:
+		stLocPos.X := stLocPos.X + stDimension.Width;
+		stLocPos.Y := stLocPos.Y + stDimension.Depth;
+	E_TargetRef.TARGETREF_Center:
+		stLocPos.X := stLocPos.X + stDimension.Width / 2.0;
+		stLocPos.Y := stLocPos.Y + stDimension.Depth / 2.0;
+ELSE
+	nErrorId := E_ErrorIdCmd.ERRORID_InvalidTargetPointRef;
+END_CASE
+
+IF nErrorId > 0 THEN
+	RETURN;
+END_IF
+
+IF pChildPos > 0 THEN
+	stLocPos.X := stLocPos.X + pChildPos^.X;
+	stLocPos.Y := stLocPos.Y + pChildPos^.Y;
+	stLocPos.Z := stLocPos.Z + pChildPos^.Z;
+END_IF
+
+IF pParentTarget > 0 THEN
+	IF pParentSlot > 0 THEN
+ 		stLocPos := pParentTarget^.M_GetAbsPos(pChildPos := ADR(stLocPos), eTargetRef:= E_TargetRef.TARGETREF_Slot,
+													nParam1:= pParentSlot^.P_nNr,
+													nParam2:= 0, nParam3:= 0,nZLevel:= 0, lrAngle=> lrAngle,
+													nErrorId=> nErrorId);
+	ELSE
+ 		stLocPos := pParentTarget^.M_GetAbsPos(pChildPos := ADR(stLocPos), eTargetRef:= E_TargetRef.TARGETREF_LeftBottom,
+													nParam1:= 0,
+													nParam2:= 0, nParam3:= 0,nZLevel:= 0, lrAngle=> lrAngle,
+													nErrorId=> nErrorId);
+	END_IF
+END_IF
+
+IF nErrorId > 0 THEN
+	RETURN;
+END_IF
+
+M_GetAbsPos := stLocPos;
+]]></ST>
+      </Implementation>
+    </Method>
+    <Method Name="M_GetAllProps" Id="{2a7dba0d-feb7-456f-a169-667763e41d1f}">
+      <Declaration><![CDATA[METHOD M_GetAllProps : ERRORID
+VAR_INPUT
+	refCmdData : REFERENCE TO ST_CmdData;
+END_VAR
+]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[refCmdData.aHeader[0] := nObjectID;
+refCmdData.aHeader[1] := eObjectType;
+
+
+//ParentTarget
+IF pParentTarget > 0 THEN
+	refCmdData.n32Data[0] := pParentTarget^.P_nObjectID;
+END_IF
+
+//ParentSlot
+IF pParentSlot > 0 THEN
+	refCmdData.n32Data[1] := pParentSlot^.P_nNr;
+END_IF
+
+//Relative Koordinaten lesen
+refCmdData.n32Data[2] := REAL_TO_DINT(stRelPos.X);
+refCmdData.n32Data[3] := REAL_TO_DINT(stRelPos.Y);
+refCmdData.n32Data[4] := REAL_TO_DINT(stRelPos.Z);
+//Dimensionen lesen
+refCmdData.n32Data[5] := REAL_TO_DINT(stDimension.Width);
+refCmdData.n32Data[6] := REAL_TO_DINT(stDimension.Depth);
+refCmdData.n32Data[7] := REAL_TO_DINT(stDimension.Height);
+refCmdData.n32Data[8] := REAL_TO_DINT(rFreeHeight);
+
+nCurrentPropIndex := 8;
+
+IF eObjectType = E_ObjectType.OBJECTTYPE_Point THEN
+	refCmdData.n32Data[9] := REAL_TO_DINT(rZOffset);
+	nCurrentPropIndex := 9;
+END_IF]]></ST>
+      </Implementation>
+    </Method>
+    <Method Name="M_GetFirstParentOfType" Id="{6e4d13b3-767c-4500-9726-ae6701f8f44d}">
+      <Declaration><![CDATA[METHOD M_GetFirstParentOfType : POINTER TO FB_TargetBase
+VAR_INPUT
+	eObjectType : E_ObjectType;
+END_VAR
+]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[IF pParentTarget > 0 THEN
+	IF pParentTarget^.P_eObjectType = eObjectType THEN
+		M_GetFirstParentOfType := pParentTarget;
+	ELSE
+		M_GetFirstParentOfType := pParentTarget^.M_GetFirstParentOfType(eObjectType);
+	END_IF
+END_IF]]></ST>
+      </Implementation>
+    </Method>
+    <Method Name="M_GetHighestTarget" Id="{c0775405-67b9-4a60-8f08-034ce3b6a0ee}">
+      <Declaration><![CDATA[METHOD M_GetHighestTarget : POINTER TO FB_TargetBase
+VAR_INPUT
+	fbRectArea : FB_Rectangle;
+	rHight : REAL;
+END_VAR
+
+VAR
+	iter				: FB_ObjCollectIterator;
+	pTarget 			: POINTER TO FB_TargetBase;
+	fbRectTarget		: FB_Rectangle;
+	bResult				: BOOL;
+END_VAR]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[//Selber für sich checken, ob im Bereich
+fbRectTarget := P_fbAbsRect;
+IF F_RectInnerRect(fbRectTarget,fbRectArea) THEN
+	bResult := TRUE; 
+ELSIF F_RectInnerRect(fbRectArea,fbRectTarget) THEN
+	bResult := TRUE;	
+ELSIF F_LinesIntersect(fbRectTarget.P_LineBottom,fbRectArea.P_LineLeft) THEN
+	bResult := TRUE;	
+ELSIF F_LinesIntersect(fbRectTarget.P_LineBottom,fbRectArea.P_LineRight) THEN
+	bResult := TRUE;	
+ELSIF F_LinesIntersect(fbRectTarget.P_LineTop,fbRectArea.P_LineLeft) THEN
+	bResult := TRUE;	
+ELSIF F_LinesIntersect(fbRectTarget.P_LineTop,fbRectArea.P_LineRight) THEN
+	bResult := TRUE;
+ELSIF F_LinesIntersect(fbRectTarget.P_LineLeft,fbRectArea.P_LineBottom) THEN
+	bResult := TRUE;
+ELSIF F_LinesIntersect(fbRectTarget.P_LineLeft,fbRectArea.P_LineTop) THEN
+	bResult := TRUE;
+ELSIF F_LinesIntersect(fbRectTarget.P_LineRight,fbRectArea.P_LineBottom) THEN
+	bResult := TRUE;
+ELSIF F_LinesIntersect(fbRectTarget.P_LineRight,fbRectArea.P_LineTop) THEN
+	bResult := TRUE;
+ELSE
+	bResult := FALSE;
+END_IF
+
+IF bResult THEN
+	IF P_rAbsFreeHeight >= rHight THEN
+		rHight := P_rAbsFreeHeight;
+	END_IF
+END_IF
+
+//Childs durchlaufen
+
+pObjCollectNode^.nodes.M_GetIterator(iter);
+WHILE iter.pNode > 0 DO
+	IF iter.pNode^.P_pObject > 0 AND_THEN iter.pNode^.P_pObject^.M_bIsGroup(E_ObjectGroup.OBJECTGROUP_Target) THEN
+		pTarget := iter.pNode^.P_pObject;
+		pTarget := pTarget^.M_GetHighestTarget(fbRectArea,rHight);
+		IF pTarget > 0 THEN
+			IF pTarget^.P_eObjectType <> E_ObjectType.OBJECTTYPE_Point THEN
+				IF pTarget^.P_rAbsFreeHeight > rHight THEN
+					M_GetHighestTarget := pTarget;
+					rHight := pTarget^.P_rAbsFreeHeight;
+				END_IF
+			END_IF			
+		END_IF
+	END_IF
+	iter.M_Increment();
+END_WHILE
+
+IF P_rAbsFreeHeight >= rHight AND bResult THEN
+	M_GetHighestTarget := THIS;
+END_IF]]></ST>
+      </Implementation>
+    </Method>
+    <Method Name="M_GetPropCheckSum" Id="{4234997b-86a4-47b9-b658-05f9e122773b}">
+      <Declaration><![CDATA[METHOD M_GetPropCheckSum : UINT
+VAR_INPUT
+END_VAR
+
+VAR
+	stData 		: ST_CmdData;
+END_VAR]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[M_GetAllProps(stData);
+wChecksum := F_DATA_TO_CRC16_CCITT(ADR(stData.n32Data[0]),nNoOfProps * 4,16#FFFF);
+M_GetPropCheckSum := wChecksum;
+	]]></ST>
+      </Implementation>
+    </Method>
+    <Method Name="M_IsPointInArea" Id="{79df6fc3-1590-41f3-a1ab-d6bbce4a1b2a}">
+      <Declaration><![CDATA[METHOD M_IsPointInArea : BOOL
+VAR_INPUT
+	stPoint	: ST_3DPoint;
+END_VAR
+
+VAR
+	stPointLB : ST_3DPoint;	//links unten
+	stPointRT : ST_3DPoint;	//rechts oben
+END_VAR
+
+
+VAR_OUTPUT
+	rAbsZ	: REAL;
+END_VAR]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[stPointLB := P_stAbsPosLB;
+stPointRT := P_stAbsPosRT;
+
+IF stPoint.X >= stPointLB.X AND stPoint.X <= stPointRT.X AND stPoint.Y >= stPointLB.Y AND stPoint.Y <= stPointRT.Y THEN
+	M_IsPointInArea := TRUE;
+	rAbsZ := stPointLB.Z;
+END_IF]]></ST>
+      </Implementation>
+    </Method>
+    <Method Name="M_SetAllProps" Id="{3fe4f0a1-4a7e-4ab7-9bd3-4b5fc0070cfe}">
+      <Declaration><![CDATA[METHOD M_SetAllProps : ERRORID
+VAR_INPUT
+	refCmdData : REFERENCE TO  ST_CmdData;
+END_VAR]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[nNoOfProps := 9;
+
+//Relative Koordinaten setzen
+stRelPos.X := DINT_TO_REAL(refCmdData.n32Data[2]);
+stRelPos.Y := DINT_TO_REAL(refCmdData.n32Data[3]);
+stRelPos.Z := DINT_TO_REAL(refCmdData.n32Data[4]);
+
+//Dimensionen setzen
+stDimension.Width := DINT_TO_REAL(refCmdData.n32Data[5]);
+stDimension.Depth := DINT_TO_REAL(refCmdData.n32Data[6]);
+stDimension.Height := DINT_TO_REAL(refCmdData.n32Data[7]);
+rFreeHeight := DINT_TO_REAL(refCmdData.n32Data[8]);
+nCurrentPropIndex := 8;
+
+//Wenn ein Punkt, dann ZOffset
+IF eObjectType = E_ObjectType.OBJECTTYPE_Point THEN
+	nNoOfProps := 10;
+	rZOffset := DINT_TO_REAL(refCmdData.n32Data[9]);
+	nCurrentPropIndex := 9;
+END_IF
+
+P_pWorkplate^.P_bCalcCollisHeight := TRUE;]]></ST>
+      </Implementation>
+    </Method>
+    <Method Name="M_SetSingleProp" Id="{179bf139-aae5-47cc-835b-8c2efc7262ab}">
+      <Declaration><![CDATA[METHOD M_SetSingleProp : ERRORID
+VAR_INPUT
+	refCmdData : REFERENCE TO  ST_CmdData;
+END_VAR
+]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[//Basisproperties schreiben
+CASE refCmdData.aHeader[1] OF	//Property-Nr
+	2:	//XPosRel
+		stRelPos.X := DINT_TO_REAL(refCmdData.n32Data[0]);
+	3:	//YPosRel
+		stRelPos.Y := DINT_TO_REAL(refCmdData.n32Data[0]);
+	4:	//ZPosRel
+		stRelPos.Z := DINT_TO_REAL(refCmdData.n32Data[0]);
+		P_pWorkplate^.P_bCalcCollisHeight := TRUE;
+	5:	//Width
+		stDimension.Width := DINT_TO_REAL(refCmdData.n32Data[0]);
+	6:	//Depth
+		stDimension.Depth := DINT_TO_REAL(refCmdData.n32Data[0]);
+	7:	//Height
+		stDimension.Height := DINT_TO_REAL(refCmdData.n32Data[0]);
+		P_pWorkplate^.P_bCalcCollisHeight := TRUE;
+	8:	//FreeHeight
+		rFreeHeight := DINT_TO_REAL(refCmdData.n32Data[0]);
+		P_pWorkplate^.P_bCalcCollisHeight := TRUE;
+	9:	
+		//Wenn ein Punkt, dann ZOffset
+		IF eObjectType = E_ObjectType.OBJECTTYPE_Point THEN
+			rZOffset := DINT_TO_REAL(refCmdData.n32Data[0]);
+			P_pWorkplate^.P_bCalcCollisHeight := TRUE;
+		ELSE
+			M_SetSingleProp := E_ErrorIdCmd.ERRORID_InvalidProperty;	
+		END_IF
+	ELSE
+		//Ungültige Property-Nr
+		M_SetSingleProp := E_ErrorIdCmd.ERRORID_InvalidProperty;
+		RETURN;
+END_CASE]]></ST>
+      </Implementation>
+    </Method>
+    <Method Name="M_UpdateParent" Id="{c28ed62f-f13c-4fb1-b857-836e74a7192a}">
+      <Declaration><![CDATA[METHOD M_UpdateParent
+VAR_INPUT
+END_VAR
+
+VAR
+	pObject : POINTER TO FB_Object;
+END_VAR]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[IF pObjCollectNode > 0 AND_THEN pObjCollectNode^.pOwnerColl > 0 THEN
+	pObject := pObjCollectNode^.P_pOwnerColl^.pOwnerNode^.P_pObject;	
+END_IF
+ 
+IF pObject > 0 THEN
+	pParentTarget := pObject;
+	pParentSlot := pObject^.M_GetSlotFromChild(THIS);
+ELSE
+	pParentTarget := 0;
+	pParentSlot := 0;
+END_IF
+ ]]></ST>
+      </Implementation>
+    </Method>
+    <Property Name="P_fbAbsRect" Id="{b4f4626c-32a1-4079-b058-51d74ba2e326}">
+      <Declaration><![CDATA[PROPERTY P_fbAbsRect : FB_Rectangle]]></Declaration>
+      <Get Name="Get" Id="{18770452-ce9b-4ae0-a081-0a5b79a6c3b8}">
+        <Declaration><![CDATA[VAR
+	stPoint	: ST_3DPoint;
+END_VAR
+]]></Declaration>
+        <Implementation>
+          <ST><![CDATA[stPoint := P_stAbsPosLB;
+P_fbAbsRect.X1 := stPoint.X;
+P_fbAbsRect.Y1 := stPoint.Y;
+stPoint := P_stAbsPosRT;
+P_fbAbsRect.X2 := stPoint.X;
+P_fbAbsRect.Y2 := stPoint.Y;]]></ST>
+        </Implementation>
+      </Get>
+    </Property>
+    <Property Name="P_lrAbsAngle" Id="{6522e96b-aad0-463c-ae32-66ec6d2e48b8}">
+      <Declaration><![CDATA[PROPERTY P_lrAbsAngle : LREAL]]></Declaration>
+      <Get Name="Get" Id="{2933d41a-84d0-4010-b528-b73b7ae2297b}">
+        <Declaration><![CDATA[VAR
+END_VAR
+]]></Declaration>
+        <Implementation>
+          <ST><![CDATA[IF pParentTarget > 0 THEN
+ P_lrAbsAngle := pParentTarget^.P_lrAbsAngle;
+END_IF]]></ST>
+        </Implementation>
+      </Get>
+    </Property>
+    <Property Name="P_nGCodeTargetNr" Id="{8294d0f6-a955-472c-88a1-7d0bd3444727}">
+      <Declaration><![CDATA[PROPERTY P_nGCodeTargetNr : UINT]]></Declaration>
+      <Get Name="Get" Id="{ee853859-8da3-448a-af4c-c4da8fd13a10}">
+        <Declaration><![CDATA[VAR
+END_VAR
+]]></Declaration>
+        <Implementation>
+          <ST><![CDATA[]]></ST>
+        </Implementation>
+      </Get>
+    </Property>
+    <Property Name="P_pWorkplate" Id="{6e22a681-95e4-44c1-a622-846cda292d76}">
+      <Declaration><![CDATA[PROPERTY P_pWorkplate : POINTER TO FB_Workplate]]></Declaration>
+      <Get Name="Get" Id="{48ed0417-eb6a-4a53-87c0-37f9ab0ac956}">
+        <Declaration><![CDATA[VAR
+END_VAR
+]]></Declaration>
+        <Implementation>
+          <ST><![CDATA[IF eObjectType = E_ObjectType.OBJECTTYPE_Workplate THEN
+	P_pWorkplate := THIS;
+ELSE
+	P_pWorkplate := pParentTarget^.P_pWorkplate;
+END_IF]]></ST>
+        </Implementation>
+      </Get>
+    </Property>
+    <Property Name="P_rAbsFreeHeight" Id="{4c150bb8-4925-4d2f-9f77-9240f74a5a14}">
+      <Declaration><![CDATA[PROPERTY P_rAbsFreeHeight : REAL]]></Declaration>
+      <Get Name="Get" Id="{82443352-56cb-4c40-96b4-3bd022055f9b}">
+        <Declaration><![CDATA[VAR
+	stPoint : ST_3DPoint;
+END_VAR
+]]></Declaration>
+        <Implementation>
+          <ST><![CDATA[stPoint := P_stAbsPosCenter;
+IF rFreeHeight > stDimension.Height THEN
+	P_rAbsFreeHeight := stPoint.Z - stDimension.Height + rFreeHeight;
+ELSE
+	P_rAbsFreeHeight := stPoint.Z;
+END_IF]]></ST>
+        </Implementation>
+      </Get>
+    </Property>
+    <Property Name="P_rFreeHeight" Id="{90d4ed9f-387d-438b-b657-f20715d33999}">
+      <Declaration><![CDATA[PROPERTY P_rFreeHeight : REAL]]></Declaration>
+      <Get Name="Get" Id="{10729cf9-9585-417d-aa87-fd35988e327f}">
+        <Declaration><![CDATA[VAR
+END_VAR
+]]></Declaration>
+        <Implementation>
+          <ST><![CDATA[P_rFreeHeight := rFreeHeight;]]></ST>
+        </Implementation>
+      </Get>
+    </Property>
+    <Property Name="P_rHeight" Id="{8ca622e3-fdc3-4f67-a5b1-b6546014e745}">
+      <Declaration><![CDATA[PROPERTY P_rHeight : REAL]]></Declaration>
+      <Get Name="Get" Id="{839390eb-a8e8-4bf0-9d2b-7692e5ee8ee9}">
+        <Declaration><![CDATA[VAR
+END_VAR
+]]></Declaration>
+        <Implementation>
+          <ST><![CDATA[P_rHeight := stDimension.Height;]]></ST>
+        </Implementation>
+      </Get>
+    </Property>
+    <Property Name="P_rZOffset" Id="{b60477f6-8dd8-4b05-aab2-a1a6fa648769}">
+      <Declaration><![CDATA[PROPERTY P_rZOffset : REAL]]></Declaration>
+      <Get Name="Get" Id="{40c4ff59-0807-4a15-b835-9428cb85d866}">
+        <Declaration><![CDATA[VAR
+END_VAR
+]]></Declaration>
+        <Implementation>
+          <ST><![CDATA[P_rZOffset := rZOffset;]]></ST>
+        </Implementation>
+      </Get>
+      <Set Name="Set" Id="{6a31d4a6-5652-4dda-86ff-08bd1eb60f8c}">
+        <Declaration><![CDATA[VAR
+END_VAR
+]]></Declaration>
+        <Implementation>
+          <ST><![CDATA[rZOffset := P_rZOffset;
+P_pWorkplate^.P_bCalcCollisHeight := TRUE;]]></ST>
+        </Implementation>
+      </Set>
+    </Property>
+    <Property Name="P_stAbsPosCenter" Id="{f412f1f7-4f91-4463-8432-ffcbcd47ace5}">
+      <Declaration><![CDATA[PROPERTY P_stAbsPosCenter : ST_3DPoint	//Absolute Mitten-Position(XY) zum Workplate-Nullpunkt
+]]></Declaration>
+      <Get Name="Get" Id="{ddcc4ee6-919d-4d94-9046-8523e38b1fa2}">
+        <Declaration><![CDATA[VAR
+	stPosTmp	: ST_3DPoint;
+END_VAR]]></Declaration>
+        <Implementation>
+          <ST><![CDATA[stPosTmp.X := stDimension.Width / 2;
+stPosTmp.Y := stDimension.Depth / 2;
+stPosTmp.Z := stPosTmp.Z + stDimension.Height + P_rZOffset;
+stPosTmp := F_Add3DPoints(stPosTmp,stRelPos);
+
+IF pParentTarget > 0 THEN
+	IF pParentSlot > 0 THEN
+		P_stAbsPosCenter := F_Add3DPoints(pParentSlot^.P_stAbsPos, stPosTmp);
+	ELSE
+		P_stAbsPosCenter := F_Add3DPoints(pParentTarget^.P_stAbsPosLB, stPosTmp);	
+	END_IF
+ELSE
+	P_stAbsPosCenter := stPosTmp;
+END_IF
+]]></ST>
+        </Implementation>
+      </Get>
+    </Property>
+    <Property Name="P_stAbsPosLB" Id="{3372f617-983e-480c-b51e-10b0d6e3bb10}">
+      <Declaration><![CDATA[PROPERTY P_stAbsPosLB : ST_3DPoint
+]]></Declaration>
+      <Get Name="Get" Id="{cafae09f-e0c9-4b2f-a941-793bb729c4f7}">
+        <Declaration><![CDATA[VAR
+	stPosTmp : ST_3DPoint;
+END_VAR
+]]></Declaration>
+        <Implementation>
+          <ST><![CDATA[IF pParentTarget > 0 THEN
+	stPosTmp := stRelPos;
+	stPosTmp.Z := stPosTmp.Z + stDimension.Height + P_rZOffset;
+	IF pParentSlot > 0 THEN
+		P_stAbsPosLB := F_Add3DPoints(pParentSlot^.P_stAbsPos,stPosTmp);
+	ELSE
+		P_stAbsPosLB := F_Add3DPoints(pParentTarget^.P_stAbsPosLB,stPosTmp);	
+	END_IF
+ELSE
+	P_stAbsPosLB := stRelPos;
+END_IF
+]]></ST>
+        </Implementation>
+      </Get>
+    </Property>
+    <Property Name="P_stAbsPosLT" Id="{af403b81-ccfa-4cae-a020-c83561fa485b}">
+      <Declaration><![CDATA[PROPERTY P_stAbsPosLT : ST_3DPoint
+]]></Declaration>
+      <Get Name="Get" Id="{692de32c-72a3-434d-8d05-9828ba12aad4}">
+        <Declaration><![CDATA[VAR
+	stPosTmp : ST_3DPoint;
+END_VAR
+]]></Declaration>
+        <Implementation>
+          <ST><![CDATA[stPosTmp := stRelPos;
+stPosTmp.Y := stPosTmp.Y + stDimension.Depth;
+IF pParentTarget > 0 THEN
+	stPosTmp.Z := stPosTmp.Z + stDimension.Height + P_rZOffset;
+	IF pParentSlot > 0 THEN
+		P_stAbsPosLT := F_Add3DPoints(pParentSlot^.P_stAbsPos,stPosTmp);
+	ELSE
+		P_stAbsPosLT := F_Add3DPoints(pParentTarget^.P_stAbsPosLB,stPosTmp);	
+	END_IF
+ELSE
+	P_stAbsPosLT := stPosTmp;
+END_IF
+]]></ST>
+        </Implementation>
+      </Get>
+    </Property>
+    <Property Name="P_stAbsPosRB" Id="{fe97caa9-8496-4579-8701-a50ee5fd69bb}">
+      <Declaration><![CDATA[PROPERTY P_stAbsPosRB : ST_3DPoint	//Absolute Position zum Workplate-Nullpunkt (links unten)]]></Declaration>
+      <Get Name="Get" Id="{add02f5b-f21b-4485-8417-8f4c920b5322}">
+        <Declaration><![CDATA[VAR
+	stPosTmp : ST_3DPoint;
+END_VAR
+]]></Declaration>
+        <Implementation>
+          <ST><![CDATA[stPosTmp := stRelPos;
+stPosTmp.X := stPosTmp.X + stDimension.Width;
+IF pParentTarget > 0 THEN
+	stPosTmp.Z := stPosTmp.Z + stDimension.Height + P_rZOffset;
+	IF pParentSlot > 0 THEN
+		P_stAbsPosRB := F_Add3DPoints(pParentSlot^.P_stAbsPos,stPosTmp);
+	ELSE
+		P_stAbsPosRB := F_Add3DPoints(pParentTarget^.P_stAbsPosLB,stPosTmp);	
+	END_IF
+ELSE
+	P_stAbsPosRB := stPosTmp;
+END_IF
+]]></ST>
+        </Implementation>
+      </Get>
+    </Property>
+    <Property Name="P_stAbsPosRT" Id="{36a7595b-937a-41c6-81c5-ff85aad37a52}">
+      <Declaration><![CDATA[PROPERTY P_stAbsPosRT : ST_3DPoint	//Absolute Position zum Workplate-Nullpunkt (links unten)]]></Declaration>
+      <Get Name="Get" Id="{3cbf9cf2-125f-40f7-bbc1-d57f187ba1f9}">
+        <Declaration><![CDATA[VAR
+	stPosTmp : ST_3DPoint;
+END_VAR
+]]></Declaration>
+        <Implementation>
+          <ST><![CDATA[stPosTmp := stRelPos;
+stPosTmp.Y := stPosTmp.Y + stDimension.Depth;
+stPosTmp.X := stPosTmp.X + stDimension.Width;
+//IF nParentTargetIdx > 0 THEN
+IF pParentTarget > 0 THEN
+	stPosTmp.Z := stPosTmp.Z + stDimension.Height + P_rZOffset;
+	IF pParentSlot > 0 THEN
+		P_stAbsPosRT := F_Add3DPoints(pParentSlot^.P_stAbsPos,stPosTmp);
+	ELSE
+		P_stAbsPosRT := F_Add3DPoints(pParentTarget^.P_stAbsPosLB,stPosTmp);	
+	END_IF
+	
+ELSE
+	P_stAbsPosRT := stPosTmp;
+END_IF
+]]></ST>
+        </Implementation>
+      </Get>
+    </Property>
+    <Property Name="P_stAbsRect" Id="{48ac1254-d2a5-4b28-904d-a866fa71cad3}">
+      <Declaration><![CDATA[PROPERTY P_stAbsRect : ST_Rectangle]]></Declaration>
+      <Get Name="Get" Id="{6024b056-1591-4cd0-8690-17b76f1ebaad}">
+        <Declaration><![CDATA[VAR
+	stPoint	: ST_3DPoint;
+END_VAR
+]]></Declaration>
+        <Implementation>
+          <ST><![CDATA[stPoint := P_stAbsPosLB;
+P_stAbsRect.X1 := stPoint.X;
+P_stAbsRect.Y1 := stPoint.Y;
+stPoint := P_stAbsPosRT;
+P_stAbsRect.X2 := stPoint.X;
+P_stAbsRect.Y2 := stPoint.Y;]]></ST>
+        </Implementation>
+      </Get>
+    </Property>
+    <Property Name="P_stDimension" Id="{8f838362-2b0c-46bf-aa23-05ab1c311544}">
+      <Declaration><![CDATA[PROPERTY P_stDimension : ST_3DDimension]]></Declaration>
+      <Get Name="Get" Id="{d0d7bbe4-95a8-442d-a8b8-b180a7a223cf}">
+        <Declaration><![CDATA[VAR
+END_VAR
+]]></Declaration>
+        <Implementation>
+          <ST><![CDATA[P_stDimension := stDimension;]]></ST>
+        </Implementation>
+      </Get>
+      <Set Name="Set" Id="{c29e569e-8431-47a4-811b-6709cb552e7e}">
+        <Declaration><![CDATA[VAR
+END_VAR
+]]></Declaration>
+        <Implementation>
+          <ST><![CDATA[stDimension := P_stDimension;
+P_pWorkplate^.P_bCalcCollisHeight := TRUE;
+]]></ST>
+        </Implementation>
+      </Set>
+    </Property>
+    <Property Name="P_stRelPos" Id="{f4c4fe8b-9c97-44a5-9ae8-dcdf8d3a15aa}">
+      <Declaration><![CDATA[PROPERTY P_stRelPos : ST_3DPoint
+]]></Declaration>
+      <Get Name="Get" Id="{913d4a64-c91c-4c92-aa61-688cc6952bd8}">
+        <Declaration><![CDATA[VAR
+END_VAR
+]]></Declaration>
+        <Implementation>
+          <ST><![CDATA[P_stRelPos := stRelPos;]]></ST>
+        </Implementation>
+      </Get>
+      <Set Name="Set" Id="{f6c1b612-4d42-4612-be65-dce017d08f45}">
+        <Declaration><![CDATA[VAR
+	
+END_VAR
+]]></Declaration>
+        <Implementation>
+          <ST><![CDATA[stRelPos := P_stRelPos;]]></ST>
+        </Implementation>
+      </Set>
+    </Property>
+    <Property Name="P_stRelPosLB" Id="{7780027f-74e8-4e88-88e6-b6dc0c174589}">
+      <Declaration><![CDATA[PROPERTY P_stRelPosLB : ST_3DPoint]]></Declaration>
+      <Get Name="Get" Id="{0ae7cbba-84f6-47bf-a45f-2181e6e1f963}">
+        <Declaration><![CDATA[VAR
+END_VAR
+]]></Declaration>
+        <Implementation>
+          <ST><![CDATA[P_stRelPosLB := stRelPos;
+P_stRelPosLB.Z := stRelPos.Z + stDimension.Height + rZOffset;
+IF pParentTarget > 0 AND_THEN pParentSlot > 0 THEN
+	P_stRelPosLB := F_Add3DPoints(P_stRelPosLB,pParentSlot^.P_stRelPos);
+END_IF]]></ST>
+        </Implementation>
+      </Get>
+    </Property>
+    <LineIds Name="FB_TargetBase">
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="FB_TargetBase.M_AddChild">
+      <LineId Id="8" Count="2" />
+      <LineId Id="40" Count="0" />
+      <LineId Id="15" Count="0" />
+      <LineId Id="17" Count="2" />
+      <LineId Id="21" Count="1" />
+      <LineId Id="27" Count="2" />
+      <LineId Id="33" Count="1" />
+      <LineId Id="5" Count="0" />
+    </LineIds>
+    <LineIds Name="FB_TargetBase.M_ApplyPos">
+      <LineId Id="77" Count="64" />
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="FB_TargetBase.M_CheckAction">
+      <LineId Id="3" Count="3" />
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="FB_TargetBase.M_CheckProps">
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="FB_TargetBase.M_ClearAllProps">
+      <LineId Id="29" Count="0" />
+      <LineId Id="34" Count="1" />
+      <LineId Id="33" Count="0" />
+      <LineId Id="32" Count="0" />
+      <LineId Id="16" Count="0" />
+      <LineId Id="4" Count="2" />
+      <LineId Id="12" Count="0" />
+    </LineIds>
+    <LineIds Name="FB_TargetBase.M_GetAbsPos">
+      <LineId Id="141" Count="0" />
+      <LineId Id="133" Count="0" />
+      <LineId Id="120" Count="4" />
+      <LineId Id="135" Count="0" />
+      <LineId Id="125" Count="0" />
+      <LineId Id="127" Count="0" />
+      <LineId Id="136" Count="1" />
+      <LineId Id="129" Count="0" />
+      <LineId Id="138" Count="1" />
+      <LineId Id="131" Count="1" />
+      <LineId Id="118" Count="0" />
+      <LineId Id="162" Count="2" />
+      <LineId Id="192" Count="1" />
+      <LineId Id="195" Count="0" />
+      <LineId Id="197" Count="1" />
+      <LineId Id="196" Count="0" />
+      <LineId Id="194" Count="0" />
+      <LineId Id="140" Count="0" />
+      <LineId Id="95" Count="0" />
+      <LineId Id="97" Count="0" />
+      <LineId Id="116" Count="0" />
+      <LineId Id="103" Count="0" />
+      <LineId Id="105" Count="0" />
+      <LineId Id="102" Count="0" />
+      <LineId Id="100" Count="0" />
+      <LineId Id="117" Count="0" />
+      <LineId Id="106" Count="1" />
+      <LineId Id="98" Count="0" />
+      <LineId Id="96" Count="0" />
+      <LineId Id="108" Count="3" />
+      <LineId Id="142" Count="1" />
+      <LineId Id="112" Count="0" />
+      <LineId Id="5" Count="0" />
+    </LineIds>
+    <LineIds Name="FB_TargetBase.M_GetAllProps">
+      <LineId Id="3" Count="28" />
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="FB_TargetBase.M_GetFirstParentOfType">
+      <LineId Id="7" Count="0" />
+      <LineId Id="9" Count="0" />
+      <LineId Id="11" Count="1" />
+      <LineId Id="10" Count="0" />
+      <LineId Id="8" Count="0" />
+      <LineId Id="5" Count="0" />
+    </LineIds>
+    <LineIds Name="FB_TargetBase.M_GetHighestTarget">
+      <LineId Id="64" Count="52" />
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="FB_TargetBase.M_GetPropCheckSum">
+      <LineId Id="3" Count="0" />
+      <LineId Id="5" Count="1" />
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="FB_TargetBase.M_IsPointInArea">
+      <LineId Id="3" Count="5" />
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="FB_TargetBase.M_SetAllProps">
+      <LineId Id="3" Count="1" />
+      <LineId Id="13" Count="18" />
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="FB_TargetBase.M_SetSingleProp">
+      <LineId Id="60" Count="6" />
+      <LineId Id="95" Count="0" />
+      <LineId Id="67" Count="0" />
+      <LineId Id="69" Count="21" />
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="FB_TargetBase.M_UpdateParent">
+      <LineId Id="3" Count="10" />
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="FB_TargetBase.P_fbAbsRect.Get">
+      <LineId Id="3" Count="4" />
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="FB_TargetBase.P_lrAbsAngle.Get">
+      <LineId Id="3" Count="1" />
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="FB_TargetBase.P_nGCodeTargetNr.Get">
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="FB_TargetBase.P_pWorkplate.Get">
+      <LineId Id="3" Count="3" />
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="FB_TargetBase.P_rAbsFreeHeight.Get">
+      <LineId Id="3" Count="4" />
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="FB_TargetBase.P_rFreeHeight.Get">
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="FB_TargetBase.P_rHeight.Get">
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="FB_TargetBase.P_rZOffset.Get">
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="FB_TargetBase.P_rZOffset.Set">
+      <LineId Id="3" Count="0" />
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="FB_TargetBase.P_stAbsPosCenter.Get">
+      <LineId Id="3" Count="13" />
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="FB_TargetBase.P_stAbsPosLB.Get">
+      <LineId Id="3" Count="10" />
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="FB_TargetBase.P_stAbsPosLT.Get">
+      <LineId Id="3" Count="11" />
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="FB_TargetBase.P_stAbsPosRB.Get">
+      <LineId Id="3" Count="11" />
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="FB_TargetBase.P_stAbsPosRT.Get">
+      <LineId Id="3" Count="14" />
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="FB_TargetBase.P_stAbsRect.Get">
+      <LineId Id="3" Count="4" />
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="FB_TargetBase.P_stDimension.Get">
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="FB_TargetBase.P_stDimension.Set">
+      <LineId Id="3" Count="1" />
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="FB_TargetBase.P_stRelPos.Get">
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="FB_TargetBase.P_stRelPos.Set">
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="FB_TargetBase.P_stRelPosLB.Get">
+      <LineId Id="3" Count="3" />
+      <LineId Id="2" Count="0" />
+    </LineIds>
+  </POU>
+</TcPlcObject>

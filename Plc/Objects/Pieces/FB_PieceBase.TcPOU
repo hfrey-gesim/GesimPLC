@@ -1,0 +1,467 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<TcPlcObject Version="1.1.0.1">
+  <POU Name="FB_PieceBase" Id="{63b07fb9-5ab1-4920-9bfc-a43e0b6ab977}" SpecialFunc="None">
+    <Declaration><![CDATA[FUNCTION_BLOCK FB_PieceBase EXTENDS FB_Object
+VAR_INPUT
+END_VAR
+VAR_OUTPUT
+	bUsingPiece			: BOOL;	
+END_VAR
+VAR
+	pParentObject		: POINTER TO FB_Object;
+	stDimension			: ST_3DDimension;
+	rSlotDiameter		: REAL;
+	stOffset			: ST_3DPoint;	//Offset
+	rZOverlapTool		: REAL;
+	rZOverlapSlot		: REAL;
+	rMeasureDistance	: REAL;
+	rDockOffset			: REAL;
+	nCurrentPropIndex	: USINT;
+	nSpecPropIndex		: USINT;			//erster Index für Specialproperties
+	bIgnoreOffset		: BOOL;
+END_VAR
+]]></Declaration>
+    <Implementation>
+      <ST><![CDATA[]]></ST>
+    </Implementation>
+    <Method Name="M_UpdateParent" Id="{12272a62-205a-4dc2-ab64-81302efaa155}">
+      <Declaration><![CDATA[METHOD M_UpdateParent
+VAR_INPUT
+END_VAR
+]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[IF pObjCollectNode > 0 AND_THEN pObjCollectNode^.pOwnerColl > 0 THEN
+	pParentObject := pObjCollectNode^.pOwnerColl^.pOwnerNode^.P_pObject;
+ELSE
+	pParentObject := 0;
+END_IF
+
+IF pParentObject > 0 THEN
+	pParentSlot := pParentObject^.M_GetSlotFromChild(THIS);
+ELSE
+	pParentSlot := 0;
+END_IF
+]]></ST>
+      </Implementation>
+    </Method>
+    <Method Name="M_GetPropCheckSum" Id="{18633363-fac8-4800-9b10-f9ba3b401402}">
+      <Declaration><![CDATA[METHOD M_GetPropCheckSum : UINT
+VAR_INPUT
+END_VAR
+
+VAR
+	stData 		: ST_CmdData;
+END_VAR]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[M_GetAllProps(stData);
+wChecksum := F_DATA_TO_CRC16_CCITT(ADR(stData.n32Data[0]),nNoOfProps * 4,16#FFFF);
+M_GetPropCheckSum := wChecksum;]]></ST>
+      </Implementation>
+    </Method>
+    <Property Name="P_stDimension" Id="{38cfc3fb-8369-4149-a7c6-1e896656ace3}">
+      <Declaration><![CDATA[PROPERTY P_stDimension : ST_3DDimension]]></Declaration>
+      <Get Name="Get" Id="{583f7b0b-c4be-47cf-978b-40ce2de136c8}">
+        <Declaration><![CDATA[VAR
+END_VAR
+]]></Declaration>
+        <Implementation>
+          <ST><![CDATA[P_stDimension := stDimension;]]></ST>
+        </Implementation>
+      </Get>
+    </Property>
+    <Property Name="P_rDockOffset" Id="{51558094-4c39-411f-879f-5d616be5f64f}">
+      <Declaration><![CDATA[PROPERTY P_rDockOffset : REAL]]></Declaration>
+      <Get Name="Get" Id="{f60d6112-2c55-486f-8f1e-da6ce27be520}">
+        <Declaration><![CDATA[VAR
+END_VAR
+]]></Declaration>
+        <Implementation>
+          <ST><![CDATA[P_rDockOffset := rDockOffset;]]></ST>
+        </Implementation>
+      </Get>
+    </Property>
+    <Method Name="M_CheckProps" Id="{55fc7aaa-cef2-4c3c-8779-ab7d9e3b0219}">
+      <Declaration><![CDATA[{attribute 'object_name' := 'M_CheckProps'}
+METHOD M_CheckProps : ERRORID
+]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[]]></ST>
+      </Implementation>
+    </Method>
+    <Property Name="P_rZOverlapSlot" Id="{567ff299-7005-4f6d-a9e8-9c08dff96786}">
+      <Declaration><![CDATA[PROPERTY P_rZOverlapSlot : REAL]]></Declaration>
+      <Get Name="Get" Id="{9407881e-c1e3-4504-8457-e2ec5cb609f1}">
+        <Declaration><![CDATA[VAR
+END_VAR
+]]></Declaration>
+        <Implementation>
+          <ST><![CDATA[P_rZOverlapSlot := rZOverlapSlot;]]></ST>
+        </Implementation>
+      </Get>
+    </Property>
+    <Property Name="P_pLatestChild" Id="{599afd22-374e-473d-8028-cebee4c6bece}">
+      <Declaration><![CDATA[PROPERTY P_pLatestChild : POINTER TO FB_PieceBase]]></Declaration>
+      <Get Name="Get" Id="{c8f06d56-fe69-4d12-9409-8169bbd8a26b}">
+        <Declaration><![CDATA[VAR
+END_VAR
+]]></Declaration>
+        <Implementation>
+          <ST><![CDATA[P_pLatestChild := THIS;]]></ST>
+        </Implementation>
+      </Get>
+    </Property>
+    <Property Name="P_rZOverlapTool" Id="{5e5f6762-008e-42af-8d8d-704a3888c52c}">
+      <Declaration><![CDATA[PROPERTY P_rZOverlapTool : REAL]]></Declaration>
+      <Get Name="Get" Id="{2fcd534d-4388-454b-8be3-60a5ae57e755}">
+        <Declaration><![CDATA[VAR
+END_VAR
+]]></Declaration>
+        <Implementation>
+          <ST><![CDATA[P_rZOverlapTool := rZOverlapTool;]]></ST>
+        </Implementation>
+      </Get>
+    </Property>
+    <Property Name="P_stOffset" Id="{604faea7-ad93-4a8b-aef7-91a75165f3a7}">
+      <Declaration><![CDATA[PROPERTY P_stOffset : ST_3DPoint]]></Declaration>
+      <Get Name="Get" Id="{328cfb13-c842-4ea7-948d-177437d03342}">
+        <Declaration><![CDATA[VAR
+END_VAR
+]]></Declaration>
+        <Implementation>
+          <ST><![CDATA[P_stOffset := stOffset;]]></ST>
+        </Implementation>
+      </Get>
+      <Set Name="Set" Id="{50a76d6a-1900-4314-80fa-1453c6d08102}">
+        <Declaration><![CDATA[VAR
+END_VAR
+]]></Declaration>
+        <Implementation>
+          <ST><![CDATA[stOffset := P_stOffset;]]></ST>
+        </Implementation>
+      </Set>
+    </Property>
+    <Method Name="M_ClearAllProps" Id="{7719d9df-58e4-46b7-b1d8-5dfd54045015}">
+      <Declaration><![CDATA[{attribute 'object_name' := 'M_ClearAllProps'}
+METHOD M_ClearAllProps
+
+VAR_INPUT
+	bIgnoreParent : BOOL; //Es wird das gesamte OD gelöscht. -> Zeiger auf Parent nicht mehr gültig!
+END_VAR
+]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[IF NOT bIgnoreParent THEN
+	IF pParentSlot > 0 THEN
+		pParentSlot^.P_pChild := 0;
+	END_IF	
+END_IF
+nObjectID := 0;
+pParentObject := 0;
+pParentSlot := 0;
+pObjCollectNode := 0;]]></ST>
+      </Implementation>
+    </Method>
+    <Method Name="M_GetRelPosTopCenter" Id="{895bb838-4287-4255-85e0-880c3d6350cd}">
+      <Declaration><![CDATA[METHOD M_GetRelPosTopCenter : ST_3DPoint
+VAR_INPUT
+END_VAR
+VAR
+	stPosTemp : ST_3DPoint;
+	pPieceSlot : POINTER TO FB_PieceSlot;
+END_VAR
+]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[IF pParentObject > 0 THEN
+	IF pParentObject^.M_bIsGroup(E_ObjectGroup.OBJECTGROUP_Target) THEN
+		IF pParentSlot > 0 THEN
+			pPieceSlot := pParentSlot;
+			stPosTemp := pPieceSlot^.P_stRelPos;
+			//Wenn OverlapSlot > SlotTiefe, dann sitzt Piece auf dem Grund des Slots auf
+			IF rZOverlapSlot > pPieceSlot^.rDepth THEN
+				stPosTemp.Z := stPosTemp.Z - pPieceSlot^.rDepth + stDimension.Height;
+			ELSE
+				stPosTemp.Z := stPosTemp.Z - rZOverlapSlot + stDimension.Height;
+			END_IF
+			IF bIgnoreOffset THEN
+				M_GetRelPosTopCenter := stPosTemp;
+			ELSE
+				M_GetRelPosTopCenter := F_Add3DPoints(stPosTemp,stOffset);	
+			END_IF
+		END_IF
+	END_IF
+END_IF]]></ST>
+      </Implementation>
+    </Method>
+    <Method Name="M_SetSingleProp" Id="{8b42104b-9230-4634-bf32-5bb53ab65987}">
+      <Declaration><![CDATA[{attribute 'object_name' := 'M_SetSingleProp'}
+METHOD M_SetSingleProp : ERRORID
+VAR_INPUT
+	refCmdData	: REFERENCE TO ST_CmdData;
+END_VAR
+]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[CASE refCmdData.aHeader[1] OF
+	0,1:
+		M_SetSingleProp := E_ErrorIdCmd.ERRORID_InvalidProperty;
+	2:	stDimension.Width := DINT_TO_REAL(refCmdData.n32Data[0]);
+	3:	stDimension.Depth := DINT_TO_REAL(refCmdData.n32Data[0]);
+	4:	stDimension.Height := DINT_TO_REAL(refCmdData.n32Data[0]);
+	5:	rSlotDiameter := DINT_TO_REAL(refCmdData.n32Data[0]);
+	6:	rZOverlapTool := DINT_TO_REAL(refCmdData.n32Data[0]);
+	7:	rZOverlapSlot := DINT_TO_REAL(refCmdData.n32Data[0]);
+	8:	stOffset.X := DINT_TO_REAL(refCmdData.n32Data[0]);
+	9:	stOffset.Y := DINT_TO_REAL(refCmdData.n32Data[0]);
+	10:	stOffset.Z := DINT_TO_REAL(refCmdData.n32Data[0]);
+	11: rMeasureDistance := DINT_TO_REAL(refCmdData.n32Data[0]);
+	12:	rDockOffset := DINT_TO_REAL(refCmdData.n32Data[0]);
+END_CASE]]></ST>
+      </Implementation>
+    </Method>
+    <Method Name="M_ClearOffset" Id="{8ce0672d-aa64-4446-b80a-5f086ed20313}">
+      <Declaration><![CDATA[METHOD M_ClearOffset
+VAR_INPUT
+END_VAR
+]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[stOffset.X := 0.0;
+stOffset.Y := 0.0;
+stOffset.Z := 0.0;]]></ST>
+      </Implementation>
+    </Method>
+    <Property Name="P_rMeasureDistance" Id="{9bae66cb-d201-4dcc-8eb2-a70f9ca72cb0}">
+      <Declaration><![CDATA[PROPERTY P_rMeasureDistance : REAL]]></Declaration>
+      <Get Name="Get" Id="{62c0c84e-0df8-4c92-befd-d44a6bd21024}">
+        <Declaration><![CDATA[VAR
+END_VAR
+]]></Declaration>
+        <Implementation>
+          <ST><![CDATA[P_rMeasureDistance := rMeasureDistance;]]></ST>
+        </Implementation>
+      </Get>
+    </Property>
+    <Method Name="M_GetAllProps" Id="{b457f268-2efd-4fe4-9c95-d0bca3e91460}">
+      <Declaration><![CDATA[{attribute 'object_name' := 'M_GetAllProps'}
+METHOD M_GetAllProps : ERRORID
+VAR_INPUT
+	refCmdData	: REFERENCE TO ST_CmdData;
+END_VAR
+]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[refCmdData.aHeader[0] := nObjectID;
+refCmdData.aHeader[1] := eObjectType;
+refCmdData.aHeader[2] := 0;
+
+IF pParentObject > 0 THEN
+	refCmdData.n32Data[0] := pParentObject^.P_nObjectID;
+ELSE
+	refCmdData.n32Data[0] := 0;
+END_IF
+
+IF pParentSlot > 0 THEN
+	refCmdData.n32Data[1] := pParentSlot^.nNr;
+ELSE
+	refCmdData.n32Data[1] := 0;
+END_IF
+
+//Dimensionen lesen
+refCmdData.n32Data[2] := REAL_TO_DINT(stDimension.Width);
+refCmdData.n32Data[3] := REAL_TO_DINT(stDimension.Depth);
+refCmdData.n32Data[4] := REAL_TO_DINT(stDimension.Height);
+refCmdData.n32Data[5] := REAL_TO_DINT(rSlotDiameter);
+refCmdData.n32Data[6] := REAL_TO_DINT(rZOverlapTool);
+refCmdData.n32Data[7] := REAL_TO_DINT(rZOverlapSlot);
+refCmdData.n32Data[8] := REAL_TO_DINT(stOffset.X);
+refCmdData.n32Data[9] := REAL_TO_DINT(stOffset.Y);
+refCmdData.n32Data[10] := REAL_TO_DINT(stOffset.Z);
+refCmdData.n32Data[11] := REAL_TO_DINT(rMeasureDistance);
+refCmdData.n32Data[12] := REAL_TO_DINT(rDockOffset);
+nCurrentPropIndex := 12;]]></ST>
+      </Implementation>
+    </Method>
+    <Method Name="M_AddChild" Id="{bcc24b54-37c5-4672-ac4e-4def77d6218c}">
+      <Declaration><![CDATA[METHOD M_AddChild : ERRORID
+VAR_INPUT
+	pObject	: POINTER TO FB_Object;
+	nSlotNr	: UINT;
+	nIndex 	: INT;
+END_VAR
+]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[//Pieces könnnen keine Childs aufnehmen
+M_AddChild := E_ErrorIdObjMgmt.ERRORID_ObjectCanNotTakeChilds;]]></ST>
+      </Implementation>
+    </Method>
+    <Method Name="M_SetAllProps" Id="{c95aee18-be78-4b3d-b6ed-71f97931af31}">
+      <Declaration><![CDATA[{attribute 'object_name' := 'M_SetAllProps'}
+METHOD M_SetAllProps : ERRORID
+VAR_INPUT
+	refCmdData	: REFERENCE TO ST_CmdData;
+END_VAR
+]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[IF fbObjectDirectory.M_GetObjPointer(DINT_TO_UINT(refCmdData.n32Data[0])) = 0 THEN
+	M_SetAllProps := E_ErrorIdObjMgmt.ERRORID_InvalidParentObject;
+	RETURN;
+END_IF
+
+//ParentSlot unterschiedlich?
+
+(*IF pParentSlot = 0 THEN
+	M_SetAllProps := M_SetParent(aI_Object[refCmdData.n32Data[0]],DINT_TO_UINT(refCmdData.n32Data[1]));
+ELSE
+	IF pParentSlot^.P_nNr <> DINT_TO_UINT(refCmdData.n32Data[1]) THEN
+		M_SetAllProps := M_SetParent(aI_Object[refCmdData.n32Data[0]],DINT_TO_UINT(refCmdData.n32Data[1]));
+	END_IF
+END_IF
+
+IF M_SetAllProps > 0 THEN
+	RETURN;
+END_IF*)
+
+//Dimensionen setzen
+stDimension.Width := DINT_TO_REAL(refCmdData.n32Data[2]);
+stDimension.Depth := DINT_TO_REAL(refCmdData.n32Data[3]);
+stDimension.Height := DINT_TO_REAL(refCmdData.n32Data[4]);
+rSlotDiameter := DINT_TO_REAL(refCmdData.n32Data[5]);
+rZOverlapTool := DINT_TO_REAL(refCmdData.n32Data[6]);
+rZOverlapSlot := DINT_TO_REAL(refCmdData.n32Data[7]);
+stOffset.X := DINT_TO_REAL(refCmdData.n32Data[8]);
+stOffset.Y := DINT_TO_REAL(refCmdData.n32Data[9]);
+stOffset.Z := DINT_TO_REAL(refCmdData.n32Data[10]);
+rMeasureDistance := DINT_TO_REAL(refCmdData.n32Data[11]);
+rDockOffset := DINT_TO_REAL(refCmdData.n32Data[12]);
+nCurrentPropIndex := 12;
+nNoOfProps := nCurrentPropIndex + 1;]]></ST>
+      </Implementation>
+    </Method>
+    <Property Name="P_nCntSlots" Id="{d7709e70-a5a5-43ae-94bf-2392db318ccf}">
+      <Declaration><![CDATA[PROPERTY P_nCntSlots : UINT]]></Declaration>
+      <Get Name="Get" Id="{59ce1092-2756-4af6-bc8d-f8ce2ec685e0}">
+        <Declaration><![CDATA[VAR
+END_VAR
+]]></Declaration>
+        <Implementation>
+          <ST><![CDATA[]]></ST>
+        </Implementation>
+      </Get>
+    </Property>
+    <Property Name="P_bIgnoreOffset" Id="{e2645d6a-d2f5-4d76-a453-6a748247d97d}">
+      <Declaration><![CDATA[PROPERTY P_bIgnoreOffset : BOOL]]></Declaration>
+      <Set Name="Set" Id="{a745faca-8da2-4bd8-973c-ee532bfc2459}">
+        <Declaration><![CDATA[VAR
+END_VAR
+]]></Declaration>
+        <Implementation>
+          <ST><![CDATA[bIgnoreOffset := P_bIgnoreOffset;]]></ST>
+        </Implementation>
+      </Set>
+      <Get Name="Get" Id="{b505df4d-b201-4c10-bcff-6c2ca5f75af7}">
+        <Declaration><![CDATA[VAR
+END_VAR
+]]></Declaration>
+        <Implementation>
+          <ST><![CDATA[P_bIgnoreOffset := bIgnoreOffset;]]></ST>
+        </Implementation>
+      </Get>
+    </Property>
+    <LineIds Name="FB_PieceBase">
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="FB_PieceBase.M_UpdateParent">
+      <LineId Id="19" Count="0" />
+      <LineId Id="21" Count="1" />
+      <LineId Id="20" Count="0" />
+      <LineId Id="18" Count="0" />
+      <LineId Id="7" Count="1" />
+      <LineId Id="11" Count="1" />
+      <LineId Id="10" Count="0" />
+      <LineId Id="6" Count="0" />
+      <LineId Id="5" Count="0" />
+    </LineIds>
+    <LineIds Name="FB_PieceBase.M_GetPropCheckSum">
+      <LineId Id="3" Count="0" />
+      <LineId Id="14" Count="0" />
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="FB_PieceBase.P_stDimension.Get">
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="FB_PieceBase.P_rDockOffset.Get">
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="FB_PieceBase.M_CheckProps">
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="FB_PieceBase.P_rZOverlapSlot.Get">
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="FB_PieceBase.P_pLatestChild.Get">
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="FB_PieceBase.P_rZOverlapTool.Get">
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="FB_PieceBase.P_stOffset.Get">
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="FB_PieceBase.P_stOffset.Set">
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="FB_PieceBase.M_ClearAllProps">
+      <LineId Id="20" Count="0" />
+      <LineId Id="27" Count="1" />
+      <LineId Id="25" Count="1" />
+      <LineId Id="13" Count="0" />
+      <LineId Id="3" Count="0" />
+      <LineId Id="2" Count="0" />
+      <LineId Id="9" Count="0" />
+    </LineIds>
+    <LineIds Name="FB_PieceBase.M_GetRelPosTopCenter">
+      <LineId Id="24" Count="17" />
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="FB_PieceBase.M_SetSingleProp">
+      <LineId Id="3" Count="11" />
+      <LineId Id="21" Count="0" />
+      <LineId Id="15" Count="0" />
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="FB_PieceBase.M_ClearOffset">
+      <LineId Id="3" Count="1" />
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="FB_PieceBase.P_rMeasureDistance.Get">
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="FB_PieceBase.M_GetAllProps">
+      <LineId Id="3" Count="25" />
+      <LineId Id="34" Count="0" />
+      <LineId Id="40" Count="0" />
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="FB_PieceBase.M_AddChild">
+      <LineId Id="8" Count="0" />
+      <LineId Id="5" Count="0" />
+    </LineIds>
+    <LineIds Name="FB_PieceBase.M_SetAllProps">
+      <LineId Id="3" Count="3" />
+      <LineId Id="35" Count="1" />
+      <LineId Id="7" Count="1" />
+      <LineId Id="37" Count="3" />
+      <LineId Id="9" Count="0" />
+      <LineId Id="41" Count="3" />
+      <LineId Id="10" Count="11" />
+      <LineId Id="29" Count="0" />
+      <LineId Id="22" Count="1" />
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="FB_PieceBase.P_nCntSlots.Get">
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="FB_PieceBase.P_bIgnoreOffset.Set">
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="FB_PieceBase.P_bIgnoreOffset.Get">
+      <LineId Id="2" Count="0" />
+    </LineIds>
+  </POU>
+</TcPlcObject>

@@ -1,0 +1,21 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<TcPlcObject Version="1.1.0.1" ProductVersion="3.1.4024.11">
+  <DUT Name="E_CoDS402States" Id="{ed078b6a-7423-41e3-b46d-adac559a8af7}">
+    <Declaration><![CDATA[TYPE E_CoDS402States :
+(
+	DS402STATE_Notspecified := 0,
+	DS402STATE_NotReadyToSwitchOn,
+	DS402STATE_SwitchOnDisabled,
+	DS402STATE_ReadyToSwitchOn,
+	DS402STATE_SwitchedOn,
+	DS402STATE_OperationEnabled,
+	DS402STATE_QuickStopActive,
+	DS402STATE_FaultReactionActive,
+	DS402STATE_HomingInProgess,
+	DS402STATE_HomingCompleted,
+	DS402STATE_Fault
+)UINT;
+END_TYPE
+]]></Declaration>
+  </DUT>
+</TcPlcObject>

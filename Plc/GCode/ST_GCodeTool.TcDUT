@@ -1,0 +1,15 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<TcPlcObject Version="1.1.0.1" ProductVersion="3.1.4022.18">
+  <DUT Name="ST_GCodeTool" Id="{912c8439-d54b-46ff-86ac-46edc5fe08de}">
+    <Declaration><![CDATA[TYPE ST_GCodeTool :
+STRUCT
+	bIsUsed			: BOOL;	//wird durch AssignRParams gesetzt
+	pMzTool			: POINTER TO FB_GCodeTool;
+	bIsInAction1	: BOOL;	//True, wenn in Pause gegangen wird und gerade mit Action1 geprintet wird
+	bIsInAction2 	: BOOL;	//True, wenn in Pause gegangen wird und gerade mit Action2 geprintet wird
+	bIsInAction3 	: BOOL;	//True, wenn in Pause gegangen wird und gerade mit Action3 geprintet wird
+	tDelayStart 	: TIME;	//Startverzögerung nach Continue
+END_STRUCT
+END_TYPE]]></Declaration>
+  </DUT>
+</TcPlcObject>

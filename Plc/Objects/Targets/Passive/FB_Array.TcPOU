@@ -1,0 +1,375 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<TcPlcObject Version="1.1.0.1" ProductVersion="3.1.4024.5">
+  <POU Name="FB_Array" Id="{fdc0d7cb-4f45-4904-80e9-c42a49131391}" SpecialFunc="None">
+    <Declaration><![CDATA[FUNCTION_BLOCK FB_Array EXTENDS FB_TargetBase
+VAR_INPUT
+END_VAR
+VAR_OUTPUT
+END_VAR
+VAR
+	nCols			: UINT;		//Anzahl Spalten
+	nRows			: UINT;		//Anzahl Zeilen
+	nPropIndexCols  : UINT;
+END_VAR
+]]></Declaration>
+    <Implementation>
+      <ST><![CDATA[]]></ST>
+    </Implementation>
+    <Method Name="M_CheckAction" Id="{e6fa0e93-bcc3-46d4-ba17-e68c607dfa01}">
+      <Declaration><![CDATA[METHOD M_CheckAction : ERRORID
+VAR_INPUT
+	refActionData : REFERENCE TO ST_ActionData;
+	pCorrelObject	: POINTER TO FB_Object;
+END_VAR
+]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[IF refActionData.eAction = E_Action.ACTION_TeachTarget THEN
+	IF DINT_TO_UINT(refActionData.aParams[1]) <> E_TargetRef.TARGETREF_TwoDimArray THEN
+		M_CheckAction := E_ErrorIdCmd.ERRORID_InvalidTargetPointRef;
+	END_IF
+END_IF]]></ST>
+      </Implementation>
+    </Method>
+    <Method Name="M_GetAbsPos" Id="{4fe27103-725d-41b1-82d6-645a644a5b49}">
+      <Declaration><![CDATA[METHOD M_GetAbsPos : ST_3DPoint
+VAR_INPUT
+	pChildPos	: POINTER TO ST_3DPoint;
+	eTargetRef 	: E_TargetRef;
+	nParam1		: UINT;
+ 	nParam2		: UINT;
+	nParam3		: USINT;
+	nZLevel		: USINT;
+END_VAR
+VAR_OUTPUT
+	nErrorId 	: ERRORID;
+	lrAngle		: LREAL;
+END_VAR
+VAR
+	stLocPos : ST_3DPoint;
+	rTemp : REAL;
+	nCol : UINT;
+	nRow : UINT;
+END_VAR
+]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[IF eTargetRef = E_TargetRef.TARGETREF_TwoDimArray THEN
+	//Checken ob gültige Spalte und Zeile
+	IF nParam1 = 0 OR nParam1 > nCols THEN
+		nErrorId := E_ErrorIdCmd.ERRORID_InvalidTargetPointCol;
+		RETURN;
+	END_IF
+	IF nParam2 = 0 OR nParam2 > nRows THEN
+		nErrorId := E_ErrorIdCmd.ERRORID_InvalidTargetPointRow;
+		RETURN;
+	END_IF
+	
+	stLocPos := stRelPos;
+	//relative X-Position berechnen
+	IF ncols > 1 THEN
+		rTemp := stDimension.Width / (nCols - 1); //Spaltenbreite	
+	END_IF
+	stLocPos.X := stLocPos.X + rTemp * nParam1 - rTemp;
+	
+	//relative Y-Position berechnen
+	IF nRows > 1 THEN
+		rTemp := stDimension.Depth / (nRows - 1); //Zeilenhöhe
+		stLocPos.Y := stLocPos.Y + stDimension.Depth - rTemp * nParam2 + rTemp;
+	END_IF
+	
+	
+	
+	M_GetAbsPos := pParentTarget^.M_GetAbsPos(pChildPos := ADR(stLocPos), eTargetRef:= E_TargetRef.TARGETREF_LeftBottom,
+													nParam1:= 0,
+													nParam2:= 0, nParam3:= 0,nZLevel:= 0,
+													lrAngle => lrAngle, nErrorId=> nErrorId);
+													
+ELSIF eTargetRef = E_TargetRef.TARGETREF_SequParaToArrayItem THEN
+	//das Item muss 0 und <= Zeilen*Spalten sein
+	IF nParam1 > 0 AND nParam1 <= nCols * nRows THEN
+		nRow := nParam1 MOD nCols; 
+		IF nRow > 0 THEN
+			nRow := (nParam1 - nRow) / nCols + 1;
+		ELSE
+			nRow := (nParam1 - nRow) / nCols;
+		END_IF
+		nCol := nParam1 - nCols * (nRow - 1);
+		
+		stLocPos := stRelPos;
+		//relative X-Position berechnen
+		IF ncols > 1 THEN
+			rTemp := stDimension.Width / (nCols - 1); //Spaltenbreite	
+		END_IF
+		stLocPos.X := stLocPos.X + rTemp * nCol - rTemp;
+		
+		//relative Y-Position berechnen
+		IF nRows > 1 THEN
+			rTemp := stDimension.Depth / (nRows - 1); //Zeilenhöhe
+			stLocPos.Y := stLocPos.Y + stDimension.Depth - rTemp * nRow + rTemp;
+		END_IF
+		
+		
+		
+		M_GetAbsPos := pParentTarget^.M_GetAbsPos(pChildPos := ADR(stLocPos), eTargetRef:= E_TargetRef.TARGETREF_LeftBottom,
+														nParam1:= 0,
+														nParam2:= 0, nParam3:= 0,nZLevel:= 0,
+														lrAngle => lrAngle, nErrorId=> nErrorId);		
+	ELSE
+		nErrorId := E_ErrorIdCmd.ERRORID_InvalidArrayItem;
+	END_IF
+ELSE
+	M_GetAbsPos := SUPER^.M_GetAbsPos(pChildPos := pChildPos, eTargetRef:= eTargetRef,
+													nParam1:= nParam1,
+													nParam2:= nParam2, nParam3:= nParam3, nZLevel:= nZLevel,
+													lrAngle => lrAngle, nErrorId=> nErrorId);	
+END_IF]]></ST>
+      </Implementation>
+    </Method>
+    <Method Name="M_GetAllProps" Id="{88efdaf0-d051-4b51-b633-0753651a5642}">
+      <Declaration><![CDATA[METHOD M_GetAllProps : ERRORID
+VAR_INPUT
+	refCmdData : REFERENCE TO  ST_CmdData;
+END_VAR
+]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[SUPER^.M_GetAllProps(refCmdData);
+nCurrentPropIndex := nCurrentPropIndex + 1;
+refCmdData.n32Data[nCurrentPropIndex] := nCols;
+nCurrentPropIndex := nCurrentPropIndex + 1;
+refCmdData.n32Data[nCurrentPropIndex] := nRows;
+
+]]></ST>
+      </Implementation>
+    </Method>
+    <Method Name="M_GetNextArrayIndex" Id="{ecfcd7b4-86a1-4794-b1c1-20b722f5cee5}">
+      <Declaration><![CDATA[METHOD M_GetNextArrayIndex : BOOL
+VAR_INPUT
+	eOrder	  : E_ArrayOrder;
+	nStartCol : UINT;
+	nStartRow : UINT;
+END_VAR
+VAR_OUTPUT
+	nCol : UINT;
+	nRow : UINT;
+END_VAR
+
+]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[CASE eOrder OF
+	E_ArrayOrder.RowWiseSaw:
+		IF nStartCol = 0 THEN //Start
+			nCol := 1;
+			nRow := 1;
+			M_GetNextArrayIndex := TRUE;
+		ELSE
+			//Zeile darf nicht "0" sein
+			IF nStartRow = 0 THEN
+				RETURN;
+			END_IF
+			//Letzte Spalte?
+			IF (nStartCol = nCols) THEN //Zeilenvorschub
+				nCol := 1;
+				nRow := nStartRow + 1;
+				//Zeile darf nicht größer als Anzahl Zeilen sein
+				IF nRow > nRows THEN
+					nRow := 0;
+					RETURN;
+				END_IF
+			ELSE //Spaltenvorschub
+				nCol := nStartCol + 1;
+				nRow := nStartRow;
+			END_IF
+			M_GetNextArrayIndex := TRUE;
+		END_IF
+	E_ArrayOrder.RowWiseMeander:
+		IF nStartCol = 0 THEN //Start
+			nCol := 1;
+			nRow := 1;
+			M_GetNextArrayIndex := TRUE;
+		ELSE
+			//Zeile darf nicht "0" sein
+			IF nStartRow = 0 THEN
+				RETURN;
+			END_IF
+			//StartSpalte die erste oder letzte Spalte?
+			IF (nStartCol = nCols AND (nStartRow MOD 2) = 1) OR (nStartCol = 1 AND (nStartRow MOD 2) = 0) THEN //Zeilenvorschub
+				nRow := nStartRow + 1;
+				//Zeile darf nicht größer als Anzahl Zeilen sein
+				IF nRow > nRows THEN
+					nRow := 0;
+					RETURN;
+				END_IF
+				nCol := nStartCol;
+				M_GetNextArrayIndex := TRUE;
+			ELSE
+				//Spalte vor oder zurück zählen?
+				IF (nStartRow MOD 2 = 0) THEN //gerade -> Spalte zurück zählen
+					nCol := nStartCol - 1;
+				ELSE //ungerade -> Spalte vorwärts zählen
+					nCol := nStartCol + 1;
+				END_IF
+				M_GetNextArrayIndex := TRUE;
+				nRow := nStartRow;
+			END_IF
+		END_IF	
+	E_ArrayOrder.ColWiseSaw:
+		IF nStartRow = 0 THEN //Start
+			nCol := 1;
+			nRow := 1;
+			M_GetNextArrayIndex := TRUE;
+		ELSE
+			//Spalte darf nicht "0" sein
+			IF nStartCol = 0 THEN
+				RETURN;
+			END_IF
+			//Letzte Spalte?
+			IF (nStartRow = nRows) THEN //Spaltenvorschub
+				nRow := 1;
+				nCol := nStartCol + 1;
+				IF nCol > nCols THEN
+					nCol:= 0;
+					RETURN;
+				END_IF
+			ELSE //Zeilenvorschub
+				nRow := nStartRow + 1;
+				nCol := nStartCol;
+			END_IF
+			M_GetNextArrayIndex := TRUE;
+		END_IF	
+	E_ArrayOrder.ColWiseMeander:
+		IF nStartRow = 0 THEN //Start
+			nCol := 1;
+			nRow := 1;
+			M_GetNextArrayIndex := TRUE;
+		ELSE
+			//Spalte darf nicht "0" sein
+			IF nStartCol = 0 THEN
+				RETURN;
+			END_IF
+			//StartZeile die erste oder letzte Zeile?
+			IF (nStartRow = nRows AND (nStartCol MOD 2) = 1) OR (nStartRow = 1 AND (nStartCol MOD 2) = 0) THEN //Spaltenvorschub
+				nCol := nStartCol + 1;
+				//Spalte darf nicht größer als Anzahl Spalten sein
+				IF nCol > nCols THEN
+					nCol := 0;
+					RETURN;
+				END_IF
+				nRow := nStartRow;
+				M_GetNextArrayIndex := TRUE;
+			ELSE
+				//Zeile vor oder zurück zählen?
+				IF (nStartCol MOD 2 = 0) THEN //gerade -> Spalte zurück zählen
+					nRow := nStartRow - 1;
+				ELSE //ungerade -> Spalte vorwärts zählen
+					nRow := nStartRow + 1;
+				END_IF
+				M_GetNextArrayIndex := TRUE;
+				nCol := nStartCol;
+			END_IF
+		END_IF
+END_CASE
+
+
+
+
+]]></ST>
+      </Implementation>
+    </Method>
+    <Method Name="M_SetAllProps" Id="{9e7ebf11-77b2-4285-b1fe-533a19d2f075}">
+      <Declaration><![CDATA[METHOD M_SetAllProps : ERRORID
+VAR_INPUT
+	refCmdData : REFERENCE TO  ST_CmdData;
+END_VAR
+]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[M_SetAllProps := SUPER^.M_SetAllProps(refCmdData);
+
+IF M_SetAllProps > 0 THEN
+	RETURN;
+END_IF
+
+nCurrentPropIndex := nCurrentPropIndex + 1;
+nPropIndexCols := nCurrentPropIndex;
+nCols := DINT_TO_UINT(refCmdData.n32Data[nCurrentPropIndex]);
+nCurrentPropIndex := nCurrentPropIndex + 1;
+nRows := DINT_TO_UINT(refCmdData.n32Data[nCurrentPropIndex]);
+
+nNoOfProps := nCurrentPropIndex + 1;
+]]></ST>
+      </Implementation>
+    </Method>
+    <Method Name="M_SetSingleProp" Id="{a84c81cc-9bac-4eed-8981-95fe9b469435}">
+      <Declaration><![CDATA[METHOD M_SetSingleProp : ERRORID
+VAR_INPUT
+	refCmdData : REFERENCE TO  ST_CmdData;
+END_VAR
+]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[IF nPropIndexCols = refCmdData.aHeader[1] THEN
+	nCols := DINT_TO_UINT(refCmdData.n32Data[0]);
+ELSIF (nPropIndexCols + 1) = refCmdData.aHeader[1] THEN
+	nRows := DINT_TO_UINT(refCmdData.n32Data[0]);
+ELSE
+	M_SetSingleProp := SUPER^.M_SetSingleProp(refCmdData);
+END_IF]]></ST>
+      </Implementation>
+    </Method>
+    <Property Name="P_nCols" Id="{63196a9c-7b77-4e8a-a832-458fd39c60f3}">
+      <Declaration><![CDATA[PROPERTY P_nCols : UINT]]></Declaration>
+      <Get Name="Get" Id="{a8fb3bdc-7ec4-4069-a842-30a8c63e6fbd}">
+        <Declaration><![CDATA[VAR
+END_VAR
+]]></Declaration>
+        <Implementation>
+          <ST><![CDATA[P_nCols := nCols;]]></ST>
+        </Implementation>
+      </Get>
+    </Property>
+    <Property Name="P_nRows" Id="{bfc338ed-5acf-4d09-b0dd-d365e6657f19}">
+      <Declaration><![CDATA[PROPERTY P_nRows : UINT]]></Declaration>
+      <Get Name="Get" Id="{1656c858-014d-4699-9c22-f79b80e51727}">
+        <Declaration><![CDATA[VAR
+END_VAR
+]]></Declaration>
+        <Implementation>
+          <ST><![CDATA[P_nRows := nRows;]]></ST>
+        </Implementation>
+      </Get>
+    </Property>
+    <LineIds Name="FB_Array">
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="FB_Array.M_CheckAction">
+      <LineId Id="3" Count="3" />
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="FB_Array.M_GetAbsPos">
+      <LineId Id="222" Count="68" />
+      <LineId Id="20" Count="0" />
+    </LineIds>
+    <LineIds Name="FB_Array.M_GetAllProps">
+      <LineId Id="3" Count="5" />
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="FB_Array.M_GetNextArrayIndex">
+      <LineId Id="3" Count="116" />
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="FB_Array.M_SetAllProps">
+      <LineId Id="3" Count="6" />
+      <LineId Id="19" Count="0" />
+      <LineId Id="10" Count="4" />
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="FB_Array.M_SetSingleProp">
+      <LineId Id="3" Count="3" />
+      <LineId Id="25" Count="1" />
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="FB_Array.P_nCols.Get">
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="FB_Array.P_nRows.Get">
+      <LineId Id="2" Count="0" />
+    </LineIds>
+  </POU>
+</TcPlcObject>

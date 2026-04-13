@@ -1,0 +1,202 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<TcPlcObject Version="1.1.0.1" ProductVersion="3.1.4020.6">
+  <POU Name="FB_HwRef4ChHeater" Id="{f21040c9-eb65-4116-bb11-49b21cb5f021}" SpecialFunc="None">
+    <Declaration><![CDATA[FUNCTION_BLOCK FB_HwRef4ChHeater EXTENDS FB_CanNodeBase
+VAR_INPUT
+END_VAR
+VAR_OUTPUT
+END_VAR
+VAR
+	//Eingänge
+	nTempActual 	AT %I* : UINT;	//aktuelle Temperatur in 1/100tel °C 
+	bTempCutoff 	AT %I* : BOOL;	//Übertemperaturabschaltung wurde aktiviert
+	//Ausgänge
+	nPidKp 			AT %Q* : UINT; 	//PID-Reglerparameter KP
+	nPidKi 			AT %Q* : UINT;	//PID-Reglerparameter KI
+	nPidKd 			AT %Q* : UINT;	//PID-Reglerparameter KD
+	nPidTa 			AT %Q* : USINT;	//PID-Reglerparameter TA
+	bHeatingOn		AT %Q* : BOOL;	//Heizer EIN
+	nTempSetpoint	AT %Q* : USINT;	//Solltemperatur in °C (ohne Kommastellen)
+	bEdgeLightOn	AT %Q* : BOOL;	//Seitenlicht für Kamera EIN (nur bei Mtp)
+END_VAR
+]]></Declaration>
+    <Implementation>
+      <ST><![CDATA[IF bNodeEnabled THEN
+	SUPER^();
+END_IF]]></ST>
+    </Implementation>
+    <Property Name="P_nPidKp" Id="{0aa3492c-0b4c-460a-9729-9e5a9d3912d2}">
+      <Declaration><![CDATA[PROPERTY P_nPidKp : UINT]]></Declaration>
+      <Set Name="Set" Id="{cb1fddf4-e7bf-4688-95d4-f49d460c8330}">
+        <Declaration><![CDATA[VAR
+END_VAR
+]]></Declaration>
+        <Implementation>
+          <ST><![CDATA[nPidKp := P_nPidKp;]]></ST>
+        </Implementation>
+      </Set>
+      <Get Name="Get" Id="{ebc21284-06e4-4435-a811-cb13fdf019b3}">
+        <Declaration><![CDATA[VAR
+END_VAR
+]]></Declaration>
+        <Implementation>
+          <ST><![CDATA[P_nPidKp := nPidKp;]]></ST>
+        </Implementation>
+      </Get>
+    </Property>
+    <Property Name="P_nPidKd" Id="{1781d390-2062-48f7-adec-9e119c259598}">
+      <Declaration><![CDATA[PROPERTY P_nPidKd : UINT]]></Declaration>
+      <Set Name="Set" Id="{2dbd15be-d2d6-45ec-9b0e-38182a764c5e}">
+        <Declaration><![CDATA[VAR
+END_VAR
+]]></Declaration>
+        <Implementation>
+          <ST><![CDATA[nPidKd := P_nPidKd;]]></ST>
+        </Implementation>
+      </Set>
+      <Get Name="Get" Id="{359cfa6b-7f0e-4f1a-9cc9-035a85511ace}">
+        <Declaration><![CDATA[VAR
+END_VAR
+]]></Declaration>
+        <Implementation>
+          <ST><![CDATA[P_nPidKd := nPidKd;]]></ST>
+        </Implementation>
+      </Get>
+    </Property>
+    <Property Name="P_bHeatingOn" Id="{38e53cbb-f6a4-452c-86ce-70bc20f1f485}">
+      <Declaration><![CDATA[PROPERTY P_bHeatingOn : BOOL]]></Declaration>
+      <Get Name="Get" Id="{0827e9c5-3fb6-47f7-bb3b-103d0a1c5670}">
+        <Declaration><![CDATA[VAR
+END_VAR
+]]></Declaration>
+        <Implementation>
+          <ST><![CDATA[P_bHeatingOn := bHeatingOn;]]></ST>
+        </Implementation>
+      </Get>
+      <Set Name="Set" Id="{f77bd560-9304-40cf-b643-9059f9244aa1}">
+        <Declaration><![CDATA[VAR
+END_VAR
+]]></Declaration>
+        <Implementation>
+          <ST><![CDATA[bHeatingOn := P_bHeatingOn;]]></ST>
+        </Implementation>
+      </Set>
+    </Property>
+    <Property Name="P_nTempSetpoint" Id="{737c3cd1-5d84-41c9-a3f2-0513585c8c29}">
+      <Declaration><![CDATA[PROPERTY P_nTempSetpoint : USINT]]></Declaration>
+      <Get Name="Get" Id="{487870cf-93fe-4963-b676-efacc4ee71c1}">
+        <Declaration><![CDATA[VAR
+END_VAR
+]]></Declaration>
+        <Implementation>
+          <ST><![CDATA[P_nTempSetpoint := nTempSetpoint;]]></ST>
+        </Implementation>
+      </Get>
+      <Set Name="Set" Id="{f4903177-8da5-4c85-8ab1-d1adc9b11056}">
+        <Declaration><![CDATA[VAR
+END_VAR
+]]></Declaration>
+        <Implementation>
+          <ST><![CDATA[nTempSetpoint := P_nTempSetpoint;]]></ST>
+        </Implementation>
+      </Set>
+    </Property>
+    <Property Name="P_nPidKi" Id="{83badb2f-9b78-4182-8c0c-315d6c764e91}">
+      <Declaration><![CDATA[PROPERTY P_nPidKi : UINT]]></Declaration>
+      <Get Name="Get" Id="{51fa2cee-cd6e-424c-8d46-00d56992d4f0}">
+        <Declaration><![CDATA[VAR
+END_VAR
+]]></Declaration>
+        <Implementation>
+          <ST><![CDATA[P_nPidKi := nPidKi;]]></ST>
+        </Implementation>
+      </Get>
+      <Set Name="Set" Id="{9157a3fe-e796-44e9-a317-4c7af96561d3}">
+        <Declaration><![CDATA[VAR
+END_VAR
+]]></Declaration>
+        <Implementation>
+          <ST><![CDATA[nPidKi := P_nPidKi;]]></ST>
+        </Implementation>
+      </Set>
+    </Property>
+    <Action Name="A_ResetApp" Id="{aa9dbc43-ed21-47e9-a0bb-87623532fe85}">
+      <Implementation>
+        <ST><![CDATA[IF nStateA_ResetApp = 0 THEN
+	fbSdoWrite(sADSNetID:= stAdsAdress.sNetId, nPortNr:= stAdsAdress.nPort,
+				nIndex := cUpdateRequest.nIndex, nSubIndex := 0, nDataLength := 1, nData:= 1, bExecute:= TRUE);
+	IF NOT fbSdoWrite.bBusy THEN
+		IF fbSdoWrite.bError THEN
+			nErrorId := fbSdoWrite.nAdsErrorId;
+			nErrorId2 := fbSdoWrite.nSdoErrorId;
+			nStateA_ResetApp := 99;  //Error
+		ELSE
+			nStateA_ResetApp := 80;
+		END_IF
+		fbSdoWrite(bExecute:= FALSE);
+	END_IF
+END_IF]]></ST>
+      </Implementation>
+    </Action>
+    <Property Name="P_bTempCutoff" Id="{ae4db5bf-1112-4095-a6a3-e14f8a5517ea}">
+      <Declaration><![CDATA[PROPERTY P_bTempCutoff : BOOL]]></Declaration>
+      <Get Name="Get" Id="{408975ec-8be4-40d4-be66-feb79a43602d}">
+        <Declaration><![CDATA[VAR
+END_VAR
+]]></Declaration>
+        <Implementation>
+          <ST><![CDATA[P_bTempCutoff := bTempCutoff;]]></ST>
+        </Implementation>
+      </Get>
+    </Property>
+    <Property Name="P_bEdgeLightOn" Id="{cda48487-0aad-496e-b7cd-7c894a26dad8}">
+      <Declaration><![CDATA[PROPERTY P_bEdgeLightOn : BOOL]]></Declaration>
+      <Set Name="Set" Id="{43bbc56a-f645-41f5-83df-473e430346f5}">
+        <Declaration><![CDATA[VAR
+END_VAR
+]]></Declaration>
+        <Implementation>
+          <ST><![CDATA[bEdgeLightOn := P_bEdgeLightOn;]]></ST>
+        </Implementation>
+      </Set>
+      <Get Name="Get" Id="{cd6602ec-3d80-4860-af07-44d56da526d4}">
+        <Declaration><![CDATA[VAR
+END_VAR
+]]></Declaration>
+        <Implementation>
+          <ST><![CDATA[P_bEdgeLightOn := bEdgeLightOn;]]></ST>
+        </Implementation>
+      </Get>
+    </Property>
+    <Property Name="P_nTempActual" Id="{d44214d4-e442-4406-8d72-595085758188}">
+      <Declaration><![CDATA[PROPERTY P_nTempActual : UINT]]></Declaration>
+      <Get Name="Get" Id="{aa067844-b864-40a0-a855-30f556acdd5f}">
+        <Declaration><![CDATA[VAR
+END_VAR
+]]></Declaration>
+        <Implementation>
+          <ST><![CDATA[P_nTempActual := nTempActual;]]></ST>
+        </Implementation>
+      </Get>
+    </Property>
+    <Property Name="P_nPidTa" Id="{d7f72271-1259-49b7-9b66-a530d575f057}">
+      <Declaration><![CDATA[PROPERTY P_nPidTa : USINT]]></Declaration>
+      <Get Name="Get" Id="{05ef108f-13ea-416f-a090-d01a7cf36bfa}">
+        <Declaration><![CDATA[VAR
+END_VAR
+]]></Declaration>
+        <Implementation>
+          <ST><![CDATA[P_nPidTa := nPidTa;]]></ST>
+        </Implementation>
+      </Get>
+      <Set Name="Set" Id="{3210af61-ab4f-4c15-b58c-00709bb519a9}">
+        <Declaration><![CDATA[VAR
+END_VAR
+]]></Declaration>
+        <Implementation>
+          <ST><![CDATA[nPidTa := P_nPidTa;]]></ST>
+        </Implementation>
+      </Set>
+    </Property>
+  </POU>
+</TcPlcObject>

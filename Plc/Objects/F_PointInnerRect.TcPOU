@@ -1,0 +1,24 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<TcPlcObject Version="1.1.0.1" ProductVersion="3.1.4020.12">
+  <POU Name="F_PointInnerRect" Id="{be2359e1-0790-45a5-943e-26be1bcfc302}" SpecialFunc="None">
+    <Declaration><![CDATA[FUNCTION F_PointInnerRect : BOOL
+VAR_INPUT
+	stPoint		: ST_3DPoint;
+	stRectangle : ST_Rectangle;
+END_VAR
+VAR
+END_VAR
+]]></Declaration>
+    <Implementation>
+      <ST><![CDATA[F_PointInnerRect := (stPoint.X >= stRectAngle.X1) AND
+					(stPoint.X <= stRectAngle.X2) AND
+					(stPoint.Y >= stRectAngle.Y1) AND
+					(stPoint.Y <= stRectAngle.Y2);]]></ST>
+    </Implementation>
+    <LineIds Name="F_PointInnerRect">
+      <LineId Id="13" Count="0" />
+      <LineId Id="15" Count="1" />
+      <LineId Id="7" Count="0" />
+    </LineIds>
+  </POU>
+</TcPlcObject>

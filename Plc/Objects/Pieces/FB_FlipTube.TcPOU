@@ -1,0 +1,176 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<TcPlcObject Version="1.1.0.1" ProductVersion="3.1.4022.18">
+  <POU Name="FB_FlipTube" Id="{be527c7b-c7ab-41e5-a0db-9c314abc2e6d}" SpecialFunc="None">
+    <Declaration><![CDATA[{attribute 'enable_dynamic_creation'}
+FUNCTION_BLOCK FB_FlipTube EXTENDS FB_PieceBase
+VAR_INPUT
+END_VAR
+VAR_OUTPUT
+END_VAR
+VAR
+	bIsOpen : BOOL;
+	nTopLevel : DINT;
+	nBottomLevel : DINT;	
+END_VAR
+]]></Declaration>
+    <Implementation>
+      <ST><![CDATA[]]></ST>
+    </Implementation>
+    <Method Name="FB_init" Id="{13295405-401f-4229-8512-62ccdd60b0bd}">
+      <Declaration><![CDATA[METHOD FB_init : BOOL
+VAR_INPUT
+	bInitRetains : BOOL; // if TRUE, the retain variables are initialized (warm start / cold start)
+	bInCopyCode : BOOL;  // if TRUE, the instance afterwards gets moved into the copy code (online change)
+END_VAR
+]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[eObjectType := E_ObjectType.OBJECTTYPE_FlipTube;
+eObjectGroup := E_ObjectGroup.OBJECTGROUP_Piece;]]></ST>
+      </Implementation>
+    </Method>
+    <Method Name="M_GetAllProps" Id="{8632fa0b-f0a1-4150-8497-c788dee95e12}">
+      <Declaration><![CDATA[METHOD M_GetAllProps : ERRORID
+VAR_INPUT
+	refCmdData : REFERENCE TO  ST_CmdData;
+END_VAR
+]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[SUPER^.M_GetAllProps(refCmdData);
+nCurrentPropIndex := nCurrentPropIndex + 1;
+refCmdData.n32Data[nCurrentPropIndex] := BOOL_TO_DINT(bIsOpen);
+nCurrentPropIndex := nCurrentPropIndex + 1;
+refCmdData.n32Data[nCurrentPropIndex] := nTopLevel;
+nCurrentPropIndex := nCurrentPropIndex + 1;
+refCmdData.n32Data[nCurrentPropIndex] := nBottomLevel; ]]></ST>
+      </Implementation>
+    </Method>
+    <Method Name="M_SetAllProps" Id="{33418384-c955-4035-8e87-98ac9595dcb1}">
+      <Declaration><![CDATA[{attribute 'object_name' := 'M_SetAllProps'}
+METHOD M_SetAllProps : ERRORID
+VAR_INPUT
+	refCmdData	: REFERENCE TO ST_CmdData;
+END_VAR
+]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[M_SetAllProps := SUPER^.M_SetAllProps(refCmdData);
+
+IF M_SetAllProps > 0 THEN
+	RETURN;
+END_IF
+nCurrentPropIndex := nCurrentPropIndex + 1;
+nSpecPropIndex := nCurrentPropIndex;
+
+bIsOpen := DINT_TO_BOOL(refCmdData.n32Data[nCurrentPropIndex]);
+nCurrentPropIndex := nCurrentPropIndex + 1;
+nTopLevel := refCmdData.n32Data[nCurrentPropIndex];
+nCurrentPropIndex := nCurrentPropIndex + 1;
+nBottomLevel := refCmdData.n32Data[nCurrentPropIndex];
+
+nNoOfProps := nCurrentPropIndex + 1;]]></ST>
+      </Implementation>
+    </Method>
+    <Method Name="M_SetSingleProp" Id="{bbe18f58-82d7-425d-a111-e37555db68fe}">
+      <Declaration><![CDATA[METHOD M_SetSingleProp : ERRORID
+VAR_INPUT
+	refCmdData : REFERENCE TO  ST_CmdData;
+END_VAR
+]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[IF refCmdData.aHeader[1] = nSpecPropIndex THEN
+	bIsOpen := DINT_TO_BOOL(refCmdData.n32Data[0]);
+ELSIF refCmdData.aHeader[1] + 1 = nSpecPropIndex THEN
+	nTopLevel := refCmdData.n32Data[0];
+ELSIF refCmdData.aHeader[1] + 2 = nSpecPropIndex THEN
+	nBottomLevel := refCmdData.n32Data[0];
+ELSE
+	M_SetSingleProp := SUPER^.M_SetSingleProp(refCmdData);
+END_IF]]></ST>
+      </Implementation>
+    </Method>
+    <Property Name="P_bIsOpen" Id="{cbc33f89-73a1-49de-a2fe-63cc3b4b7670}">
+      <Declaration><![CDATA[PROPERTY P_bIsOpen : BOOL]]></Declaration>
+      <Get Name="Get" Id="{9c9795ef-b460-4b31-af27-f59c37b61316}">
+        <Declaration><![CDATA[VAR
+END_VAR
+]]></Declaration>
+        <Implementation>
+          <ST><![CDATA[P_bIsOpen := bIsOpen;]]></ST>
+        </Implementation>
+      </Get>
+      <Set Name="Set" Id="{1afd7639-2b13-4b4d-969c-570270d847f6}">
+        <Declaration><![CDATA[VAR
+END_VAR
+]]></Declaration>
+        <Implementation>
+          <ST><![CDATA[bIsOpen := P_bIsOpen;]]></ST>
+        </Implementation>
+      </Set>
+    </Property>
+    <Property Name="P_nBottomLevel" Id="{397dbe44-794d-4344-b75f-544d9a414284}">
+      <Declaration><![CDATA[PROPERTY P_nBottomLevel : DINT]]></Declaration>
+      <Get Name="Get" Id="{2af393a1-0490-4c2c-b333-470859f5c842}">
+        <Declaration><![CDATA[VAR
+END_VAR
+]]></Declaration>
+        <Implementation>
+          <ST><![CDATA[P_nBottomLevel := nBottomLevel;]]></ST>
+        </Implementation>
+      </Get>
+    </Property>
+    <Property Name="P_nTopLevel" Id="{0b360c8b-b833-4c6d-9ce5-ab35309ce737}">
+      <Declaration><![CDATA[PROPERTY P_nTopLevel : DINT]]></Declaration>
+      <Get Name="Get" Id="{514acb15-340b-4e28-a4ff-3a8c548fcdb6}">
+        <Declaration><![CDATA[VAR
+END_VAR
+]]></Declaration>
+        <Implementation>
+          <ST><![CDATA[P_nTopLevel := nTopLevel;]]></ST>
+        </Implementation>
+      </Get>
+    </Property>
+    <LineIds Name="FB_FlipTube">
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="FB_FlipTube.FB_init">
+      <LineId Id="7" Count="1" />
+    </LineIds>
+    <LineIds Name="FB_FlipTube.M_GetAllProps">
+      <LineId Id="4" Count="1" />
+      <LineId Id="12" Count="0" />
+      <LineId Id="6" Count="0" />
+      <LineId Id="13" Count="0" />
+      <LineId Id="7" Count="0" />
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="FB_FlipTube.M_SetAllProps">
+      <LineId Id="4" Count="4" />
+      <LineId Id="21" Count="1" />
+      <LineId Id="9" Count="0" />
+      <LineId Id="19" Count="0" />
+      <LineId Id="10" Count="0" />
+      <LineId Id="20" Count="0" />
+      <LineId Id="11" Count="2" />
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="FB_FlipTube.M_SetSingleProp">
+      <LineId Id="24" Count="0" />
+      <LineId Id="26" Count="0" />
+      <LineId Id="28" Count="3" />
+      <LineId Id="27" Count="0" />
+      <LineId Id="25" Count="0" />
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="FB_FlipTube.P_bIsOpen.Get">
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="FB_FlipTube.P_bIsOpen.Set">
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="FB_FlipTube.P_nBottomLevel.Get">
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="FB_FlipTube.P_nTopLevel.Get">
+      <LineId Id="2" Count="0" />
+    </LineIds>
+  </POU>
+</TcPlcObject>

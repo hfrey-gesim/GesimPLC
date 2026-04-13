@@ -1,0 +1,57 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<TcPlcObject Version="1.1.0.1" ProductVersion="3.1.4020.6">
+  <POU Name="CANInterfaceCom" Id="{c392a5b3-7f59-4c77-ae3c-9a5a35ebe191}" SpecialFunc="None">
+    <Declaration><![CDATA[{attribute 'contextName':='ComTask'}
+PROGRAM CANInterfaceCom
+VAR
+	//Input
+	nInTxCounter 		AT %I* : UINT;
+	nInRxCounter 		AT %I* : UINT;
+	nInCobId			AT %I* : UINT;
+	aInData				AT %I* : ARRAY[0..7] OF USINT;
+	//Output
+	nOutTxCounter 		AT %Q* : UINT;
+	nOutRxCounter 		AT %Q* : UINT;
+	nOutNoOfTxMessages	AT %Q* : UINT := 1;
+	nOutCobId			AT %Q* : UINT;
+	aOutData			AT %Q* : ARRAY[0..7] OF USINT;
+	nState				: USINT;
+	bInit				: BOOL := TRUE;
+	stCanInterfaceBuffer: ST_CANInterfaceBuffer;
+END_VAR
+]]></Declaration>
+    <Implementation>
+      <ST><![CDATA[IF bInit THEN
+	F_CreateLinkedListHnd( ADR(stCanInterfaceBuffer.aNodes ), SIZEOF( stCanInterfaceBuffer.aNodes ), stCanInterfaceBuffer.hList );
+	bInit := FALSE;
+END_IF
+
+IF stCanInterfaceBuffer.bExecute THEN
+	IF nState = 0 THEN
+		stCanInterfaceBuffer.bBusy := TRUE;
+		nOutRxCounter := nInRxCounter;
+		//CobId aus Identifier und Datenlänge bilden
+		nOutCobId := SHL(stCanInterfaceBuffer.nTxIdent,5) OR stCanInterfaceBuffer.nTxDlc;
+		aOutData := stCanInterfaceBuffer.aTxData;
+		//durch inkrementieren durch nOutTxCounter wird gesendet
+		nOutTxCounter := nOutTxCounter + 1;
+		nState := 1;
+	ELSIF nState = 1 THEN //auf Rx warten
+		IF nInRxCounter <> nOutRxCounter THEN
+			//Identifier und Datenlänge extrahieren
+			stCanInterfaceBuffer.nRxIdent := SHR(nInCobId,5);
+			stCanInterfaceBuffer.nRxDlc := UINT_TO_USINT(nInCobId) AND 16#0F;
+			MEMSET(ADR(stCanInterfaceBuffer.aRxData),0,8);
+			MEMCPY(ADR(stCanInterfaceBuffer.aRxData),ADR(aInData),stCanInterfaceBuffer.nRxDlc);
+			//Empfang bestätigen
+			nOutRxCounter := nInRxCounter;
+			stCanInterfaceBuffer.bBusy := FALSE;
+			nState := 80;
+		END_IF
+	END_IF
+ELSE
+	nState := 0;
+END_IF]]></ST>
+    </Implementation>
+  </POU>
+</TcPlcObject>

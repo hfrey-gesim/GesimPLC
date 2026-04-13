@@ -1,0 +1,212 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<TcPlcObject Version="1.1.0.1" ProductVersion="3.1.4024.9">
+  <POU Name="FB_VialRack" Id="{a7fd508f-1cfe-4f91-9d1f-954e894c395a}" SpecialFunc="None">
+    <Declaration><![CDATA[FUNCTION_BLOCK FB_VialRack EXTENDS FB_Rack
+VAR
+	nGCodeTargetNr	: UINT;
+END_VAR
+
+
+]]></Declaration>
+    <Implementation>
+      <ST><![CDATA[]]></ST>
+    </Implementation>
+    <Method Name="FB_init" Id="{15ee1b98-548f-4aa6-b64e-b9684dff61d0}">
+      <Declaration><![CDATA[METHOD FB_init : BOOL
+VAR_INPUT
+	bInitRetains : BOOL; // if TRUE, the retain variables are initialized (warm start / cold start)
+	bInCopyCode : BOOL;  // if TRUE, the instance afterwards gets moved into the copy code (online change)
+END_VAR
+]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[eObjectType := E_ObjectType.OBJECTTYPE_VialRack;
+eObjectGroup := E_ObjectGroup.OBJECTGROUP_Target OR E_ObjectGroup.OBJECTGROUP_Rack;]]></ST>
+      </Implementation>
+    </Method>
+    <Method Name="M_AddChild" Id="{90b2121b-bbcb-40e7-ab65-f23af1b2dd36}">
+      <Declaration><![CDATA[METHOD M_AddChild : ERRORID
+VAR_INPUT
+	pObject : POINTER TO FB_Object;
+	nSlotNr	: UINT;
+	nIndex 	: INT;
+END_VAR
+]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[//Kann folgende Objekte aufnehmen:
+//Point, Vials
+IF pObject > 0 THEN
+	IF pObject^.P_eObjectType = E_ObjectType.OBJECTTYPE_Point THEN
+		M_AddChild := SUPER^.M_AddChild(pObject,nSlotNr,nIndex);
+	ELSIF pObject^.P_eObjectType = E_ObjectType.OBJECTTYPE_Vial OR
+			pObject^.P_eObjectType = E_ObjectType.OBJECTTYPE_VialClosed THEN
+		//darf nur in ein Slot
+		IF nSlotNr > 0 THEN
+			M_AddChild := SUPER^.M_AddChild(pObject,nSlotNr,nIndex);
+		ELSE
+			M_AddChild := E_ErrorIdObjMgmt.ERRORID_InvalidSlotNumber;	
+		END_IF
+	ELSE
+		M_AddChild := E_ErrorIdObjMgmt.ERRORID_InvalidParentObject;
+	END_IF
+ELSE
+	M_AddChild := E_ErrorIdObjMgmt.ERRORID_InvalidParentObject;
+END_IF]]></ST>
+      </Implementation>
+    </Method>
+    <Method Name="M_CheckAction" Id="{39ccdcd5-3652-4618-adc9-defd1e197d00}">
+      <Declaration><![CDATA[METHOD M_CheckAction : ERRORID
+VAR_INPUT
+	refActionData 	: REFERENCE TO ST_ActionData;
+	pCorrelObject	: POINTER TO FB_Object;
+END_VAR
+
+VAR
+	pSlot : POINTER TO FB_PieceSlot;
+	pVial : POINTER TO FB_Vial;
+	pMzTool : POINTER TO FB_MzTool;
+END_VAR]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[IF refActionData.eAction = E_Action.ACTION_InsertTool THEN
+	pSlot := super^.M_GetSlot(DINT_TO_UINT(refActionData.aParams[2]));
+	IF pSlot = 0 THEN
+		M_CheckAction := E_ErrorIdCmd.ERRORID_InvalidTargetSlot;
+	ELSE
+		//Vial in Slot ?
+		pVial := pSlot^.P_pPiece;
+		IF pVial = 0 THEN
+			M_CheckAction := E_ErrorIdCmd.ERRORID_NoPieceInSlot;
+		END_IF
+	END_IF
+ELSIF refActionData.eAction = E_Action.ACTION_DockTool THEN
+	pSlot := super^.M_GetSlot(DINT_TO_UINT(refActionData.aParams[2]));
+	IF pSlot = 0 THEN
+		M_CheckAction := E_ErrorIdCmd.ERRORID_InvalidTargetSlot;
+	ELSE
+		//Vial in Slot ?
+		pVial := pSlot^.P_pPiece;
+		IF pVial = 0 THEN
+			M_CheckAction := E_ErrorIdCmd.ERRORID_NoPieceInSlot;
+		ELSE
+			IF pVial^.P_eObjectType = E_ObjectType.OBJECTTYPE_VialClosed THEN
+				M_CheckAction := E_ErrorIdCmd.ERRORID_InvalidPieceType;
+			END_IF
+		END_IF
+	END_IF
+ELSIF refActionData.eAction = E_Action.ACTION_MeasurepH THEN
+	pSlot := super^.M_GetSlot(DINT_TO_UINT(refActionData.aParams[1]));
+	IF pSlot = 0 THEN
+		M_CheckAction := E_ErrorIdCmd.ERRORID_InvalidTargetSlot;
+	ELSE
+		//Vial in Slot ?
+		pVial := pSlot^.P_pPiece;
+		IF pVial = 0 THEN
+			M_CheckAction := E_ErrorIdCmd.ERRORID_NoPieceInSlot;
+		ELSE
+			IF pVial^.P_eObjectType = E_ObjectType.OBJECTTYPE_VialClosed THEN
+				M_CheckAction := E_ErrorIdCmd.ERRORID_InvalidPieceType;
+			END_IF
+		END_IF
+	END_IF
+ELSE
+	M_CheckAction := SUPER^.M_CheckAction(refActionData, pCorrelObject);
+END_IF]]></ST>
+      </Implementation>
+    </Method>
+    <Method Name="M_GetAllProps" Id="{943c0639-a234-48d4-8684-3bd086277a60}">
+      <Declaration><![CDATA[METHOD M_GetAllProps : ERRORID
+VAR_INPUT
+	refCmdData : REFERENCE TO  ST_CmdData;
+END_VAR
+]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[SUPER^.M_GetAllProps(refCmdData);
+nCurrentPropIndex := nCurrentPropIndex + 1;
+refCmdData.n32Data[nCurrentPropIndex] := nGCodeTargetNr;]]></ST>
+      </Implementation>
+    </Method>
+    <Method Name="M_OverrideObjectType" Id="{ed50e023-ac07-4bec-bc9d-f565ef113154}">
+      <Declaration><![CDATA[METHOD M_OverrideObjectType
+VAR_INPUT
+END_VAR
+]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[eObjectType := E_ObjectType.OBJECTTYPE_VialRackClosed;]]></ST>
+      </Implementation>
+    </Method>
+    <Method Name="M_SetAllProps" Id="{217259b4-087e-4613-875f-a1409d2ef9e5}">
+      <Declaration><![CDATA[METHOD M_SetAllProps : ERRORID
+VAR_INPUT
+	refCmdData : REFERENCE TO  ST_CmdData;
+END_VAR
+]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[M_SetAllProps := SUPER^.M_SetAllProps(refCmdData);
+
+IF M_SetAllProps > 0 THEN
+	RETURN;
+END_IF
+
+nCurrentPropIndex := nCurrentPropIndex + 1;
+nGCodeTargetNr := DINT_TO_UINT(refCmdData.n32Data[nCurrentPropIndex]);
+nNoOfProps := nCurrentPropIndex + 1;]]></ST>
+      </Implementation>
+    </Method>
+    <Property Name="P_nGCodeTargetNr" Id="{d8ce1981-74f6-4568-89d7-e3080ff2b3cf}">
+      <Declaration><![CDATA[PROPERTY P_nGCodeTargetNr : UINT]]></Declaration>
+      <Get Name="Get" Id="{db4d50d4-ecb5-4ec5-aa80-778083515e37}">
+        <Declaration><![CDATA[VAR
+END_VAR
+]]></Declaration>
+        <Implementation>
+          <ST><![CDATA[P_nGCodeTargetNr := nGCodeTargetNr;]]></ST>
+        </Implementation>
+      </Get>
+    </Property>
+    <LineIds Name="FB_VialRack">
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="FB_VialRack.FB_init">
+      <LineId Id="7" Count="1" />
+    </LineIds>
+    <LineIds Name="FB_VialRack.M_AddChild">
+      <LineId Id="19" Count="0" />
+      <LineId Id="8" Count="1" />
+      <LineId Id="21" Count="0" />
+      <LineId Id="20" Count="0" />
+      <LineId Id="28" Count="0" />
+      <LineId Id="22" Count="2" />
+      <LineId Id="26" Count="1" />
+      <LineId Id="25" Count="0" />
+      <LineId Id="16" Count="0" />
+      <LineId Id="18" Count="0" />
+      <LineId Id="15" Count="0" />
+      <LineId Id="11" Count="0" />
+      <LineId Id="13" Count="0" />
+      <LineId Id="12" Count="0" />
+      <LineId Id="5" Count="0" />
+    </LineIds>
+    <LineIds Name="FB_VialRack.M_CheckAction">
+      <LineId Id="3" Count="25" />
+      <LineId Id="41" Count="0" />
+      <LineId Id="43" Count="13" />
+      <LineId Id="29" Count="1" />
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="FB_VialRack.M_GetAllProps">
+      <LineId Id="3" Count="0" />
+      <LineId Id="5" Count="0" />
+      <LineId Id="30" Count="0" />
+    </LineIds>
+    <LineIds Name="FB_VialRack.M_OverrideObjectType">
+      <LineId Id="5" Count="0" />
+    </LineIds>
+    <LineIds Name="FB_VialRack.M_SetAllProps">
+      <LineId Id="3" Count="6" />
+      <LineId Id="37" Count="0" />
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="FB_VialRack.P_nGCodeTargetNr.Get">
+      <LineId Id="2" Count="0" />
+    </LineIds>
+  </POU>
+</TcPlcObject>

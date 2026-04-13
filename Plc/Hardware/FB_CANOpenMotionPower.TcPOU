@@ -1,0 +1,76 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<TcPlcObject Version="1.1.0.1" ProductVersion="3.1.0.25">
+  <POU Name="FB_CANOpenMotionPower" Id="{4ba7c1c1-9463-4e9d-bf9d-a65ca011e847}">
+    <Declaration><![CDATA[FUNCTION_BLOCK FB_CANOpenMotionPower
+VAR_INPUT
+	bExecute 	: BOOL;
+	pStatus 	: POINTER TO UINT;
+	pControl 	: POINTER TO UINT;
+END_VAR
+VAR_OUTPUT
+	bBusy	: BOOL;
+	bError	: BOOL;
+END_VAR
+VAR
+	nState : USINT;
+END_VAR
+]]></Declaration>
+    <Implementation>
+      <ST><![CDATA[IF bExecute THEN
+	CASE nState OF
+		0:	//Error?
+			bBusy := TRUE;
+			IF F_GetCoDS402State(pStatus^) = E_CoDS402States.DS402STATE_Fault THEN  //Error
+				pControl^ := 153;
+			ELSE
+				pControl^ := 0;
+				nState := 1;
+			END_IF
+			
+		1:	//Leistungsteil einschalten - "Ready to switch on"
+			pControl^ := 6;
+			nState := 2;
+			
+		2:	//Abfrage auf Status "Ready to switch on"
+			IF F_GetCoDS402State(pStatus^) = E_CoDS402States.DS402STATE_Fault THEN  //Error
+				nState := 99;
+			ELSIF F_GetCoDS402State(pStatus^) = E_CoDS402States.DS402STATE_ReadyToSwitchOn  THEN//"Ready to switch on"
+				nState := 3;
+			END_IF
+			
+		3:	//Leistungsteil einschalten - "Switch on" und "Voltage Enabled"
+			pControl^ := 7;
+			nState := 4;
+			
+		4:	//Abfrage auf Status "Switch on" und "Voltage Enabled"
+			IF F_GetCoDS402State(pStatus^) = E_CoDS402States.DS402STATE_Fault THEN  //Error
+				nState := 99;
+			ELSIF F_GetCoDS402State(pStatus^) = E_CoDS402States.DS402STATE_SwitchedOn THEN //"Switch on" und "Voltage Enabled"
+				nState := 5;
+			END_IF
+			
+		5:	//Leistungsteil einschalten - "Operation Enabled"
+			pControl^ := 15;
+			nState := 6;		
+	
+		6:	//Abfrage auf Status "Operation Enabled"
+			IF F_GetCoDS402State(pStatus^) = E_CoDS402States.DS402STATE_Fault THEN  //Error
+				nState := 99;
+			ELSIF F_GetCoDS402State(pStatus^) = E_CoDS402States.DS402STATE_OperationEnabled THEN //"Operation Enabled"
+				bBusy := FALSE;
+			END_IF
+	END_CASE
+	
+	IF nState = 99 THEN
+		bError := TRUE;
+		bBusy := FALSE;
+	END_IF
+ELSE
+	bError := FALSE;
+	bBusy := FALSE;
+	nState := 0;
+END_IF]]></ST>
+    </Implementation>
+    <ObjectProperties />
+  </POU>
+</TcPlcObject>

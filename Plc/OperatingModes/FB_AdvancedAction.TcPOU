@@ -1,0 +1,221 @@
+﻿<TcPlcObject Version="1.1.0.1" ProductVersion="3.1.0.23">
+  <POU Name="FB_AdvancedAction" Id="{d77bd4aa-4844-4162-b495-0c4c99e7699f}">
+    <Declaration><![CDATA[FUNCTION_BLOCK FB_AdvancedAction
+VAR_INPUT
+END_VAR
+
+VAR_OUTPUT
+	bBusy				: BOOL;
+	bError					: BOOL;
+	eCurrentState		: E_MachineState;
+END_VAR
+
+VAR
+	bInitFB					: BOOL := TRUE;	
+	bStart					: BOOL;
+	bCancel					: BOOL;
+	stError					: ST_Error;
+	bMoveToTarget			: BOOL;
+	bStop					: BOOL;
+	nStateA_MoveToTarget	: USINT;
+	nStateA_Stop			: USINT;
+	nStateM_Reset			: USINT;
+
+	eAction					: E_Action;
+
+
+	//Verkettete Liste für CurrentActions
+	fbList				: FB_LinkedListCtrl;(* basic linked list control function block *)
+	hList				: T_HLINKEDLIST;(* linked list handle *)
+	aNodes           	: ARRAY[0..4] OF T_LinkedListEntry;(* Max. number of linked list nodes. The value of list node = 32 bit integer *)
+	getValue			: UDINT;
+	getPosPtr       	: POINTER TO T_LinkedListEntry := 0;
+	nCntListOld			: UDINT;
+END_VAR
+]]></Declaration>
+    <Implementation>
+      <ST><![CDATA[IF bInitFB THEN
+	bInitFB := FALSE;
+	F_CreateLinkedListHnd( ADR( aNodes ), SIZEOF( aNodes ), hList );
+END_IF
+
+CASE eCurrentState OF
+	E_MachineState.eMachineState_Idle:
+		bError := FALSE;
+		bCancel := FALSE;
+		IF bStart THEN
+			bStart := FALSE;
+			eCurrentState:= E_MachineState.eMachineState_Active;
+		END_IF
+		
+	E_MachineState.eMachineState_Active:		
+		IF hList.nCount > nCntListOld THEN	//Es wurde eine neue BasicAction zur Liste hinzugefügt
+			nCntListOld := hList.nCount;
+			//zuletzt hinzugefügte Action ermitteln
+			fbList.A_GetHead( hList := hList, getValue=> getValue);
+			eAction := UDINT_TO_UINT(getValue);
+			
+			//Action ausführen
+			CASE eAction OF
+				E_Action.eAction_MoveToTarget:
+					bMoveToTarget := TRUE;
+			END_CASE
+		END_IF
+		
+		IF bMoveToTarget THEN
+			A_MoveToTarget();
+			IF nStateA_MoveToTarget = 80 THEN
+				bMoveToTarget := FALSE;
+				nStateA_MoveToTarget := 0;
+				M_RemoveListEntry(nSearchValue:= E_Action.eAction_MoveToTarget);
+			ELSIF nStateA_MoveToTarget = 99 THEN
+				bMoveToTarget := FALSE;
+				nStateA_MoveToTarget := 0;
+				fbErrorList.A_Add(putValue := stError);
+				bError := TRUE;
+			END_IF
+		END_IF
+		
+		IF bStop THEN
+			A_Stop();
+			IF nStateA_Stop = 80 THEN
+				M_RemoveListEntry(nSearchValue:= E_Action.eAction_Stop);
+				nCntListOld := hList.nCount;
+				bStop := FALSE;
+				nStateA_Stop := 0;
+			ELSIF nStateA_Stop = 99 THEN
+				fbErrorList.A_Add(putValue := stError); 
+				bStop := FALSE;
+				nStateA_Stop := 0;
+				bError := TRUE;
+			END_IF							
+		END_IF		
+		
+
+		IF hList.nCount = 0 THEN
+			eCurrentState := E_MachineState.eMachineState_Ready;
+		END_IF		
+
+		IF bError THEN
+			IF hList.nCount > 1 THEN	//mehr Actionen als die den Fehler verursachende
+				bStop := TRUE;
+			ELSE
+				eCurrentState := E_MachineState.eMachineState_Error;	
+			END_IF
+		END_IF
+
+	E_MachineState.eMachineState_Ready:
+		bBusy := FALSE;
+		eCurrentState := E_MachineState.eMachineState_Idle;
+		nCntListOld := hList.nCount;
+		
+	E_MachineState.eMachineState_Error:
+		bBusy := FALSE;		
+
+END_CASE]]></ST>
+    </Implementation>
+    <Action Name="A_MoveToTarget" Id="{051fd099-4703-48b8-b8bd-04a6e49baf7c}">
+      <Implementation>
+        <ST><![CDATA[CASE nStateA_MoveToTarget OF
+	0:
+		nStateA_MoveToTarget := 99;
+		
+	
+
+	70:	//Stoppen
+END_CASE]]></ST>
+      </Implementation>
+    </Action>
+    <Method Name="M_Reset" Id="{32d37f60-de2b-4ff5-8490-f5a424181a02}">
+      <Declaration><![CDATA[METHOD M_Reset
+VAR_INPUT
+END_VAR
+]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[CASE nStateM_Reset OF
+	0:
+		nStateM_Reset := 80;
+	80:
+		nStateA_MoveToTarget := 0;
+		bBusy := FALSE;
+		bCancel := FALSE;
+		bError := FALSE;
+		fbList.A_Reset(hList:= hList);
+		nCntListOld := 0;
+		eCurrentState := E_MachineState.eMachineState_Idle;
+END_CASE]]></ST>
+      </Implementation>
+    </Method>
+    <Method Name="M_RemoveListEntry" Id="{3692eea5-9209-45e9-b9f0-033bee2c1a1f}">
+      <Declaration><![CDATA[METHOD M_RemoveListEntry : BOOL
+VAR_INPUT
+	nSearchValue	: E_Action;
+END_VAR
+]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[getPosPtr := 0;(* start from first node element *)
+fbList.A_FindNext( hList := hList, putPosPtr := getPosPtr, putValue := nSearchValue, getValue=>getValue, getPosPtr=>getPosPtr );
+IF fbList.bOk THEN	//Eintrag wurde gefunden
+	fbList.A_RemoveValueAtPosPtr(hList:= hList,	putPosPtr:= getPosPtr);
+	IF fbList.bOk THEN
+		M_RemoveListEntry := TRUE;
+	END_IF
+END_IF
+]]></ST>
+      </Implementation>
+    </Method>
+    <Method Name="M_CanExeAction" Id="{5c766676-4228-43ca-aef4-3716ba698ad2}">
+      <Declaration><![CDATA[METHOD M_CanExeAction : BOOL
+VAR_INPUT
+	pStActionData	: POINTER TO ST_ActionData;
+END_VAR
+
+VAR
+	i			: UINT;
+END_VAR
+]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[//für alle beteilgten Devices überprüfen, ob entsprechende BasicActions frei
+CASE pStActionData^.eAction OF
+	E_Action.eAction_MoveToTarget:
+	//Action kann nur ausgeführt werden, wenn kein MzTool irgend eine Bewegung ausführt
+	FOR i := 1 TO fbObjectManagment.nCountMzTool BY 1 DO
+		IF aI_MzTool[i].M_GetActionLock(eAction := E_Action.eAction_MoveX) OR
+			aI_MzTool[i].M_GetActionLock(eAction := E_Action.eAction_MoveY) OR
+			aI_MzTool[i].M_GetActionLock(eAction := E_Action.eAction_MoveXY) OR
+			aI_MzTool[i].M_GetActionLock(eAction := E_Action.eAction_MoveZ) THEN
+			RETURN;
+		END_IF
+	END_FOR
+			
+END_CASE
+
+M_CanExeAction := TRUE;]]></ST>
+      </Implementation>
+    </Method>
+    <Method Name="M_ExeAction" Id="{6dd7a8e0-7c48-4fed-a0b5-f8c9a686d246}">
+      <Declaration><![CDATA[METHOD M_ExeAction : ERRORID
+VAR_INPUT
+	pStActionData	: POINTER TO ST_ActionData;
+END_VAR
+]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[CASE pStActionData^.eAction OF
+	E_Action.eAction_MoveToTarget:
+		//Hier sollte dann bei dem entsprechendem Device das ActionLock gesetzt werden
+		bBusy := TRUE;
+		bStart := TRUE;
+		fbList.A_AddHeadValue( hList := hList, putValue := E_Action.eAction_MoveToTarget); //In LinkedListCtrl eintragen	
+	ELSE
+		M_ExeAction := E_CmdErrorId.eCmdErrorId_InvalidBasicAction; //Fehler		
+END_CASE]]></ST>
+      </Implementation>
+    </Method>
+    <Action Name="A_Stop" Id="{f3c2229c-ca53-4bc7-9e70-acf80a3504ca}">
+      <Implementation>
+        <ST><![CDATA[]]></ST>
+      </Implementation>
+    </Action>
+    <ObjectProperties />
+  </POU>
+</TcPlcObject>

@@ -1,0 +1,13 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<TcPlcObject Version="1.1.0.1" ProductVersion="3.1.4022.10">
+  <DUT Name="ST_CanMasterAddress" Id="{2355ce82-f61d-499b-96a5-b619a2b46532}">
+    <Declaration><![CDATA[TYPE ST_CanMasterAddress :
+STRUCT
+	sEcMasterNetId : T_AmsNetID;
+	sOwnNetId : T_AmsNetID;
+	nBoxAddress : UINT; //Bezogen auf EcMaster
+END_STRUCT
+END_TYPE
+]]></Declaration>
+  </DUT>
+</TcPlcObject>

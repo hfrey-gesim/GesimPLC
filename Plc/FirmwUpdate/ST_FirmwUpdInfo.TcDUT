@@ -1,0 +1,14 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<TcPlcObject Version="1.1.0.1" ProductVersion="3.1.0.25">
+  <DUT Name="ST_FirmwUpdInfo" Id="{836ac61c-a31b-4ece-a849-b395b300e719}">
+    <Declaration><![CDATA[TYPE ST_FirmwUpdInfo :
+STRUCT
+	nBytesToWrite 	: UDINT;
+	nWrittenBytes	: UDINT;
+	eActState 		: E_FirmwUpdState;	
+END_STRUCT
+END_TYPE
+]]></Declaration>
+    <ObjectProperties />
+  </DUT>
+</TcPlcObject>

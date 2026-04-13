@@ -1,0 +1,20 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<TcPlcObject Version="1.1.0.1" ProductVersion="3.1.4024.6">
+  <POU Name="OutDistributor" Id="{ae2aa4fe-42a2-4580-a91d-8284e35df4de}" SpecialFunc="None">
+    <Declaration><![CDATA[PROGRAM OutDistributor
+VAR
+	bInput1 AT%I* : BOOL;
+	bInput2 AT%I* : BOOL;
+	bInput3 AT%I* : BOOL;
+	bInput4 AT%I* : BOOL;
+	bOutput AT%Q* : BOOL;
+END_VAR
+]]></Declaration>
+    <Implementation>
+      <ST><![CDATA[bOutput := bInput1 OR bInput2 OR bInput3 OR bInput4;]]></ST>
+    </Implementation>
+    <LineIds Name="OutDistributor">
+      <LineId Id="5" Count="0" />
+    </LineIds>
+  </POU>
+</TcPlcObject>

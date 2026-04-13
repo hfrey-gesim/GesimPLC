@@ -1,0 +1,219 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<TcPlcObject Version="1.1.0.1" ProductVersion="3.1.4024.11">
+  <POU Name="FB_HwModuleList" Id="{28551d1a-c2f5-44b3-baeb-133d0bac6a4a}" SpecialFunc="None">
+    <Declaration><![CDATA[FUNCTION_BLOCK FB_HwModuleList
+VAR_INPUT
+END_VAR
+VAR_OUTPUT
+END_VAR
+VAR
+	pHead	: POINTER TO ST_Pointer;
+	pTail	: POINTER TO ST_Pointer;
+	pCurrent: POINTER TO ST_Pointer;
+	nCount	: UINT;	
+END_VAR
+]]></Declaration>
+    <Implementation>
+      <ST><![CDATA[]]></ST>
+    </Implementation>
+    <Method Name="FB_exit" Id="{a467608f-c30b-487b-b958-9270b5e541d4}">
+      <Declaration><![CDATA[METHOD FB_exit : BOOL
+VAR_INPUT
+	bInCopyCode : BOOL; // if TRUE, the exit method is called for exiting an instance that is copied afterwards (online change).
+END_VAR
+
+VAR
+	pPointer : POINTER TO ST_Pointer;
+END_VAR
+]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[(*pPointer := pHead;
+WHILE pPointer > 0 DO
+	__DELETE(pPointer);
+	pPointer := pPointer^.pNext;
+END_WHILE*)]]></ST>
+      </Implementation>
+    </Method>
+    <Method Name="M_Add" Id="{d28bfd29-8c4e-4286-95c7-e4779580532c}">
+      <Declaration><![CDATA[METHOD M_Add
+VAR_INPUT
+	pModule : POINTER TO FB_HwModule;
+END_VAR
+
+VAR
+	pNew : POINTER TO ST_Pointer;
+END_VAR]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[pNew := pHead;
+WHILE pNew > 0 DO
+	IF pNew^.pContent = pModule THEN
+		RETURN;
+	END_IF
+	pNew := pNew^.pNext;
+END_WHILE
+
+pNew := __NEW(ST_Pointer);
+MEMSET(pNew,0,SIZEOF(ST_Pointer));
+pNew^.pContent := pModule;
+IF pHead = 0 THEN
+	pHead := pTail := pNew;
+ELSE
+	pNew^.pPrev := pTail; 
+	pTail^.pNext := pNew;
+	pTail := pNew;
+END_IF
+nCount := nCount + 1;]]></ST>
+      </Implementation>
+    </Method>
+    <Method Name="M_CountByGroup" Id="{28f42302-16ee-48de-861b-55461194e2d7}">
+      <Declaration><![CDATA[METHOD M_CountByGroup : UINT
+VAR_INPUT
+	eGroup : E_HardwareGrp;
+END_VAR
+
+
+VAR
+	pPointer : POINTER TO ST_Pointer;
+	pModule : POINTER TO FB_HwModule;
+	stHwIdTemp : ST_HardwareId;
+	nCount : UINT;
+END_VAR]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[pPointer := pHead;
+WHILE pPointer > 0 DO
+	pModule := pPointer^.pContent;
+	stHwIdTemp := pModule^.P_stHardwareId;
+	IF eGroup = stHwIdTemp.eGroup THEN
+		nCount := nCount + 1;
+	END_IF
+	pPointer := pPointer^.pNext;
+END_WHILE
+M_CountByGroup := nCount;
+]]></ST>
+      </Implementation>
+    </Method>
+    <Method Name="M_Get" Id="{ee3c4072-1ff0-459d-a653-dee75ff68e4e}">
+      <Declaration><![CDATA[METHOD M_Get : POINTER TO FB_HwModule
+VAR_INPUT
+END_VAR
+
+VAR
+	pModule : POINTER TO FB_HwModule;
+END_VAR]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[IF pCurrent > 0 THEN
+	pModule := pCurrent^.pContent;
+	IF pModule > 0 THEN
+		M_Get := pModule;
+	END_IF
+	pCurrent := pCurrent^.pNext;
+END_IF]]></ST>
+      </Implementation>
+    </Method>
+    <Method Name="M_GetByHwId" Id="{d592009a-b20c-4b65-9840-bfa458b85b2b}">
+      <Declaration><![CDATA[METHOD M_GetByHwId : POINTER TO FB_HwModule
+VAR_INPUT
+	stHardwareId : ST_HardwareId;
+END_VAR
+
+VAR
+	pPointer : POINTER TO ST_Pointer;
+	pModule : POINTER TO FB_HwModule;
+	stHwIdTemp : ST_HardwareId;
+END_VAR]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[pPointer := pHead;
+WHILE pPointer > 0 DO
+	pModule := pPointer^.pContent;
+	stHwIdTemp := pModule^.P_stHardwareId;
+	//Strukturen können nicht direkt miteinander verglichen werden
+	//IF stHwIdTemp = stHardwareId THEN
+	IF MEMCMP(ADR(stHwIdTemp), ADR(stHardwareId), SIZEOF(ST_HardwareId)) = 0 THEN
+		M_GetByHwId := pModule;
+		RETURN;
+	END_IF
+	pPointer := pPointer^.pNext;
+END_WHILE
+]]></ST>
+      </Implementation>
+    </Method>
+    <Method Name="M_Reset" Id="{cc4a7e4b-7eb1-413e-ad54-8dc4285de7de}">
+      <Declaration><![CDATA[METHOD M_Reset
+VAR_INPUT
+END_VAR
+
+VAR
+	pDelete : POINTER TO ST_Pointer;
+	pNext	: POINTER TO ST_Pointer;
+END_VAR]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[pDelete := pHead;
+WHILE  pDelete > 0 DO
+	pNext := pDelete^.pNext;
+	__DELETE(pDelete);
+	pDelete := pNext;
+END_WHILE
+pHead := 0;
+pTail := 0;
+pCurrent := 0;
+nCount := 0;]]></ST>
+      </Implementation>
+    </Method>
+    <Method Name="M_SetCurrentToHead" Id="{72528378-8a85-4dd7-965d-12f57ee17346}">
+      <Declaration><![CDATA[METHOD M_SetCurrentToHead : BOOL
+VAR_INPUT
+END_VAR
+
+]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[pCurrent := pHead;]]></ST>
+      </Implementation>
+    </Method>
+    <LineIds Name="FB_HwModuleList">
+      <LineId Id="9" Count="0" />
+    </LineIds>
+    <LineIds Name="FB_HwModuleList.FB_exit">
+      <LineId Id="7" Count="0" />
+      <LineId Id="21" Count="0" />
+      <LineId Id="8" Count="0" />
+      <LineId Id="15" Count="0" />
+      <LineId Id="6" Count="0" />
+    </LineIds>
+    <LineIds Name="FB_HwModuleList.M_Add">
+      <LineId Id="4" Count="17" />
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="FB_HwModuleList.M_CountByGroup">
+      <LineId Id="14" Count="3" />
+      <LineId Id="25" Count="2" />
+      <LineId Id="22" Count="1" />
+      <LineId Id="28" Count="0" />
+      <LineId Id="5" Count="0" />
+    </LineIds>
+    <LineIds Name="FB_HwModuleList.M_Get">
+      <LineId Id="3" Count="2" />
+      <LineId Id="7" Count="0" />
+      <LineId Id="9" Count="1" />
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="FB_HwModuleList.M_GetByHwId">
+      <LineId Id="23" Count="3" />
+      <LineId Id="45" Count="0" />
+      <LineId Id="57" Count="0" />
+      <LineId Id="56" Count="0" />
+      <LineId Id="35" Count="0" />
+      <LineId Id="34" Count="0" />
+      <LineId Id="27" Count="0" />
+      <LineId Id="30" Count="0" />
+      <LineId Id="22" Count="0" />
+      <LineId Id="5" Count="0" />
+    </LineIds>
+    <LineIds Name="FB_HwModuleList.M_Reset">
+      <LineId Id="3" Count="8" />
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="FB_HwModuleList.M_SetCurrentToHead">
+      <LineId Id="2" Count="0" />
+    </LineIds>
+  </POU>
+</TcPlcObject>

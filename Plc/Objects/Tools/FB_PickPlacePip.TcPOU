@@ -1,0 +1,941 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<TcPlcObject Version="1.1.0.1">
+  <POU Name="FB_PickPlacePip" Id="{50960b78-2cb0-4704-855b-7fdd3150a65c}" SpecialFunc="None">
+    <Declaration><![CDATA[FUNCTION_BLOCK FB_PickPlacePip EXTENDS FB_GCodeTool
+
+VAR
+
+	//Specproperties
+	pPneuChannelPress	: POINTER TO FB_PneuChannelRef;
+	pPneuChannelVac		: POINTER TO FB_PneuChannelRef;
+	
+	nValveNrPress		: USINT;	//Druckventil
+	nValveNrVac			: USINT;	//Vakuumventil 
+	
+	//****************************************Aktionvariablen****************************************************
+	
+	//Action: "InitTool"
+	bInitTool			: BOOL;
+	nStateA_InitTool	: USINT;	
+
+	//Action: "SetPressure"
+	bSetPress			: BOOL;
+	fbSetPress			: FB_SetPressure;
+
+	//Action: "SetVacuum"
+	bSetVacuum			: BOOL;
+	fbSetVacuum			: FB_SetPressure;
+	
+	//Action: "SwitchPressure"
+	bSwitchPress		: BOOL;
+	nStateA_SwitchPress	: USINT;	//State von A_SwitchPress()
+	ePressCtrl			: E_PressCtrl;
+	eCurrPressCtrl 		: E_PressCtrl; 
+	tPressTime			: TIME;		//Öffnungszeit Druckventil
+	timerPress			: TON;		//Timer für Öffnungszeit Druckventil
+	
+	//Action: "PulsePressure"
+	bPulsePress			: BOOL;
+	nStateA_PulsePress	: USINT;	//State von A_PulsePress()
+	eSwitchCtrlPhase1	: E_PressCtrl;		//
+	eSwitchCtrlPhase2	: E_PressCtrl;		//
+	nPulseDutycycle		: UINT;		//Tastverhältnis (0-100%)
+	nTimePhase1			: UINT;
+	nTimePhase2			: UINT;
+	timerPulse			: TON;		//Timer
+	nSetpointPulses		: UINT;		//Soll Anzahl an Pulses
+	nCurrentPulses		: UINT;		//aktuelle Anzahl an Pulses
+	bPulseOn			: BOOL;	
+	
+	//Action: "PickPut
+	bPickPut			: BOOL;
+	nStateA_PickPut		: USINT;
+	ePickPutMode		: E_PickPutMode;
+	nIntakeVac			: INT;
+	tIntakeTime			: TIME;
+	nHoldVac			: INT;
+	nBlowOutPress		: INT;
+	nBlowOutPulseTime	: UINT;
+	nBlowOutPulses		: UINT;
+	timerPickPut		: TON;
+	stActionDataPickPut	: ST_ActionData;	
+	
+END_VAR
+]]></Declaration>
+    <Implementation>
+      <ST><![CDATA[IF eCurrentState = E_MachineState.MACHINESTATE_Active THEN
+	
+	IF bPickPut THEN
+		A_PickPut();
+		IF nStateA_PickPut >= 80 THEN
+			IF nStateA_PickPut >= 99 THEN
+				bError := TRUE;
+			END_IF
+			bPickPut := FALSE;
+			nStateA_PickPut := 0;
+			M_RemoveListEntry(nSearchValue:= E_Action.ACTION_PickPutPowder);
+		END_IF
+	END_IF		
+	
+	IF bSetPress THEN
+		fbSetPress(pPneuChannelRef:= pPneuChannelPress);
+		IF NOT fbSetPress.bBusy THEN
+			IF fbSetPress.bError THEN
+				bError := TRUE;
+				stError.ErrorId := fbSetPress.nErrorId;
+				stError.POU := E_POU.POU_FB_PowderPip;
+				fbErrorList.M_Add(stError);
+			END_IF
+			bSetPress := FALSE;
+			fbSetPress(pPneuChannelRef:= pPneuChannelPress, bExecute:= FALSE);
+			M_RemoveListEntry(nSearchValue:= E_Action.ACTION_SetPressure);
+		END_IF
+	END_IF	
+
+	IF bSetVacuum THEN
+		fbSetVacuum(pPneuChannelRef:= pPneuChannelVac);
+		IF NOT fbSetVacuum.bBusy THEN
+			IF fbSetVacuum.bError THEN
+				bError := TRUE;
+				stError.ErrorId := fbSetVacuum.nErrorId;
+				stError.POU := E_POU.POU_FB_PowderPip;
+				fbErrorList.M_Add(stError);
+			END_IF
+			bSetVacuum := FALSE;
+			fbSetVacuum(pPneuChannelRef:= pPneuChannelVac, bExecute:= FALSE);
+			M_RemoveListEntry(nSearchValue:= E_Action.ACTION_SetVacuum);
+		END_IF
+	END_IF	
+
+	IF bSwitchPress THEN	//Druck/Vakuum Ein/Aus
+		A_SwitchPress();
+		IF nStateA_SwitchPress >= 80 THEN
+			IF nStateA_SwitchPress >= 99 THEN
+				bError := TRUE;
+			END_IF
+			bSwitchPress := FALSE;
+			nStateA_SwitchPress := 0;
+			M_RemoveListEntry(nSearchValue:= E_Action.ACTION_SwitchPressure);
+		END_IF
+	END_IF
+	
+	IF bPulsePress THEN
+		A_PulsePress();
+		IF nStateA_PulsePress >= 80 THEN
+			IF nStateA_PulsePress >= 99 THEN
+				bError := TRUE;
+			END_IF
+			bPulsePress := FALSE;
+			nStateA_PulsePress := 0;
+			M_RemoveListEntry(nSearchValue:= E_Action.ACTION_PulsePressure);
+		END_IF
+	END_IF
+END_IF
+
+SUPER^();	//FB_MzTool aufrufen
+
+//Prozessdaten aktualisieren
+
+IF pPneuChannelPress > 0 THEN
+	stProcessData.n32Data[7] := pPneuChannelPress^.P_nCurrentPressure;
+	stProcessData.n32Data[8] := pPneuChannelPress^.P_nCurrentPressure;
+END_IF
+
+IF pPneuChannelVac > 0 THEN
+	stProcessData.n32Data[9] := pPneuChannelVac^.P_nSetPressure;
+	stProcessData.n32Data[10] := pPneuChannelVac^.P_nCurrentPressure;
+END_IF
+
+IF nValveNrPress > 0 AND nValveNrVac > 0 THEN
+	IF aValves[nValveNrPress].bDigiOut1 THEN
+		stProcessData.n32Data[11] := E_PressCtrl.PRESSCTRL_PressOn;
+	ELSIF aValves[nValveNrVac].bDigiOut1 THEN
+ 		stProcessData.n32Data[11] := E_PressCtrl.PRESSCTRL_VacOn;
+	ELSE
+		stProcessData.n32Data[11] := E_PressCtrl.PRESSCTRL_Off;
+	END_IF
+ELSIF nValveNrPress > 0 THEN
+	IF aValves[nValveNrPress].bDigiOut1 THEN
+		stProcessData.n32Data[11] := E_PressCtrl.PRESSCTRL_PressOn;
+	ELSE
+		stProcessData.n32Data[11] := E_PressCtrl.PRESSCTRL_Off;
+	END_IF
+ELSIF nValveNrVac > 0 THEN 
+	IF aValves[nValveNrVac].bDigiOut1 THEN
+		stProcessData.n32Data[11] := E_PressCtrl.PRESSCTRL_VacOn;
+	ELSE
+		stProcessData.n32Data[11] := E_PressCtrl.PRESSCTRL_Off;
+	END_IF
+ELSE
+	stProcessData.n32Data[11] := E_PressCtrl.PRESSCTRL_UNDEFINED;
+END_IF
+
+aObjProcData[nNotifyId] := stProcessData;]]></ST>
+    </Implementation>
+    <Action Name="A_PickPut" Id="{02498a16-c12f-41ad-83ab-82264b316ef8}">
+      <Implementation>
+        <ST><![CDATA[CASE nStateA_PickPut OF
+	0:	//Ventile schließen
+		pZAxisRef^.stOutput.nToolCtrl := 0;
+		//Wenn Pick IntakeVac einstellen, bei Put BlowOutPress einstellen
+		MEMSET(ADR(stActionDataPickPut),0,SIZEOF(stActionDataPickPut));
+		IF ePickPutMode = E_PickPutMode.MODE_Pick THEN
+			stActionDataPickPut.eAction := E_Action.ACTION_SetVacuum;
+			stActionDataPickPut.aParams[2] := nIntakeVac;	
+		ELSIF ePickPutMode = E_PickPutMode.MODE_Put THEN
+			stActionDataPickPut.eAction := E_Action.ACTION_SetPressure;
+			stActionDataPickPut.aParams[2] := nBlowOutPress;
+			GVL_HwRefIO.bTrigger1 := TRUE;
+		END_IF
+		stActionDataPickPut.aParams[1] := 1;	//Fertigmeldung erst, wenn Druck erreicht
+		stActionDataPickPut.aParams[3] := 8;	//Tolerance +
+		stActionDataPickPut.aParams[4] := 8;	//Tolerance -
+		stActionDataPickPut.aParams[5] := 10000; //Timeout
+		M_ExeAction(stActionDataPickPut);
+		stActionDataPickPut.eAction := E_Action.ACTION_SwitchPressure;
+		stActionDataPickPut.aParams[1] := E_PressCtrl.PRESSCTRL_Off;
+		M_ExeAction(stActionDataPickPut);
+		nStateA_PickPut := 1;
+	
+	1:	//Warten bis SollDruck erreioht ist
+		IF NOT M_GetActionBusy(E_Action.ACTION_SetPressure) AND NOT M_GetActionBusy(E_Action.ACTION_SetVacuum)THEN
+			IF ePickPutMode = E_PickPutMode.MODE_Pick THEN
+				nStateA_PickPut := 2;
+			ELSE
+				nStateA_PickPut := 20;
+			END_IF
+		END_IF
+		
+	2:	//Pick - Switch Vacuum
+		MEMSET(ADR(stActionDataPickPut),0,SIZEOF(stActionDataPickPut));
+		stActionDataPickPut.eAction := E_Action.ACTION_SwitchPressure;
+		stActionDataPickPut.aParams[1] := E_PressCtrl.PRESSCTRL_VacOn;
+		stActionDataPickPut.aParams[2] := 0;
+		M_ExeAction(stActionDataPickPut);
+		timerPickPut(IN:=TRUE, PT:= tIntakeTime);
+		nStateA_PickPut := 3;
+
+	3:	//Warten, bis Zeit abgelaufen
+		timerPickPut();
+		IF timerPickPut.Q THEN
+			timerPickPut(IN:= FALSE);
+			MEMSET(ADR(stActionDataPickPut),0,SIZEOF(stActionDataPickPut));
+			//HoldVac einstellen (wenn HoldVac = 0, dann SwitchPress auf Off
+			IF nHoldVac < 0 THEN
+				stActionDataPickPut.eAction := E_Action.ACTION_SetVacuum;
+				stActionDataPickPut.aParams[1] := 0; //Ohne Überwachung
+				stActionDataPickPut.aParams[2] := nHoldVac;
+				M_ExeAction(stActionDataPickPut);
+			ELSE
+				stActionDataPickPut.eAction := E_Action.ACTION_SwitchPressure;
+				stActionDataPickPut.aParams[1] := E_PressCtrl.PRESSCTRL_Off;
+				stActionDataPickPut.aParams[2] := 0;
+				M_ExeAction(stActionDataPickPut);
+			END_IF
+			nStateA_PickPut := 80;
+		END_IF
+		
+	20:	//Put
+		//PulsePressure
+		MEMSET(ADR(stActionDataPickPut),0,SIZEOF(stActionDataPickPut));
+		stActionDataPickPut.eAction := E_Action.ACTION_PulsePressure;
+		stActionDataPickPut.aParams[1] := E_PressCtrl.PRESSCTRL_PressOn;
+		stActionDataPickPut.aParams[2] := E_PressCtrl.PRESSCTRL_Off;
+		stActionDataPickPut.aParams[3] := nBlowOutPulseTime * 2; //Periode
+		stActionDataPickPut.aParams[4] := 50; //Dutycycle
+		stActionDataPickPut.aParams[5] := nBlowOutPulses;
+		stActionDataPickPut.aParams[6] := 1; //On
+		M_ExeAction(stActionDataPickPut);
+		nStateA_PickPut := 21;
+		
+	21: //Warten, bis Pulsen fertig
+		IF NOT M_GetActionBusy(E_Action.ACTION_PulsePressure) THEN
+			GVL_HwRefIO.bTrigger1 := FALSE;
+			nStateA_PickPut := 80;
+		END_IF
+	
+	70: //Abbrechen
+		M_CancelAction(E_Action.ACTION_PulsePressure);
+		stActionDataPickPut.eAction := E_Action.ACTION_SwitchPressure;
+		stActionDataPickPut.aParams[1] := E_PressCtrl.PRESSCTRL_Off;
+		M_ExeAction(stActionDataPickPut);
+		timerPickPut(IN:= FALSE);
+		nStateA_PickPut := 80;
+		
+END_CASE]]></ST>
+      </Implementation>
+    </Action>
+    <Action Name="A_PulsePress" Id="{7a1cfb78-706e-440c-8804-d39a23492c0b}">
+      <Implementation>
+        <ST><![CDATA[CASE nStateA_PulsePress OF
+	0:	//Phase1
+		
+		IF eSwitchCtrlPhase1 = E_PressCtrl.PRESSCTRL_Off THEN
+			M_PressAndVacOff();
+		ELSIF eSwitchCtrlPhase1 = E_PressCtrl.PRESSCTRL_PressOn THEN
+			M_PressOn();
+		ELSIF eSwitchCtrlPhase1 = E_PressCtrl.PRESSCTRL_VacOn THEN
+			M_VacOn();
+		END_IF
+
+		timerPulse(IN:= TRUE, PT:= UINT_TO_TIME(nTimePhase1));
+		IF timerPulse.Q THEN
+			timerPulse(IN:= FALSE);
+			nStateA_PulsePress := 1;
+			nCurrentPulses := nCurrentPulses + 1;
+		END_IF
+
+	1:	//Phase2
+
+		IF eSwitchCtrlPhase2 = E_PressCtrl.PRESSCTRL_Off THEN
+			M_PressAndVacOff();
+		ELSIF eSwitchCtrlPhase2 = E_PressCtrl.PRESSCTRL_PressOn THEN
+			M_PressOn();
+		ELSIF eSwitchCtrlPhase2 = E_PressCtrl.PRESSCTRL_VacOn THEN
+			M_VacOn();
+		END_IF
+
+		timerPulse(IN:= TRUE, PT:= UINT_TO_TIME(nTimePhase2));
+		IF timerPulse.Q THEN
+			timerPulse(IN:= FALSE);
+			IF nCurrentPulses = nSetpointPulses THEN
+				M_PressAndVacOff();
+				nStateA_PulsePress := 80;
+			ELSIF nSetpointPulses = 0 AND NOT bPulseOn THEN
+				M_PressAndVacOff();
+				nStateA_PulsePress := 80;
+			ELSE
+				nStateA_PulsePress := 0;	
+			END_IF
+		END_IF
+		
+	70:	//Abbrechen
+		timerPulse(IN:= FALSE);
+		M_PressAndVacOff();
+		nStateA_PulsePress := 80;
+		
+END_CASE]]></ST>
+      </Implementation>
+    </Action>
+    <Action Name="A_Reset" Id="{ad0f6c9f-260c-4cc1-b180-514d7b0918f8}">
+      <Implementation>
+        <ST><![CDATA[//Ist noch eine Aktion aktiv?
+IF nStateA_ResetSpec = 0 THEN 
+	IF bSetPress THEN
+		bSetPress := FALSE;
+		fbSetPress(bExecute:= FALSE, pPneuChannelRef:= pPneuChannelPress);
+	END_IF
+
+	IF bSetVacuum THEN
+		bSetVacuum := FALSE;
+		fbSetVacuum(bExecute:= FALSE, pPneuChannelRef:= pPneuChannelVac);
+	END_IF
+	
+	IF bSwitchPress THEN 
+		bSwitchPress := FALSE;
+		nStateA_SwitchPress := 0;
+	END_IF
+	
+	IF bPulsePress THEN
+		bPulsePress := FALSE;
+		nStateA_PulsePress := 0;
+	END_IF
+	
+	IF bPickPut THEN
+		bPickPut := FALSE;
+		nStateA_PickPut := 0;
+	END_IF
+	
+	nStateA_ResetSpec := 80;
+END_IF
+
+SUPER^.A_Reset();]]></ST>
+      </Implementation>
+    </Action>
+    <Action Name="A_Stop" Id="{4f119f59-5932-48f0-af62-f45de91476a1}">
+      <Implementation>
+        <ST><![CDATA[IF nStateA_Stop = 0 THEN
+
+	IF bSetPress THEN
+		fbSetPress(bExecute:= FALSE, pPneuChannelRef:= pPneuChannelPress);
+	END_IF
+
+	IF bSetVacuum THEN
+		fbSetVacuum(bExecute:= FALSE, pPneuChannelRef:= pPneuChannelVac);
+	END_IF
+
+	IF bSwitchPress AND nStateA_SwitchPress < 70 THEN
+		nStateA_SwitchPress := 70;
+	END_IF
+	
+	IF bPulsePress AND nStateA_PulsePress < 70 THEN
+		nStateA_PulsePress := 70;
+	END_IF
+	
+	IF bPickPut AND nStateA_PickPut < 70 THEN
+		nStateA_PickPut := 70;
+	END_IF
+
+	nStateA_Stop := 1;
+END_IF
+
+SUPER^.A_Stop();]]></ST>
+      </Implementation>
+    </Action>
+    <Action Name="A_SwitchPress" Id="{33a7f914-ba0b-48b8-bc57-7707d152d421}">
+      <Implementation>
+        <ST><![CDATA[// In jedem Zustand sollte umgeschalten werden
+CASE nStateA_SwitchPress OF
+	0:	//Wie soll geschalten werden?
+		IF ePressCtrl = E_PressCtrl.PRESSCTRL_Off THEN
+			M_PressAndVacOff();
+			eCurrPressCtrl := E_PressCtrl.PRESSCTRL_Off;
+			timerPress(IN:= FALSE);
+			nStateA_SwitchPress := 80;
+			RETURN;
+		ELSIF ePressCtrl = E_PressCtrl.PRESSCTRL_PressOn THEN
+			M_PressOn();
+			eCurrPressCtrl := E_PressCtrl.PRESSCTRL_PressOn;
+		ELSIF ePressCtrl = E_PressCtrl.PRESSCTRL_VacOn THEN
+			M_VacOn();
+			eCurrPressCtrl := E_PressCtrl.PRESSCTRL_VacOn;
+		END_IF
+
+		IF tPressTime > T#0MS THEN
+			timerPress(IN:= TRUE, PT:= tPressTime);
+			nStateA_SwitchPress := 1;
+		ELSE
+			nStateA_SwitchPress := 80;
+		END_IF
+		
+	1:	//Timer
+		//Haben sich die Eingangsparameter geändert?
+		IF ePressCtrl <> eCurrPressCtrl THEN
+			nStateA_SwitchPress := 0;
+			timerPress(IN:= FALSE);
+		END_IF
+		timerPress();
+		IF timerPress.Q THEN
+			timerPress(IN:= FALSE);
+			M_PressAndVacOff();
+			eCurrPressCtrl := E_PressCtrl.PRESSCTRL_Off;
+			nStateA_SwitchPress := 80;
+		END_IF
+
+	70:	//Abbrechen
+		M_PressAndVacOff();
+		timerPress(IN:= FALSE);
+		nStateA_SwitchPress := 80;
+		
+	80:	//Haben sich die Eingangsparameter geändert?
+		IF ePressCtrl <> eCurrPressCtrl THEN
+			nStateA_SwitchPress := 0;
+		END_IF
+END_CASE]]></ST>
+      </Implementation>
+    </Action>
+    <Method Name="FB_init" Id="{d86c72ce-93fd-477b-b951-0808ae2a0975}">
+      <Declaration><![CDATA[METHOD FB_init : BOOL
+VAR_INPUT
+	bInitRetains : BOOL; // if TRUE, the retain variables are initialized (warm start / cold start)
+	bInCopyCode : BOOL;  // if TRUE, the instance afterwards gets moved into the copy code (online change)
+END_VAR
+]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[eObjectType := E_ObjectType.OBJECTTYPE_PickPlacePip;
+eObjectGroup := E_ObjectGroup.OBJECTGROUP_MzTool OR E_ObjectGroup.OBJECTGROUP_Device;]]></ST>
+      </Implementation>
+    </Method>
+    <Method Name="M_CancelAction" Id="{84d815c2-5daa-4ab4-b9bf-7787817511bd}">
+      <Declaration><![CDATA[METHOD M_CancelAction
+VAR_INPUT
+	eAction : E_Action;
+END_VAR
+]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[CASE eAction OF
+	E_Action.ACTION_SetPressure:
+		IF bSetPress THEN
+			fbSetPress(bExecute:= FALSE, pPneuChannelRef:= pPneuChannelPress);
+		END_IF
+	
+	E_Action.ACTION_SetVacuum:
+		IF bSetVacuum THEN
+			fbSetVacuum(bExecute:= FALSE, pPneuChannelRef:= pPneuChannelVac);
+		END_IF
+
+	E_Action.ACTION_SwitchPressure:
+		IF bSwitchPress AND nStateA_SwitchPress < 70 THEN
+			nStateA_SwitchPress := 70;
+		END_IF
+
+	E_Action.ACTION_PickPutPowder:
+		IF bPickPut AND nStateA_PickPut < 70 THEN
+			nStateA_PickPut := 70;
+		END_IF
+
+	E_Action.ACTION_PulsePressure:
+		IF bPulsePress AND nStateA_PulsePress < 70 THEN
+			nStateA_PulsePress := 70;
+		END_IF	
+ELSE
+	SUPER^.M_CancelAction(eAction);
+END_CASE]]></ST>
+      </Implementation>
+    </Method>
+    <Method Name="M_CheckAction" Id="{e99cbc11-6b7f-4263-9230-14d14aa5127c}">
+      <Declaration><![CDATA[METHOD M_CheckAction : ERRORID
+VAR_INPUT
+	refActionData 	: REFERENCE TO ST_ActionData;
+	pCorrelObject	: POINTER TO FB_Object;
+END_VAR
+
+VAR
+END_VAR]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[IF refActionData.eAction = E_Action.ACTION_MeasureTool THEN
+	IF fbObjectDirectory.M_GetObjType(refActionData.nTarget) <> E_ObjectType.OBJECTTYPE_TipCalibrator THEN
+		M_CheckAction := E_ErrorIdCmd.ERRORID_UnsuitableTarget;
+		RETURN;
+	END_IF
+ELSE
+	M_CheckAction := SUPER^.M_CheckAction(refActionData, pCorrelObject);
+END_IF]]></ST>
+      </Implementation>
+    </Method>
+    <Method Name="M_ExeAction" Id="{f45651dd-8e8b-4654-8933-80bb870cd186}">
+      <Declaration><![CDATA[METHOD M_ExeAction : ERRORID
+VAR_INPUT
+	refActionData : REFERENCE TO ST_ActionData;	
+END_VAR]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[IF NOT (eCurrentState = E_MachineState.MACHINESTATE_Idle OR
+	eCurrentState = E_MachineState.MACHINESTATE_Active OR
+	eCurrentState = E_MachineState.MACHINESTATE_Ready) THEN
+	M_ExeAction := E_ErrorIdCmd.ERRORID_InvalidState;
+	RETURN;
+END_IF
+
+CASE refActionData.eAction OF
+	
+	(*E_Action.ACTION_Init:
+		IF NOT bInitAxis AND NOT bInitTool THEN
+			bInitAxis := TRUE;
+			fbList.A_AddHeadValue( hList := hList, putValue := E_Action.ACTION_Init);	//InitBase
+		ELSE
+			RETURN;
+		END_IF*)		
+
+	E_Action.ACTION_SetPressure:
+		fbSetPress(bExecute:= FALSE, pPneuChannelRef:= pPneuChannelPress); //eventueller Fehler wird auch zurückgesetzt
+		fbSetPress.bAwait := DINT_TO_BOOL(refActionData.aParams[1]);
+		fbSetPress.nValue := DINT_TO_INT(refActionData.aParams[2]);
+		fbSetPress.nTolerancePlus := DINT_TO_INT(refActionData.aParams[3]);
+		fbSetPress.nToleranceMinus := DINT_TO_INT(refActionData.aParams[4]);
+		fbSetPress.tTimeout := DINT_TO_TIME(refActionData.aParams[5]);
+		
+		fbSetPress(bExecute:= TRUE,	pPneuChannelRef:= pPneuChannelPress,nErrorId=> M_ExeAction);
+		IF fbSetPress.bError THEN
+			RETURN;
+		END_IF
+		
+		IF NOT bSetPress AND fbSetPress.bBusy THEN
+			bSetPress := TRUE;
+			fbList.A_AddHeadValue(hList := hList, putValue := E_Action.ACTION_SetPressure);
+		ELSE
+			RETURN;	
+		END_IF
+
+	E_Action.ACTION_SetVacuum:
+		fbSetVacuum(bExecute:= FALSE, pPneuChannelRef:= pPneuChannelVac); //eventueller Fehler wird auch zurückgesetzt
+		fbSetVacuum.bAwait := DINT_TO_BOOL(refActionData.aParams[1]);
+		fbSetVacuum.nValue := DINT_TO_INT(refActionData.aParams[2]);
+		fbSetVacuum.nTolerancePlus := DINT_TO_INT(refActionData.aParams[3]);
+		fbSetVacuum.nToleranceMinus := DINT_TO_INT(refActionData.aParams[4]);
+		fbSetVacuum.tTimeout := DINT_TO_TIME(refActionData.aParams[5]);
+		
+		fbSetVacuum(bExecute:= TRUE, pPneuChannelRef:= pPneuChannelVac,nErrorId=> M_ExeAction);
+		IF fbSetVacuum.bError THEN
+			RETURN;
+		END_IF
+		
+		IF NOT bSetVacuum AND fbSetVacuum.bBusy THEN
+			bSetVacuum := TRUE;
+			fbList.A_AddHeadValue(hList := hList, putValue := E_Action.ACTION_SetVacuum);
+		ELSE
+			RETURN;	
+		END_IF
+
+	E_Action.ACTION_SwitchPressure:
+		ePressCtrl := DINT_TO_USINT(refActionData.aParams[1]);
+		tPressTime := DINT_TO_TIME(refActionData.aParams[2]);
+		IF ePressCtrl = E_PressCtrl.PRESSCTRL_Off OR ePressCtrl = E_PressCtrl.PRESSCTRL_PressOn 
+													OR ePressCtrl = E_PressCtrl.PRESSCTRL_VacOn THEN
+			IF NOT bSwitchPress THEN
+				fbList.A_AddHeadValue(hList := hList, putValue := E_Action.ACTION_SwitchPressure);
+				bSwitchPress := TRUE;
+			END_IF
+		END_IF
+				
+	E_Action.ACTION_PulsePressure:
+		bPulseOn := DINT_TO_BOOL(refActionData.aParams[6]);
+		IF bPulseOn THEN	//On
+			eSwitchCtrlPhase1 := DINT_TO_USINT(refActionData.aParams[1]);
+			eSwitchCtrlPhase2 := DINT_TO_USINT(refActionData.aParams[2]);
+	
+			IF NOT(refActionData.aParams[4] >= 1 AND refActionData.aParams[4] <= 100) THEN
+				M_ExeAction := E_ErrorIdCmd.ERRORID_InvalidDutyCycle;  //Error
+				RETURN;
+			END_IF
+			nTimePhase1 := DINT_TO_UINT(refActionData.aParams[3] / 100 * refActionData.aParams[4]); 
+			nTimePhase2 := DINT_TO_UINT(refActionData.aParams[3] - nTimePhase1);
+			IF NOT bPulsePress THEN
+				bPulsePress := TRUE;
+				fbList.A_AddHeadValue(hList := hList, putValue := E_Action.ACTION_PulsePressure);
+			ELSE
+				RETURN;
+			END_IF
+			nCurrentPulses := 0;
+			nSetpointPulses := DINT_TO_UINT(refActionData.aParams[5]);
+		ELSE
+			RETURN;
+		END_IF				
+
+	E_Action.ACTION_PickPutPowder:
+		IF NOT bPickPut THEN
+			ePickPutMode := DINT_TO_USINT(refActionData.aParams[1]);
+			nIntakeVac := DINT_TO_INT(refActionData.aParams[2]);
+			tIntakeTime := DINT_TO_TIME(refActionData.aParams[3]);
+			nHoldVac := DINT_TO_INT(refActionData.aParams[4]);
+			nBlowOutPress := DINT_TO_INT(refActionData.aParams[5]);
+			nBlowOutPulseTime := DINT_TO_UINT(refActionData.aParams[6]);
+			nBlowOutPulses := DINT_TO_UINT(refActionData.aParams[7]);
+			IF nBlowOutPulseTime = 0 OR nBlowOutPulses = 0 THEN
+				RETURN;
+			END_IF
+			bPickPut := TRUE;
+			fbList.A_AddHeadValue(hList := hList, putValue := E_Action.ACTION_PickPutPowder);
+		ELSE
+			RETURN;	
+		END_IF
+	ELSE
+		M_ExeAction := SUPER^.M_ExeAction(refActionData);
+		RETURN;
+END_CASE
+
+bBusy := TRUE;
+eCurrentState := E_MachineState.MACHINESTATE_Active;]]></ST>
+      </Implementation>
+    </Method>
+    <Method Name="M_GetAllProps" Id="{0e85fdc9-b885-4ab5-a031-41ea4abb471e}">
+      <Declaration><![CDATA[METHOD M_GetAllProps : ERRORID
+VAR_INPUT
+	refCmdData : REFERENCE TO  ST_CmdData;
+END_VAR
+]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[//Basisproperties lesen
+SUPER^.M_GetAllProps(refCmdData);
+//Specialproperties lesen
+nCurrentPropIndex := nCurrentPropIndex + 1; 
+IF pPneuChannelPress > 0 THEN
+	refCmdData.n32Data[nCurrentPropIndex] := pPneuChannelPress^.nChannel;
+ELSE
+	refCmdData.n32Data[nCurrentPropIndex] := 0;
+END_IF
+
+nCurrentPropIndex := nCurrentPropIndex + 1;
+IF pPneuChannelVac > 0 THEN
+	refCmdData.n32Data[nCurrentPropIndex] := pPneuChannelVac^.nChannel;
+ELSE
+	refCmdData.n32Data[nCurrentPropIndex] := 0;
+END_IF
+
+nCurrentPropIndex := nCurrentPropIndex + 1;
+refCmdData.n32Data[nCurrentPropIndex] := nValveNrPress; //Digitaler Ausgangskanal MzHead Druckventil
+nCurrentPropIndex := nCurrentPropIndex + 1;
+refCmdData.n32Data[nCurrentPropIndex] := nValveNrVac;	//Digitaler Ausgangskanal MzHead Vakuumventil]]></ST>
+      </Implementation>
+    </Method>
+    <Method Name="M_PressAndVacOff" Id="{78c2d78a-63b5-4ca5-b7b5-5a0f18556185}">
+      <Declaration><![CDATA[METHOD M_PressAndVacOff
+VAR_INPUT
+END_VAR
+]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[IF nValveNrPress > 0 THEN
+	aValves[nValveNrPress].M_Off();
+END_IF
+IF nValveNrVac > 0 THEN
+	aValves[nValveNrVac].M_Off();
+END_IF
+]]></ST>
+      </Implementation>
+    </Method>
+    <Method Name="M_PressOn" Id="{f5372e9b-ed1a-4682-93eb-3e0f1cc0aac9}">
+      <Declaration><![CDATA[METHOD M_PressOn
+VAR_INPUT
+END_VAR
+]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[IF nValveNrPress > 0 THEN
+	aValves[nValveNrPress].M_On(1);
+END_IF
+IF nValveNrVac > 0 THEN
+	aValves[nValveNrVac].M_Off();
+END_IF			
+]]></ST>
+      </Implementation>
+    </Method>
+    <Method Name="M_SetAllProps" Id="{cfab0cd0-685a-41f9-b9f6-432f3140189f}">
+      <Declaration><![CDATA[METHOD M_SetAllProps : ERRORID
+VAR_INPUT
+	refCmdData : REFERENCE TO  ST_CmdData;
+END_VAR
+
+VAR
+	nPneuChannel : USINT;
+END_VAR]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[M_SetAllProps := SUPER^.M_SetAllProps(refCmdData);
+
+IF M_SetAllProps > 0 THEN
+	RETURN;
+END_IF
+
+//PneuChannel Druck
+nCurrentPropIndex := nCurrentPropIndex + 1;
+nSpecPropIndex := nCurrentPropIndex;
+nPneuChannel := DINT_TO_USINT(refCmdData.n32Data[nCurrentPropIndex]);
+IF NOT (nPneuChannel > 0 AND nPneuChannel <= cNoOfPneuChannels) THEN
+	M_SetAllProps := E_ErrorIdObjMgmt.ERRORID_InvalidPneuChannel;
+	RETURN;	
+END_IF
+pPneuChannelPress := ADR(aFbPneuChannel[nPneuChannel]);
+
+//PneuChannel Vakuum
+nCurrentPropIndex := nCurrentPropIndex + 1;
+nPneuChannel := DINT_TO_USINT(refCmdData.n32Data[nCurrentPropIndex]);		
+IF NOT (nPneuChannel > 0 AND nPneuChannel <= cNoOfPneuChannels) THEN
+	M_SetAllProps := E_ErrorIdObjMgmt.ERRORID_InvalidPneuChannel;
+	RETURN;	
+END_IF
+pPneuChannelVac := ADR(aFbPneuChannel[nPneuChannel]);
+
+nCurrentPropIndex := nCurrentPropIndex + 1;
+nValveNrPress := DINT_TO_USINT(refCmdData.n32Data[nCurrentPropIndex]); //Digitaler Ausgangskanal MzHead Druckventil Pressure
+IF NOT(nValveNrPress >= 0 AND nValveNrPress <= cNoOfValves) THEN
+	M_SetAllProps := E_ErrorIdObjMgmt.ERRORID_InvalidMzDOutChannel;
+	RETURN;
+END_IF
+
+nCurrentPropIndex := nCurrentPropIndex + 1;
+nValveNrVac := DINT_TO_USINT(refCmdData.n32Data[nCurrentPropIndex]);	//Digitaler Ausgangskanal MzHead Druckventil Vacuum
+IF NOT(nValveNrVac >= 0 AND nValveNrVac <= cNoOfValves) THEN	//kann 0 sein
+	M_SetAllProps := E_ErrorIdObjMgmt.ERRORID_InvalidMzDOutChannel;
+	RETURN;
+END_IF
+
+pZAxisRef^.eFixedToolType := E_MzToolType.TOOL_TYPE_None;
+
+nNoOfProps := nCurrentPropIndex + 1;]]></ST>
+      </Implementation>
+    </Method>
+    <Method Name="M_SetSingleProp" Id="{97027fab-b9af-4be0-ad8c-5d5b67587248}">
+      <Declaration><![CDATA[METHOD M_SetSingleProp : ERRORID
+VAR_INPUT
+	refCmdData : REFERENCE TO  ST_CmdData;
+END_VAR
+
+VAR
+	nPneuChannel : USINT;
+END_VAR
+]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[IF nSpecPropIndex = refCmdData.aHeader[1] THEN	//PneuChannel Druck
+	nPneuChannel := DINT_TO_USINT(refCmdData.n32Data[0]);
+	IF NOT (nPneuChannel > 0 AND nPneuChannel <= cNoOfPneuChannels) THEN
+		M_SetSingleProp := E_ErrorIdObjMgmt.ERRORID_InvalidPneuChannel;
+		RETURN;	
+	END_IF
+	pPneuChannelPress := ADR(aFbPneuChannel[nPneuChannel]);
+ELSIF (nSpecPropIndex + 1) = refCmdData.aHeader[1] THEN //PneuChannel Vakuum
+	nPneuChannel := DINT_TO_USINT(refCmdData.n32Data[0]);
+	IF NOT (nPneuChannel >= 0 AND nPneuChannel <= cNoOfPneuChannels) THEN
+		M_SetSingleProp := E_ErrorIdObjMgmt.ERRORID_InvalidPneuChannel;
+		RETURN;	
+	END_IF
+	pPneuChannelVac := ADR(aFbPneuChannel[nPneuChannel]);		
+ELSIF (nSpecPropIndex + 2) = refCmdData.aHeader[1] THEN
+	IF refCmdData.n32Data[0] < 1 OR refCmdData.n32Data[0] > cNoOfValves THEN
+		M_SetSingleProp := E_ErrorIdObjMgmt.ERRORID_InvalidValveNumber;
+		RETURN;
+	END_IF
+	nValveNrPress := DINT_TO_USINT(refCmdData.n32Data[0]);	
+ELSIF (nSpecPropIndex + 3) = refCmdData.aHeader[1] THEN
+	IF refCmdData.n32Data[0] < 1 OR refCmdData.n32Data[0] > cNoOfValves THEN
+		M_SetSingleProp := E_ErrorIdObjMgmt.ERRORID_InvalidValveNumber;
+		RETURN;
+	END_IF
+	nValveNrVac := DINT_TO_USINT(refCmdData.n32Data[0]);	
+ELSE
+	M_SetSingleProp := SUPER^.M_SetSingleProp(refCmdData);
+END_IF]]></ST>
+      </Implementation>
+    </Method>
+    <Method Name="M_VacOn" Id="{1109a135-082d-43f2-ae54-e22b318217ef}">
+      <Declaration><![CDATA[METHOD M_VacOn
+VAR_INPUT
+END_VAR
+]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[IF nValveNrPress > 0 THEN
+	aValves[nValveNrPress].M_Off();
+END_IF
+IF nValveNrVac > 0 THEN
+	aValves[nValveNrVac].M_On(1);
+END_IF			
+]]></ST>
+      </Implementation>
+    </Method>
+    <LineIds Name="FB_PickPlacePip">
+      <LineId Id="3" Count="0" />
+      <LineId Id="16" Count="12" />
+      <LineId Id="174" Count="27" />
+      <LineId Id="39" Count="29" />
+      <LineId Id="164" Count="0" />
+      <LineId Id="167" Count="2" />
+      <LineId Id="165" Count="1" />
+      <LineId Id="170" Count="1" />
+      <LineId Id="173" Count="0" />
+      <LineId Id="163" Count="0" />
+      <LineId Id="262" Count="1" />
+      <LineId Id="284" Count="0" />
+      <LineId Id="289" Count="0" />
+      <LineId Id="287" Count="0" />
+      <LineId Id="290" Count="2" />
+      <LineId Id="288" Count="0" />
+      <LineId Id="267" Count="0" />
+      <LineId Id="272" Count="1" />
+      <LineId Id="275" Count="1" />
+      <LineId Id="274" Count="0" />
+      <LineId Id="270" Count="0" />
+      <LineId Id="277" Count="3" />
+      <LineId Id="265" Count="0" />
+      <LineId Id="281" Count="1" />
+      <LineId Id="266" Count="0" />
+      <LineId Id="283" Count="0" />
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="FB_PickPlacePip.A_PickPut">
+      <LineId Id="2" Count="4" />
+      <LineId Id="8" Count="0" />
+      <LineId Id="96" Count="0" />
+      <LineId Id="10" Count="1" />
+      <LineId Id="97" Count="0" />
+      <LineId Id="13" Count="7" />
+      <LineId Id="99" Count="2" />
+      <LineId Id="21" Count="28" />
+      <LineId Id="51" Count="7" />
+      <LineId Id="65" Count="1" />
+      <LineId Id="72" Count="20" />
+      <LineId Id="98" Count="0" />
+      <LineId Id="102" Count="2" />
+      <LineId Id="93" Count="2" />
+      <LineId Id="1" Count="0" />
+    </LineIds>
+    <LineIds Name="FB_PickPlacePip.A_PulsePress">
+      <LineId Id="2" Count="46" />
+      <LineId Id="1" Count="0" />
+    </LineIds>
+    <LineIds Name="FB_PickPlacePip.A_Reset">
+      <LineId Id="2" Count="1" />
+      <LineId Id="27" Count="7" />
+      <LineId Id="7" Count="19" />
+      <LineId Id="1" Count="0" />
+    </LineIds>
+    <LineIds Name="FB_PickPlacePip.A_Stop">
+      <LineId Id="2" Count="1" />
+      <LineId Id="23" Count="5" />
+      <LineId Id="6" Count="16" />
+      <LineId Id="1" Count="0" />
+    </LineIds>
+    <LineIds Name="FB_PickPlacePip.A_SwitchPress">
+      <LineId Id="2" Count="3" />
+      <LineId Id="83" Count="0" />
+      <LineId Id="6" Count="0" />
+      <LineId Id="8" Count="3" />
+      <LineId Id="80" Count="0" />
+      <LineId Id="12" Count="0" />
+      <LineId Id="14" Count="1" />
+      <LineId Id="81" Count="0" />
+      <LineId Id="17" Count="17" />
+      <LineId Id="82" Count="0" />
+      <LineId Id="36" Count="12" />
+      <LineId Id="1" Count="0" />
+    </LineIds>
+    <LineIds Name="FB_PickPlacePip.FB_init">
+      <LineId Id="7" Count="1" />
+    </LineIds>
+    <LineIds Name="FB_PickPlacePip.M_CancelAction">
+      <LineId Id="3" Count="0" />
+      <LineId Id="26" Count="8" />
+      <LineId Id="7" Count="4" />
+      <LineId Id="35" Count="0" />
+      <LineId Id="12" Count="3" />
+      <LineId Id="36" Count="0" />
+      <LineId Id="16" Count="5" />
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="FB_PickPlacePip.M_CheckAction">
+      <LineId Id="459" Count="0" />
+      <LineId Id="465" Count="2" />
+      <LineId Id="463" Count="0" />
+      <LineId Id="461" Count="0" />
+      <LineId Id="464" Count="0" />
+      <LineId Id="462" Count="0" />
+    </LineIds>
+    <LineIds Name="FB_PickPlacePip.M_ExeAction">
+      <LineId Id="3" Count="11" />
+      <LineId Id="16" Count="0" />
+      <LineId Id="18" Count="3" />
+      <LineId Id="136" Count="37" />
+      <LineId Id="59" Count="59" />
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="FB_PickPlacePip.M_GetAllProps">
+      <LineId Id="13" Count="2" />
+      <LineId Id="27" Count="11" />
+      <LineId Id="19" Count="0" />
+      <LineId Id="39" Count="0" />
+      <LineId Id="20" Count="2" />
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="FB_PickPlacePip.M_PressAndVacOff">
+      <LineId Id="6" Count="5" />
+      <LineId Id="5" Count="0" />
+    </LineIds>
+    <LineIds Name="FB_PickPlacePip.M_PressOn">
+      <LineId Id="6" Count="5" />
+      <LineId Id="5" Count="0" />
+    </LineIds>
+    <LineIds Name="FB_PickPlacePip.M_SetAllProps">
+      <LineId Id="3" Count="40" />
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="FB_PickPlacePip.M_SetSingleProp">
+      <LineId Id="3" Count="0" />
+      <LineId Id="37" Count="0" />
+      <LineId Id="39" Count="3" />
+      <LineId Id="8" Count="1" />
+      <LineId Id="44" Count="4" />
+      <LineId Id="13" Count="0" />
+      <LineId Id="15" Count="13" />
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="FB_PickPlacePip.M_VacOn">
+      <LineId Id="6" Count="5" />
+      <LineId Id="5" Count="0" />
+    </LineIds>
+  </POU>
+</TcPlcObject>

@@ -1,0 +1,384 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<TcPlcObject Version="1.1.0.1" ProductVersion="3.1.4020.12">
+  <POU Name="FB_HwRefInterlockSafe" Id="{5def48dc-0969-4a46-b60c-a97f6bc68448}" SpecialFunc="None">
+    <Declaration><![CDATA[FUNCTION_BLOCK FB_HwRefInterlockSafe  EXTENDS FB_HwRefInterlockBase
+
+VAR_INPUT
+END_VAR
+
+VAR_OUTPUT
+	bVoltageSafe			: BOOL;
+	bToolTempSafe			: BOOL;
+END_VAR
+
+VAR
+	
+	bEmergencyStop			AT %I* : BOOL;
+	bInputLocked			AT %I* : BOOL;
+	bInputSafetyRelais		AT %I* : BOOL;	//NC
+	nTwinSafeGrpState		AT %I* : USINT;
+	bSafeRelaisOn			AT %Q* : BOOL;
+	bUnlockInterlock		AT %Q* : BOOL;
+	bErrAckTwinSafeGrp		AT %Q* : BOOL;
+	
+	bInit					: BOOL := TRUE;
+	bResetError				: BOOL;
+	bLock					: BOOL;
+	bUnlock					: BOOL;
+	bMonitor				: BOOL;
+	nStateAction			: USINT;
+	timer					: TON;
+	i						: UINT;
+	stPosition				: ST_3DPoint;
+	
+	stError					: ST_Error;
+	stActionData			: ST_ActionData;
+	
+	pXYDrive				: POINTER TO FB_XYDriveBase;
+	
+END_VAR
+
+VAR CONSTANT
+	rSafePositionX			: REAL := 400000.0;
+	rSafePositionY			: REAL := 200000.0;
+	nSafeTemp				: UINT := 500; //50°C
+END_VAR
+
+
+]]></Declaration>
+    <Implementation>
+      <ST><![CDATA[IF bInit THEN
+	bInit := FALSE;
+	IF nTwinSafeGrpState <> 1 THEN
+		bResetError := TRUE;
+	ELSE
+		eCurrentState := E_InterlockState.Unlocked;
+		bMonitor := TRUE;
+		//Falls Interlock geschlossen, weiter zu Lock
+		IF NOT bEmergencyStop AND bInputLocked THEN
+ 			bLock := TRUE;
+		END_IF
+	END_IF
+END_IF
+
+IF bResetError THEN
+	bMonitor := FALSE;
+	A_ResetError();
+	IF nStateAction >= 80 THEN
+		IF nStateAction >= 99 THEN
+			eCurrentState := E_InterlockState.Error;
+		ELSE
+			bLock := TRUE;
+		END_IF
+		nStateAction := 0;
+		bResetError := FALSE;
+	END_IF
+	
+ELSIF bUnLock THEN
+	bMonitor := FALSE;
+	A_Unlock();
+	IF nStateAction >= 80 THEN
+		IF nStateAction >= 99 THEN
+			;
+		END_IF
+		nStateAction := 0;
+		bUnLock := FALSE;
+	END_IF	
+ELSIF bLock THEN
+	bMonitor := FALSE;
+	A_Lock();
+	IF nStateAction >= 80 THEN
+		IF nStateAction >= 99 THEN
+			;
+		ELSE
+			bMonitor := TRUE;
+		END_IF
+		nStateAction := 0;
+		bLock := FALSE;
+	END_IF
+ELSIF bMonitor THEN
+	IF NOT bInputLocked OR bInputSafetyRelais THEN
+		eCurrentState := E_InterlockState.Error;
+	END_IF
+END_IF
+]]></ST>
+    </Implementation>
+    <Property Name="P_rSafePositionX" Id="{03f8e753-06ae-44ce-a679-e01cc5d9505c}">
+      <Declaration><![CDATA[PROPERTY P_rSafePositionX : REAL]]></Declaration>
+      <Get Name="Get" Id="{16b0f474-2fe1-4dc0-a6af-900381e26f4a}">
+        <Declaration><![CDATA[VAR
+END_VAR
+]]></Declaration>
+        <Implementation>
+          <ST><![CDATA[P_rSafePositionX := rSafePositionX;]]></ST>
+        </Implementation>
+      </Get>
+    </Property>
+    <Action Name="A_Lock" Id="{100bd9a8-31d4-4de2-b248-1490630c0ef4}">
+      <Implementation>
+        <ST><![CDATA[IF nStateAction = 0 THEN
+	bSafeRelaisOn := TRUE;
+	bUnlockInterlock := FALSE;
+	nStateAction := 1;
+ELSIF nStateAction = 1 THEN
+	//Warten, bis SafetyRelais ein
+	IF NOT bInputSafetyRelais THEN
+	fbXYDriveList.M_SetCurrentToHead();
+	REPEAT
+		pXYDrive := fbXYDriveList.M_Get();
+		IF pXYDrive > 0 THEN
+			IF pXYDrive^.P_bHomed THEN
+				pXYDrive^.M_PowerOn();
+			END_IF
+		END_IF
+	UNTIL pXYDrive = 0
+	END_REPEAT		
+		(*FOR i := 1 TO cMaxMzHeads BY 1 DO
+			IF aStXYDrives[i].iXDrive.P_bHomed THEN
+				aStXYDrives[i].iXDrive.M_PowerOn();	
+			END_IF
+			IF aStXYDrives[i].iYDrive.P_bHomed THEN
+				aStXYDrives[i].iYDrive.M_PowerOn();	
+			END_IF
+		END_FOR*)
+
+		nStateAction := 2;
+	END_IF
+ELSIF nStateAction = 2 THEN
+	nStateAction := 3;
+	fbXYDriveList.M_SetCurrentToHead();
+	REPEAT
+		pXYDrive := fbXYDriveList.M_Get();
+		IF pXYDrive > 0 THEN
+			IF pXYDrive^.P_bBusy THEN
+				nStateAction := 2;
+			END_IF
+		END_IF
+	UNTIL pXYDrive = 0
+	END_REPEAT		
+
+ELSIF nStateAction = 3 THEN
+ 	eCurrentState := E_InterlockState.Locked;
+	nStateAction := 80;
+END_IF]]></ST>
+      </Implementation>
+    </Action>
+    <Method Name="M_ResetError" Id="{3351de59-0048-4dac-8084-1def3abb32bb}">
+      <Declaration><![CDATA[METHOD M_ResetError
+VAR_INPUT
+END_VAR
+]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[bResetError := TRUE;]]></ST>
+      </Implementation>
+    </Method>
+    <Method Name="M_LockUnlock" Id="{5092ba6b-cd6d-4264-b6db-a886395c6777}">
+      <Declaration><![CDATA[METHOD M_LockUnlock : ERRORID
+VAR_INPUT
+	bLock : BOOL;
+END_VAR
+]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[IF bEmergencyStop THEN
+	M_LockUnlock := E_ErrorIdCmd.ERRORID_StopButtonNotReleased;
+	RETURN;
+END_IF
+
+IF bLock THEN
+	IF NOT (bResetError OR THIS^.bLock) THEN
+		THIS^.bLock := TRUE;
+	END_IF
+ELSE
+	IF NOT bInputLocked THEN
+		M_LockUnlock := E_ErrorIdCmd.ERRORID_StopButtonNotReleased;
+		RETURN;
+	END_IF	
+	IF NOT (bResetError OR THIS^.bUnlock) THEN
+		THIS^.bUnLock := TRUE;
+	END_IF
+END_IF]]></ST>
+      </Implementation>
+    </Method>
+    <Property Name="P_rSafePositionY" Id="{55c17158-1a5d-4abf-b7f7-cd07f9e784ae}">
+      <Declaration><![CDATA[PROPERTY P_rSafePositionY : REAL]]></Declaration>
+      <Get Name="Get" Id="{69ecd516-633c-46ae-a096-bea9ebad6071}">
+        <Declaration><![CDATA[VAR
+END_VAR
+]]></Declaration>
+        <Implementation>
+          <ST><![CDATA[P_rSafePositionY := rSafePositionY;]]></ST>
+        </Implementation>
+      </Get>
+    </Property>
+    <Action Name="A_Unlock" Id="{733d5352-fb40-4599-9720-c4f42574aaff}">
+      <Implementation>
+        <ST><![CDATA[//1. Hochspannung ausschalten
+//2. Fall Tools temperiert, in sichere Position fahren
+//3. warten bis o.g. Bedingungen erfüllt (Timeout)
+//4. Antriebe ausschalten
+//5. Interlock entriegeln
+
+CASE nStateAction OF
+	0:	//GCode aktiv?
+		IF GCode.bBusy THEN
+			GCode.M_Stop();
+		ELSE
+			nStateAction := 1;
+		END_IF
+		
+	1:	//Hochspannung aus
+		{IF defined(variable:fbHighVoltSupplyRef)}
+		 fbHighVoltSupplyRef.M_SwitchVoltage(1,FALSE);
+		 fbHighVoltSupplyRef.M_SwitchVoltage(2,FALSE);
+		{END_IF}
+		nStateAction := 3;
+		//Tools temperiert?
+		FOR i:= 1 TO fbObjectDirectory.nCntMZHead BY 1 DO
+			IF afbMzHead[i].P_bIsHot THEN
+				nStateAction := 2;
+				stActionData.eAction := E_Action.ACTION_MoveAllHome;
+				stError.ErrorId := fbComplexAction.M_ExeAction(stActionData);
+				IF stError.ErrorId > 0 THEN
+					nStateAction := 99;
+					EXIT;
+				END_IF
+			END_IF
+		END_FOR
+		
+	2:	//MoveAllHome ready?
+		nStateAction := 3;
+		IF fbComplexAction.bBusy THEN
+			nStateAction := 2;
+		END_IF
+		
+	3:	//Spannungsfreiheit Hochspannungsmodul?
+		nStateAction := 4;
+		{IF defined(variable:fbHighVoltSupplyRef)}
+		//>20 um Rauschen des analogen Eingangs zu unterbinden
+		IF fbHighVoltSupplyRef.bHVPSAvailable AND NOT fbHighVoltSupplyRef.bSafeVoltage AND (fbHighVoltSupplyRef.M_GetVoltage() > 20) THEN
+			nStateAction := 3;
+		END_IF
+		{END_IF}
+		
+	4:	//Antriebe ausschalten
+		fbXYDriveList.M_SetCurrentToHead();
+		REPEAT
+			pXYDrive := fbXYDriveList.M_Get();
+			IF pXYDrive > 0 THEN
+				pXYDrive^.M_PowerOff();
+			END_IF
+		UNTIL pXYDrive = 0
+		END_REPEAT	
+		nStateAction := 5;
+		
+	5:	//Safety-Relais ausschalten und Interlock entriegeln
+		bSafeRelaisOn := FALSE;
+		bUnlockInterlock := TRUE;
+		nStateAction := 6;
+		
+	6:	//Warten bis Interlock entriegelt
+		timer();
+		IF timer.Q THEN
+			nStateAction := 99;
+			eCurrentState := E_InterlockState.Error;
+			timer(IN:= FALSE);
+		END_IF
+		
+		IF NOT bInputLocked THEN
+			timer(IN:= FALSE);
+			eCurrentState := E_InterlockState.Unlocked;
+			nStateAction := 80;
+		END_IF	
+END_CASE]]></ST>
+      </Implementation>
+    </Action>
+    <Property Name="P_nSafeToolTemp" Id="{e440b521-8184-4ddc-8d5b-8c2e716db91b}">
+      <Declaration><![CDATA[PROPERTY P_nSafeToolTemp : UINT]]></Declaration>
+      <Get Name="Get" Id="{3294badc-183c-4f36-a919-092415c2b60e}">
+        <Declaration><![CDATA[VAR
+END_VAR
+]]></Declaration>
+        <Implementation>
+          <ST><![CDATA[P_nSafeToolTemp := nSafeTemp;]]></ST>
+        </Implementation>
+      </Get>
+    </Property>
+    <Action Name="A_ResetError" Id="{fb2dd62e-187f-43e7-af24-88f2a27abe87}">
+      <Implementation>
+        <ST><![CDATA[IF nStateAction = 0 THEN
+	bErrAckTwinSafeGrp := TRUE;
+	timer(IN:= TRUE, PT:=T#500MS);
+	nStateAction := 1;
+ELSIF nStateAction = 1 THEN
+	timer();
+	IF timer.Q THEN
+		timer(IN:= FALSE);
+		bErrAckTwinSafeGrp := FALSE;
+		nStateAction := 99;
+	ELSIF nTwinSafeGrpState = 5 THEN
+		bErrAckTwinSafeGrp := FALSE;
+	ELSIF nTwinSafeGrpState = 1 THEN
+		timer(IN:= FALSE);
+		nStateAction := 80;
+		bErrAckTwinSafeGrp := FALSE;
+	END_IF
+END_IF]]></ST>
+      </Implementation>
+    </Action>
+    <LineIds Name="FB_HwRefInterlockSafe">
+      <LineId Id="3" Count="3" />
+      <LineId Id="105" Count="0" />
+      <LineId Id="107" Count="0" />
+      <LineId Id="7" Count="0" />
+      <LineId Id="99" Count="1" />
+      <LineId Id="106" Count="0" />
+      <LineId Id="11" Count="1" />
+      <LineId Id="14" Count="41" />
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="FB_HwRefInterlockSafe.P_rSafePositionX.Get">
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="FB_HwRefInterlockSafe.A_Lock">
+      <LineId Id="2" Count="6" />
+      <LineId Id="31" Count="3" />
+      <LineId Id="41" Count="2" />
+      <LineId Id="39" Count="1" />
+      <LineId Id="30" Count="0" />
+      <LineId Id="9" Count="12" />
+      <LineId Id="45" Count="9" />
+      <LineId Id="26" Count="3" />
+      <LineId Id="1" Count="0" />
+    </LineIds>
+    <LineIds Name="FB_HwRefInterlockSafe.M_ResetError">
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="FB_HwRefInterlockSafe.M_LockUnlock">
+      <LineId Id="22" Count="3" />
+      <LineId Id="21" Count="0" />
+      <LineId Id="3" Count="3" />
+      <LineId Id="26" Count="3" />
+      <LineId Id="7" Count="0" />
+      <LineId Id="20" Count="0" />
+      <LineId Id="17" Count="0" />
+      <LineId Id="10" Count="0" />
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="FB_HwRefInterlockSafe.P_rSafePositionY.Get">
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="FB_HwRefInterlockSafe.A_Unlock">
+      <LineId Id="259" Count="23" />
+      <LineId Id="291" Count="13" />
+      <LineId Id="310" Count="38" />
+      <LineId Id="1" Count="0" />
+    </LineIds>
+    <LineIds Name="FB_HwRefInterlockSafe.P_nSafeToolTemp.Get">
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="FB_HwRefInterlockSafe.A_ResetError">
+      <LineId Id="2" Count="16" />
+      <LineId Id="1" Count="0" />
+    </LineIds>
+  </POU>
+</TcPlcObject>

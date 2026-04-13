@@ -1,0 +1,105 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<TcPlcObject Version="1.1.0.1" ProductVersion="3.1.4020.12">
+  <POU Name="F_GetTwoLineAngle" Id="{f5f92eff-cb2a-47b4-94bf-e297b649390c}" SpecialFunc="None">
+    <Declaration><![CDATA[FUNCTION F_GetTwoLineAngle : LREAL	//ermittelt den Winkel zwischen zwei Linien in XY-Ebene
+VAR_INPUT
+	line1_P1 : ST_3DPoint;
+	line1_P2 : ST_3DPoint;
+	line2_P1 : ST_3DPoint;
+	line2_P2 : ST_3DPoint;	
+END_VAR
+VAR
+	vec1X, vec1Y, vec2X, vec2Y : LREAL;
+	temp : LREAL;
+	angle1 : LREAL;
+	angle2 : LREAL;
+END_VAR
+]]></Declaration>
+    <Implementation>
+      <ST><![CDATA[//1. Linien in Ortsvektoren umrechnen
+vec1X := line1_P2.X - line1_P1.X;
+vec1Y := line1_P2.Y - line1_P1.Y;
+
+vec2X := line2_P2.X - line2_P1.X;
+vec2Y := line2_P2.Y - line2_P1.Y;
+
+//Vektor 1 auf Einheitskreis normalisieren
+//Länge berechnen
+temp := vec1X * vec1X + vec1Y * vec1Y;
+IF temp = 0.0 THEN
+	F_GetTwoLineAngle := 9999.9; //führt zu Wurzel aus "0" was bedeutet, dass der Vektor keine Länge hat
+	RETURN;
+END_IF
+temp := SQRT(temp);
+//normalisieren 
+vec1X := vec1X / temp;
+vec1Y := vec1Y / temp;
+
+//Vektor 2 auf Einheitskreis normalisieren
+//Länge berechnen
+temp := vec2X * vec2X + vec2Y * vec2Y;
+IF temp = 0.0 THEN
+	F_GetTwoLineAngle := 9999.9; //führt zu Wurzel aus "0" was bedeutet, dass der Vektor keine Länge hat
+	RETURN;
+END_IF
+temp := SQRT(temp);
+//normalisieren 
+vec2X := vec2X / temp;
+vec2Y := vec2Y / temp;
+
+//Winkelberechnung Vektor 1 in Bezug zu X-Achse im Koordinatensystem
+IF vec1Y < 0.0 THEN	//Vektor befindet sich im Quadranten III oder IV
+	angle1 := 360.0 -  RAD_TO_DEG(ACOS(vec1X));
+ELSE
+	angle1 := RAD_TO_DEG(ACOS(vec1X));
+END_IF
+
+//Winkelberechnung Vektor 2 in Bezug zu X-Achse im Koordinatensystem
+IF vec2Y < 0.0 THEN	//Vektor befindet sich im Quadranten III oder IV
+	angle2 := 360.0 -  RAD_TO_DEG(ACOS(vec2X));
+ELSE
+	angle2 := RAD_TO_DEG(ACOS(vec2X));
+END_IF
+
+F_GetTwoLineAngle := angle2 - angle1;
+
+IF F_GetTwoLineAngle > 180.0 THEN
+	F_GetTwoLineAngle := F_GetTwoLineAngle - 360.0;
+END_IF
+]]></ST>
+    </Implementation>
+    <LineIds Name="F_GetTwoLineAngle">
+      <LineId Id="14" Count="0" />
+      <LineId Id="17" Count="0" />
+      <LineId Id="20" Count="0" />
+      <LineId Id="18" Count="1" />
+      <LineId Id="21" Count="0" />
+      <LineId Id="43" Count="0" />
+      <LineId Id="62" Count="0" />
+      <LineId Id="46" Count="2" />
+      <LineId Id="51" Count="0" />
+      <LineId Id="49" Count="0" />
+      <LineId Id="63" Count="0" />
+      <LineId Id="68" Count="0" />
+      <LineId Id="64" Count="2" />
+      <LineId Id="57" Count="0" />
+      <LineId Id="67" Count="0" />
+      <LineId Id="58" Count="0" />
+      <LineId Id="52" Count="3" />
+      <LineId Id="69" Count="0" />
+      <LineId Id="56" Count="0" />
+      <LineId Id="70" Count="1" />
+      <LineId Id="73" Count="1" />
+      <LineId Id="76" Count="0" />
+      <LineId Id="82" Count="0" />
+      <LineId Id="84" Count="1" />
+      <LineId Id="83" Count="0" />
+      <LineId Id="75" Count="0" />
+      <LineId Id="72" Count="0" />
+      <LineId Id="86" Count="4" />
+      <LineId Id="92" Count="5" />
+      <LineId Id="41" Count="0" />
+      <LineId Id="7" Count="0" />
+    </LineIds>
+  </POU>
+</TcPlcObject>

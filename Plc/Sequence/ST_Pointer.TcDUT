@@ -1,0 +1,13 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<TcPlcObject Version="1.1.0.1" ProductVersion="3.1.4020.6">
+  <DUT Name="ST_Pointer" Id="{a832e3f9-6d02-4b95-9062-f5646e70f735}">
+    <Declaration><![CDATA[{attribute 'enable_dynamic_creation'}
+TYPE ST_Pointer :
+STRUCT
+	pContent:  POINTER TO PVOID;
+	pPrev	:  POINTER TO PVOID;
+	pNext	:  POINTER TO PVOID;
+END_STRUCT
+END_TYPE]]></Declaration>
+  </DUT>
+</TcPlcObject>

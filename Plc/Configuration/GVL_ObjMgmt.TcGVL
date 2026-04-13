@@ -1,0 +1,10 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<TcPlcObject Version="1.1.0.1" ProductVersion="3.1.4022.12">
+  <GVL Name="GVL_ObjMgmt" Id="{539d25b4-2a96-45e3-bd06-1ea86955fb48}">
+    <Declaration><![CDATA[VAR_GLOBAL
+	fbConfiguration		: FB_Configuration;
+	fbObjectDirectory 	: FB_ObjectDirectory;
+	nObjPropChangeCnt	: USINT;
+END_VAR]]></Declaration>
+  </GVL>
+</TcPlcObject>

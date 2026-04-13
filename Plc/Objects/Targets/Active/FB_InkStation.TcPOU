@@ -1,0 +1,944 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<TcPlcObject Version="1.1.0.1" ProductVersion="3.1.4022.18">
+  <POU Name="FB_InkStation" Id="{efaad813-ca12-4c5c-8163-3a4d53c7d0fb}" SpecialFunc="None">
+    <Declaration><![CDATA[FUNCTION_BLOCK FB_InkStation EXTENDS FB_ActiveTarget IMPLEMENTS I_TargetZSensor
+
+VAR
+	//Hardware-Verküpfung
+	pSpinDrive			: POINTER TO FB_HwRefInkStatDriveSpin;
+	pCoverDrive			: POINTER TO FB_HwRefInkStatDriveCover;
+	//Hardware-Bausteine
+	fbInitSpinDrive		: FB_InkStationInitSpinDrive;
+	fbInitSpinCover		: FB_InkStationInitCoverDrive;
+	fbOpenCloseCover	: FB_InkStationOpenClose;
+	
+	
+	//Variablen allgemeine Statemachine
+	eBasicAction		: E_Action;
+	
+	//Prozessdaten
+	nCurrentSpinSpeed	: INT;
+	bVacuumOn			: BOOL;
+	
+	//Spec-Properties
+	nNoOfSpecPoints : USINT;
+	stMeasurePoint		: ST_3DPoint;
+	stInkPoint			: ST_3DPoint;
+	nValveNrVac			: USINT;	//VentilNr Vakuum (FBox)
+	nMinHoldVac			: INT;		//minimales Haltevakuum um zu Schleudern
+	
+	//****************************************Aktionvariablen****************************************************
+	bActionLock			: ARRAY[50..150] OF BOOL;
+	
+	
+	//Action: "Spin"
+	bSpin				: BOOL;	
+	nStateA_Spin		: USINT;			//State von A_Spin();
+	
+	timerSpin			: TON;				//Timer für Schleuderzeit
+	tSpinTime			: TIME; 			//Schleuderzeit (bei 0 wird dauerhaft eingeschalten bis zum Ausschalten)
+	nSpinSpeed			: INT;				//Drehzahl Schleuder RPM
+	
+	//Action: "OpenClose"
+	bOpenClose			: BOOL;
+	nStateA_OpenClose	: USINT;	//Statemachine von A_OpenClose();
+	eOpClCtrl			: E_OpClCtrl;
+
+END_VAR
+]]></Declaration>
+    <Implementation>
+      <ST><![CDATA[{IF defined (variable:aFbInkStatDrvSpinRef)}
+IF bInitFB THEN
+	bInitFB := FALSE;
+	F_CreateLinkedListHnd( ADR( aNodes ), SIZEOF( aNodes ), hList );
+	//Fehlerstruktur vorausfüllen
+	stError.ObjectId := nObjectID;
+	stError.HardwareGrp := E_HardwareGrp.Nothing;
+	stError.POU := E_POU.POU_FB_InkStation;
+END_IF
+IF (pSpinDrive = 0) OR  (pCoverDrive = 0) THEN
+	RETURN;
+END_IF
+
+bIsInit := pSpinDrive^.bIsInit AND pCoverDrive^.bIsInit;
+nCurrentSpinSpeed := pSpinDrive^.nCurrentSpeed  * 3;	//RPM
+
+CASE eCurrentState OF
+	E_MachineState.MACHINESTATE_Active:
+		//BasicActions ausführen
+		IF bInit THEN	//Initialisieren
+			A_Init();
+			IF nStateA_Init >= 80 THEN
+				IF nStateA_Init >= 99 THEN
+					bError := TRUE;	
+				END_IF
+				bInit := FALSE;
+				nStateA_Init := 0;
+				M_RemoveListEntry(nSearchValue:= E_Action.ACTION_Init);
+			END_IF
+		END_IF
+		
+		IF bSpin THEN	//Drehzahl Schleuder vorgeben
+			A_Spin();
+			IF nStateA_Spin >= 80 THEN
+				IF nStateA_Spin >= 99 THEN
+					bError := TRUE;	
+				END_IF
+				bSpin := FALSE;
+				nStateA_Spin := 0;
+				M_RemoveListEntry(nSearchValue:= E_Action.ACTION_InkSpin);
+			END_IF
+		END_IF		
+		
+		IF bOpenClose THEN	//Deckel auf/zu
+			A_OpenClose();
+			IF nStateA_OpenClose >= 80 THEN
+				IF nStateA_OpenClose >= 99 THEN
+					bError := TRUE;	
+				END_IF
+				bOpenClose := FALSE;
+				nStateA_OpenClose := 0;
+				M_RemoveListEntry(nSearchValue:= E_Action.ACTION_InkOpClCover);
+			END_IF
+		END_IF		
+		
+		IF bStop THEN
+			A_Stop();
+			IF nStateA_Stop >= 80 THEN
+				IF nStateA_Stop >= 99 THEN
+					bError := TRUE;
+				END_IF
+				M_RemoveListEntry(nSearchValue:= E_Action.ACTION_Stop);
+				nStateA_Stop := 0;
+				bStop := FALSE;
+			END_IF							
+		END_IF		
+		
+		IF hList.nCount = 0 THEN
+			eCurrentState := E_MachineState.MACHINESTATE_Ready;
+		END_IF
+
+		IF bError  THEN
+			eCurrentState := E_MachineState.MACHINESTATE_Error;
+		END_IF
+
+	E_MachineState.MACHINESTATE_Reset:
+		A_Reset();
+		IF nStateA_Reset = 80 THEN
+			nStateA_Init := 0;
+			nStateA_Spin := 0;
+			nStateA_OpenClose := 0;
+			nStateA_Stop := 0;
+			nStateA_Reset := 0;
+			bBusy := FALSE;
+			bError := FALSE;
+			bStopAllOnError := FALSE;
+			fbList.A_Reset( hList := hList);
+			MEMSET(ADR(bActionLock),0,SIZEOF(bActionLock));
+			nErrorId := 0;
+			stError.Cmd := 0;
+			stError.ErrorId := 0;
+			eCurrentState := E_MachineState.MACHINESTATE_Idle;
+		ELSIF
+			nStateA_Reset = 99 THEN
+			fbErrorList.M_Add(stError);
+			nStateA_Reset := 0;
+			bBusy := FALSE;
+			bError := TRUE;
+			eCurrentState := E_MachineState.MACHINESTATE_Error;			
+		END_IF
+	
+	E_MachineState.MACHINESTATE_Ready:
+		bBusy := FALSE;
+		eCurrentState := E_MachineState.MACHINESTATE_Idle;
+	
+	E_MachineState.MACHINESTATE_Error:
+		pSpinDrive^.nSpeed := 0;
+		bBusy := FALSE;
+END_CASE
+
+//Prozessdaten aktualisieren
+stProcessData.nObjId := nObjectID;
+stProcessData.n32Data[0] := BOOL_TO_DINT(bIsInit);
+stProcessData.n32Data[1] := eCurrentState;
+stProcessData.n32Data[2] := stError.ErrorId;
+stProcessData.n32Data[3] := pSpinDrive^.nCurrentSpeed;
+stProcessData.n32Data[4] := pCoverDrive^.P_eCoverState;
+stProcessData.n32Data[5] := BOOL_TO_DINT(bVacuumOn);
+stProcessData.n32Data[6] := pSpinDrive^.nCurrentVacuum;
+
+aObjProcData[nNotifyId] := stProcessData;
+{END_IF}]]></ST>
+    </Implementation>
+    <Action Name="A_Init" Id="{dfacf57d-e622-491c-bc53-04dff5208e48}">
+      <Implementation>
+        <ST><![CDATA[stError.POUState := nStateA_Init;
+
+CASE nStateA_Init OF
+	0:	//Spin initialisieren
+		fbInitSpinDrive(pDriveRef:= pSpinDrive, bExecute:= TRUE);
+		IF NOT fbInitSpinDrive.bBusy THEN
+			IF fbInitSpinDrive.bError THEN
+				stError.ErrorId := fbInitSpinDrive.nErrorId;
+				nStateA_Init := 99;
+			ELSE
+				nStateA_Init := 1;			
+			END_IF
+			fbInitSpinDrive(bExecute:= FALSE);
+		END_IF
+	
+	1: //Cover initialisieren
+		fbInitSpinCover(pDriveRef:= pCoverDrive, bExecute:= TRUE);
+		IF NOT fbInitSpinCover.bBusy THEN
+			IF fbInitSpinCover.bError THEN
+				stError.ErrorId := fbInitSpinCover.nErrorId;
+				nStateA_Init := 99;
+			ELSE
+				nStateA_Init := 80;
+			END_IF
+			fbInitSpinCover(bExecute:= FALSE);
+		END_IF
+		
+	70:	//Abbrechen
+		nStateA_Init := 80;
+		fbInitSpinDrive();
+		IF fbInitSpinDrive.bBusy THEN
+			nStateA_Init := 70;
+			fbInitSpinDrive.M_Stop();
+		ELSE
+			fbInitSpinDrive(bExecute:= FALSE);
+		END_IF
+		fbInitSpinCover();
+		IF fbInitSpinCover.bBusy THEN
+			nStateA_Init := 70;
+			fbInitSpinCover.M_Stop();
+		ELSE
+			fbInitSpinCover(bExecute:= FALSE);
+		END_IF
+END_CASE
+
+//Errorhandling
+IF nStateA_Init = 99 THEN
+	stError.Cmd := E_Action.ACTION_Init;
+	stError.POUAction := E_POUACT.POUACT_A_Init;
+	fbErrorList.M_Add(stError);
+END_IF]]></ST>
+      </Implementation>
+    </Action>
+    <Action Name="A_OpenClose" Id="{a2767453-5adf-472f-bfe4-8de36e16b108}">
+      <Implementation>
+        <ST><![CDATA[stError.POUState := nStateA_OpenClose;
+
+IF nStateA_OpenClose = 0 THEN
+	fbOpenCloseCover(pDriveRef:= pCoverDrive, eCtrl:= eOpClCtrl, bExecute:= TRUE); 
+	IF NOT fbOpenCloseCover.bBusy THEN
+		IF fbOpenCloseCover.bError THEN
+			stError.ErrorId := fbOpenCloseCover.nErrorId;
+			nStateA_OpenClose := 99;
+		ELSE
+			nStateA_OpenClose := 80;
+		END_IF
+		fbOpenCloseCover(bExecute:= FALSE); 
+	END_IF
+END_IF
+
+//Errorhandling
+IF nStateA_OpenClose = 99 THEN
+	stError.Cmd := E_Action.ACTION_InkOpClCover;
+	stError.POUAction := E_POUACT.POUACT_A_OpenClose;
+	fbErrorList.M_Add(stError);
+END_IF]]></ST>
+      </Implementation>
+    </Action>
+    <Action Name="A_Reset" Id="{e16c6abb-0a30-42c6-b3a3-069a1841eaa7}">
+      <Implementation>
+        <ST><![CDATA[CASE nStateA_Reset OF
+	0:
+		nStateA_Reset := 80;
+END_CASE]]></ST>
+      </Implementation>
+    </Action>
+    <Action Name="A_Spin" Id="{70403442-6dc1-4760-b4ee-4ad8c6dafd7e}">
+      <Implementation>
+        <ST><![CDATA[IF pSpinDrive^.nStatus.3 THEN	//Error
+	stError.POUState := nStateA_Spin;
+	nStateA_Spin := 99;
+END_IF
+
+CASE nStateA_Spin OF
+	0:
+		pSpinDrive^.nSpeed := nSpinSpeed;
+		IF tSpinTime > T#0S THEN
+			timerSpin(IN:= TRUE, PT:= tSpinTime);
+		END_IF
+		nStateA_Spin := 1;
+		
+	1:	//Überwachung Vacuum, Timer, Drezahl
+		pSpinDrive^.nSpeed := nSpinSpeed;
+		timerSpin();
+		IF timerSpin.Q OR (pSpinDrive^.nSpeed = 0 AND pSpinDrive^.nCurrentSpeed = 0) OR nMinHoldVac < pSpinDrive^.nCurrentVacuum THEN
+			timerSpin(IN:= FALSE);	
+			pSpinDrive^.nSpeed := 0;
+			nStateA_Spin := 2;
+		END_IF
+		
+	2:	//Warten bis Drehzahl auf 0
+		IF pSpinDrive^.nCurrentSpeed = 0 THEN
+			nStateA_Spin := 80;
+		END_IF
+		
+	70:	//Abbrechen
+		timerSpin(IN:= FALSE);
+		pSpinDrive^.nSpeed := 0;
+		nStateA_Spin := 71;
+		
+	71:	//Speed = 0?
+		IF pSpinDrive^.nCurrentSpeed = 0 THEN
+			nStateA_Spin := 80;
+		END_IF
+		
+END_CASE
+
+//Errorhandling
+IF nStateA_Spin = 99 THEN
+	stError.Cmd := E_Action.ACTION_InkSpin;
+	stError.POUAction := E_POUACT.POUACT_A_Spin;
+	fbErrorList.M_Add(stError);
+END_IF]]></ST>
+      </Implementation>
+    </Action>
+    <Action Name="A_Stop" Id="{4d1d4772-d593-4ebe-b659-b20ccecd576d}">
+      <Implementation>
+        <ST><![CDATA[CASE nStateA_Stop OF
+	0:	
+		IF bInit THEN
+			nStateA_Init := 70;	
+		END_IF
+		
+		IF bSpin THEN
+			nStateA_Spin := 70;
+		END_IF
+		
+		nStateA_Stop := 1;
+	
+	1:	//Warten bis alle Actions außer Stop abgebrochen sind
+		IF hList.nCount = 1 THEN	//nur der Eintrag von Stop
+			nStateA_Stop := 80;
+		END_IF
+END_CASE
+
+//Errorhandling
+IF nStateA_Stop = 99 THEN
+	stError.Cmd := E_Action.ACTION_Stop;
+	stError.POUAction := E_POUACT.POUACT_A_Stop;
+	fbErrorList.M_Add(stError);
+END_IF]]></ST>
+      </Implementation>
+    </Action>
+    <Method Name="FB_init" Id="{b0d7f6bd-da53-4bec-8b66-70106b8d5e19}">
+      <Declaration><![CDATA[METHOD FB_init : BOOL
+VAR_INPUT
+	bInitRetains : BOOL; // if TRUE, the retain variables are initialized (warm start / cold start)
+	bInCopyCode : BOOL;  // if TRUE, the instance afterwards gets moved into the copy code (online change)
+END_VAR
+]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[eObjectType := E_ObjectType.OBJECTTYPE_InkStation;
+eObjectGroup := E_ObjectGroup.OBJECTGROUP_Target OR E_ObjectGroup.OBJECTGROUP_Device;]]></ST>
+      </Implementation>
+    </Method>
+    <Method Name="M_ApplyPos" Id="{81e7a2ef-9206-4e55-b754-a25fb3eb68c8}">
+      <Declaration><![CDATA[METHOD M_ApplyPos : ERRORID
+VAR_INPUT
+	eTargetRef 		: E_TargetRef;
+	nPointSlotNr	: UINT;
+	stPos 			: ST_3DPoint;
+	bXPos			: BOOL;
+	bYPos			: BOOL;
+	bZPos			: BOOL;	
+END_VAR
+VAR
+	stAbsPos		: ST_3DPoint;
+END_VAR
+]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[IF eTargetRef = E_TargetRef.TARGETREF_SpecPoint THEN
+	IF nPointSlotNr = 2 THEN
+		stAbsPos := P_stAbsPosLB;
+		IF bXPos THEN
+			stInkPoint.X := stPos.X - stAbsPos.X;
+		END_IF
+		IF bYPos THEN
+			stInkPoint.Y := stPos.Y - stAbsPos.Y;
+		END_IF
+		IF bZPos THEN
+			stInkPoint.Z := stPos.Z - stAbsPos.Z;
+		END_IF
+	ELSE
+		M_ApplyPos := E_ErrorIdCmd.ERRORID_InvalidTargetPointNr;
+	END_IF
+ELSE
+	M_ApplyPos := SUPER^.M_ApplyPos(eTargetRef, nPointSlotNr, stPos, bXPos, bYPos, bZPos);
+END_IF
+
+]]></ST>
+      </Implementation>
+    </Method>
+    <Method Name="M_CancelAction" Id="{dce703f5-93af-4393-a745-7b42f973a830}">
+      <Declaration><![CDATA[METHOD M_CancelAction
+VAR_INPUT
+	eAction : E_Action;
+END_VAR
+]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[IF eAction = E_Action.ACTION_InkSpin THEN
+	M_Stop();
+END_IF]]></ST>
+      </Implementation>
+    </Method>
+    <Method Name="M_CheckAction" Id="{148c573a-998b-4308-8b71-3d91aaf3e874}">
+      <Declaration><![CDATA[METHOD M_CheckAction : ERRORID
+VAR_INPUT
+	refActionData 	: REFERENCE TO ST_ActionData;
+	pCorrelObject	: POINTER TO FB_Object;
+END_VAR
+]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[IF refActionData.eAction = E_Action.ACTION_TeachTarget THEN
+	IF NOT DINT_TO_UINT(refActionData.aParams[1]) = E_TargetRef.TARGETREF_SpecPoint AND refActionData.aParams[2] = 2 THEN
+		M_CheckAction := E_ErrorIdCmd.ERRORID_InvalidTargetPointRef;
+	END_IF
+ELSIF refActionData.eAction = E_Action.ACTION_MoveToTarget THEN
+	//Target = Inkpoint -> Inkstation muss geöffnet sein
+	IF (refActionData.aParams[1] = E_TargetRef.TARGETREF_SpecPoint) AND (refActionData.aParams[2] = 2) THEN
+		IF P_eCoverState <> E_OpClState.Open THEN
+			M_CheckAction := E_ErrorIdCmd.ERRORID_InkStationNotOpen;
+			RETURN;
+		END_IF
+		IF P_nCurrentSpinSpeed <> 0 THEN
+			M_CheckAction := E_ErrorIdCmd.ERRORID_InkStationIsStillSpinning; //Error
+			RETURN;		
+		END_IF		
+	END_IF
+END_IF]]></ST>
+      </Implementation>
+    </Method>
+    <Method Name="M_ExeAction" Id="{6c19bc44-cf96-44e8-b4b2-e428690175b9}">
+      <Declaration><![CDATA[METHOD M_ExeAction : ERRORID
+VAR_INPUT
+	refActionData	: REFERENCE TO ST_ActionData;	
+END_VAR
+]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[CASE refActionData.eAction OF
+	E_Action.ACTION_Init:
+		IF NOT bInit THEN
+			bInit := TRUE;
+			fbList.A_AddHeadValue(hList := hList, putValue:= E_Action.ACTION_Init);
+		ELSE
+			RETURN;
+		END_IF
+		
+	E_Action.ACTION_InkSpin:
+		nSpinSpeed := DINT_TO_INT(refActionData.aParams[2]);
+		nSpinSpeed := nSpinSpeed / 3;		//Velo umrechnen (Übersetzung 1:3)
+		tSpinTime := DINT_TO_TIME(refActionData.aParams[3]);
+		
+		IF NOT bSpin THEN
+			IF refActionData.aParams[1] = 1 AND nSpinSpeed <> 0 THEN
+				IF nSpinSpeed <> 0 THEN
+					IF nMinHoldVac < pSpinDrive^.nCurrentVacuum THEN
+						M_ExeAction := E_ErrorIdCmd.ERRORID_VacuumNotOk;  //Error
+						RETURN;
+					END_IF
+				END_IF
+			END_IF
+		ELSE
+			IF refActionData.aParams[1] = 0 THEN
+				nSpinSpeed := 0;
+			END_IF
+		END_IF
+		
+		getPosPtr := 0;	//nach vorhandenem Eintrag suchen - beginnen an Anfang
+		fbList.A_FindNext(hList := hList, putPosPtr := getPosPtr, putValue := E_Action.ACTION_InkSpin, getValue=>getValue, getPosPtr=>getPosPtr );
+		IF NOT fbList.bOk THEN	//Eintrag wurde nicht gefunden
+			bSpin := TRUE;
+			fbList.A_AddHeadValue(hList := hList, putValue:= E_Action.ACTION_InkSpin);
+		ELSE
+			RETURN;
+		END_IF
+
+	E_Action.ACTION_InkOpClCover:
+		IF NOT bOpenClose THEN
+			IF NOT P_bCoverAreaIsFree THEN
+				M_ExeAction := E_ErrorIdCmd.ERRORID_InkStatCoverAreaNotFree;  //Error
+				RETURN;
+			END_IF
+			eOpClCtrl := DINT_TO_USINT(refActionData.aParams[1]);
+			fbList.A_AddHeadValue(hList := hList, putValue:= E_Action.ACTION_InkOpClCover);
+			bOpenClose := TRUE;
+		ELSE
+			RETURN;
+		END_IF
+		
+	E_Action.ACTION_SwitchPressure:
+		IF refActionData.aParams[1] = 0 THEN
+			aValves[nValveNrVac].M_Off();
+			bVacuumOn := FALSE;
+		ELSE
+			aValves[nValveNrVac].M_On(1);
+			bVacuumOn := TRUE;
+		END_IF
+	
+	E_Action.ACTION_Stop:
+		IF hList.nCount > 0 THEN
+			fbList.A_AddHeadValue(hList := hList, putValue:= E_Action.ACTION_Stop);
+		ELSE
+			RETURN;	
+		END_IF
+	ELSE
+		M_ExeAction := E_ErrorIdCmd.ERRORID_InvalidAction;
+END_CASE
+
+eCurrentState := E_MachineState.MACHINESTATE_Active;
+bBusy := TRUE;]]></ST>
+      </Implementation>
+    </Method>
+    <Method Name="M_GetAbsPos" Id="{4d836b8a-679e-4e8f-b4ed-76afafa01ef9}">
+      <Declaration><![CDATA[METHOD M_GetAbsPos : ST_3DPoint
+VAR_INPUT
+	pChildPos	: POINTER TO ST_3DPoint;
+	eTargetRef 	: E_TargetRef;
+	nParam1		: UINT;
+ 	nParam2		: UINT;
+	nParam3		: USINT;
+	nZLevel		: USINT;
+END_VAR
+VAR_OUTPUT
+	nErrorId 	: ERRORID;
+	lrAngle		: LREAL;
+END_VAR
+VAR
+	stLocPosLB : ST_3DPoint;
+END_VAR
+]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[IF eTargetRef = E_TargetRef.TARGETREF_SpecPoint THEN
+	stLocPosLB := P_stRelPosLB;
+	IF nParam1 = 1 THEN	//MeasurePoint
+		stLocPosLB := F_Add3DPoints(stLocPosLB,stMeasurePoint);
+	ELSIF nParam1 = 2 THEN	//InkPoint
+		stLocPosLB := F_Add3DPoints(stLocPosLB,stInkPoint);
+	ELSE
+		nErrorId := E_ErrorIdCmd.ERRORID_InvalidTargetPointNr;
+		RETURN;
+	END_IF
+	M_GetAbsPos := pParentTarget^.M_GetAbsPos(pChildPos := ADR(stLocPosLB), eTargetRef:= E_TargetRef.TARGETREF_LeftBottom,
+												nParam1:= 0,
+												nParam2:= 0, nParam3:= 0,nZLevel:= 0,
+												lrAngle => lrAngle, nErrorId=> nErrorId);	
+ELSE
+	M_GetAbsPos := SUPER^.M_GetAbsPos(pChildPos := pChildPos, eTargetRef:= eTargetRef,
+													nParam1:= nParam1,
+													nParam2:= nParam2, nParam3:= nParam3, nZLevel:= nZLevel,
+													lrAngle => lrAngle, nErrorId=> nErrorId);		
+END_IF]]></ST>
+      </Implementation>
+    </Method>
+    <Method Name="M_GetActionBusy" Id="{d68f0361-dcf4-4b9c-966a-5222f1816d61}">
+      <Declaration><![CDATA[METHOD M_GetActionBusy : BOOL
+VAR_INPUT
+	eAction : E_Action;
+END_VAR
+]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[getPosPtr := 0;(* start from first node element *)
+fbList.A_FindNext( hList := hList, putPosPtr := getPosPtr, putValue := eAction, getValue=>getValue, getPosPtr=>getPosPtr );
+IF fbList.bOk THEN	//Eintrag wurde gefunden, d.h. Action ist noch busy
+	M_GetActionBusy := TRUE;
+END_IF]]></ST>
+      </Implementation>
+    </Method>
+    <Method Name="M_GetAllProps" Id="{00c09312-0363-44a1-82fa-3461fd3f119f}">
+      <Declaration><![CDATA[METHOD M_GetAllProps : ERRORID
+VAR_INPUT
+	refCmdData : REFERENCE TO  ST_CmdData;
+END_VAR
+]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[SUPER^.M_GetAllProps(refCmdData);
+
+nCurrentPropIndex := nCurrentPropIndex + 1;
+refCmdData.n32Data[nCurrentPropIndex] := nNoOfSpecPoints;
+nCurrentPropIndex := nCurrentPropIndex + 1;
+refCmdData.n32Data[nCurrentPropIndex] := REAL_TO_DINT(stMeasurePoint.X);
+nCurrentPropIndex := nCurrentPropIndex + 1; 	
+refCmdData.n32Data[nCurrentPropIndex] := REAL_TO_DINT(stMeasurePoint.Y);
+nCurrentPropIndex := nCurrentPropIndex + 1;
+refCmdData.n32Data[nCurrentPropIndex] := REAL_TO_DINT(stMeasurePoint.Z);
+nCurrentPropIndex := nCurrentPropIndex + 1;
+refCmdData.n32Data[nCurrentPropIndex] := REAL_TO_DINT(stInkPoint.X);
+nCurrentPropIndex := nCurrentPropIndex + 1;
+refCmdData.n32Data[nCurrentPropIndex] := REAL_TO_DINT(stInkPoint.Y);
+nCurrentPropIndex := nCurrentPropIndex + 1;
+refCmdData.n32Data[nCurrentPropIndex] := REAL_TO_DINT(stInkPoint.Z);
+nCurrentPropIndex := nCurrentPropIndex + 1;
+refCmdData.n32Data[nCurrentPropIndex] := REAL_TO_DINT(rZOffset);
+nCurrentPropIndex := nCurrentPropIndex + 1;
+refCmdData.n32Data[nCurrentPropIndex] := nValveNrVac;
+nCurrentPropIndex := nCurrentPropIndex + 1;
+refCmdData.n32Data[nCurrentPropIndex] := nMinHoldVac;]]></ST>
+      </Implementation>
+    </Method>
+    <Method Name="M_GetProcData" Id="{75084a54-b28c-4593-9935-65cde99f0055}">
+      <Declaration><![CDATA[METHOD M_GetProcData : DINT
+VAR_INPUT
+	eProcDataType : E_ProcDataType;
+END_VAR
+]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[]]></ST>
+      </Implementation>
+    </Method>
+    <Method Name="M_RemoveListEntry" Id="{3b2f45d7-24da-45c4-ba4e-bb3ec7a925d2}">
+      <Declaration><![CDATA[METHOD M_RemoveListEntry : BOOL
+VAR_INPUT
+	nSearchValue	: E_Action;
+END_VAR
+]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[getPosPtr := 0;(* start from first node element *)
+fbList.A_FindNext( hList := hList, putPosPtr := getPosPtr, putValue := nSearchValue, getValue=>getValue, getPosPtr=>getPosPtr );
+IF fbList.bOk THEN	//Eintrag wurde gefunden
+	fbList.A_RemoveValueAtPosPtr(hList:= hList,	putPosPtr:= getPosPtr);
+	IF fbList.bOk THEN
+		M_RemoveListEntry := TRUE;
+	END_IF
+END_IF
+]]></ST>
+      </Implementation>
+    </Method>
+    <Method Name="M_SetAllProps" Id="{9082ca63-12c0-4286-9dfa-a9b56e9dc5a7}">
+      <Declaration><![CDATA[METHOD M_SetAllProps : ERRORID
+VAR_INPUT
+	refCmdData : REFERENCE TO  ST_CmdData;
+END_VAR
+]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[{IF defined (variable:aFbInkStatDrvSpinRef)}
+pSpinDrive := ADR(aFbInkStatDrvSpinRef[1]);
+{ELSE}
+{warning 'implement errorId}
+M_SetAllProps := 5555;
+{END_IF}
+
+{IF defined (variable:aFbInkStatDrvSpinRef)}
+pCoverDrive := ADR(aFbInkStatDrvCoverRef[1]);
+{ELSE}
+{warning 'implement errorId}
+M_SetAllProps := 5555;
+{END_IF}
+
+M_SetAllProps := SUPER^.M_SetAllProps(refCmdData);
+
+IF M_SetAllProps > 0 THEN
+	RETURN;
+END_IF
+
+nCurrentPropIndex := nCurrentPropIndex + 1;
+nSpecPropIndex := nCurrentPropIndex;
+nNoOfSpecPoints := DINT_TO_USINT(refCmdData.n32Data[nCurrentPropIndex]);
+nCurrentPropIndex := nCurrentPropIndex + 1;
+stMeasurePoint.X := DINT_TO_REAL(refCmdData.n32Data[nCurrentPropIndex]);
+nCurrentPropIndex := nCurrentPropIndex + 1;
+stMeasurePoint.Y := DINT_TO_REAL(refCmdData.n32Data[nCurrentPropIndex]);
+nCurrentPropIndex := nCurrentPropIndex + 1;
+stMeasurePoint.Z := DINT_TO_REAL(refCmdData.n32Data[nCurrentPropIndex]);
+nCurrentPropIndex := nCurrentPropIndex + 1;
+stInkPoint.X := DINT_TO_REAL(refCmdData.n32Data[nCurrentPropIndex]);
+nCurrentPropIndex := nCurrentPropIndex + 1;
+stInkPoint.Y := DINT_TO_REAL(refCmdData.n32Data[nCurrentPropIndex]);
+nCurrentPropIndex := nCurrentPropIndex + 1;
+stInkPoint.Z := DINT_TO_REAL(refCmdData.n32Data[nCurrentPropIndex]);
+nCurrentPropIndex := nCurrentPropIndex + 1;
+rZOffset := DINT_TO_REAL(refCmdData.n32Data[nCurrentPropIndex]);
+nCurrentPropIndex := nCurrentPropIndex + 1;
+IF refCmdData.n32Data[nCurrentPropIndex] > 0 AND refCmdData.n32Data[nCurrentPropIndex] <= cNoOfValves THEN
+	nValveNrVac := DINT_TO_USINT(refCmdData.n32Data[nCurrentPropIndex]);
+ELSE
+	M_SetAllProps := E_ErrorIdObjMgmt.ERRORID_InvalidValveNumber;
+	RETURN;
+END_IF
+nCurrentPropIndex := nCurrentPropIndex + 1;
+nMinHoldVac := DINT_TO_INT(refCmdData.n32Data[nCurrentPropIndex]);
+nNoOfProps := nCurrentPropIndex + 1;]]></ST>
+      </Implementation>
+    </Method>
+    <Method Name="M_SetSingleProp" Id="{630e2edd-71a8-414d-933e-0f922bdf8dd0}">
+      <Declaration><![CDATA[METHOD M_SetSingleProp : ERRORID
+VAR_INPUT
+	refCmdData : REFERENCE TO  ST_CmdData;
+END_VAR
+
+VAR
+	nValve : USINT;
+END_VAR]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[IF nSpecPropIndex = refCmdData.aHeader[1] THEN
+	M_SetSingleProp := E_ErrorIdCmd.ERRORID_InvalidProperty; //Anzahl SpecPoints darf nicht verändert werden
+ELSIF (nSpecPropIndex + 1) = refCmdData.aHeader[1] THEN
+	stMeasurePoint.X := DINT_TO_REAL(refCmdData.n32Data[0]);
+ELSIF (nSpecPropIndex + 2) = refCmdData.aHeader[1] THEN
+	stMeasurePoint.Y := DINT_TO_REAL(refCmdData.n32Data[0]);
+ELSIF (nSpecPropIndex + 3) = refCmdData.aHeader[1] THEN
+	stMeasurePoint.Z := DINT_TO_REAL(refCmdData.n32Data[0]);
+ELSIF (nSpecPropIndex + 4) = refCmdData.aHeader[1] THEN
+	stInkPoint.X := DINT_TO_REAL(refCmdData.n32Data[0]);
+ELSIF (nSpecPropIndex + 5) = refCmdData.aHeader[1] THEN
+	stInkPoint.Y := DINT_TO_REAL(refCmdData.n32Data[0]);
+ELSIF (nSpecPropIndex + 6) = refCmdData.aHeader[1] THEN
+	stInkPoint.Z := DINT_TO_REAL(refCmdData.n32Data[0]);
+ELSIF (nSpecPropIndex + 7) = refCmdData.aHeader[1] THEN
+	rZOffset := DINT_TO_REAL(refCmdData.n32Data[0]);
+ELSIF (nSpecPropIndex + 8) = refCmdData.aHeader[1] THEN
+		nValve := DINT_TO_USINT(refCmdData.n32Data[0]);
+		IF nValve > 0 AND nValve <= cNoOfValves THEN
+			nValveNrVac := nValve;
+		ELSE
+			M_SetSingleProp := E_ErrorIdObjMgmt.ERRORID_InvalidValveNumber;	
+		END_IF
+	
+ELSIF (nSpecPropIndex + 9) = refCmdData.aHeader[1] THEN
+	nMinHoldVac := DINT_TO_INT(refCmdData.n32Data[0]);	
+ELSE
+	M_SetSingleProp := SUPER^.M_SetSingleProp(refCmdData);
+END_IF]]></ST>
+      </Implementation>
+    </Method>
+    <Property Name="P_bCoverAreaIsFree" Id="{05296844-d60e-43f1-a64e-163f1b7863fc}">
+      <Declaration><![CDATA[PROPERTY P_bCoverAreaIsFree : BOOL]]></Declaration>
+      <Get Name="Get" Id="{8f5c83e0-9f1c-450c-965f-4ff15bd548c5}">
+        <Declaration><![CDATA[VAR
+	i : UINT;
+	stCurPosMzTool	: ST_3DPoint;
+	stCurPosInkStat	: ST_3DPoint;
+END_VAR
+]]></Declaration>
+        <Implementation>
+          <ST><![CDATA[//Checken, ob sich im Bewegungsbereich des Deckel ein MzTool befindet
+P_bCoverAreaIsFree := TRUE;
+//Hier stoße ich wieder genau auf das Problem, dass ich ich alle Tools des Heads durchiterieren muss
+//Den Head habe ich zur Verfügung
+//der Head könnte eine Property zur Verfügung stellen, die einen Pointer auf die Liste der ChildTools zur Verfügung stellt
+//Ein Problem könnte aber darstellen, dass wenn bei rekursivem Aufruf der Liste es zu einem Durcheinander kommt.
+//Eine sehr gute Idee wäre der Iteratoransatz
+//Eine Liste muss damit immer mit Hilfe eins Iterators iteriert werden.
+//Wenn begonnen wird zu iterieren, muss dieser resettet werden.
+//Bei TwinCAT Vision abschauen!
+
+
+
+(*FOR i:= 1 TO fbObjectDirectory.nCntMzTool BY 1 DO
+	IF NOT (aI_MzTool[i].P_eObjectType = E_ObjectType.OBJECTTYPE_MZHead) THEN
+		IF NOT aI_MzTool[i].P_bCollFree THEN	//Tool ist nicht im kollisionsfreiem Bereich
+			
+			stCurPosMzTool := aI_MzTool[i].P_stCurrentPosPhys;
+			stCurPosInkStat := P_stAbsPosLB;
+			IF (stCurPosMzTool.Z - 5000) < stCurPosInkStat.Z THEN
+				IF stCurPosMzTool.X >= stCurPosInkStat.X AND stCurPosMzTool.X <= (stCurPosInkStat.X + stDimension.Width)
+				AND stCurPosMzTool.Y >= stCurPosInkStat.Y AND stCurPosMzTool.Y <= (stCurPosInkStat.Y + stDimension.Depth) THEN
+					P_bCoverAreaIsFree := FALSE;
+					RETURN;
+				END_IF
+			END_IF
+ 		END_IF
+	END_IF
+END_FOR*)]]></ST>
+        </Implementation>
+      </Get>
+    </Property>
+    <Property Name="P_bIsSpinning" Id="{a1f773ef-a096-42da-9170-53f9170acf36}">
+      <Declaration><![CDATA[PROPERTY P_bIsSpinning : BOOL]]></Declaration>
+      <Get Name="Get" Id="{aaa06471-9851-4884-bf75-9eb6a8033180}">
+        <Declaration><![CDATA[VAR
+END_VAR
+]]></Declaration>
+        <Implementation>
+          <ST><![CDATA[IF pSpinDrive > 0 THEN
+	IF pSpinDrive^.nCurrentSpeed <> 0 THEN
+		P_bIsSpinning := TRUE;
+	END_IF	
+END_IF
+]]></ST>
+        </Implementation>
+      </Get>
+    </Property>
+    <Property Name="P_bSensor" Id="{b6a2c451-f089-4c10-b8b1-33b8ff99a263}">
+      <Declaration><![CDATA[PROPERTY P_bSensor : BOOL]]></Declaration>
+      <Get Name="Get" Id="{0ea984f0-8faf-4eea-bdff-3a63e400a3a5}">
+        <Declaration><![CDATA[VAR
+END_VAR
+]]></Declaration>
+        <Implementation>
+          <ST><![CDATA[IF pSpinDrive > 0 THEN
+	P_bSensor := pSpinDrive^.bZSensor;	
+END_IF
+]]></ST>
+        </Implementation>
+      </Get>
+    </Property>
+    <Property Name="P_eCoverState" Id="{bf7c8dce-119c-49d5-8d5e-387c96a20b00}">
+      <Declaration><![CDATA[PROPERTY P_eCoverState : E_OpClState]]></Declaration>
+      <Get Name="Get" Id="{08ba778b-dcd2-4f77-9f9f-70c3c908b656}">
+        <Declaration><![CDATA[VAR
+END_VAR
+]]></Declaration>
+        <Implementation>
+          <ST><![CDATA[P_eCoverState := pCoverDrive^.P_eCoverState;]]></ST>
+        </Implementation>
+      </Get>
+    </Property>
+    <Property Name="P_nCurrentSpinSpeed" Id="{bbadf7d5-0441-4863-b290-920145eef2ac}">
+      <Declaration><![CDATA[PROPERTY P_nCurrentSpinSpeed : INT]]></Declaration>
+      <Get Name="Get" Id="{6eb9e28f-a9fe-4813-a0ae-ef9f62c49b21}">
+        <Declaration><![CDATA[VAR
+END_VAR
+]]></Declaration>
+        <Implementation>
+          <ST><![CDATA[P_nCurrentSpinSpeed := nCurrentSpinSpeed;]]></ST>
+        </Implementation>
+      </Get>
+    </Property>
+    <LineIds Name="FB_InkStation">
+      <LineId Id="3" Count="12" />
+      <LineId Id="31" Count="91" />
+      <LineId Id="210" Count="0" />
+      <LineId Id="123" Count="14" />
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="FB_InkStation.A_Init">
+      <LineId Id="2" Count="49" />
+      <LineId Id="1" Count="0" />
+    </LineIds>
+    <LineIds Name="FB_InkStation.A_OpenClose">
+      <LineId Id="2" Count="19" />
+      <LineId Id="1" Count="0" />
+    </LineIds>
+    <LineIds Name="FB_InkStation.A_Reset">
+      <LineId Id="2" Count="2" />
+      <LineId Id="1" Count="0" />
+    </LineIds>
+    <LineIds Name="FB_InkStation.A_Spin">
+      <LineId Id="2" Count="5" />
+      <LineId Id="88" Count="0" />
+      <LineId Id="8" Count="0" />
+      <LineId Id="78" Count="0" />
+      <LineId Id="50" Count="0" />
+      <LineId Id="79" Count="0" />
+      <LineId Id="10" Count="0" />
+      <LineId Id="43" Count="0" />
+      <LineId Id="89" Count="0" />
+      <LineId Id="49" Count="0" />
+      <LineId Id="18" Count="0" />
+      <LineId Id="86" Count="0" />
+      <LineId Id="45" Count="1" />
+      <LineId Id="87" Count="0" />
+      <LineId Id="71" Count="1" />
+      <LineId Id="55" Count="0" />
+      <LineId Id="22" Count="1" />
+      <LineId Id="32" Count="1" />
+      <LineId Id="52" Count="0" />
+      <LineId Id="35" Count="6" />
+      <LineId Id="34" Count="0" />
+      <LineId Id="24" Count="7" />
+      <LineId Id="1" Count="0" />
+    </LineIds>
+    <LineIds Name="FB_InkStation.A_Stop">
+      <LineId Id="2" Count="3" />
+      <LineId Id="21" Count="3" />
+      <LineId Id="6" Count="14" />
+      <LineId Id="1" Count="0" />
+    </LineIds>
+    <LineIds Name="FB_InkStation.FB_init">
+      <LineId Id="7" Count="1" />
+    </LineIds>
+    <LineIds Name="FB_InkStation.M_ApplyPos">
+      <LineId Id="3" Count="18" />
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="FB_InkStation.M_CancelAction">
+      <LineId Id="13" Count="1" />
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="FB_InkStation.M_CheckAction">
+      <LineId Id="3" Count="3" />
+      <LineId Id="25" Count="0" />
+      <LineId Id="20" Count="1" />
+      <LineId Id="26" Count="2" />
+      <LineId Id="30" Count="3" />
+      <LineId Id="29" Count="0" />
+      <LineId Id="7" Count="0" />
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="FB_InkStation.M_ExeAction">
+      <LineId Id="3" Count="70" />
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="FB_InkStation.M_GetAbsPos">
+      <LineId Id="18" Count="0" />
+      <LineId Id="33" Count="0" />
+      <LineId Id="26" Count="2" />
+      <LineId Id="34" Count="0" />
+      <LineId Id="31" Count="1" />
+      <LineId Id="35" Count="0" />
+      <LineId Id="21" Count="0" />
+      <LineId Id="37" Count="2" />
+      <LineId Id="36" Count="0" />
+      <LineId Id="19" Count="0" />
+      <LineId Id="23" Count="2" />
+      <LineId Id="22" Count="0" />
+      <LineId Id="20" Count="0" />
+    </LineIds>
+    <LineIds Name="FB_InkStation.M_GetActionBusy">
+      <LineId Id="3" Count="3" />
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="FB_InkStation.M_GetAllProps">
+      <LineId Id="3" Count="20" />
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="FB_InkStation.M_GetProcData">
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="FB_InkStation.M_RemoveListEntry">
+      <LineId Id="3" Count="7" />
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="FB_InkStation.M_SetAllProps">
+      <LineId Id="3" Count="45" />
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="FB_InkStation.M_SetSingleProp">
+      <LineId Id="3" Count="27" />
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="FB_InkStation.P_bCoverAreaIsFree.Get">
+      <LineId Id="3" Count="27" />
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="FB_InkStation.P_bIsSpinning.Get">
+      <LineId Id="3" Count="4" />
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="FB_InkStation.P_bSensor.Get">
+      <LineId Id="3" Count="2" />
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="FB_InkStation.P_eCoverState.Get">
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="FB_InkStation.P_nCurrentSpinSpeed.Get">
+      <LineId Id="2" Count="0" />
+    </LineIds>
+  </POU>
+</TcPlcObject>

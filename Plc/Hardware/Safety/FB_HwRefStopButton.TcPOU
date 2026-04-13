@@ -1,0 +1,83 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<TcPlcObject Version="1.1.0.1" ProductVersion="3.1.4024.11">
+  <POU Name="FB_HwRefStopButton" Id="{7baece8b-1dc9-4d4b-a35a-8bb7f3010af5}" SpecialFunc="None">
+    <Declaration><![CDATA[FUNCTION_BLOCK FB_HwRefStopButton
+VAR_INPUT
+END_VAR
+VAR_OUTPUT
+END_VAR
+VAR
+	bE_Stop_NO 	AT %I* : BOOL;
+	bE_Stop_NC 	AT %I* : BOOL;
+	bRelease 	AT %Q* : BOOL; 
+	bFTrig 		: F_TRIG;
+END_VAR
+VAR PERSISTENT
+	bDisabled : BOOL := TRUE;
+END_VAR
+]]></Declaration>
+    <Implementation>
+      <ST><![CDATA[bRelease := NOT bE_Stop_NO AND bE_Stop_NC;
+bFTrig(CLK:= (bRelease OR bDisabled));]]></ST>
+    </Implementation>
+    <Property Name="P_bDisabled" Id="{9a391eb1-fa82-4c73-b410-4c29b5333069}">
+      <Declaration><![CDATA[PROPERTY P_bDisabled : BOOL]]></Declaration>
+      <Get Name="Get" Id="{4a5587e0-93b5-4bb2-8de4-dc9ea1a2a49d}">
+        <Declaration><![CDATA[VAR
+END_VAR
+]]></Declaration>
+        <Implementation>
+          <ST><![CDATA[P_bDisabled := bDisabled;]]></ST>
+        </Implementation>
+      </Get>
+      <Set Name="Set" Id="{6e392f9c-69a4-46e7-9d7d-d07a24652417}">
+        <Declaration><![CDATA[VAR
+END_VAR
+]]></Declaration>
+        <Implementation>
+          <ST><![CDATA[bDisabled := P_bDisabled;
+fbSettings.M_WritePersData();]]></ST>
+        </Implementation>
+      </Set>
+    </Property>
+    <Property Name="P_bReleased" Id="{d1645a9a-8a8c-4d35-80e4-186646dba8ce}">
+      <Declaration><![CDATA[PROPERTY P_bReleased : BOOL]]></Declaration>
+      <Get Name="Get" Id="{32973aaa-590a-4665-8edd-e2bd0a458bae}">
+        <Declaration><![CDATA[VAR
+END_VAR
+]]></Declaration>
+        <Implementation>
+          <ST><![CDATA[P_bReleased := bRelease OR bDisabled;]]></ST>
+        </Implementation>
+      </Get>
+    </Property>
+    <Property Name="P_bTriggered" Id="{0d76184b-de85-4a43-a058-c25823b210f0}">
+      <Declaration><![CDATA[PROPERTY P_bTriggered : BOOL]]></Declaration>
+      <Get Name="Get" Id="{a2f4313e-0f34-43e8-b91c-4967decc4811}">
+        <Declaration><![CDATA[VAR
+END_VAR
+]]></Declaration>
+        <Implementation>
+          <ST><![CDATA[P_bTriggered := bFTrig.Q;]]></ST>
+        </Implementation>
+      </Get>
+    </Property>
+    <LineIds Name="FB_HwRefStopButton">
+      <LineId Id="28" Count="0" />
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="FB_HwRefStopButton.P_bDisabled.Get">
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="FB_HwRefStopButton.P_bDisabled.Set">
+      <LineId Id="3" Count="0" />
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="FB_HwRefStopButton.P_bReleased.Get">
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="FB_HwRefStopButton.P_bTriggered.Get">
+      <LineId Id="2" Count="0" />
+    </LineIds>
+  </POU>
+</TcPlcObject>

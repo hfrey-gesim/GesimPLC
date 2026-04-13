@@ -1,0 +1,39 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<TcPlcObject Version="1.1.0.1" ProductVersion="3.1.4020.6">
+  <POU Name="FB_HwRefBottleRack" Id="{d49a67fd-918f-4a6f-82db-4e30be543e1d}" SpecialFunc="None">
+    <Declaration><![CDATA[FUNCTION_BLOCK FB_HwRefBottleRack EXTENDS FB_CanNodeBase
+VAR_INPUT
+END_VAR
+VAR_OUTPUT
+	
+END_VAR
+VAR
+	
+END_VAR
+]]></Declaration>
+    <Implementation>
+      <ST><![CDATA[IF bNodeEnabled THEN
+	SUPER^();	
+END_IF
+]]></ST>
+    </Implementation>
+    <Action Name="A_ResetApp" Id="{39a31604-0cc4-4c09-824d-4f998cb1f8b3}">
+      <Implementation>
+        <ST><![CDATA[IF nStateA_ResetApp = 0 THEN
+	fbSdoWrite(sADSNetID:= stAdsAdress.sNetId, nPortNr:= stAdsAdress.nPort,
+				nIndex := cUpdateRequest.nIndex, nSubIndex := 0, nDataLength := 1, nData:= 1, bExecute:= TRUE);
+	IF NOT fbSdoWrite.bBusy THEN
+		IF fbSdoWrite.bError THEN
+			nErrorId := fbSdoWrite.nAdsErrorId;
+			nErrorId2 := fbSdoWrite.nSdoErrorId;
+			nStateA_ResetApp := 99;  //Error
+		ELSE
+			nStateA_ResetApp := 80;
+		END_IF
+		fbSdoWrite(bExecute:= FALSE);
+	END_IF
+END_IF]]></ST>
+      </Implementation>
+    </Action>
+  </POU>
+</TcPlcObject>

@@ -1,0 +1,16 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<TcPlcObject Version="1.1.0.1" ProductVersion="3.1.0.25">
+  <DUT Name="E_ReactDrive" Id="{c5a8efbd-5f95-4126-ad3e-38f2d3135146}">
+    <Declaration><![CDATA[TYPE E_ReactDrive :
+(
+	Clamp := 1,
+	CoverHoriz := 2,
+	CoverVerti := 3,
+	CoverBoth := 4,
+	Complete
+)USINT;
+END_TYPE
+]]></Declaration>
+    <ObjectProperties />
+  </DUT>
+</TcPlcObject>

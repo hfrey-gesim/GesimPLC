@@ -1,0 +1,134 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<TcPlcObject Version="1.1.0.1" ProductVersion="3.1.4024.11">
+  <POU Name="FB_NanotecPD_Power" Id="{e2a422db-98d6-485e-aeb9-b80444d17502}" SpecialFunc="None">
+    <Declaration><![CDATA[FUNCTION_BLOCK FB_NanotecPD_Power
+VAR_INPUT
+	bExecute : BOOL;
+END_VAR
+VAR_OUTPUT
+	bBusy 		: BOOL;
+	bError 		: BOOL;
+	nErrorId 	: ERRORID;	
+END_VAR
+VAR_IN_OUT
+	pHwRef : POINTER TO FB_HwRefNanotecPD; 
+END_VAR
+VAR
+	nState : USINT;
+	fbSdoWrite : FB_SDO_WRITE;
+END_VAR
+]]></Declaration>
+    <Implementation>
+      <ST><![CDATA[//Achtung, anders als bei TMCM-Controllern wird die Statemachine des Controller hier nur bis "SwitchedOn" durchlaufen.
+//"OperationEnabled" wird erst nach dem Setzen des Modes gesetzt. Jedes Ändern des Modes erfordert eine Rückkehr zu "SwitchedOn"
+IF bExecute THEN
+	IF nState = 0 THEN
+		bBusy := TRUE;
+		CASE pHwRef^.M_GetDS402State() OF
+			E_CoDS402States.DS402STATE_Fault:
+				pHwRef^.nControlword := 153;	//Reset Error
+			E_CoDS402States.DS402STATE_SwitchOnDisabled:
+				nState := 1;
+			E_CoDS402States.DS402STATE_ReadyToSwitchOn:
+				pHwRef^.nControlword := 0;	//Transition 7 in DS402 statemachine -> geht in Switch on disabled
+				nState := 1;
+			E_CoDS402States.DS402STATE_SwitchedOn:
+				pHwRef^.nControlword := 0;	//Transition 10 in DS402 statemachine -> geht in Switch on disabled
+				nState := 1;
+			E_CoDS402States.DS402STATE_OperationEnabled:
+				pHwRef^.nControlword := 0;	//Shutdown
+				nState := 1;
+			E_CoDS402States.DS402STATE_NotReadyToSwitchOn:
+				nErrorId := E_ErrorIdDS402.ERRORID_NotReadyToSwitchOn;
+				nState := 99;
+		END_CASE
+ 	END_IF
+	
+	CASE nState OF
+		1:	//Change ro "Ready to switched on"
+			pHwRef^.nControlword := 6;
+			nState := 2;
+			
+		2:	//State = "Ready to switched on" ? -> Switch on
+			IF pHwRef^.M_GetDS402State() = E_CoDS402States.DS402STATE_ReadyToSwitchOn THEN
+				pHwRef^.nControlword := 7;
+				nState := 3;
+			ELSIF pHwRef^.M_GetDS402State() = E_CoDS402States.DS402STATE_Fault THEN
+				nErrorId := E_ErrorIdDS402.ERRORID_FaultState;
+				nState := 99;
+			END_IF
+			
+		3:	//State = "Switched on" ?
+			IF pHwRef^.M_GetDS402State() = E_CoDS402States.DS402STATE_SwitchedOn THEN
+				//pHwRef^.nDriveSubMode := 1;
+				nState := 80;
+			ELSIF pHwRef^.M_GetDS402State() = E_CoDS402States.DS402STATE_Fault THEN
+				nErrorId := E_ErrorIdDS402.ERRORID_FaultState;
+				nState := 99;
+			END_IF
+			
+	END_CASE
+	
+	IF nState >= 80 THEN
+		bBusy := FALSE;
+		IF nState = 99 THEN
+			bError := TRUE;
+		END_IF
+	END_IF
+	
+ELSE
+	bError := FALSE;
+	nErrorId := 0;
+	nState := 0;
+END_IF]]></ST>
+    </Implementation>
+    <LineIds Name="FB_NanotecPD_Power">
+      <LineId Id="38" Count="0" />
+      <LineId Id="37" Count="0" />
+      <LineId Id="9" Count="0" />
+      <LineId Id="33" Count="0" />
+      <LineId Id="39" Count="0" />
+      <LineId Id="41" Count="0" />
+      <LineId Id="43" Count="0" />
+      <LineId Id="45" Count="3" />
+      <LineId Id="51" Count="1" />
+      <LineId Id="50" Count="0" />
+      <LineId Id="54" Count="1" />
+      <LineId Id="53" Count="0" />
+      <LineId Id="57" Count="1" />
+      <LineId Id="56" Count="0" />
+      <LineId Id="59" Count="0" />
+      <LineId Id="49" Count="0" />
+      <LineId Id="44" Count="0" />
+      <LineId Id="42" Count="0" />
+      <LineId Id="63" Count="2" />
+      <LineId Id="67" Count="1" />
+      <LineId Id="70" Count="0" />
+      <LineId Id="69" Count="0" />
+      <LineId Id="94" Count="0" />
+      <LineId Id="79" Count="1" />
+      <LineId Id="77" Count="0" />
+      <LineId Id="82" Count="1" />
+      <LineId Id="76" Count="0" />
+      <LineId Id="72" Count="1" />
+      <LineId Id="95" Count="0" />
+      <LineId Id="121" Count="0" />
+      <LineId Id="96" Count="0" />
+      <LineId Id="98" Count="0" />
+      <LineId Id="101" Count="1" />
+      <LineId Id="97" Count="0" />
+      <LineId Id="103" Count="0" />
+      <LineId Id="66" Count="0" />
+      <LineId Id="84" Count="1" />
+      <LineId Id="93" Count="0" />
+      <LineId Id="89" Count="0" />
+      <LineId Id="91" Count="1" />
+      <LineId Id="90" Count="0" />
+      <LineId Id="88" Count="0" />
+      <LineId Id="23" Count="0" />
+      <LineId Id="30" Count="1" />
+      <LineId Id="26" Count="0" />
+      <LineId Id="24" Count="0" />
+    </LineIds>
+  </POU>
+</TcPlcObject>

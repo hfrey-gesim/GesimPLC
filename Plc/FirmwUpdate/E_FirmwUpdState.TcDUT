@@ -1,0 +1,20 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<TcPlcObject Version="1.1.0.1" ProductVersion="3.1.0.25">
+  <DUT Name="E_FirmwUpdState" Id="{fda4119f-6e37-4808-ae73-8ad105fd3896}">
+    <Declaration><![CDATA[TYPE E_FirmwUpdState :
+(
+	LoadFile,
+	Connect,
+	GetStatus,
+	ProgramStart,
+	SetMTA,
+	ProgramClear,
+	Programming,
+	WaitForBootup,
+	Ready,
+	Error
+);
+END_TYPE]]></Declaration>
+    <ObjectProperties />
+  </DUT>
+</TcPlcObject>

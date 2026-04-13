@@ -1,0 +1,14 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<TcPlcObject Version="1.1.0.1" ProductVersion="3.1.0.25">
+  <Itf Name="I_TargetZSensor" Id="{e54d7a9f-6c6f-442d-bb20-3947619f046d}">
+    <Declaration><![CDATA[INTERFACE I_TargetZSensor
+]]></Declaration>
+    <Property Name="P_bSensor" Id="{ffb74354-aa81-4afc-9d2b-30544494b891}">
+      <Declaration><![CDATA[PROPERTY P_bSensor : BOOL]]></Declaration>
+      <Get Name="Get" Id="{4cfe8a2f-d218-443c-84b3-81e0c1761036}">
+        <Declaration><![CDATA[]]></Declaration>
+      </Get>
+    </Property>
+    <ObjectProperties />
+  </Itf>
+</TcPlcObject>

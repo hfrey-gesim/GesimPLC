@@ -1,0 +1,123 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<TcPlcObject Version="1.1.0.1" ProductVersion="3.1.4020.12">
+  <POU Name="FB_Rack" Id="{bf2f976b-495b-41ff-b2e6-c80592df5350}" SpecialFunc="None">
+    <Declaration><![CDATA[FUNCTION_BLOCK FB_Rack EXTENDS FB_SlotTarget
+VAR_INPUT
+END_VAR
+VAR_OUTPUT
+END_VAR
+VAR
+END_VAR]]></Declaration>
+    <Implementation>
+      <ST><![CDATA[]]></ST>
+    </Implementation>
+    <Method Name="M_GetAbsPos" Id="{4eae30f6-29f2-469b-a951-ce67c1001773}">
+      <Declaration><![CDATA[METHOD M_GetAbsPos : ST_3DPoint
+VAR_INPUT
+	pChildPos	: POINTER TO ST_3DPoint;
+	eTargetRef 	: E_TargetRef;
+	nParam1		: UINT;
+ 	nParam2		: UINT;
+	nParam3		: USINT;
+	nZLevel		: USINT;
+END_VAR
+VAR_OUTPUT
+	nErrorId 	: ERRORID;
+	lrAngle		: LREAL;
+END_VAR
+VAR
+	stLocPosLB : ST_3DPoint;
+	pSlot : POINTER TO FB_PieceSlot;
+END_VAR
+]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[IF eTargetRef = E_TargetRef.TARGETREF_Slot THEN
+	//Slotnummer checken
+	pSlot := super^.M_GetSlot(nParam1);
+	IF pSlot > 0 THEN
+		stLocPosLB := P_stRelPosLB;	//hier wird auch berücksichtigt, wenn das Rack an einem Slot hängt
+		//Slot belegt?
+		IF pSlot^.P_pPiece > 0 THEN
+			stLocPosLB := F_Add3DPoints(stLocPosLB, pSlot^.P_pPiece^.M_GetRelPosTopCenter());
+		ELSE
+			stLocPosLB := F_Add3DPoints(stLocPosLB, pSlot^.P_stRelPos);
+		END_IF
+		
+		M_GetAbsPos := pParentTarget^.M_GetAbsPos(pChildPos := ADR(stLocPosLB), eTargetRef:= E_TargetRef.TARGETREF_LeftBottom,
+														nParam1:= 0,
+														nParam2:= 0, nParam3:= 0,nZLevel:= 0,
+														lrAngle => lrAngle, nErrorId=> nErrorId);		
+	ELSE
+		nErrorId := E_ErrorIdCmd.ERRORID_InvalidTargetSlot;
+	END_IF
+	
+ELSE
+	M_GetAbsPos := SUPER^.M_GetAbsPos(pChildPos := pChildPos, eTargetRef:= eTargetRef,
+													nParam1:= nParam1,
+													nParam2:= nParam2, nParam3:= nParam3, nZLevel:= nZLevel,
+													lrAngle => lrAngle, nErrorId=> nErrorId);	
+END_IF]]></ST>
+      </Implementation>
+    </Method>
+    <Method Name="M_GetNextFreeSlot" Id="{76b1c723-7ccd-4b18-8c5e-385cf139df76}">
+      <Declaration><![CDATA[METHOD M_GetNextFreeSlot : POINTER TO FB_SLOT
+VAR_INPUT
+	stRange : ST_Rectangle;
+END_VAR
+VAR
+	pSlot 	: POINTER TO FB_PieceSlot;
+END_VAR]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[fbSlotList.M_SetCurrentToHead();
+REPEAT
+	pSlot := fbSlotList.M_GetNext();
+	IF pSlot > 0 THEN
+		IF F_PointInnerRect(stPoint:= pSlot^.P_stAbsPos, stRectangle:= stRange) THEN
+			IF pSlot^.P_pPiece = 0 THEN
+				M_GetNextFreeSlot := pSlot;
+				RETURN;
+			END_IF			
+		END_IF
+	END_IF
+UNTIL (pSlot = 0)
+END_REPEAT]]></ST>
+      </Implementation>
+    </Method>
+    <Method Name="M_GetNextFreshPieceSlot" Id="{f725a860-ffd9-488b-a5c7-fea433ce5ef6}">
+      <Declaration><![CDATA[METHOD M_GetNextFreshPieceSlot : POINTER TO FB_PieceSlot
+VAR_INPUT
+	stRange : ST_Rectangle;
+END_VAR
+
+VAR
+	pSlot 	: POINTER TO FB_PieceSlot;
+	pUsingPiece : POINTER TO FB_UsingPiece;
+END_VAR]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[fbSlotList.M_SetCurrentToHead();
+REPEAT
+	pSlot := fbSlotList.M_GetNext();
+	IF pSlot > 0 THEN
+		IF F_PointInnerRect(stPoint:= pSlot^.P_stAbsPos, stRectangle:= stRange) THEN
+			IF pSlot^.P_pPiece > 0 THEN
+				IF pSlot^.P_pPiece^.bUsingPiece THEN
+					pUsingPiece := pSlot^.P_pPiece;
+					IF NOT pUsingPiece^.P_bUsed THEN
+						M_GetNextFreshPieceSlot := pSlot;
+						RETURN;
+					END_IF
+				ELSE
+					M_GetNextFreshPieceSlot := pSlot;
+				END_IF
+			END_IF
+		END_IF
+	END_IF
+UNTIL (pSlot = 0)
+END_REPEAT]]></ST>
+      </Implementation>
+    </Method>
+    <LineIds Name="FB_Rack">
+      <LineId Id="2" Count="0" />
+    </LineIds>
+  </POU>
+</TcPlcObject>

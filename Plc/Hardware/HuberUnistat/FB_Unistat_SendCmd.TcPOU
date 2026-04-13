@@ -1,0 +1,251 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<TcPlcObject Version="1.1.0.1" ProductVersion="3.1.4024.6">
+  <POU Name="FB_Unistat_SendCmd" Id="{c1af8263-bc98-4d27-b5c4-6110834c5b1e}" SpecialFunc="None">
+    <Declaration><![CDATA[FUNCTION_BLOCK FB_Unistat_SendCmd
+VAR_INPUT
+	bExecute		: BOOL;	
+	eCommand		: E_Unitstat_Command;
+	nSendData		: DINT;
+	SerialPort		: REFERENCE TO FB_SerialComPort_Base;	
+END_VAR
+
+VAR_OUTPUT
+	bBusy			: BOOL;
+	bError			: BOOL;
+	nErrorId		: ERRORID; 		//RS232-Fehler oder vom Diluter zurückgegebener Fehler
+	nReceiveData	: DINT;
+END_VAR
+VAR
+	
+	fbSendString	: Tc2_SerialCom.SendString;
+	fbReceiveString	: Tc2_SerialCom.ReceiveString;
+	bExpectReply	: BOOL;
+	bExpectReal		: BOOL;
+	rTemp			: REAL;
+	sSendString		: STRING;
+	sReceivedString	: STRING;
+	sTemp			: STRING;
+	
+	nState			: USINT;
+	bFlag			: BOOL := TRUE;
+	nLenData		: USINT; //komplette Länge der Sende-oder Empfamgsdaten
+	timeout			: TON;
+END_VAR]]></Declaration>
+    <Implementation>
+      <ST><![CDATA[IF bExecute THEN
+	IF nState = 0 THEN
+		IF NOT __ISVALIDREF(SerialPort) THEN
+			bError := TRUE;
+			RETURN;
+		END_IF
+		//Am Serial Port zu Senden registrieren
+		//Die Registrierung sollte, wenn alles richtig programmiert wurde, immer klappen!
+		IF NOT SerialPort.M_Register(THIS) THEN
+			bError := TRUE;
+			RETURN;
+		ELSE
+			nState := 1	;
+		END_IF
+		bBusy := TRUE;
+	END_IF
+	
+	//Checken, ob an der Reihe (wird übersprungen, wenn "SerialPort.M_Register" TRUE zurückgibt
+	IF nState = 1 THEN
+		IF SerialPort.M_IsMyTurn(THIS) THEN
+			nState := 2;
+		END_IF
+	END_IF
+	
+	//Ist für eine Zeit gesperrt und wird automatisch aufgehoben
+	IF SerialPort.bIsLocked THEN
+		RETURN;
+	END_IF
+	
+	//Ist an der Reihe
+	IF nState = 2 THEN
+		//Kommunikationspuffer löschen (nicht der Hardware-Buffer)
+		SerialPort.M_ClearTxComBuffer();
+		SerialPort.M_ClearRxComBuffer();
+		
+		//# # # # # # # # # # # # # Sendestring zusammensetzen # # # # # # # # # # # # # # # # # # #
+		CASE eCommand OF
+			E_Unitstat_Command.Get_TempActualIntern:
+				sSendString := 'IN_PV_00';
+				bExpectReply := TRUE;
+				bExpectReal := TRUE;
+			E_Unitstat_Command.Get_TempActualExtern:
+				sSendString := 'IN_PV_02';
+				bExpectReply := TRUE;
+				bExpectReal := TRUE;
+			E_Unitstat_Command.Get_TempSetPoint:
+				sSendString := 'IN_SP_00';
+				bExpectReply := TRUE;
+				bExpectReal := TRUE;
+			E_Unitstat_Command.Get_Status:
+				sSendString := 'STATUS';
+				bExpectReply := TRUE;
+			E_Unitstat_Command.Set_TempSetPoint:
+				//Umwandlung von Ganzzahl 1/10tel°C in String als Gleitpunktzahl 
+				rTemp := DINT_TO_REAL(nSendData) / 10.0;
+				sSendString := CONCAT('OUT_SP_00 ', REAL_TO_STRING(rTemp));
+			E_Unitstat_Command.Start_TempControl:
+				sSendString := 'START';
+			E_Unitstat_Command.Stop_TempControl:
+				sSendString := 'STOP';
+		ELSE
+			bError := TRUE;
+			RETURN;
+		END_CASE
+		
+		//CR und LF anfügen
+		sSendString := CONCAT(sSendString,'$R$N');
+		nState := 3;	//weiter zu String senden
+	END_IF
+	
+	CASE nState OF
+		3:	//# # # # # # # # # # # # # Daten senden # # # # # # # # # # # # # # # # # # #
+			IF bFlag XOR fbSendString.Busy THEN
+				bFlag := FALSE;
+				fbSendString(SendString:= sSendString, TXbuffer:= SerialPort.P_TxBuffer);
+			END_IF
+			
+			IF NOT fbSendString.Busy THEN	//Sendung abgeschlossen
+				IF fbSendString.Error > 0 THEN
+					nErrorId := INT_TO_UINT(fbSendString.Error);
+					bError := TRUE;
+					bBusy := FALSE;
+					nState := 99;
+					RETURN;				
+				ELSE
+					IF bExpectReply THEN	//Antwort wird erwartet
+						nState := 4;	//weiter zu Daten empfangen
+					ELSE	//Antwort wird nicht erwartet -> Daten nicht abrufen
+						//Hier muss SerialPort für 500ms blockiert werden (siehe Doku Unistat)
+						SerialPort.M_LockForTime(T#500MS); 
+						bBusy := FALSE;
+						nState:= 80;
+					END_IF
+				END_IF
+			END_IF
+			
+		4:	//# # # # # # # # # # # # # Daten empfangen # # # # # # # # # # # # # # # # # # #
+			timeout(IN:= TRUE, PT:= T#500MS);
+			IF timeout.Q THEN //Es wurden keine Daten mit entsprechendem Suffix empfangen -> Baustein resetten
+				fbReceiveString(ReceivedString:= sReceivedString, RXbuffer:= SerialPort.P_RxBuffer, Reset:= TRUE);
+				nErrorId := E_ErrorIdDiluter.ERRORID_ComTimeout;
+				bError := TRUE;
+				bBusy := FALSE;
+				nState := 99;
+			ELSE
+				fbReceiveString(ReceivedString:= sReceivedString, Suffix:= '$R$N', RXbuffer:= SerialPort.P_RxBuffer, Reset:= FALSE);
+				IF fbReceiveString.Error <> ComError_t.COMERROR_NOERROR THEN
+					fbReceiveString(ReceivedString:= sReceivedString, RXbuffer:= SerialPort.P_RxBuffer, Reset:= TRUE);
+					bError := TRUE;
+					bBusy := FALSE;
+					nErrorId := INT_TO_UINT(fbReceiveString.Error);
+					nState := 99;
+					RETURN;
+				END_IF
+				
+				IF fbReceiveString.StringReceived THEN
+					IF bExpectReal THEN
+						nReceiveData := REAL_TO_DINT(STRING_TO_REAL(sReceivedString) * 10.0);	
+					ELSE
+						nReceiveData := STRING_TO_DINT(sReceivedString);
+					END_IF
+					SerialPort.M_LockForTime(T#500MS);
+					bBusy := FALSE;
+					nState := 80;
+				END_IF
+			END_IF
+	END_CASE
+ELSE
+	IF __ISVALIDREF(SerialPort) AND_THEN SerialPort.M_IsMyTurn(THIS) THEN
+		SerialPort.M_Release(THIS);
+	END_IF
+	bBusy := FALSE;
+	bError := FALSE;
+	bExpectReply := FALSE;
+	bExpectReal := FALSE;
+	bFlag := TRUE;
+	nErrorId := 0;
+	nState := 0;
+	nReceiveData := 0;
+	timeout(IN:= FALSE);
+END_IF]]></ST>
+    </Implementation>
+    <LineIds Name="FB_Unistat_SendCmd">
+      <LineId Id="9" Count="0" />
+      <LineId Id="37" Count="13" />
+      <LineId Id="52" Count="1" />
+      <LineId Id="55" Count="5" />
+      <LineId Id="270" Count="1" />
+      <LineId Id="267" Count="2" />
+      <LineId Id="54" Count="0" />
+      <LineId Id="61" Count="6" />
+      <LineId Id="94" Count="0" />
+      <LineId Id="96" Count="0" />
+      <LineId Id="111" Count="0" />
+      <LineId Id="145" Count="0" />
+      <LineId Id="250" Count="0" />
+      <LineId Id="98" Count="0" />
+      <LineId Id="112" Count="0" />
+      <LineId Id="146" Count="0" />
+      <LineId Id="251" Count="0" />
+      <LineId Id="99" Count="0" />
+      <LineId Id="113" Count="0" />
+      <LineId Id="149" Count="0" />
+      <LineId Id="252" Count="0" />
+      <LineId Id="100" Count="0" />
+      <LineId Id="114" Count="0" />
+      <LineId Id="148" Count="0" />
+      <LineId Id="101" Count="0" />
+      <LineId Id="150" Count="0" />
+      <LineId Id="142" Count="1" />
+      <LineId Id="102" Count="0" />
+      <LineId Id="116" Count="0" />
+      <LineId Id="103" Count="0" />
+      <LineId Id="117" Count="0" />
+      <LineId Id="104" Count="2" />
+      <LineId Id="97" Count="0" />
+      <LineId Id="151" Count="2" />
+      <LineId Id="92" Count="1" />
+      <LineId Id="163" Count="1" />
+      <LineId Id="166" Count="0" />
+      <LineId Id="169" Count="13" />
+      <LineId Id="187" Count="0" />
+      <LineId Id="189" Count="0" />
+      <LineId Id="264" Count="0" />
+      <LineId Id="272" Count="0" />
+      <LineId Id="190" Count="4" />
+      <LineId Id="198" Count="2" />
+      <LineId Id="215" Count="1" />
+      <LineId Id="222" Count="3" />
+      <LineId Id="218" Count="0" />
+      <LineId Id="220" Count="0" />
+      <LineId Id="228" Count="0" />
+      <LineId Id="237" Count="0" />
+      <LineId Id="232" Count="4" />
+      <LineId Id="231" Count="0" />
+      <LineId Id="238" Count="1" />
+      <LineId Id="254" Count="1" />
+      <LineId Id="257" Count="1" />
+      <LineId Id="256" Count="0" />
+      <LineId Id="360" Count="0" />
+      <LineId Id="262" Count="1" />
+      <LineId Id="241" Count="0" />
+      <LineId Id="217" Count="0" />
+      <LineId Id="167" Count="0" />
+      <LineId Id="23" Count="0" />
+      <LineId Id="327" Count="0" />
+      <LineId Id="28" Count="3" />
+      <LineId Id="144" Count="0" />
+      <LineId Id="253" Count="0" />
+      <LineId Id="261" Count="0" />
+      <LineId Id="32" Count="1" />
+      <LineId Id="260" Count="0" />
+      <LineId Id="34" Count="0" />
+      <LineId Id="21" Count="0" />
+    </LineIds>
+  </POU>
+</TcPlcObject>

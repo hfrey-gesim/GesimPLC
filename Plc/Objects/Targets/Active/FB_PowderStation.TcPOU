@@ -1,0 +1,1266 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<TcPlcObject Version="1.1.0.1" ProductVersion="3.1.4024.11">
+  <POU Name="FB_PowderStation" Id="{a26cc47c-11de-4f6c-9805-1cfff5682e50}" SpecialFunc="None">
+    <Declaration><![CDATA[FUNCTION_BLOCK FB_PowderStation EXTENDS FB_ActiveTarget IMPLEMENTS I_SlotTarget
+VAR
+	
+	nNoOfSpecPoints 	: USINT;
+	stPickPoint			: ST_3DPoint;
+	nLevelOffset		: DINT;
+	
+	nNoOfSlots			: USINT;
+	fbVialSlot			: FB_PieceSlot(pOwner:= THIS);
+
+
+	//Hardware-Verküpfung
+	pPowdStatRef		: POINTER TO FB_HwRefPowderStat;
+	
+	//Variablen allgemeine Statemachine
+	fbSdoWrite			: FB_SDO_WRITE;
+	
+	//****************************************Aktionvariablen****************************************************
+	bActionLock			: ARRAY[50..150] OF BOOL;
+
+	//Action: "Shaking"	(Rüttelmotor schalten)
+	bShaking			: BOOL;
+	nStateA_Shaking		: USINT;
+	nVibrationPower1	: UINT;
+	nVibrationPower2	: UINT;
+	nVibrationPower3	: UINT;
+
+	//Action: "Leveling"	(Pulver rütteln und auf Höhe bringen)
+	bLeveling			: BOOL;				//Action A_Leveling() aktiv setzen
+	nStateA_Leveling	: USINT;			//State von A_Leveling()
+	tShakingTime		: TIME;
+	timer				: TON;
+	
+	//Action: "Reload"	(Stößel in untere Position fahren zum nachfüllen)
+	bReload				: BOOL;
+	nStateA_Reload		: USINT;
+	
+	//Action: "TakePicture"
+	bTakePicture			: BOOL;
+	nStateA_TakePicture		: USINT;
+	tDelayTakePicture		: TIME;
+	timerTakePicture		: TON;
+	nRequestArg1			: DINT;
+	nRequestArg2			: DINT;	
+	
+END_VAR]]></Declaration>
+    <Implementation>
+      <ST><![CDATA[IF bInitFB THEN
+	bInitFB := FALSE;
+	F_CreateLinkedListHnd( ADR( aNodes ), SIZEOF( aNodes ), hList );
+	//Fehlerstruktur vorausfüllen
+	stError.ObjectId := nObjectID;
+	stError.HardwareGrp := E_HardwareGrp.Nothing;
+	stError.POU := E_POU.POU_FB_PowderStation;
+END_IF
+
+CASE eCurrentState OF
+	E_MachineState.MACHINESTATE_Active:
+		//BasicActions ausführen
+		IF bInit THEN	//Initialisieren
+			A_Init();
+			IF nStateA_Init >= 80 THEN
+				IF nStateA_Init >= 99 THEN
+					bError := TRUE;
+				END_IF
+				bInit := FALSE;
+				nStateA_Init := 0;
+				M_RemoveListEntry(nSearchValue:= E_Action.ACTION_Init);
+			END_IF
+		END_IF
+
+		IF bShaking THEN
+			A_Shaking();
+			IF nStateA_Shaking >= 80 THEN
+				IF nStateA_Shaking >= 99 THEN
+					bError := TRUE;
+				END_IF
+				bShaking := FALSE;
+				nStateA_Shaking := 0;
+				M_RemoveListEntry(nSearchValue:= E_Action.ACTION_PowdStatShaking);
+			END_IF
+		END_IF
+		
+		IF bLeveling THEN
+			A_Leveling();
+			IF nStateA_Leveling >= 80 THEN
+				IF nStateA_Leveling >= 99 THEN
+					bError := TRUE;
+				END_IF
+				bLeveling := FALSE;
+				nStateA_Leveling := 0;
+				M_RemoveListEntry(nSearchValue:= E_Action.ACTION_PowdStatLeveling);
+			END_IF
+		END_IF
+		
+		IF bReload THEN
+			A_Reload();
+			IF nStateA_Reload >= 80 THEN
+				IF nStateA_Reload >= 99 THEN
+					bError := TRUE;	
+				END_IF
+				bReload := FALSE;
+				nStateA_Reload := 0;
+				M_RemoveListEntry(nSearchValue:= E_Action.ACTION_PowdStatReload);
+			END_IF
+		END_IF
+
+		IF bTakePicture THEN
+			A_TakePicture();
+			IF nStateA_TakePicture >= 80 THEN
+				IF nStateA_TakePicture >= 99 THEN
+					bError := TRUE;	
+				END_IF
+				bTakePicture := FALSE;
+				nStateA_TakePicture := 0;
+				M_RemoveListEntry(nSearchValue:= E_Action.ACTION_TakePicture);
+			END_IF
+		END_IF		
+		
+		IF bStop THEN	//alle Actions stoppen
+			A_Stop();
+			IF nStateA_Stop >= 80 THEN
+				IF nStateA_Stop >= 99 THEN
+					bError := TRUE;
+				END_IF
+				bStop := FALSE;
+				nStateA_Stop := 0;
+				bCanceled := TRUE;
+				M_RemoveListEntry(nSearchValue:= E_Action.ACTION_Stop);
+			END_IF							
+		END_IF
+
+		IF hList.nCount = 0 THEN
+			eCurrentState := E_MachineState.MACHINESTATE_Ready;
+		END_IF
+
+		IF bError  THEN
+			eCurrentState := E_MachineState.MACHINESTATE_Error;
+		END_IF
+
+	E_MachineState.MACHINESTATE_Reset:
+		A_Reset();
+		IF nStateA_Reset = 80 THEN
+			nStateA_Init := 0;
+			nStateA_Stop := 0;
+			nStateA_Reset := 0;
+			bBusy := FALSE;
+			bError := FALSE;
+			bStopAllOnError := FALSE;
+			fbList.A_Reset( hList := hList);
+			MEMSET(ADR(bActionLock),0,SIZEOF(bActionLock));
+			nErrorId := 0;
+			stError.Cmd := 0;
+			stError.ErrorId := 0;
+			eCurrentState := E_MachineState.MACHINESTATE_Idle;
+		ELSIF
+			nStateA_Reset = 99 THEN
+			fbErrorList.M_Add(stError);
+			nStateA_Reset := 0;
+			bBusy := FALSE;
+			bError := TRUE;
+			eCurrentState := E_MachineState.MACHINESTATE_Error;			
+		END_IF
+	
+	E_MachineState.MACHINESTATE_Ready:
+		bBusy := FALSE;
+		eCurrentState := E_MachineState.MACHINESTATE_Idle;
+	
+	E_MachineState.MACHINESTATE_Error:
+		bBusy := FALSE;
+END_CASE
+
+//Prozessdaten aktualisieren
+stProcessData.nObjId := nObjectID;
+stProcessData.n32Data[0] := BOOL_TO_DINT(bIsInit);
+stProcessData.n32Data[1] := eCurrentState;
+stProcessData.n32Data[2] := stError.ErrorId;
+stProcessData.n32Data[3] := BOOL_TO_DINT(pPowdStatRef^.bLevelOk);	
+stProcessData.n32Data[4] := BOOL_TO_DINT(pPowdStatRef^.bLevelLow);
+stProcessData.n32Data[5] := BOOL_TO_DINT(pPowdStatRef^.bOnReloadPos);
+stProcessData.n32Data[6] := BOOL_TO_DINT(pPowdStatRef^.bVibrationIsOn);
+//stProcessData.n32Data[7] := BOOL_TO_DINT(pPowdStatRef^.bCoverIsClosed);
+stProcessData.n32Data[7] := BOOL_TO_DINT(pPowdStatRef^.bVialSensor);
+stProcessData.n32Data[8] := BOOL_TO_DINT(pPowdStatRef^.bLevelSensor);
+stProcessData.n32Data[9] := BOOL_TO_DINT(pPowdStatRef^.bHeaterIsOn);
+
+stProcessData.n32Data[10] := pPowdStatRef^.nTempActual;
+IF pPowdStatRef^.P_nCameraLight > 0 THEN
+	stProcessData.n32Data[11] := 1;
+ELSE
+	stProcessData.n32Data[11] := 0;
+END_IF
+aObjProcData[nNotifyId] := stProcessData;]]></ST>
+    </Implementation>
+    <Action Name="A_Init" Id="{ce9f5087-86b9-4169-9eb3-a494e6d25fec}">
+      <Implementation>
+        <ST><![CDATA[CASE nStateA_Init OF
+	0:	//Wenn in Error, dann Error zurücksetzen
+		bIsInit := FALSE;
+		pPowdStatRef^.P_bStartLeveling := FALSE;
+		pPowdStatRef^.P_bStartReload := FALSE;
+		pPowdStatRef^.P_bVibrationOn := FALSE;
+		IF pPowdStatRef^.bErr THEN
+			pPowdStatRef^.P_bResetError := TRUE;
+			nStateA_Init := 1;
+		ELSE
+			nStateA_Init := 2;
+		END_IF
+
+	1:	//Warten bis Error zurückgesetzt	
+		IF NOT pPowdStatRef^.bErr THEN
+			pPowdStatRef^.P_bResetError := FALSE;
+			nStateA_Init := 2;
+		END_IF
+		
+	2:	//Stöße in ReladPos fahren, wenn noch nicht geschehen
+		IF NOT pPowdStatRef^.bOnReloadPos THEN
+			pPowdStatRef^.P_bStartReload := TRUE;
+			nStateA_Init := 3;
+		ELSE
+			nStateA_Init := 80;
+			bIsInit := TRUE;
+		END_IF
+	
+	3:	//Warten bis Stößel in ReloadPos
+		IF pPowdStatRef^.bOnReloadPos THEN
+			pPowdStatRef^.P_bStartReload := FALSE;
+			nStateA_Init := 80;
+			bIsInit := TRUE;	
+		END_IF
+		IF pPowdStatRef^.bError THEN
+			stError.ErrorId := E_ErrorIdCmd.ERRORID_DeviceInErrorState;
+			stError.POUState := nStateA_Init;
+			nStateA_Init := 99;		
+		END_IF
+	
+	70:	//Initialisierung abbrechen
+		pPowdStatRef^.P_bResetError := FALSE;	
+		pPowdStatRef^.P_bStartReload := FALSE;
+		nStateA_Init := 80;
+	
+END_CASE
+
+//Errorhandling
+IF nStateA_Init = 99 THEN
+	stError.Cmd := E_Action.ACTION_Init;
+	stError.POUAction := E_POUACT.POUACT_A_Init;
+	fbErrorList.M_Add(stError);
+END_IF
+]]></ST>
+      </Implementation>
+    </Action>
+    <Action Name="A_Leveling" Id="{9af198ea-cba7-4ce7-8925-aebb713cbe24}">
+      <Implementation>
+        <ST><![CDATA[stError.POUState := nStateA_Leveling;
+
+IF pPowdStatRef^.bError THEN
+	stError.ErrorId := pPowdStatRef^.nError;
+	nStateA_Leveling := 99;
+	pPowdStatRef^.P_bVibrationOn := FALSE;
+END_IF
+
+CASE nStateA_Leveling OF
+	0:	//LevelOffset schreiben
+		fbSdoWrite(sAdsNetID:= pPowdStatRef^.P_sAdsNetId, nPortNr:= pPowdStatRef^.P_nAdsPort, nIndex:= 16#2104,
+					nSubIndex:= 0, nDataLength:= 2, nData:= ABS(nLevelOffset), bExecute:= TRUE);
+		IF NOT fbSdoWrite.bBusy THEN
+			IF fbSdoWrite.bError THEN
+				stError.ErrorId := fbSdoWrite.nAdsErrorId;
+				nStateA_Leveling := 99;
+			ELSE
+				pPowdStatRef^.P_bStartReload := TRUE;
+				nStateA_Leveling := 1;
+			END_IF
+			fbSdoWrite(bExecute:= FALSE);
+		END_IF
+
+	1:	//OnReloadPos?
+		//Timeout
+		timer(IN:=TRUE, PT:= T#5S);
+		IF timer.Q THEN
+			timer(IN:= FALSE);
+			stError.ErrorId := E_ErrorIdCmd.ERRORID_TimeOut;
+			nStateA_Leveling := 99;
+		END_IF
+ 
+		IF pPowdStatRef^.bOnReloadPos THEN
+			timer(IN:=FALSE);
+			pPowdStatRef^.P_bStartReload := FALSE;
+			IF pPowdStatRef^.bLevelSensor THEN
+				stError.ErrorId := E_ErrorIdCmd.ERRORID_PowdDetectOnReloadPos;
+				nStateA_Leveling := 99;				
+			ELSE
+				//ShakerOn, Start Timer
+				pPowdStatRef^.P_bVibrationOn := TRUE;
+				timer(IN:=TRUE, PT:= tShakingTime);
+				nStateA_Leveling := 2;
+			END_IF
+		END_IF
+		
+	2:	//Warten bis Timer abgelaufen
+		timer();
+		IF timer.Q THEN
+			timer(IN:= FALSE);
+			pPowdStatRef^.P_bVibrationOn := FALSE;
+			pPowdStatRef^.P_bStartLeveling := TRUE;
+			nStateA_Leveling := 3;
+		END_IF
+		
+	3:	//Warten bis Leveling fertig
+		IF pPowdStatRef^.bLevelOk THEN
+			pPowdStatRef^.P_bStartLeveling := FALSE;
+			nStateA_Leveling := 80;
+		ELSIF pPowdStatRef^.bLevelLow THEN
+			pPowdStatRef^.P_bStartLeveling := FALSE;
+			stError.ErrorId := E_ErrorIdCmd.ERRORID_PowdLevelLow;
+			nStateA_Leveling := 99;
+		END_IF
+		
+	70:	//Abbrechen
+		pPowdStatRef^.P_bVibrationOn := FALSE;
+		pPowdStatRef^.P_bStartLeveling := FALSE;
+		pPowdStatRef^.P_bStartReload := FALSE;
+		timer(IN:= FALSE);
+		nStateA_Leveling := 80;
+END_CASE
+
+//Errorhandling
+IF nStateA_Leveling = 99 THEN
+	stError.Cmd := E_Action.ACTION_PowdStatLeveling;
+	stError.POUAction := E_POUACT.POUACT_A_Leveling;
+	fbErrorList.M_Add(stError);
+END_IF
+]]></ST>
+      </Implementation>
+    </Action>
+    <Action Name="A_Reload" Id="{24a03cca-cec9-46c3-b079-b48c74f0888e}">
+      <Implementation>
+        <ST><![CDATA[IF pPowdStatRef^.nError > 0 OR pPowdStatRef^.bError THEN
+	stError.POUState := nStateA_Reload;
+	stError.ErrorId := pPowdStatRef^.nError;
+	nStateA_Reload := 99;
+END_IF
+
+CASE nStateA_Reload OF
+	0:
+		pPowdStatRef^.P_bStartReload := TRUE;
+		nStateA_Reload := 1;
+		
+	1:	//Warten bis Stößel in ReloadPos
+		IF pPowdStatRef^.bOnReloadPos THEN
+			pPowdStatRef^.P_bStartReload := FALSE;
+			nStateA_Reload := 80;
+		END_IF
+		
+	70:	//Abbrechen
+		pPowdStatRef^.P_bStartReload := FALSE;
+		nStateA_Reload := 80;
+END_CASE
+
+//Errorhandling
+IF nStateA_Reload = 99 THEN
+	stError.Cmd := E_Action.ACTION_PowdStatShaking;
+	stError.POUAction := E_POUACT.POUACT_A_Shaking;
+	fbErrorList.M_Add(stError);
+END_IF]]></ST>
+      </Implementation>
+    </Action>
+    <Action Name="A_Reset" Id="{c4700a7a-51a8-4e54-96a2-7d985b017dac}">
+      <Implementation>
+        <ST><![CDATA[CASE nStateA_Reset OF
+	0:
+		nStateA_Reset := 80;
+END_CASE]]></ST>
+      </Implementation>
+    </Action>
+    <Action Name="A_Shaking" Id="{20fbec44-bf39-415d-97ac-9d6cdebf546a}">
+      <Implementation>
+        <ST><![CDATA[CASE nStateA_Shaking OF
+	0:	
+		pPowdStatRef^.P_bVibrationOn := TRUE;
+		IF tShakingTime > T#0MS THEN
+			timer(IN:= TRUE, PT:= tShakingTime);
+			nStateA_Shaking := 1;
+		END_IF
+	1:
+		timer();
+		IF timer.Q THEN
+			pPowdStatRef^.P_bVibrationOn := FALSE;
+			timer(IN:= FALSE);
+			nStateA_Shaking := 80;
+		END_IF
+		
+	70:	//Abrechen
+		pPowdStatRef^.P_bVibrationOn := FALSE;
+		timer(IN:=FALSE);
+		nStateA_Shaking := 80;
+END_CASE]]></ST>
+      </Implementation>
+    </Action>
+    <Action Name="A_Stop" Id="{676b63c1-8607-4b12-ab77-55ed4eda0612}">
+      <Implementation>
+        <ST><![CDATA[CASE nStateA_Stop OF
+	0:
+		IF nStateA_Init < 70 AND bInit THEN	//Initialisieren abbrechen
+			nStateA_Init := 70;
+			nStateA_Stop := 1;	
+		END_IF
+		
+		IF nStateA_Leveling < 70 AND bLeveling THEN
+			nStateA_Leveling := 70;
+			nStateA_Stop := 1;
+		END_IF
+		
+		IF nStateA_Shaking < 70 AND bShaking THEN
+			nStateA_Shaking := 70;
+			nStateA_Stop := 1;
+		END_IF
+		
+		IF nStateA_Reload < 70 AND bReload THEN
+			nStateA_Reload := 70;
+			nStateA_Stop := 1;
+		END_IF
+
+	1:	//Warten bis alle Actions fertig abgebrochen
+		IF hList.nCount = 1 THEN	//nur der Eintrag von Stop
+			nStateA_Stop := 80;
+		END_IF
+END_CASE]]></ST>
+      </Implementation>
+    </Action>
+    <Action Name="A_TakePicture" Id="{73868002-d2b5-49e7-8f4e-3556c340ebeb}">
+      <Implementation>
+        <ST><![CDATA[IF nStateA_TakePicture = 0 THEN //Timer starten
+	timerTakePicture(IN:= TRUE, PT:= tDelayTakePicture);
+	IF timerTakePicture.Q THEN
+		timerTakePicture(IN:= FALSE);
+		stInterResponse.eInteractMessageType := E_InteractMessageType.INTERACTMES_NONE;
+		stInteractRequest.eInteractMessageType := E_InteractMessageType.INTERACTMES_WaitForUser;
+		stInteractRequest.nObjectId := nObjectID;
+		stInteractRequest.nArg1 := nRequestArg1;
+		stInteractRequest.nArg2 := nRequestArg2;
+		nStateA_TakePicture := 1;
+	END_IF
+ELSIF nStateA_TakePicture = 1 THEN //Auf InteractResponse warten
+	IF stInterResponse.eInteractMessageType = E_InteractMessageType.INTERACTMES_Continue OR 
+							stInterResponse.eInteractMessageType = E_InteractMessageType.INTERACTMES_Cancel THEN
+		stInteractRequest.eInteractMessageType := E_InteractMessageType.INTERACTMES_NONE;
+		nStateA_TakePicture := 80;
+	END_IF
+ELSIF nStateA_TakePicture = 70 THEN //Abbrechen
+	timerTakePicture(IN:= FALSE);
+	stInteractRequest.eInteractMessageType := E_InteractMessageType.INTERACTMES_NONE;
+	nStateA_TakePicture := 80;
+END_IF]]></ST>
+      </Implementation>
+    </Action>
+    <Method Name="FB_init" Id="{83ad2f6f-e1de-4895-8728-c6d9bac967e3}">
+      <Declaration><![CDATA[METHOD FB_init : BOOL
+VAR_INPUT
+	bInitRetains : BOOL; // if TRUE, the retain variables are initialized (warm start / cold start)
+	bInCopyCode : BOOL;  // if TRUE, the instance afterwards gets moved into the copy code (online change)
+END_VAR
+]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[eObjectType := E_ObjectType.OBJECTTYPE_PowderStation;
+eObjectGroup := E_ObjectGroup.OBJECTGROUP_Target OR E_ObjectGroup.OBJECTGROUP_Device;]]></ST>
+      </Implementation>
+    </Method>
+    <Method Name="M_AddChild" Id="{da09fb19-c3b1-4ff7-bedf-dce70c9d326c}">
+      <Declaration><![CDATA[METHOD M_AddChild : ERRORID
+VAR_INPUT
+	pObject : POINTER TO FB_Object;
+	nSlotNr	: UINT;
+	nIndex 	: INT;	
+END_VAR
+]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[IF pObject > 0 THEN
+	IF nSlotNr = fbVialSlot.P_nNr THEN //Reactor besitzt nur den VialSlot
+		IF fbVialSlot.P_pChild = 0 THEN
+			//Object darf selber noch an keinem Parent hängen
+			IF pObject^.P_pParentObject = 0 THEN
+				fbVialSlot.P_pChild := pObject;
+				pObject^.P_pObjCollectNode := pObjCollectNode^.nodes.M_AddNewNode(pObject,nIndex);
+				pObject^.M_UpdateParent();
+			ELSE
+				M_AddChild := E_ErrorIdObjMgmt.ERRORID_ObjectAlreadyOnAnotherParent;
+			END_IF
+		ELSE //Slot bereits belegt
+			M_AddChild := E_ErrorIdObjMgmt.ERRORID_SlotIsAlreadyOccupied;
+		END_IF		
+	ELSE
+		M_AddChild := SUPER^.M_AddChild(pObject,nSlotNr,nIndex);
+	END_IF
+ELSE
+	M_AddChild := E_ErrorIdObjMgmt.ERRORID_InvalidParentObject;
+END_IF]]></ST>
+      </Implementation>
+    </Method>
+    <Method Name="M_ApplyPos" Id="{7d143e7b-a009-41f1-b29c-4d88705df2bb}">
+      <Declaration><![CDATA[METHOD M_ApplyPos : ERRORID
+VAR_INPUT
+	eTargetRef 		: E_TargetRef;
+	nPointSlotNr	: UINT;
+	stPos 			: ST_3DPoint;
+	bXPos			: BOOL;
+	bYPos			: BOOL;
+	bZPos			: BOOL;	
+END_VAR
+
+VAR
+	stAbsPos		: ST_3DPoint;
+END_VAR]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[IF eTargetRef = E_TargetRef.TARGETREF_SpecPoint THEN
+	IF nPointSlotNr = 1 THEN
+		stAbsPos := P_stAbsPosLB;
+		IF bXPos THEN
+			stPickPoint.X := stPos.X - stAbsPos.X;	
+		END_IF
+		IF bYPos THEN
+			stPickPoint.Y := stPos.Y - stAbsPos.Y;	
+		END_IF
+		IF bZPos THEN
+			stPickPoint.Z := stPos.Z - stAbsPos.Z;	
+		END_IF
+	ELSE
+		M_ApplyPos := E_ErrorIdCmd.ERRORID_InvalidTargetPointNr;
+	END_IF
+ELSE
+	M_ApplyPos := SUPER^.M_ApplyPos(eTargetRef, nPointSlotNr, stPos,bXPos,bYPos,bZPos);
+END_IF
+
+
+
+]]></ST>
+      </Implementation>
+    </Method>
+    <Method Name="M_CancelAction" Id="{da4ba639-c851-40c7-b8e4-d2255a710c24}">
+      <Declaration><![CDATA[METHOD M_CancelAction
+VAR_INPUT
+	eAction : E_Action;
+END_VAR
+]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[CASE eAction OF
+	E_Action.ACTION_PowdStatLeveling:
+		IF bLeveling AND nStateA_Leveling < 70 THEN
+			nStateA_Leveling := 70;
+		END_IF
+	E_Action.ACTION_PowdStatReload:
+		IF bReload AND nStateA_Reload < 70 THEN
+			nStateA_Reload := 70;
+		END_IF	
+	E_Action.ACTION_PowdStatShaking:
+		IF bShaking AND nStateA_Shaking < 70 THEN
+			nStateA_Shaking := 70;
+		END_IF	
+END_CASE]]></ST>
+      </Implementation>
+    </Method>
+    <Method Name="M_CheckAction" Id="{1d82a524-bee6-43c0-ae95-cb6bf2fd31e5}">
+      <Declaration><![CDATA[METHOD M_CheckAction : ERRORID
+VAR_INPUT
+	refActionData 	: REFERENCE TO ST_ActionData;
+	pCorrelObject	: POINTER TO FB_Object;
+END_VAR
+]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[IF refActionData.eAction = E_Action.ACTION_TeachTarget THEN
+	IF NOT DINT_TO_UINT(refActionData.aParams[1]) = E_TargetRef.TARGETREF_SpecPoint AND refActionData.aParams[2] = 1 THEN
+		M_CheckAction := E_ErrorIdCmd.ERRORID_InvalidTargetPointRef;
+	END_IF
+END_IF]]></ST>
+      </Implementation>
+    </Method>
+    <Method Name="M_CheckProcDataType" Id="{38e21c2f-a77b-4748-aaa5-532e91fabfb7}">
+      <Declaration><![CDATA[METHOD M_CheckProcDataType : BOOL
+VAR_INPUT
+	eProcDataType : E_ProcDataType;
+END_VAR
+]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[]]></ST>
+      </Implementation>
+    </Method>
+    <Method Name="M_ClearAllProps" Id="{c56526db-5905-402d-a4a2-83bdc6022188}">
+      <Declaration><![CDATA[METHOD M_ClearAllProps
+VAR_INPUT
+	bIgnoreParent : BOOL; //Es wird das gesamte OD gelöscht. -> Zeiger auf Parent nicht mehr gültig!
+END_VAR
+]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[SUPER^.M_ClearAllProps(bIgnoreParent);
+fbVialSlot.P_pPiece := 0;
+]]></ST>
+      </Implementation>
+    </Method>
+    <Method Name="M_ExeAction" Id="{579a9b3b-96a6-4677-9c10-76da074d9331}">
+      <Declaration><![CDATA[METHOD M_ExeAction : ERRORID
+VAR_INPUT
+	refActionData	: REFERENCE TO ST_ActionData;
+END_VAR
+]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[IF NOT (eCurrentState = E_MachineState.MACHINESTATE_Idle OR
+	eCurrentState = E_MachineState.MACHINESTATE_Active OR
+	eCurrentState = E_MachineState.MACHINESTATE_Ready) THEN
+	M_ExeAction := E_ErrorIdCmd.ERRORID_InvalidState;
+	RETURN;
+END_IF
+
+CASE refActionData.eAction OF
+	E_Action.ACTION_Init:
+		IF NOT bInit THEN
+			IF pPowdStatRef^.P_bNodeEnabled THEN
+				bInit := TRUE;
+				fbList.A_AddHeadValue(hList := hList, putValue:= E_Action.ACTION_Init);
+				bIsInit := FALSE;
+			ELSE
+				M_ExeAction := E_ErrorIdCan.ERRORID_NodeNotFound;
+				RETURN;
+			END_IF
+		ELSE
+			RETURN;
+		END_IF
+		
+	E_Action.ACTION_PowdStatReload:
+		IF NOT bReload THEN
+			bReload := TRUE;
+			fbList.A_AddHeadValue(hList := hList, putValue:= E_Action.ACTION_PowdStatReload);
+		END_IF
+
+	E_Action.ACTION_PowdStatShaking:
+		//Aktion wird direkt hier ausgeführt, da in einem Zyklus ausführbar
+		IF NOT bIsInit THEN
+			M_ExeAction := E_ErrorIdCmd.ERRORID_DeviceNotInitialized;
+			RETURN;
+		END_IF
+		tShakingTime := DINT_TO_TIME(refActionData.aParams[2]);
+		nVibrationPower1 := DINT_TO_UINT(refActionData.aParams[3]);
+		nVibrationPower2 := DINT_TO_UINT(refActionData.aParams[4]);
+		nVibrationPower3 := DINT_TO_UINT(refActionData.aParams[5]);
+		
+		IF bShaking THEN //Falls Shaker schon Ein
+			//Erneuter Einschaltbefehl -> Timer neu setzen
+			IF refActionData.aParams[1] = 1 THEN
+				timer(IN:= FALSE);
+				timer(IN:= TRUE, PT:= tShakingTime);
+			ELSE
+				nStateA_Shaking := 70; //Abbrechen
+			END_IF
+		ELSE
+			IF refActionData.aParams[1] = 1 THEN
+				bShaking := TRUE;
+				fbList.A_AddHeadValue(hList := hList, putValue:= E_Action.ACTION_PowdStatShaking);
+			END_IF
+		END_IF
+		
+	E_Action.ACTION_PowdStatLeveling:
+		IF NOT bIsInit THEN
+			M_ExeAction := E_ErrorIdCmd.ERRORID_DeviceNotInitialized;
+			RETURN;
+		END_IF
+
+		IF NOT bLeveling THEN
+			tShakingTime := DINT_TO_TIME(refActionData.aParams[1]);
+			bLeveling := TRUE;	
+			fbList.A_AddHeadValue(hList := hList, putValue:= E_Action.ACTION_PowdStatLeveling);
+		ELSE
+			RETURN;
+		END_IF
+		
+	E_Action.ACTION_SwitchLight:	//Beleuchtung für die Kamera
+		IF DINT_TO_BOOL(refActionData.aParams[1]) THEN
+			pPowdStatRef^.P_nCameraLight := 1023;
+		ELSE
+			pPowdStatRef^.P_nCameraLight := 0;
+		END_IF
+		RETURN;
+		
+	E_Action.ACTION_TakePicture:
+		IF NOT bTakePicture THEN
+			tDelayTakePicture := DINT_TO_TIME(refActionData.aParams[1]);
+			nRequestArg1 := refActionData.aParams[2];
+			nRequestArg2 := refActionData.aParams[3];
+			bTakePicture := TRUE;
+			fbList.A_AddHeadValue(hList := hList, putValue:= E_Action.ACTION_TakePicture);
+		ELSE
+			RETURN;
+		END_IF	
+		
+	E_Action.ACTION_Stop:
+		//Stop braucht nur ausgeführt werden, wenn irgendwas aktiv ist
+		IF bBusy AND nStateA_Stop = 0 AND hList.nCount > 0 THEN
+			bStop := TRUE;
+			fbList.A_AddHeadValue(hList := hList, putValue := E_Action.ACTION_Stop);
+		ELSE
+			RETURN;
+		END_IF
+	ELSE
+		M_ExeAction := E_ErrorIdCmd.ERRORID_InvalidAction;
+END_CASE
+
+bBusy := TRUE;
+eCurrentState := E_MachineState.MACHINESTATE_Active;]]></ST>
+      </Implementation>
+    </Method>
+    <Method Name="M_GetAbsPos" Id="{fc057d68-31f5-48a8-8a79-a0ff93ef494a}">
+      <Declaration><![CDATA[METHOD M_GetAbsPos : ST_3DPoint
+VAR_INPUT
+	pChildPos	: POINTER TO ST_3DPoint;
+	eTargetRef 	: E_TargetRef;
+	nParam1		: UINT;
+ 	nParam2		: UINT;
+	nParam3		: USINT;
+	nZLevel		: USINT;
+END_VAR
+VAR_OUTPUT
+	nErrorId 	: ERRORID;
+	lrAngle		: LREAL;
+END_VAR
+VAR
+	stLocPosLB : ST_3DPoint;
+END_VAR
+]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[IF eTargetRef = E_TargetRef.TARGETREF_SpecPoint THEN
+	IF nParam1 = 1 THEN	//Pickpoint X
+		stLocPosLB := P_stRelPosLB;
+		stLocPosLB := F_Add3DPoints(stLocPosLB,stPickPoint);
+		M_GetAbsPos := pParentTarget^.M_GetAbsPos(pChildPos := ADR(stLocPosLB), eTargetRef:= E_TargetRef.TARGETREF_LeftBottom,
+													nParam1:= 0,
+													nParam2:= 0, nParam3:= 0,nZLevel:= 0,
+													lrAngle => lrAngle, nErrorId=> nErrorId);		
+	ELSE
+		nErrorId := E_ErrorIdCmd.ERRORID_InvalidTargetPointNr;
+	END_IF
+ELSIF eTargetRef = E_TargetRef.TARGETREF_Slot THEN
+	IF nParam1 = 1 THEN
+		stLocPosLB := P_stRelPosLB;
+		//Slot belegt?
+		IF fbVialSlot.P_pPiece > 0 THEN
+			stLocPosLB := F_Add3DPoints(stLocPosLB, fbVialSlot.P_pPiece^.M_GetRelPosTopCenter());
+		ELSE
+			stLocPosLB := F_Add3DPoints(stLocPosLB,fbVialSlot.P_stRelPos);	
+		END_IF
+		
+		M_GetAbsPos := pParentTarget^.M_GetAbsPos(pChildPos := ADR(stLocPosLB), eTargetRef:= E_TargetRef.TARGETREF_LeftBottom,
+													nParam1:= 0,
+													nParam2:= 0, nParam3:= 0,nZLevel:= 0,
+													lrAngle => lrAngle, nErrorId=> nErrorId);		
+	ELSE
+		nErrorId := E_ErrorIdCmd.ERRORID_InvalidTargetPointNr;
+	END_IF	
+ELSE
+	M_GetAbsPos := SUPER^.M_GetAbsPos(pChildPos := pChildPos, eTargetRef:= eTargetRef,
+													nParam1:= nParam1,
+													nParam2:= nParam2, nParam3:= nParam3, nZLevel:= nZLevel,
+													lrAngle => lrAngle, nErrorId=> nErrorId);		
+END_IF]]></ST>
+      </Implementation>
+    </Method>
+    <Method Name="M_GetActionBusy" Id="{0e10bed9-019d-488a-a1fe-65b9ff228474}">
+      <Declaration><![CDATA[METHOD M_GetActionBusy : BOOL
+VAR_INPUT
+	eAction : E_Action;
+END_VAR
+]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[getPosPtr := 0;(* start from first node element *)
+fbList.A_FindNext( hList := hList, putPosPtr := getPosPtr, putValue := eAction, getValue=>getValue, getPosPtr=>getPosPtr );
+IF fbList.bOk THEN	//Eintrag wurde gefunden, d.h. Action ist noch busy
+	M_GetActionBusy := TRUE;
+END_IF]]></ST>
+      </Implementation>
+    </Method>
+    <Method Name="M_GetAllProps" Id="{428d7a3c-4163-4bc7-8caf-5b8ac0444668}">
+      <Declaration><![CDATA[METHOD M_GetAllProps : ERRORID
+VAR_INPUT
+	refCmdData : REFERENCE TO  ST_CmdData;
+END_VAR
+]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[SUPER^.M_GetAllProps(refCmdData);
+
+nCurrentPropIndex := nCurrentPropIndex + 1;
+refCmdData.n32Data[nCurrentPropIndex] := nNoOfSlots;
+nCurrentPropIndex := nCurrentPropIndex + 1;
+refCmdData.n32Data[nCurrentPropIndex] := fbVialSlot.nNr;
+nCurrentPropIndex := nCurrentPropIndex + 1;
+refCmdData.n32Data[nCurrentPropIndex] := REAL_TO_DINT(fbVialSlot.P_rRelPosX);
+nCurrentPropIndex := nCurrentPropIndex + 1;
+refCmdData.n32Data[nCurrentPropIndex] := REAL_TO_DINT(fbVialSlot.P_rRelPosY);
+nCurrentPropIndex := nCurrentPropIndex + 1;
+refCmdData.n32Data[nCurrentPropIndex] := REAL_TO_DINT(fbVialSlot.P_rRelPosZ);
+nCurrentPropIndex := nCurrentPropIndex + 1;
+refCmdData.n32Data[nCurrentPropIndex] := REAL_TO_DINT(fbVialSlot.P_rDepth);
+
+nCurrentPropIndex := nCurrentPropIndex + 1;
+refCmdData.n32Data[nCurrentPropIndex] := nNoOfSpecPoints;
+nCurrentPropIndex := nCurrentPropIndex + 1;
+refCmdData.n32Data[nCurrentPropIndex] := REAL_TO_DINT(stPickPoint.X);
+nCurrentPropIndex := nCurrentPropIndex + 1;
+refCmdData.n32Data[nCurrentPropIndex] := REAL_TO_DINT(stPickPoint.Y);
+nCurrentPropIndex := nCurrentPropIndex + 1;
+refCmdData.n32Data[nCurrentPropIndex] := REAL_TO_DINT(stPickPoint.Z);
+nCurrentPropIndex := nCurrentPropIndex + 1;
+refCmdData.n32Data[nCurrentPropIndex] := pPowdStatRef^.nPidKp;
+nCurrentPropIndex := nCurrentPropIndex + 1;
+refCmdData.n32Data[nCurrentPropIndex] := pPowdStatRef^.nPidKi;
+nCurrentPropIndex := nCurrentPropIndex + 1;
+refCmdData.n32Data[nCurrentPropIndex] := pPowdStatRef^.nPidKd;
+nCurrentPropIndex := nCurrentPropIndex + 1;
+refCmdData.n32Data[nCurrentPropIndex] := pPowdStatRef^.nPidTa;
+nCurrentPropIndex := nCurrentPropIndex + 1;
+refCmdData.n32Data[nCurrentPropIndex] := pPowdStatRef^.nVibrationPower1;
+nCurrentPropIndex := nCurrentPropIndex + 1;
+refCmdData.n32Data[nCurrentPropIndex] := pPowdStatRef^.nVibrationPower2;
+nCurrentPropIndex := nCurrentPropIndex + 1;
+refCmdData.n32Data[nCurrentPropIndex] := pPowdStatRef^.nVibrationPower3;
+nCurrentPropIndex := nCurrentPropIndex + 1;
+refCmdData.n32Data[nCurrentPropIndex] := nLevelOffset;
+
+]]></ST>
+      </Implementation>
+    </Method>
+    <Method Name="M_GetProcData" Id="{ee0062c2-5c52-4986-99ec-2a7d36bd0cfc}">
+      <Declaration><![CDATA[METHOD M_GetProcData : DINT
+VAR_INPUT
+	eProcDataType : E_ProcDataType;
+END_VAR
+]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[]]></ST>
+      </Implementation>
+    </Method>
+    <Method Name="M_GetSlot" Id="{682d15d1-d30e-4da0-adf0-56a10503004e}">
+      <Declaration><![CDATA[METHOD M_GetSlot : POINTER TO FB_Slot
+VAR_INPUT
+	nSlotNr : UINT;
+END_VAR
+]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[IF nSlotNr = 1 THEN
+	M_GetSlot := ADR(fbVialSlot);
+END_IF
+]]></ST>
+      </Implementation>
+    </Method>
+    <Method Name="M_GetSlotFromChild" Id="{ad755d87-9622-4ff3-908e-23efa6514c16}">
+      <Declaration><![CDATA[METHOD M_GetSlotFromChild : POINTER TO FB_Slot
+VAR_INPUT
+	pObject : POINTER TO FB_Object;
+END_VAR]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[IF fbVialSlot.P_pChild = pObject THEN
+	M_GetSlotFromChild := ADR(fbVialSlot);
+END_IF]]></ST>
+      </Implementation>
+    </Method>
+    <Method Name="M_RemoveListEntry" Id="{aa230f4f-e4e4-4cc1-9942-6b66807a12e6}">
+      <Declaration><![CDATA[METHOD M_RemoveListEntry : BOOL
+VAR_INPUT
+	nSearchValue : E_Action;
+END_VAR
+]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[getPosPtr := 0;(* start from first node element *)
+fbList.A_FindNext( hList := hList, putPosPtr := getPosPtr, putValue := nSearchValue, getValue=>getValue, getPosPtr=>getPosPtr );
+IF fbList.bOk THEN	//Eintrag wurde gefunden
+	fbList.A_RemoveValueAtPosPtr(hList:= hList,	putPosPtr:= getPosPtr);
+	IF fbList.bOk THEN
+		M_RemoveListEntry := TRUE;
+	END_IF
+END_IF
+]]></ST>
+      </Implementation>
+    </Method>
+    <Method Name="M_SetAllProps" Id="{643b6824-b05d-49fa-992f-371209d8836b}">
+      <Declaration><![CDATA[METHOD M_SetAllProps : ERRORID
+VAR_INPUT
+	refCmdData : REFERENCE TO  ST_CmdData;
+END_VAR
+]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[M_SetAllProps := SUPER^.M_SetAllProps(refCmdData);
+
+IF M_SetAllProps > 0 THEN
+	RETURN;
+END_IF
+
+nCurrentPropIndex := nCurrentPropIndex + 1;
+nSpecPropIndex := nCurrentPropIndex;
+//NumberOfSlots immer "1"
+nNoOfSlots := DINT_TO_USINT(refCmdData.n32Data[nCurrentPropIndex]);
+IF nNoOfSlots <> 1 THEN
+	nNoOfSlots := 1;
+	M_SetAllProps := E_ErrorIdObjMgmt.ERRORID_InvalidNoOfSlots;
+	RETURN;
+END_IF
+nCurrentPropIndex := nCurrentPropIndex + 1;
+fbVialSlot.P_nNr := DINT_TO_UINT(refCmdData.n32Data[nCurrentPropIndex]);
+//SlotNr immer "1"
+IF fbVialSlot.P_nNr <> 1 THEN
+	fbVialSlot.P_nNr := 1;
+	M_SetAllProps := E_ErrorIdObjMgmt.ERRORID_InvalidSlotNumber;
+	RETURN;
+END_IF
+
+nCurrentPropIndex := nCurrentPropIndex + 1;
+fbVialSlot.P_rRelPosX := DINT_TO_REAL(refCmdData.n32Data[nCurrentPropIndex]);
+nCurrentPropIndex := nCurrentPropIndex + 1;
+fbVialSlot.P_rRelPosY := DINT_TO_REAL(refCmdData.n32Data[nCurrentPropIndex]);
+nCurrentPropIndex := nCurrentPropIndex + 1;
+fbVialSlot.P_rRelPosZ := DINT_TO_REAL(refCmdData.n32Data[nCurrentPropIndex]);
+nCurrentPropIndex := nCurrentPropIndex + 1;
+fbVialSlot.P_rDepth := DINT_TO_REAL(refCmdData.n32Data[nCurrentPropIndex]);
+
+{IF defined (variable:aFbPowderStatRef)}
+nCurrentPropIndex := nCurrentPropIndex + 1;
+nSpecPropIndex := nCurrentPropIndex;
+nNoOfSpecPoints := DINT_TO_USINT(refCmdData.n32Data[nCurrentPropIndex]);
+nCurrentPropIndex := nCurrentPropIndex + 1;
+stPickPoint.X := DINT_TO_REAL(refCmdData.n32Data[nCurrentPropIndex]);
+nCurrentPropIndex := nCurrentPropIndex + 1;
+stPickPoint.Y := DINT_TO_REAL(refCmdData.n32Data[nCurrentPropIndex]);
+nCurrentPropIndex := nCurrentPropIndex + 1;
+stPickPoint.Z := DINT_TO_REAL(refCmdData.n32Data[nCurrentPropIndex]);
+nCurrentPropIndex := nCurrentPropIndex + 1;
+pPowdStatRef := ADR(aFbPowderStatRef[1]);
+pPowdStatRef^.P_nPidKp := DINT_TO_UINT(refCmdData.n32Data[nCurrentPropIndex]);
+nCurrentPropIndex := nCurrentPropIndex + 1;
+pPowdStatRef^.P_nPidKi := DINT_TO_UINT(refCmdData.n32Data[nCurrentPropIndex]);
+nCurrentPropIndex := nCurrentPropIndex + 1;
+pPowdStatRef^.P_nPidKd := DINT_TO_UINT(refCmdData.n32Data[nCurrentPropIndex]);
+nCurrentPropIndex := nCurrentPropIndex + 1;
+pPowdStatRef^.P_nPidTa := DINT_TO_USINT(refCmdData.n32Data[nCurrentPropIndex]);
+nCurrentPropIndex := nCurrentPropIndex + 1;
+pPowdStatRef^.P_nVibrationPower1 := DINT_TO_UINT(refCmdData.n32Data[nCurrentPropIndex]);
+nCurrentPropIndex := nCurrentPropIndex + 1;
+pPowdStatRef^.P_nVibrationPower2 := DINT_TO_UINT(refCmdData.n32Data[nCurrentPropIndex]);
+nCurrentPropIndex := nCurrentPropIndex + 1;
+pPowdStatRef^.P_nVibrationPower3 := DINT_TO_UINT(refCmdData.n32Data[nCurrentPropIndex]);
+{ELSE}
+M_SetAllProps := E_ErrorIdObjMgmt.ERRORID_InvalidHardwareRef;
+RETURN;
+{END_IF}
+nCurrentPropIndex := nCurrentPropIndex + 1;
+nLevelOffset := refCmdData.n32Data[nCurrentPropIndex];
+nNoOfProps := nCurrentPropIndex + 1;]]></ST>
+      </Implementation>
+    </Method>
+    <Method Name="M_SetSingleProp" Id="{5c670c18-75a2-4592-abc4-6cdeadd0b5ea}">
+      <Declaration><![CDATA[METHOD M_SetSingleProp : ERRORID
+VAR_INPUT
+	refCmdData : REFERENCE TO  ST_CmdData;
+END_VAR
+]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[IF nSpecPropIndex = refCmdData.aHeader[1] THEN
+	M_SetSingleProp := E_ErrorIdCmd.ERRORID_InvalidProperty; //Anzahl Specpoints darf nicht verändert werden
+ELSIF (nSpecPropIndex + 1) = refCmdData.aHeader[1] THEN
+	stPickPoint.X := DINT_TO_REAL(refCmdData.n32Data[0]);
+ELSIF (nSpecPropIndex + 2) = refCmdData.aHeader[1] THEN
+	stPickPoint.Y := DINT_TO_REAL(refCmdData.n32Data[0]);
+ELSIF (nSpecPropIndex + 3) = refCmdData.aHeader[1] THEN
+	stPickPoint.Z := DINT_TO_REAL(refCmdData.n32Data[0]);
+ELSIF (nSpecPropIndex + 4) = refCmdData.aHeader[1] THEN
+	pPowdStatRef^.P_nPidKp := DINT_TO_UINT(refCmdData.n32Data[0]);
+ELSIF (nSpecPropIndex + 5) = refCmdData.aHeader[1] THEN
+	pPowdStatRef^.P_nPidKi := DINT_TO_UINT(refCmdData.n32Data[0]);
+ELSIF (nSpecPropIndex + 6) = refCmdData.aHeader[1] THEN
+	pPowdStatRef^.P_nPidKd := DINT_TO_UINT(refCmdData.n32Data[0]);
+ELSIF (nSpecPropIndex + 7) = refCmdData.aHeader[1] THEN
+	pPowdStatRef^.P_nPidTa := DINT_TO_USINT(refCmdData.n32Data[0]);
+ELSIF (nSpecPropIndex + 8) = refCmdData.aHeader[1] THEN
+	pPowdStatRef^.P_nVibrationPower1 := DINT_TO_UINT(refCmdData.n32Data[0]);
+ELSIF (nSpecPropIndex + 9) = refCmdData.aHeader[1] THEN
+	pPowdStatRef^.P_nVibrationPower2 := DINT_TO_UINT(refCmdData.n32Data[0]);
+ELSIF (nSpecPropIndex + 10) = refCmdData.aHeader[1] THEN
+	pPowdStatRef^.P_nVibrationPower3 := DINT_TO_UINT(refCmdData.n32Data[0]);
+ELSIF (nSpecPropIndex + 11) = refCmdData.aHeader[1] THEN
+	nLevelOffset := refCmdData.n32Data[0];
+ELSE
+	M_SetSingleProp := SUPER^.M_SetSingleProp(refCmdData);
+END_IF]]></ST>
+      </Implementation>
+    </Method>
+    <Method Name="M_SetSpeed" Id="{163173ed-417a-400b-a2e3-1779a3778811}">
+      <Declaration><![CDATA[METHOD PRIVATE M_SetSpeed : BOOL
+VAR_INPUT
+	nSpeed : UDINT;
+END_VAR
+
+VAR_OUTPUT
+	nErrorId	: ERRORID;
+END_VAR
+]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[(*//Profile Speed setzen
+fbSdoWrite(sADSNetID:= stPowdStatRef.stAdsAdress.sNetId,nPortNr:= stPowdStatRef.stAdsAdress.nPort, 
+			nIndex:= 16#6081, nSubIndex:= 0, nDataLength:= 4, nData:= UDINT_TO_DINT(nSpeed), bExecute:= TRUE);
+
+M_SetSpeed := fbSdoWrite.bBusy; 
+
+IF NOT fbSdoWrite.bBusy THEN
+	IF fbSdoWrite.bError THEN
+		nErrorId := fbSdoWrite.nAdsErrorId;
+	END_IF
+	fbSdoWrite(bExecute:= FALSE);
+END_IF			
+*)
+
+]]></ST>
+      </Implementation>
+    </Method>
+    <Method Name="M_Stop" Id="{b49afc43-ce32-43e7-b158-d3e638932d39}">
+      <Declaration><![CDATA[METHOD M_Stop : ERRORID
+VAR_INPUT
+END_VAR
+]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[//Stop braucht nur ausgeführt werden, wenn irgendwas aktiv ist
+IF NOT bStop AND eCurrentState = E_MachineState.MACHINESTATE_Active THEN
+ 	//stPowdStatRef.bShaker := FALSE;
+	bStop := TRUE;
+	fbList.A_AddHeadValue(hList := hList, putValue := E_Action.ACTION_Stop);
+END_IF]]></ST>
+      </Implementation>
+    </Method>
+    <Property Name="P_bVialSensor" Id="{7a9d9d0b-8e87-4baa-81aa-44687999c705}">
+      <Declaration><![CDATA[PROPERTY P_bVialSensor : BOOL]]></Declaration>
+      <Get Name="Get" Id="{bc6583be-c1e2-49b0-84ce-840e0cc98c3c}">
+        <Declaration><![CDATA[VAR
+END_VAR
+]]></Declaration>
+        <Implementation>
+          <ST><![CDATA[P_bVialSensor := pPowdStatRef^.P_bVialSensor;]]></ST>
+        </Implementation>
+      </Get>
+    </Property>
+    <Property Name="P_pVial" Id="{2127a3e5-4e9b-497a-8e56-db197481e464}">
+      <Declaration><![CDATA[PROPERTY P_pVial : POINTER TO FB_Vial]]></Declaration>
+      <Get Name="Get" Id="{96d742cd-e7e5-4c80-a8c2-ea3fbef49406}">
+        <Declaration><![CDATA[VAR
+END_VAR
+]]></Declaration>
+        <Implementation>
+          <ST><![CDATA[P_pVial := fbVialSlot.P_pPiece;]]></ST>
+        </Implementation>
+      </Get>
+      <Set Name="Set" Id="{0577dcc8-a490-4e34-b0fd-555b9bd66e2c}">
+        <Declaration><![CDATA[VAR
+END_VAR
+]]></Declaration>
+        <Implementation>
+          <ST><![CDATA[fbVialSlot.P_pPiece := P_pVial;]]></ST>
+        </Implementation>
+      </Set>
+    </Property>
+    <LineIds Name="FB_PowderStation">
+      <LineId Id="3" Count="58" />
+      <LineId Id="283" Count="11" />
+      <LineId Id="62" Count="63" />
+      <LineId Id="236" Count="0" />
+      <LineId Id="126" Count="1" />
+      <LineId Id="234" Count="0" />
+      <LineId Id="192" Count="1" />
+      <LineId Id="195" Count="1" />
+      <LineId Id="194" Count="0" />
+      <LineId Id="191" Count="0" />
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="FB_PowderStation.A_Init">
+      <LineId Id="2" Count="52" />
+      <LineId Id="1" Count="0" />
+    </LineIds>
+    <LineIds Name="FB_PowderStation.A_Leveling">
+      <LineId Id="2" Count="8" />
+      <LineId Id="80" Count="0" />
+      <LineId Id="83" Count="0" />
+      <LineId Id="85" Count="1" />
+      <LineId Id="88" Count="0" />
+      <LineId Id="95" Count="0" />
+      <LineId Id="90" Count="0" />
+      <LineId Id="92" Count="0" />
+      <LineId Id="98" Count="0" />
+      <LineId Id="93" Count="0" />
+      <LineId Id="91" Count="0" />
+      <LineId Id="96" Count="0" />
+      <LineId Id="89" Count="0" />
+      <LineId Id="94" Count="0" />
+      <LineId Id="24" Count="55" />
+      <LineId Id="1" Count="0" />
+    </LineIds>
+    <LineIds Name="FB_PowderStation.A_Reload">
+      <LineId Id="2" Count="26" />
+      <LineId Id="1" Count="0" />
+    </LineIds>
+    <LineIds Name="FB_PowderStation.A_Reset">
+      <LineId Id="2" Count="2" />
+      <LineId Id="1" Count="0" />
+    </LineIds>
+    <LineIds Name="FB_PowderStation.A_Shaking">
+      <LineId Id="2" Count="18" />
+      <LineId Id="1" Count="0" />
+    </LineIds>
+    <LineIds Name="FB_PowderStation.A_Stop">
+      <LineId Id="2" Count="25" />
+      <LineId Id="1" Count="0" />
+    </LineIds>
+    <LineIds Name="FB_PowderStation.A_TakePicture">
+      <LineId Id="1" Count="0" />
+      <LineId Id="8" Count="0" />
+      <LineId Id="12" Count="0" />
+      <LineId Id="14" Count="0" />
+      <LineId Id="18" Count="0" />
+      <LineId Id="17" Count="0" />
+      <LineId Id="34" Count="0" />
+      <LineId Id="26" Count="0" />
+      <LineId Id="28" Count="0" />
+      <LineId Id="16" Count="0" />
+      <LineId Id="15" Count="0" />
+      <LineId Id="7" Count="0" />
+      <LineId Id="19" Count="1" />
+      <LineId Id="32" Count="0" />
+      <LineId Id="22" Count="0" />
+      <LineId Id="21" Count="0" />
+      <LineId Id="29" Count="1" />
+      <LineId Id="33" Count="0" />
+      <LineId Id="31" Count="0" />
+      <LineId Id="3" Count="0" />
+    </LineIds>
+    <LineIds Name="FB_PowderStation.FB_init">
+      <LineId Id="7" Count="1" />
+    </LineIds>
+    <LineIds Name="FB_PowderStation.M_AddChild">
+      <LineId Id="3" Count="18" />
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="FB_PowderStation.M_ApplyPos">
+      <LineId Id="3" Count="20" />
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="FB_PowderStation.M_CancelAction">
+      <LineId Id="3" Count="12" />
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="FB_PowderStation.M_CheckAction">
+      <LineId Id="3" Count="3" />
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="FB_PowderStation.M_CheckProcDataType">
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="FB_PowderStation.M_ClearAllProps">
+      <LineId Id="3" Count="1" />
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="FB_PowderStation.M_ExeAction">
+      <LineId Id="3" Count="9" />
+      <LineId Id="98" Count="0" />
+      <LineId Id="103" Count="2" />
+      <LineId Id="101" Count="1" />
+      <LineId Id="106" Count="0" />
+      <LineId Id="100" Count="0" />
+      <LineId Id="16" Count="47" />
+      <LineId Id="83" Count="1" />
+      <LineId Id="89" Count="1" />
+      <LineId Id="92" Count="1" />
+      <LineId Id="91" Count="0" />
+      <LineId Id="85" Count="0" />
+      <LineId Id="64" Count="0" />
+      <LineId Id="111" Count="1" />
+      <LineId Id="116" Count="7" />
+      <LineId Id="113" Count="0" />
+      <LineId Id="65" Count="13" />
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="FB_PowderStation.M_GetAbsPos">
+      <LineId Id="18" Count="0" />
+      <LineId Id="21" Count="0" />
+      <LineId Id="31" Count="0" />
+      <LineId Id="26" Count="0" />
+      <LineId Id="33" Count="2" />
+      <LineId Id="32" Count="0" />
+      <LineId Id="28" Count="1" />
+      <LineId Id="27" Count="0" />
+      <LineId Id="52" Count="0" />
+      <LineId Id="54" Count="14" />
+      <LineId Id="53" Count="0" />
+      <LineId Id="19" Count="0" />
+      <LineId Id="23" Count="2" />
+      <LineId Id="22" Count="0" />
+      <LineId Id="20" Count="0" />
+    </LineIds>
+    <LineIds Name="FB_PowderStation.M_GetActionBusy">
+      <LineId Id="3" Count="3" />
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="FB_PowderStation.M_GetAllProps">
+      <LineId Id="3" Count="0" />
+      <LineId Id="39" Count="11" />
+      <LineId Id="38" Count="0" />
+      <LineId Id="4" Count="22" />
+      <LineId Id="33" Count="0" />
+      <LineId Id="32" Count="0" />
+      <LineId Id="27" Count="0" />
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="FB_PowderStation.M_GetProcData">
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="FB_PowderStation.M_GetSlot">
+      <LineId Id="3" Count="2" />
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="FB_PowderStation.M_GetSlotFromChild">
+      <LineId Id="7" Count="1" />
+      <LineId Id="6" Count="0" />
+    </LineIds>
+    <LineIds Name="FB_PowderStation.M_RemoveListEntry">
+      <LineId Id="3" Count="7" />
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="FB_PowderStation.M_SetAllProps">
+      <LineId Id="3" Count="4" />
+      <LineId Id="53" Count="25" />
+      <LineId Id="52" Count="0" />
+      <LineId Id="8" Count="10" />
+      <LineId Id="41" Count="0" />
+      <LineId Id="19" Count="17" />
+      <LineId Id="46" Count="1" />
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="FB_PowderStation.M_SetSingleProp">
+      <LineId Id="3" Count="21" />
+      <LineId Id="32" Count="0" />
+      <LineId Id="31" Count="0" />
+      <LineId Id="25" Count="1" />
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="FB_PowderStation.M_SetSpeed">
+      <LineId Id="3" Count="13" />
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="FB_PowderStation.M_Stop">
+      <LineId Id="3" Count="4" />
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="FB_PowderStation.P_bVialSensor.Get">
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="FB_PowderStation.P_pVial.Get">
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="FB_PowderStation.P_pVial.Set">
+      <LineId Id="2" Count="0" />
+    </LineIds>
+  </POU>
+</TcPlcObject>

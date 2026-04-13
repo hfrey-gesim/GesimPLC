@@ -1,0 +1,121 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<TcPlcObject Version="1.1.0.1" ProductVersion="3.1.4024.11">
+  <POU Name="FB_TMCM1140_Rotate" Id="{77ba5b88-0b02-4bd4-b03d-c28e45c11b5e}" SpecialFunc="None">
+    <Declaration><![CDATA[FUNCTION_BLOCK FB_TMCM1140_Rotate
+VAR_INPUT
+	bExecute	: BOOL;
+	bStop		: BOOL;
+	bCCW		: BOOL;
+	nSpeed		: DINT; //Reale Einheit/s //wenn -1, dann wird ProfileSpeed genommen
+END_VAR
+VAR_OUTPUT
+	bBusy 		: BOOL;
+	bError 		: BOOL;
+	nErrorId 	: ERRORID;	
+END_VAR
+VAR_IN_OUT
+	pHwRef : POINTER TO FB_HwRefTMCM1140;
+END_VAR
+VAR
+	nState 			: USINT;
+	nCurrentSpeed 	: DINT;
+	bCurrentCCW		: BOOL;	
+END_VAR]]></Declaration>
+    <Implementation>
+      <ST><![CDATA[IF bExecute THEN
+	IF NOT pHwRef^.M_GetDS402State() = E_CoDS402States.DS402STATE_OperationEnabled THEN
+		nErrorID := E_ErrorIdDS402.ERRORID_OperationNotEnabled;
+		nState := 99;
+	END_IF
+	
+	IF nState = 0 THEN
+		bBusy := TRUE;
+		
+		IF nSpeed = -1 THEN
+			nSpeed := pHwRef^.P_nMaxSpeed;
+		END_IF
+		
+		IF NOT pHwRef^.M_SetVLSpeed(nSpeed, bCCW) THEN
+			nErrorID := E_ErrorIdHwGeneral.ERRORID_InvalidSpeed;
+			nState := 99;
+		ELSE
+			nCurrentSpeed := nSpeed;
+			bCurrentCCW := bCCW;
+			pHwRef^.nMode := 2;
+			nState := 1;
+		END_IF
+		
+	ELSIF nState = 1 THEN
+		IF bStop THEN
+			pHwRef^.M_SetVLSpeed(0, FALSE);
+			nState := 2;
+		ELSE
+			IF nSpeed <> nCurrentSpeed OR bCCW <> bCurrentCCW THEN
+				IF pHwRef^.M_SetVLSpeed(nSpeed, bCCW) THEN
+					nCurrentSpeed := nSpeed;
+					bCurrentCCW := bCCW;
+				END_IF
+			END_IF
+			
+		END_IF
+	ELSIF nState = 2 THEN
+		IF NOT pHwRef^.P_bIsMoving THEN
+			nState := 80;
+		END_IF
+	END_IF
+	
+	IF nState >= 80 THEN
+		bBusy := FALSE;
+		IF nState = 99 THEN
+			bError := TRUE;
+		END_IF
+	END_IF
+
+ELSE
+	bBusy := FALSE;
+	bError := FALSE;
+	bStop := FALSE;
+	nState := 0;	
+END_IF]]></ST>
+    </Implementation>
+    <LineIds Name="FB_TMCM1140_Rotate">
+      <LineId Id="37" Count="0" />
+      <LineId Id="432" Count="3" />
+      <LineId Id="431" Count="0" />
+      <LineId Id="60" Count="0" />
+      <LineId Id="375" Count="0" />
+      <LineId Id="483" Count="0" />
+      <LineId Id="379" Count="3" />
+      <LineId Id="421" Count="0" />
+      <LineId Id="425" Count="2" />
+      <LineId Id="441" Count="1" />
+      <LineId Id="439" Count="0" />
+      <LineId Id="428" Count="0" />
+      <LineId Id="424" Count="0" />
+      <LineId Id="73" Count="0" />
+      <LineId Id="429" Count="0" />
+      <LineId Id="443" Count="1" />
+      <LineId Id="448" Count="0" />
+      <LineId Id="446" Count="0" />
+      <LineId Id="449" Count="1" />
+      <LineId Id="458" Count="1" />
+      <LineId Id="454" Count="0" />
+      <LineId Id="451" Count="0" />
+      <LineId Id="447" Count="0" />
+      <LineId Id="445" Count="0" />
+      <LineId Id="430" Count="0" />
+      <LineId Id="461" Count="2" />
+      <LineId Id="62" Count="0" />
+      <LineId Id="124" Count="0" />
+      <LineId Id="114" Count="0" />
+      <LineId Id="219" Count="0" />
+      <LineId Id="221" Count="2" />
+      <LineId Id="220" Count="0" />
+      <LineId Id="42" Count="0" />
+      <LineId Id="41" Count="0" />
+      <LineId Id="45" Count="1" />
+      <LineId Id="143" Count="0" />
+      <LineId Id="43" Count="1" />
+    </LineIds>
+  </POU>
+</TcPlcObject>

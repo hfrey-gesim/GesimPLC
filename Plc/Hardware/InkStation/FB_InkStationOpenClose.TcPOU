@@ -1,0 +1,98 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<TcPlcObject Version="1.1.0.1" ProductVersion="3.1.4020.6">
+  <POU Name="FB_InkStationOpenClose" Id="{2364ba33-f948-4488-bcd1-8fa323238bd9}" SpecialFunc="None">
+    <Declaration><![CDATA[FUNCTION_BLOCK FB_InkStationOpenClose
+VAR_INPUT
+	pDriveRef		: POINTER TO FB_HwRefInkStatDriveCover;
+	eCtrl			: E_OpClCtrl;
+	bExecute		: BOOL;	
+END_VAR
+VAR_OUTPUT
+	bBusy		: BOOL;
+	bError		: BOOL;
+	nErrorId	: ERRORID;	
+END_VAR
+VAR
+	nState		: USINT;
+	timer		: TON;
+END_VAR
+]]></Declaration>
+    <Implementation>
+      <ST><![CDATA[IF bExecute THEN
+	CASE nState OF
+		0:
+			IF pDriveRef = 0 THEN
+				bError := TRUE;
+				RETURN;		
+			END_IF
+			nState := 1;
+			bBusy := TRUE;
+			pDriveRef^.P_eCoverState := E_OpClState.UNDEFINED;
+			IF NOT pDriveRef^.bIsInit THEN
+				bBusy := FALSE;
+				bError:= TRUE;
+				nErrorId := E_ErrorIdCmd.ERRORID_DeviceNotInitialized;
+				nState := 99;
+			ELSE
+				IF eCtrl = E_OpClCtrl.Open THEN
+					pDriveRef^.nTargetPos := 102000;
+				ELSE
+					pDriveRef^.nTargetPos := -14000;
+				END_IF
+				pDriveRef^.nControl := 31;
+			END_IF
+			
+		1:	//Warten auf Setpoint ACK
+			timer(IN:=TRUE, PT:= T#100MS);
+			IF pDriveRef^.nStatus.12 THEN
+				timer(IN:=FALSE);
+				pDriveRef^.nControl := 15;
+				nState := 2;
+			END_IF
+			IF timer.Q THEN
+				bBusy := FALSE;
+				bError := TRUE;
+				nErrorId := E_ErrorIdMultiZ.ERRORID_ToWaitSetPointAck;
+				nState := 99;
+			END_IF
+			
+		2:	//Warten auf Target reached
+			timer(IN:=TRUE, PT:= T#5S);
+			IF pDriveRef^.nStatus.10 THEN
+				bBusy := FALSE;
+				timer(IN:= FALSE);
+				//Abfrage auf Endschalter
+				IF eCtrl = E_OpClCtrl.Open THEN //Öffnen
+					pDriveRef^.P_eCoverState := E_OpClState.Open;
+					IF NOT pDriveRef^.bOpenSwitch THEN
+						pDriveRef^.P_eCoverState := E_OpClState.UNDEFINED;
+						bError := TRUE;
+						nErrorId := E_ErrorIdCmd.ERRORID_CoverNotOpen;
+						nState := 99; //Error, Deckel nicht richtig offen
+					END_IF
+				ELSE //Schließen
+					pDriveRef^.P_eCoverState := E_OpClState.Closed;
+					IF NOT pDriveRef^.bClosedSwitch THEN
+						pDriveRef^.P_eCoverState := E_OpClState.UNDEFINED;
+						bError := TRUE;
+						nErrorId := E_ErrorIdCmd.ERRORID_CoverNotClosed;
+						nState := 99; //Error, Deckel nicht richtig geschlossen
+					END_IF
+				END_IF
+			END_IF
+			IF timer.Q THEN
+				bBusy := FALSE;
+				bError := TRUE;
+				nErrorId := E_ErrorIdMultiZ.ERRORID_ToWaitTrgtReached;
+				nState := 99;
+			END_IF
+	END_CASE
+ELSE
+	bError := FALSE;
+	nState := 0;
+	nErrorId := 0;
+	timer(IN:= FALSE);
+END_IF]]></ST>
+    </Implementation>
+  </POU>
+</TcPlcObject>

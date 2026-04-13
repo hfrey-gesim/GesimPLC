@@ -1,0 +1,19 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<TcPlcObject Version="1.1.0.1" ProductVersion="3.1.4024.11">
+  <DUT Name="E_EL70xx_StartType" Id="{06b6a880-7323-4fcc-918c-46298f5f1ef9}">
+    <Declaration><![CDATA[{attribute 'qualified_only'}
+TYPE E_EL70xx_StartType :
+(
+	Absolute := 16#0001,
+	Relative := 16#0002,
+	EndlessPlus := 16#0003,
+	EndlessMinus := 16#0004,
+	CaliPlcCam := 16#6000,
+	CaliHwSync := 16#6100,
+	SetCalibration := 16#6E00,
+	ClearCalibration := 16#6F00
+)UINT;
+END_TYPE
+]]></Declaration>
+  </DUT>
+</TcPlcObject>

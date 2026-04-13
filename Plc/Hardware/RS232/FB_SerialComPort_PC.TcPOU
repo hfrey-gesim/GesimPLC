@@ -1,0 +1,39 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<TcPlcObject Version="1.1.0.1" ProductVersion="3.1.4024.6">
+  <POU Name="FB_SerialComPort_PC" Id="{0a4a3ace-3b11-4669-8da4-3617eacde692}" SpecialFunc="None">
+    <Declaration><![CDATA[FUNCTION_BLOCK FB_SerialComPort_PC EXTENDS FB_SerialComPort_Base
+VAR_INPUT
+END_VAR
+VAR_OUTPUT
+END_VAR
+VAR
+	InData	AT %I* 			: Tc2_SerialCom.PcComInData;
+	OutData	AT %Q* 			: Tc2_SerialCom.PcComOutData;
+	fbSerialLineControl 	: Tc2_SerialCom.SerialLineControl;
+	nErrorIDSerialCom		: Tc2_SerialCom.ComError_t;
+	nState					: USINT;	
+END_VAR
+]]></Declaration>
+    <Implementation>
+      <ST><![CDATA[SUPER^();
+//wird direkt mit einem Hardware-Com-Port gemappt
+IF nState = 0 THEN
+	fbSerialLineControl(Mode:= Tc2_SerialCom.SERIALLINEMODE_DEFAULT,
+					pComIn:= ADR(InData), 
+					pComOut:= ADR(OutData), 
+					SizeComIn:= DINT_TO_INT(SIZEOF(InData)), 
+					ErrorID=> nErrorIDSerialCom, 
+					TxBuffer:= TxBufferSerialCom, 
+					RxBuffer:= RxBufferSerialCom );
+	IF fbSerialLineControl.Error THEN
+		nState := 99;
+	END_IF				
+END_IF]]></ST>
+    </Implementation>
+    <LineIds Name="FB_SerialComPort_PC">
+      <LineId Id="39" Count="0" />
+      <LineId Id="15" Count="11" />
+      <LineId Id="2" Count="0" />
+    </LineIds>
+  </POU>
+</TcPlcObject>

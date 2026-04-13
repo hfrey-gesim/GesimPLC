@@ -1,0 +1,92 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<TcPlcObject Version="1.1.0.1" ProductVersion="3.1.4024.11">
+  <POU Name="FB_FDM_EL2521_Ref" Id="{d33781aa-cc03-4ae1-a1d7-a4f6e7c69809}" SpecialFunc="None">
+    <Declaration><![CDATA[FUNCTION_BLOCK FB_FDM_EL2521_Ref EXTENDS FB_ExtruderRef
+VAR_INPUT
+END_VAR
+VAR
+	pPTOStepperRef : POINTER TO ST_PTOStepperRef;
+END_VAR
+VAR_OUTPUT
+	
+END_VAR
+]]></Declaration>
+    <Implementation>
+      <ST><![CDATA[]]></ST>
+    </Implementation>
+    <Method Name="FB_init" Id="{a4e05b4b-3e29-430d-ba87-1d09854bf17a}">
+      <Declaration><![CDATA[METHOD FB_init : BOOL
+VAR_INPUT
+	bInitRetains : BOOL; // if TRUE, the retain variables are initialized (warm start / cold start)
+	bInCopyCode : BOOL;  // if TRUE, the instance afterwards gets moved into the copy code (online change)
+	stPTOStepperRef : POINTER TO ST_PTOStepperRef;
+END_VAR
+]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[THIS^.pPTOStepperRef := stPTOStepperRef;]]></ST>
+      </Implementation>
+    </Method>
+    <Property Name="P_bError" Id="{af83d4f0-e2c3-4940-89b2-c323f3f0134d}">
+      <Declaration><![CDATA[PROPERTY P_bError : BOOL]]></Declaration>
+      <Get Name="Get" Id="{6b8ecbd2-526b-4fff-82ce-dc98ecb26531}">
+        <Declaration><![CDATA[VAR
+END_VAR
+]]></Declaration>
+        <Implementation>
+          <ST><![CDATA[]]></ST>
+        </Implementation>
+      </Get>
+    </Property>
+    <Property Name="P_bIsActive" Id="{e44f5898-4601-438a-93b7-1eaea22c632e}">
+      <Declaration><![CDATA[PROPERTY P_bIsActive : BOOL]]></Declaration>
+      <Get Name="Get" Id="{02f127e9-9235-4e28-a2b9-47a94a42d4a3}">
+        <Declaration><![CDATA[VAR
+END_VAR
+]]></Declaration>
+        <Implementation>
+          <ST><![CDATA[]]></ST>
+        </Implementation>
+      </Get>
+    </Property>
+    <Property Name="P_bIsLocked" Id="{74c5c070-ab90-4b41-8988-b6a5b9fb2bb6}">
+      <Declaration><![CDATA[PROPERTY P_bIsLocked : BOOL]]></Declaration>
+      <Get Name="Get" Id="{5a27fea1-6fd2-4b3c-bcec-f00b63eb67bc}">
+        <Declaration><![CDATA[VAR
+END_VAR
+]]></Declaration>
+        <Implementation>
+          <ST><![CDATA[P_bIsLocked := TRUE;]]></ST>
+        </Implementation>
+      </Get>
+    </Property>
+    <Property Name="P_pPTOStepperRef" Id="{7c395262-d7b9-44d7-8bf1-9ff017ae7882}">
+      <Declaration><![CDATA[PROPERTY P_pPTOStepperRef : POINTER TO ST_PTOStepperRef]]></Declaration>
+      <Get Name="Get" Id="{bfa401f1-0340-4f32-808d-22a8eaffe8a9}">
+        <Declaration><![CDATA[VAR
+END_VAR
+]]></Declaration>
+        <Implementation>
+          <ST><![CDATA[P_pPTOStepperRef := pPTOStepperRef;]]></ST>
+        </Implementation>
+      </Get>
+    </Property>
+    <LineIds Name="FB_FDM_EL2521_Ref">
+      <LineId Id="9" Count="0" />
+    </LineIds>
+    <LineIds Name="FB_FDM_EL2521_Ref.FB_init">
+      <LineId Id="7" Count="0" />
+    </LineIds>
+    <LineIds Name="FB_FDM_EL2521_Ref.P_bError.Get">
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="FB_FDM_EL2521_Ref.P_bIsActive.Get">
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="FB_FDM_EL2521_Ref.P_bIsLocked.Get">
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="FB_FDM_EL2521_Ref.P_pPTOStepperRef.Get">
+      <LineId Id="2" Count="0" />
+    </LineIds>
+  </POU>
+</TcPlcObject>

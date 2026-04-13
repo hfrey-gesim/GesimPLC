@@ -1,0 +1,67 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<TcPlcObject Version="1.1.0.1" ProductVersion="3.1.4022.10">
+  <POU Name="FB_Dil_GetPlungerPos" Id="{d434ccc1-3d84-49e2-8cc6-e5ff2d9d25d7}" SpecialFunc="None">
+    <Declaration><![CDATA[FUNCTION_BLOCK FB_Dil_GetPlungerPos
+VAR_INPUT
+	bExecute	: BOOL;
+	pDilRef		: POINTER TO FB_HwRefDiluter;
+END_VAR
+VAR_OUTPUT
+	bBusy		: BOOL;
+	bError		: BOOL;
+	nErrorId	: ERRORID;
+	nValue		: UINT;
+	bStatus		: BOOL;
+END_VAR
+VAR
+	rTrig : R_TRIG;
+	pDilRefIntern : POINTER TO FB_HwRefDiluter;
+END_VAR
+VAR_IN_OUT
+	DilSendCmd 	: FB_Dil_SendCmd;
+END_VAR
+]]></Declaration>
+    <Implementation>
+      <ST><![CDATA[rTrig(CLK:= bExecute);
+IF rTrig.Q THEN
+	IF pDilRef = 0 THEN
+		bError := TRUE;
+		RETURN;	
+	ELSE
+		pDilRefIntern := pDilRef;
+	END_IF	
+END_IF
+
+IF bExecute THEN
+	bBusy := TRUE;
+
+	DilSendCmd(bExecute:= TRUE, bExpectReply:= TRUE, sSendData:= CONCAT(USINT_TO_STRING(pDilRefIntern^.nChannel),'?0'));
+	
+	IF NOT DilSendCmd.bBusy THEN
+		IF DilSendCmd.bError THEN
+			bError := TRUE;
+			nErrorId := DilSendCmd.nErrorId;
+		ELSE
+			IF DilSendCmd.bDataIsNumeric THEN
+				nValue := STRING_TO_UINT(DilSendCmd.sReceiveData);
+				pDilRefIntern^.nActPlungerPos := nValue; 
+			END_IF
+			bStatus := DilSendCmd.bStatus;
+		END_IF
+		DilSendCmd(bExecute:= FALSE);
+		bBusy := FALSE;
+	END_IF
+ELSE
+	bBusy := FALSE;
+	bError := FALSE;
+	nErrorId := 0;
+	nValue := 0;
+	bStatus := FALSE;
+END_IF]]></ST>
+    </Implementation>
+    <LineIds Name="FB_Dil_GetPlungerPos">
+      <LineId Id="3" Count="34" />
+      <LineId Id="2" Count="0" />
+    </LineIds>
+  </POU>
+</TcPlcObject>

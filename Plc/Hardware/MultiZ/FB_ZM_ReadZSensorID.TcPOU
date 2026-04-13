@@ -1,0 +1,173 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<TcPlcObject Version="1.1.0.1" ProductVersion="3.1.4024.5">
+  <POU Name="FB_ZM_ReadZSensorID" Id="{e19afa60-625b-48ab-aac0-52dd624f995c}" SpecialFunc="None">
+    <Declaration><![CDATA[FUNCTION_BLOCK FB_ZM_ReadZSensorID
+VAR_INPUT
+	bExecute		: BOOL;
+	pFbZAxisRef		: POINTER TO FB_ZAxisRef;
+END_VAR
+VAR_OUTPUT
+	bBusy			: BOOL;
+	bCommandAborted	: BOOL;
+	bError			: BOOL;
+	nErrorID		: ERRORID;	
+END_VAR
+VAR
+	nState				: USINT;
+	timeOut				: TON;
+	fbSdoRead			: FB_SDO_READ;
+END_VAR
+]]></Declaration>
+    <Implementation>
+      <ST><![CDATA[//Die Id (eigentlich der Offset) wird ausgelesen, indem eine kurze Vermessung mit 100µm Distanz gestartet wird.
+//Als Ergebnis bringt die Achse einen der 3 folgenden Fehler:
+//1. No_Z-Limit -> kein ZSensor (Id wurde nicht ausgelesen)
+//2. Z_Limit_Fail -> ZSensor betätigt (Id wurde ausgelesen)
+//3. Z_Limit_not_found -> (Id wurde ausgelesen)
+
+IF bExecute THEN
+	IF pFbZAxisRef = 0 THEN
+		nErrorId := E_ErrorIdMultiZ.ERRORID_InvalidZChannel;
+		bBusy := FALSE;
+		bError := TRUE;
+		nState := 99;
+		RETURN;
+	END_IF
+
+	//Wenn durch anderen FB Achse gestoppt, dann abbrechen
+	IF pFbZAxisRef^.stStatus.bCmdAborted THEN //Muss noch irgendwo gesetzt werden!!!!
+		bCommandAborted := TRUE;
+		bBusy := FALSE;
+	END_IF
+	
+	timeOut();
+	IF timeOut.Q THEN
+		bBusy := FALSE;
+		bError := TRUE;
+		nState := 99;
+		RETURN;
+	END_IF
+
+	CASE nState OF
+		0: 	//Nur folgende Tools können ZSensor aufnehmen
+			bBusy := TRUE;
+			IF NOT (pFbZAxisRef^.eFixedToolType = E_MzToolType.TOOL_TYPE_PiezoPip OR 
+					pFbZAxisRef^.eFixedToolType = E_MzToolType.TOOL_TYPE_PiezoSingle OR 
+					pFbZAxisRef^.eFixedToolType = E_MzToolType.TOOL_TYPE_SyringeExtruder) THEN
+				nErrorID := E_ErrorIdCmd.ERRORID_ConfigErrorZSensor;
+				bBusy := FALSE;
+				bError := TRUE;
+				nState := 99;
+				RETURN;
+			END_IF
+			
+			pFbZAxisRef^.stStatus.bIsMoving := TRUE;
+			pFbZAxisRef^.stStatus.bHasJob := TRUE;
+        	//Geschwindigkeit setzen
+			pFbZAxisRef^.stOutput.nVelo := REAL_TO_DINT(pFbZAxisRef^.P_rMaxSpeed);
+			//Aktuelle Position ? Wenn ganz unten steht, dann 200µ nach oben fahren
+			IF (pFbZAxisRef^.P_rCurrentPos - 100.0) < pFbZAxisRef^.P_rMinPos THEN
+				//200µm nach oben fahren
+				pFbZAxisRef^.stOutput.nMode := 1; //normaler Positioniermodus
+				pFbZAxisRef^.P_rAbsTargetPos := pFbZAxisRef^.P_rMinPos + 200.0;
+				pFbZAxisRef^.stOutput.nCtrl := 1;
+				nState := 1;
+			ELSE
+				nState := 3;
+			END_IF
+			
+		1:	//SetpointAcknowledge?
+			IF pFbZAxisRef^.stInput.nStatus.1 THEN
+				pFbZAxisRef^.stOutput.nCtrl.0 := FALSE;	//Fahrauftrag zurücksetzen
+				timeOut(IN:= FALSE);
+				nState := 2;
+			ELSE
+				timeOut(IN:= TRUE, PT:=T#1000MS);	//Timer für Timeout starten
+			END_IF
+			
+		2:  //TargetReached?
+			IF pFbZAxisRef^.stInput.nStatus.0 THEN
+				timeOut(IN:= FALSE);
+				nState := 3;
+			ELSE
+				timeOut(IN:= TRUE, PT:= T#1000MS);	//Timer für Timeout starten
+			END_IF			
+			
+		3:	//100µm nach unten im Messmodus fahren -> sollte in jedem Fall einen Fehler erzeugen
+			//Hier muss kurzzeitig verhindert werden, dass dieser Fehler in Action "A_Monitor" von
+			//FB_MultiZRef abgefangen wird
+			pFbZAxisRef^.stOutput.nMode := 5; //normaler Messmodus
+			pFbZAxisRef^.stOutput.nTrgtPos := 100;
+			pFbZAxisRef^.bIngoreError := TRUE;
+			nState := 4;
+			
+		4:	pFbZAxisRef^.stOutput.nCtrl := 1;
+			nState := 5;
+			
+		5:	//SetpointAcknowledge?
+			IF pFbZAxisRef^.stInput.nStatus.1 THEN
+				pFbZAxisRef^.stOutput.nCtrl.0 := FALSE;	//Fahrauftrag zurücksetzen
+				timeOut(IN:= FALSE);
+				timeOut(IN:= TRUE, PT:= T#1S);
+				nState := 6;
+			ELSE
+				timeOut(IN:= TRUE, PT:=T#1000MS);	//Timer für Timeout starten
+			END_IF
+
+		6:	//Hier sollte jetzt ein Fehler kommen
+			IF pFbZAxisRef^.stInput.nStatus.3 AND pFbZAxisRef^.stInput.nError > 0 THEN
+				pFbZAxisRef^.stOutput.nMode := 0; //Mode muss zum Zurücksetzen des Fehlers auf 0 sein
+				timeOut(IN:= FALSE);
+				nErrorID := pFbZAxisRef^.stInput.nError;
+				IF nErrorID = 19 OR nErrorID = 20 THEN
+					//weiter zu Offset auslesen und Error zurücksetzen
+					fbSdoRead(sADSNetID:= pFbZAxisRef^.pMultiZRef^.P_sAdsNetId,	nPortNr:= pFbZAxisRef^.pMultiZRef^.P_nAdsPort,
+							nIndex:= cZSensOffset.nIndex, nSubIndex:= pFbZAxisRef^.nChannel, nDataLength:= cZSensOffset.nLength, bExecute:= TRUE);					
+					nState := 7;
+				ELSE
+					nErrorID := F_MultiZError_TO_ErrorId(pFbZAxisRef^.stInput.nError);
+					bBusy := FALSE;
+					bError := TRUE;
+					RETURN;					
+				END_IF
+			END_IF
+			
+		7:	//Warten bis ZOffset ausgelesen
+			fbSdoRead();
+			IF NOT fbSdoRead.bBusy THEN
+				IF fbSdoRead.bError THEN
+					nErrorID := fbSdoRead.nAdsErrorId;
+					bError := TRUE;
+					nState := 99;
+				ELSE
+					nState := 8;
+					pFbZAxisRef^.stOutput.nCtrl := 8;	//Error zurücksetzen
+					pFbZAxisRef^.P_nZSensorID := fbSdoRead.nData;
+				END_IF
+				fbSdoRead(bExecute:= FALSE);
+			END_IF
+			
+		8:	IF NOT pFbZAxisRef^.stInput.nStatus.3 AND pFbZAxisRef^.stInput.nError = 0 THEN
+				pFbZAxisRef^.stOutput.nCtrl := 0;
+				bBusy := FALSE;				
+			END_IF
+	END_CASE
+ELSE
+	bBusy := FALSE;
+	nState := 0;
+	bError := FALSE;
+	nErrorID := 0;
+	timeOut(IN:=FALSE);
+	pFbZAxisRef^.stStatus.bCmdAborted := FALSE;
+	pFbZAxisRef^.stOutput.nMode := 0;
+	pFbZAxisRef^.stStatus.bHasJob := FALSE;
+	pFbZAxisRef^.stStatus.bIsMoving := FALSE;
+	pFbZAxisRef^.bIngoreError := FALSE;
+END_IF]]></ST>
+    </Implementation>
+    <LineIds Name="FB_ZM_ReadZSensorID">
+      <LineId Id="339" Count="143" />
+      <LineId Id="2" Count="0" />
+    </LineIds>
+  </POU>
+</TcPlcObject>

@@ -1,0 +1,14 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<TcPlcObject Version="1.1.0.1" ProductVersion="3.1.0.25">
+  <DUT Name="E_TeachTrgtOption" Id="{fcafb39d-31b2-4503-9fdf-e7873cd2baf3}">
+    <Declaration><![CDATA[TYPE E_TeachTrgtOption :
+(
+	Option_PrePos := 0,
+	Option_NoPrePos := 1,
+	Option_AssumeInstantly := 2
+)USINT;
+END_TYPE
+]]></Declaration>
+    <ObjectProperties />
+  </DUT>
+</TcPlcObject>

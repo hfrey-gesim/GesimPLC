@@ -1,0 +1,17 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<TcPlcObject Version="1.1.0.1" ProductVersion="3.1.0.25">
+  <DUT Name="ST_Interaction" Id="{ee2fcb56-5903-4c66-a08a-98caa8ee031f}">
+    <Declaration><![CDATA[TYPE ST_Interaction :
+STRUCT
+	nObjectId 				: UINT;
+	eInteractMessageType	: E_InteractMessageType;
+	nArg1 					: DINT;
+	nArg2 					: DINT;
+	nArg3 					: DINT;
+	nArg4 					: DINT;
+END_STRUCT
+END_TYPE
+]]></Declaration>
+    <ObjectProperties />
+  </DUT>
+</TcPlcObject>

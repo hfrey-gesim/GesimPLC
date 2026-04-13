@@ -1,0 +1,20 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<TcPlcObject Version="1.1.0.1" ProductVersion="3.1.4020.12">
+  <Itf Name="I_SlotTarget" Id="{e25d2073-e36d-4492-8c0f-dccdddc5afb6}">
+    <Declaration><![CDATA[INTERFACE I_SlotTarget
+]]></Declaration>
+    <Method Name="M_GetSlot" Id="{814134fa-44a4-41c8-8121-29e57d050765}">
+      <Declaration><![CDATA[METHOD M_GetSlot : POINTER TO FB_Slot
+VAR_INPUT
+	nSlotNr : UINT;
+END_VAR
+]]></Declaration>
+    </Method>
+    <Method Name="M_GetSlotFromChild" Id="{ab59d9cf-2249-467b-8cc1-003d4e1621a0}">
+      <Declaration><![CDATA[METHOD M_GetSlotFromChild : POINTER TO FB_Slot
+VAR_INPUT
+	pObject : POINTER TO FB_Object;
+END_VAR]]></Declaration>
+    </Method>
+  </Itf>
+</TcPlcObject>

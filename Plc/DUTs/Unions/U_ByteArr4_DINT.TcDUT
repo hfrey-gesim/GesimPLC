@@ -1,0 +1,13 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<TcPlcObject Version="1.1.0.1" ProductVersion="3.1.0.25">
+  <DUT Name="U_ByteArr4_DINT" Id="{3b6973f4-3120-4d01-9db2-5df82f407ed8}">
+    <Declaration><![CDATA[TYPE U_ByteArr4_DINT :
+UNION
+	aBytes : ARRAY[0..3] OF BYTE;
+	nDINT  : DINT;
+END_UNION
+END_TYPE
+]]></Declaration>
+    <ObjectProperties />
+  </DUT>
+</TcPlcObject>

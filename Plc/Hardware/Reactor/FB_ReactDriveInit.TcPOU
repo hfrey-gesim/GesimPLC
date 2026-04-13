@@ -1,0 +1,287 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<TcPlcObject Version="1.1.0.1" ProductVersion="3.1.4020.6">
+  <POU Name="FB_ReactDriveInit" Id="{4ae147aa-0941-4855-a178-f01c49d9ebf9}" SpecialFunc="None">
+    <Declaration><![CDATA[FUNCTION_BLOCK FB_ReactDriveInit
+VAR_INPUT
+	pDriveRef 	: POINTER TO FB_HwRefReactDrive;
+	bExecute	: BOOL; 
+END_VAR
+VAR_OUTPUT
+	bBusy		: BOOL;
+	bError		: BOOL;
+	nErrorId	: ERRORID;	
+END_VAR
+VAR
+	fbSdoWrite	: FB_SDO_WRITE;
+	fbPower		: FB_CANOpenMotionPower;
+	nState		: USINT;
+	nStateNext	: USINT;
+	tmrTimeout	: TON;
+	
+	eCurrentDrive	: E_ReactDrive;
+	
+	nStateA 		: USINT;
+	nStateANext 	: USINT;
+
+	dwSdoIndex 		: DWORD;
+	dwSdoSubIndex 	: DWORD;
+	dwSdoDataLength : DWORD;
+	nSdoDataValue 	: DINT;
+END_VAR
+
+VAR CONSTANT
+	//Objekt-Indiezes
+	cSdoIdxSwitchPara	: ARRAY[1..3] OF DWORD := [16#2005,16#2205,16#2405];
+	cSdoIdxMaxCurrent	: ARRAY[1..3] OF DWORD := [16#2003,16#2203,16#2403];
+	cSdoIdxHoldCurrent	: ARRAY[1..3] OF DWORD := [16#2004,16#2204,16#2404];
+	cSdoIdxPulseDivisor	: ARRAY[1..3] OF DWORD := [16#2086,16#2286,16#2486];
+	cSdoIdxPosWindow	: ARRAY[1..3] OF DWORD := [16#6067,16#6867,16#7067];
+	cSdoIdxHomingMethod	: ARRAY[1..3] OF DWORD := [16#6098,16#6898,16#7098];
+	cSdoIdxHomingSpeeds	: ARRAY[1..3] OF DWORD := [16#6099,16#6899,16#7099];
+	cSdoIdxMoveSpeed	: ARRAY[1..3] OF DWORD := [16#6081,16#6881,16#7081];
+	//Values
+	cMaxCurrent			: ARRAY[1..3] OF DINT := [130,140,130];
+	cHoldCurrent		: ARRAY[1..3] OF DINT := [32,32,32];
+	cHomingSpeedFast	: ARRAY[1..3] OF DINT := [200,200,150];
+	cHomingSpeedSlow	: ARRAY[1..3] OF DINT := [20,20,20];
+	cHomingMethod		: ARRAY[1..3] OF DINT := [21,21,21];
+	//cMoveSpeed			: ARRAY[1..3] OF DINT := [1500,1000,500];
+	cGear				: ARRAY[1..3] OF REAL := [12.8,12.8,25.6];
+END_VAR
+
+
+
+]]></Declaration>
+    <Implementation>
+      <ST><![CDATA[IF bExecute THEN
+	bBusy := TRUE;
+	tmrTimeout();
+	IF tmrTimeout.Q THEN
+		bError := TRUE;
+		bBusy := FALSE;
+		nState := 99;
+	END_IF
+	
+	CASE nState OF
+		0:	pDriveRef^.bIsInit := FALSE;
+			//Clamp
+			eCurrentDrive := E_ReactDrive.Clamp;
+			pDriveRef^.eCurrentState[1] := E_OpClState.UNDEFINED; 
+			nState := 60;
+			nStateNext := 1;
+			
+		1:	//Cover Vertikal
+			eCurrentDrive := E_ReactDrive.CoverVerti;
+			pDriveRef^.eCurrentState[2] := E_OpClState.UNDEFINED;
+			nState := 60;
+			nStateNext := 2;
+
+		2:	//Cover Horizontal
+			eCurrentDrive := E_ReactDrive.CoverHoriz;
+			pDriveRef^.eCurrentState[3] := E_OpClState.UNDEFINED;
+			nState := 60;
+			nStateNext := 80;
+		
+		60:	//Prepare
+			A_Prepare();
+			IF nStateA >= 80 THEN
+				IF nStateA >= 99 THEN
+					bError := TRUE;
+					bBusy := FALSE;
+					nState := 99;
+				ELSE
+					nState := 61;
+				END_IF
+				nStateA := 0;
+			END_IF
+		
+		61:	//PowerOn
+			fbPower(pControl:= ADR(pDriveRef^.nControl[eCurrentDrive]), pStatus:= ADR(pDriveRef^.nStatus[eCurrentDrive]), bExecute:= TRUE);
+			IF NOT 	fbPower.bBusy THEN
+				IF fbPower.bError THEN
+					nState := 99;
+				ELSE
+					nState := 62;
+				END_IF
+				fbPower(bExecute:= FALSE);
+			END_IF		
+		
+		62:	//Init
+			A_Init();
+			IF nStateA >= 80 THEN
+				IF nStateA >= 99 THEN
+					nState := 99;
+				ELSE
+					nState := nStateNext;
+					pDriveRef^.eCurrentState[eCurrentDrive] := E_OpClState.Open;
+					IF nState = 80 THEN
+						pDriveRef^.bIsInit := TRUE;
+					END_IF
+				END_IF
+				nStateA := 0;
+			END_IF
+			
+		70:	//Abbrechen
+			//Das aktuelle Drive stoppen!
+			nStateA := 70;
+			A_Init();
+			IF nStateA >= 80 THEN
+				IF nStateA >= 99 THEN
+					nState := 99;
+				ELSE
+					nState := 80;
+				END_IF
+				nStateA := 0;
+			END_IF
+		
+		80:	//Ready
+			bBusy := FALSE;
+		
+	END_CASE
+ELSE
+	fbPower(bExecute:= FALSE);
+	tmrTimeout(IN:=FALSE);
+	bError := FALSE;
+	nErrorId := 0;
+	nState := 0;
+	nStateA := 0;
+END_IF]]></ST>
+    </Implementation>
+    <Action Name="A_Prepare" Id="{0381425d-9c63-4102-9d4b-f42c04c2f460}">
+      <Implementation>
+        <ST><![CDATA[CASE nStateA OF
+	0:	//Errorbit gesetzt?
+			IF pDriveRef^.nStatus[eCurrentDrive].3 THEN //Error zurücksetzen
+				pDriveRef^.nControl[eCurrentDrive] := 153;
+			ELSE
+				pDriveRef^.nControl[eCurrentDrive] := 0;
+				nStateA := 1;
+			END_IF
+			
+	1:	//SwitchParameters setzen (keine Endlagen verwenden)
+		dwSdoIndex := cSdoIdxSwitchPara[eCurrentDrive];
+		dwSdoSubIndex := 0;
+		dwSdoDataLength := 4;
+		nSdoDataValue := 3; //keien Endlagen vewenden
+		nStateANext := 2;
+		nStateA := 60; //Sdo senden
+		
+	2:	//MaxCurrent setzen
+		dwSdoIndex := cSdoIdxMaxCurrent[eCurrentDrive];
+		dwSdoSubIndex := 0;
+		dwSdoDataLength := 1;
+		nSdoDataValue := cMaxCurrent[eCurrentDrive];
+		nStateANext := 3;
+		nStateA := 60; //Sdo senden
+	
+	3:	//HoldCurrent setzen
+		dwSdoIndex := cSdoIdxHoldCurrent[eCurrentDrive];
+		dwSdoSubIndex := 0;
+		dwSdoDataLength := 1;
+		nSdoDataValue := cHoldCurrent[eCurrentDrive];
+		nStateANext := 4;
+		nStateA := 60; //Sdo senden
+	
+	4:	//Homing Fast-Speed setzen
+		dwSdoIndex := cSdoIdxHomingSpeeds[eCurrentDrive];
+		dwSdoSubIndex := 1;
+		dwSdoDataLength := 4;
+		nSdoDataValue := cHomingSpeedFast[eCurrentDrive];
+		nStateANext := 5;
+		nStateA := 60; //Sdo senden
+		
+	5:	//Homing Slow-Speed setzen
+		dwSdoIndex := cSdoIdxHomingSpeeds[eCurrentDrive];
+		dwSdoSubIndex := 2;
+		dwSdoDataLength := 4;
+		nSdoDataValue := cHomingSpeedSlow[eCurrentDrive];
+		nStateANext := 6;
+		nStateA := 60; //Sdo senden		
+		
+	6:	//Pulse-Divisor setzen
+		dwSdoIndex := cSdoIdxPulseDivisor[eCurrentDrive];
+		dwSdoSubIndex := 0;
+		dwSdoDataLength := 1;
+		nSdoDataValue := 1;
+		nStateANext := 7;
+		nStateA := 60; //Sdo senden
+		
+	7:	//Position-Windows setzen
+		dwSdoIndex := cSdoIdxPosWindow[eCurrentDrive];
+		dwSdoSubIndex := 0;
+		dwSdoDataLength := 4;
+		nSdoDataValue := 100;
+		nStateANext := 8;
+		nStateA := 60; //Sdo senden		
+
+	8:	//Move-Speed setzen
+		dwSdoIndex := cSdoIdxMoveSpeed[eCurrentDrive];
+		dwSdoSubIndex := 0;
+		dwSdoDataLength := 4;
+		nSdoDataValue := pDriveRef^.nMotorSpeed[eCurrentDrive];
+		nStateANext := 9;
+		nStateA := 60; //Sdo senden
+
+	9:	//Homing Method setzen
+		dwSdoIndex := cSdoIdxHomingMethod[eCurrentDrive];
+		dwSdoSubIndex := 0;
+		dwSdoDataLength := 1;
+		nSdoDataValue := cHomingMethod[eCurrentDrive];
+		nStateANext := 80;
+		nStateA := 60; //Sdo senden		
+		
+	60:	//Send SDO
+		fbSdoWrite(sADSNetID:= pDriveRef^.stAdsAdress.sNetId,nPortNr:= pDriveRef^.stAdsAdress.nPort, 
+					nIndex:= dwSdoIndex, nSubIndex:= dwSdoSubIndex, nDataLength:= dwSdoDataLength,
+					 nData:= nSdoDataValue, bExecute:= TRUE);
+		IF NOT fbSdoWrite.bBusy THEN
+			IF fbSdoWrite.bError THEN
+				nErrorId := fbSdoWrite.nAdsErrorId;
+				nStateA := 99;
+			ELSE
+				nStateA := nStateANext;
+			END_IF
+			fbSdoWrite(bExecute:= FALSE);
+		END_IF
+END_CASE]]></ST>
+      </Implementation>
+    </Action>
+    <Method Name="M_Stop" Id="{949521e3-c294-4d6b-98c6-282bc678b7be}">
+      <Declaration><![CDATA[METHOD M_Stop
+VAR_INPUT
+END_VAR
+]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[IF bBusy AND nState < 70 THEN
+	nState := 70;	
+END_IF
+]]></ST>
+      </Implementation>
+    </Method>
+    <Action Name="A_Init" Id="{da2f1582-7601-4105-b936-7df016818f6e}">
+      <Implementation>
+        <ST><![CDATA[CASE nStateA OF
+	0:	
+		pDriveRef^.nOpMode[eCurrentDrive] := 6;
+		nStateA := 1;
+		
+	1: 
+		IF pDriveRef^.nCurrentOpMode[eCurrentDrive] = 6 THEN
+			pDriveRef^.nControl[eCurrentDrive] := 31;
+			nStateA := 2;
+		END_IF
+		
+	2:
+		IF (pDriveRef^.nStatus[eCurrentDrive] AND 16#1400) = 16#1400 THEN
+			pDriveRef^.nControl[eCurrentDrive] := 15;
+			nStateA := 80;
+		END_IF
+		
+	70:	//Abbrechen
+		pDriveRef^.nControl[eCurrentDrive] := 15;
+		nStateA := 80;
+END_CASE]]></ST>
+      </Implementation>
+    </Action>
+  </POU>
+</TcPlcObject>

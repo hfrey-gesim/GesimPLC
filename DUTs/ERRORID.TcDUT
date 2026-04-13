@@ -1,7 +1,0 @@
-﻿<TcPlcObject Version="1.1.0.1" ProductVersion="3.1.0.20">
-  <DUT Name="ERRORID" Id="{6fda7034-3127-4f18-9536-cef88cd10ee9}">
-    <Declaration><![CDATA[TYPE ERRORID : UINT; END_TYPE
-]]></Declaration>
-    <ObjectProperties />
-  </DUT>
-</TcPlcObject>

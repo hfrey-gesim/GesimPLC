@@ -1,0 +1,89 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<TcPlcObject Version="1.1.0.1" ProductVersion="3.1.4022.10">
+  <POU Name="FB_GPInputRef" Id="{067f5e0d-cbbd-429c-bb87-aac98e8fdbe9}" SpecialFunc="None">
+    <Declaration><![CDATA[FUNCTION_BLOCK FB_GPInputRef
+VAR_INPUT
+	bInit	: BOOL;
+	eMode : E_GPInputMode;
+END_VAR
+VAR_OUTPUT
+	pMultiZRef 		: POINTER TO FB_MultiZRef;
+	nChannel 		: USINT;
+	nValue			AT %I* : UINT;
+	bBusy			: BOOL;
+	bError			: BOOL;
+	nErrorId		: ERRORID;
+END_VAR
+VAR
+	nState : USINT;
+	fbSdoWrite : FB_SDO_WRITE;
+END_VAR
+]]></Declaration>
+    <Implementation>
+      <ST><![CDATA[IF bInit THEN
+	IF nState = 0 THEN
+		fbSdoWrite(sADSNetID:= pMultiZRef^.P_sAdsNetId, nPortNr:= pMultiZRef^.P_nAdsPort, 
+					nIndex:= cGPInputMode.nIndex , nSubIndex:= nChannel, nDataLength:= cGPInputMode.nLength, nData:= eMode, bExecute:= TRUE);
+		IF NOT fbSdoWrite.bBusy THEN
+			IF fbSdoWrite.bError THEN
+				bError := TRUE;
+				nErrorId := fbSdoWrite.nAdsErrorId;
+				nState := 99;
+			ELSE
+				nState := 80;
+			END_IF
+ 			fbSdoWrite(bExecute := FALSE); 
+		END_IF
+	END_IF
+ELSE
+	bError := FALSE;
+	nErrorId := 0;
+	nState := 0;
+END_IF]]></ST>
+    </Implementation>
+    <Method Name="FB_init" Id="{577b9674-7075-4a01-aa34-13549ebc31b4}">
+      <Declaration><![CDATA[METHOD FB_init : BOOL
+VAR_INPUT
+	bInitRetains : BOOL; // if TRUE, the retain variables are initialized (warm start / cold start)
+	bInCopyCode : BOOL;  // if TRUE, the instance afterwards gets moved into the copy code (online change)
+	pMultiZRef 	: POINTER TO FB_MultiZRef;
+END_VAR
+
+VAR
+	nFirstAdress : PVOID;
+	nSelfAdress : PVOID;
+END_VAR]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[THIS^.pMultiZRef := pMultiZRef;
+nFirstAdress := ADR(pMultiZRef^.aFbGPInputRef);
+nSelfAdress := THIS;
+{IF hasvalue (RegisterSize, '32')}
+nChannel := UDINT_TO_USINT((nSelfAdress - nFirstAdress)/SIZEOF(THIS^) + 1);
+{ELSE}
+nChannel := ULINT_TO_USINT((nSelfAdress - nFirstAdress)/SIZEOF(THIS^) + 1);
+{END_IF}]]></ST>
+      </Implementation>
+    </Method>
+    <LineIds Name="FB_GPInputRef">
+      <LineId Id="9" Count="0" />
+      <LineId Id="34" Count="0" />
+      <LineId Id="43" Count="0" />
+      <LineId Id="54" Count="2" />
+      <LineId Id="64" Count="1" />
+      <LineId Id="59" Count="0" />
+      <LineId Id="67" Count="0" />
+      <LineId Id="66" Count="0" />
+      <LineId Id="60" Count="0" />
+      <LineId Id="58" Count="0" />
+      <LineId Id="57" Count="0" />
+      <LineId Id="40" Count="0" />
+      <LineId Id="27" Count="0" />
+      <LineId Id="30" Count="2" />
+      <LineId Id="28" Count="0" />
+    </LineIds>
+    <LineIds Name="FB_GPInputRef.FB_init">
+      <LineId Id="13" Count="6" />
+      <LineId Id="7" Count="0" />
+    </LineIds>
+  </POU>
+</TcPlcObject>

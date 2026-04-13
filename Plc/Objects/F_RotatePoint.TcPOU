@@ -1,0 +1,38 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<TcPlcObject Version="1.1.0.1" ProductVersion="3.1.4020.12">
+  <POU Name="F_RotatePoint" Id="{c850e1e4-644a-4487-b004-27f323bde2b0}" SpecialFunc="None">
+    <Declaration><![CDATA[FUNCTION F_RotatePoint : ST_3DPoint //Rotiert einen Punkt um einen Mittelpunkt in XY-Ebene
+VAR_INPUT
+	stPoint 	: ST_3DPoint;	//zu rotierender Punkt
+	stPointM 	: ST_3DPoint;	//Mittelpunkt
+	lrAngle 		: LREAL;	//Drehwinkel
+END_VAR
+VAR
+	lrAngleRad 	: LREAL; //Winkel im Bogenmaß
+	stLocVector : ST_2DPoint;
+END_VAR
+]]></Declaration>
+    <Implementation>
+      <ST><![CDATA[//Ortsvektor von Punkt bilden 
+stLocVector.X := stPoint.X - stPointM.X;
+stLocVector.Y := stPoint.Y - stPointM.Y;
+
+lrAngleRad := DEG_TO_RAD(lrAngle);
+F_RotatePoint.X := LREAL_TO_REAL(stLocVector.X * COS(lrAngleRad) - stLocVector.Y * SIN(lrAngleRad) + stPointM.X); 
+F_RotatePoint.Y := LREAL_TO_REAL(stLocVector.X * SIN(lrAngleRad) + stLocVector.Y * COS(lrAngleRad) + stPointM.Y);
+F_RotatePoint.Z := stPoint.Z;
+]]></ST>
+    </Implementation>
+    <LineIds Name="F_RotatePoint">
+      <LineId Id="23" Count="0" />
+      <LineId Id="25" Count="0" />
+      <LineId Id="24" Count="0" />
+      <LineId Id="18" Count="0" />
+      <LineId Id="13" Count="0" />
+      <LineId Id="15" Count="0" />
+      <LineId Id="37" Count="0" />
+      <LineId Id="26" Count="0" />
+      <LineId Id="7" Count="0" />
+    </LineIds>
+  </POU>
+</TcPlcObject>

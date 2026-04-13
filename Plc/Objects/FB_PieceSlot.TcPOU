@@ -1,0 +1,80 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<TcPlcObject Version="1.1.0.1" ProductVersion="3.1.4020.12">
+  <POU Name="FB_PieceSlot" Id="{d9e797f4-361d-4ee7-b25d-864d9e5b00f9}" SpecialFunc="None">
+    <Declaration><![CDATA[{attribute 'enable_dynamic_creation'}
+FUNCTION_BLOCK FB_PieceSlot EXTENDS FB_Slot
+VAR_INPUT
+END_VAR
+VAR_OUTPUT
+END_VAR
+VAR
+	rDepth	 : REAL;
+END_VAR
+]]></Declaration>
+    <Implementation>
+      <ST><![CDATA[]]></ST>
+    </Implementation>
+    <Property Name="P_rDepth" Id="{8078a9d9-6f8a-47a4-ad86-ccdc7bdc97fd}">
+      <Declaration><![CDATA[PROPERTY P_rDepth : REAL]]></Declaration>
+      <Get Name="Get" Id="{366aabd4-f8a1-43bb-bba8-08d764eaf43c}">
+        <Declaration><![CDATA[VAR
+END_VAR
+]]></Declaration>
+        <Implementation>
+          <ST><![CDATA[P_rDepth := rDepth;]]></ST>
+        </Implementation>
+      </Get>
+      <Set Name="Set" Id="{b5868f01-e60b-4985-a732-5453c67a9aea}">
+        <Declaration><![CDATA[VAR
+END_VAR
+]]></Declaration>
+        <Implementation>
+          <ST><![CDATA[rDepth := P_rDepth;]]></ST>
+        </Implementation>
+      </Set>
+    </Property>
+    <Property Name="P_pPiece" Id="{c6532fc7-46a6-4cb9-8df0-8b5df4893901}">
+      <Declaration><![CDATA[PROPERTY P_pPiece : POINTER TO FB_PieceBase]]></Declaration>
+      <Get Name="Get" Id="{be5de486-b3f3-4e00-9b71-b86d12982d26}">
+        <Declaration><![CDATA[VAR
+END_VAR
+]]></Declaration>
+        <Implementation>
+          <ST><![CDATA[IF pChild > 0 THEN
+	P_pPiece := pChild;
+END_IF]]></ST>
+        </Implementation>
+      </Get>
+      <Set Name="Set" Id="{c07aa166-69b8-49c2-8b44-691f93616303}">
+        <Declaration><![CDATA[VAR
+END_VAR
+]]></Declaration>
+        <Implementation>
+          <ST><![CDATA[IF P_pPiece > 0 THEN
+	pChild := P_pPiece;
+ELSE
+	pChild := 0;	
+END_IF
+]]></ST>
+        </Implementation>
+      </Set>
+    </Property>
+    <LineIds Name="FB_PieceSlot">
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="FB_PieceSlot.P_rDepth.Get">
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="FB_PieceSlot.P_rDepth.Set">
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="FB_PieceSlot.P_pPiece.Get">
+      <LineId Id="3" Count="1" />
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="FB_PieceSlot.P_pPiece.Set">
+      <LineId Id="3" Count="4" />
+      <LineId Id="2" Count="0" />
+    </LineIds>
+  </POU>
+</TcPlcObject>

@@ -1,0 +1,437 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<TcPlcObject Version="1.1.0.1" ProductVersion="3.1.4024.11">
+  <POU Name="FB_Camera" Id="{6d1727e9-21d6-47ab-aac6-925ca4a23f77}" SpecialFunc="None">
+    <Declaration><![CDATA[FUNCTION_BLOCK FB_Camera EXTENDS FB_GCodeTool
+VAR_INPUT
+END_VAR
+VAR_OUTPUT
+END_VAR
+VAR
+	//SpecProperties
+	rWorkingDistance		: REAL;
+	bInvertWorkingDistance 	: BOOL;
+	eLightOutput 			: E_TriggerOutput;
+	nLightOutputChannel		: USINT;
+	
+	bCameraLightOn			: BOOL;
+	
+	bTakePicture			: BOOL;
+	nStateA_TakePicture		: USINT;
+	tDelayTakePicture		: TIME;
+	timerTakePicture		: TON;
+	nRequestArg1			: DINT;
+	nRequestArg2			: DINT;
+	nRequestArg3			: DINT;
+	nRequestArg4			: DINT;	
+END_VAR
+]]></Declaration>
+    <Implementation>
+      <ST><![CDATA[IF bCameraLightOn THEN
+	IF eLightOutput = E_TriggerOutput.MultiZOutput THEN
+		fbMultiZDigiOut.M_On(nLightOutputChannel);
+	ELSIF eLightOutput = E_TriggerOutput.MultiZPWM THEN
+		fbMultiZPWM.M_On(nLightOutputChannel, 1000);
+	END_IF
+END_IF
+
+IF eCurrentState = E_MachineState.MACHINESTATE_Active THEN
+	IF bTakePicture THEN
+		A_TakePicture();
+		IF nStateA_TakePicture = 80 THEN
+			nStateA_TakePicture := 0;
+			bTakePicture := FALSE;
+			M_RemoveListEntry(nSearchValue:= E_Action.ACTION_TakePicture);
+		END_IF
+	END_IF	
+END_IF
+
+SUPER^();
+
+stProcessData.n32Data[7] := BOOL_TO_DINT(bCameraLightOn);
+aObjProcData[nNotifyId] := stProcessData; ]]></ST>
+    </Implementation>
+    <Action Name="A_Reset" Id="{43cf20d4-7297-4beb-a482-862479609b93}">
+      <Implementation>
+        <ST><![CDATA[nStateA_ResetSpec := 80;
+SUPER^.A_Reset();]]></ST>
+      </Implementation>
+    </Action>
+    <Action Name="A_Stop" Id="{44fa0f71-374f-45e3-97ba-21c728d998ed}">
+      <Implementation>
+        <ST><![CDATA[IF nStateA_Stop = 0 THEN
+	IF bTakePicture AND nStateA_TakePicture < 70 THEN
+		nStateA_TakePicture := 70;
+	END_IF
+	nStateA_Stop := 1;
+END_IF
+
+SUPER^.A_Stop();]]></ST>
+      </Implementation>
+    </Action>
+    <Action Name="A_TakePicture" Id="{c447fb64-ca66-4994-a719-68951c0efcd5}">
+      <Implementation>
+        <ST><![CDATA[IF nStateA_TakePicture = 0 THEN //Timer starten
+	timerTakePicture(IN:= TRUE, PT:= tDelayTakePicture);
+	IF timerTakePicture.Q THEN
+		timerTakePicture(IN:= FALSE);
+		stInterResponse.eInteractMessageType := E_InteractMessageType.INTERACTMES_NONE;
+		stInteractRequest.eInteractMessageType := E_InteractMessageType.INTERACTMES_WaitForUser;
+		stInteractRequest.nObjectId := nObjectID;
+		stInteractRequest.nArg1 := nRequestArg1;
+		stInteractRequest.nArg2 := nRequestArg2;
+		stInteractRequest.nArg3 := nRequestArg3;
+		stInteractRequest.nArg4 := nRequestArg4;
+		nStateA_TakePicture := 1;
+	END_IF
+ELSIF nStateA_TakePicture = 1 THEN //Auf InteractResponse warten
+	IF stInterResponse.eInteractMessageType = E_InteractMessageType.INTERACTMES_Continue OR 
+							stInterResponse.eInteractMessageType = E_InteractMessageType.INTERACTMES_Cancel THEN
+		stInteractRequest.eInteractMessageType := E_InteractMessageType.INTERACTMES_NONE;
+		nStateA_TakePicture := 80;
+	END_IF
+ELSIF nStateA_TakePicture = 70 THEN //Abbrechen
+	timerTakePicture(IN:= FALSE);
+	stInteractRequest.eInteractMessageType := E_InteractMessageType.INTERACTMES_NONE;
+	nStateA_TakePicture := 80;
+END_IF]]></ST>
+      </Implementation>
+    </Action>
+    <Method Name="FB_init" Id="{87c6810b-20b1-4848-9659-f4d11b203ab8}">
+      <Declaration><![CDATA[METHOD FB_init : BOOL
+VAR_INPUT
+	bInitRetains : BOOL; // if TRUE, the retain variables are initialized (warm start / cold start)
+	bInCopyCode : BOOL;  // if TRUE, the instance afterwards gets moved into the copy code (online change)
+END_VAR
+]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[eObjectType := E_ObjectType.OBJECTTYPE_Camera;
+eObjectGroup := E_ObjectGroup.OBJECTGROUP_MzTool OR E_ObjectGroup.OBJECTGROUP_Device;]]></ST>
+      </Implementation>
+    </Method>
+    <Method Name="M_AddChild" Id="{7fbea080-b919-479e-82a2-845d1d7d009a}">
+      <Declaration><![CDATA[METHOD M_AddChild : ERRORID
+VAR_INPUT
+	pObject : POINTER TO FB_Object;
+	nSlotNr	: UINT;	
+	nIndex : INT;
+END_VAR
+]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[//Kann folgende Objekte aufnehmen:
+//Camera, Exposure
+IF pObject > 0 THEN
+	IF pObject^.P_eObjectType = E_ObjectType.OBJECTTYPE_Camera OR
+		pObject^.P_eObjectType = E_ObjectType.OBJECTTYPE_DummyTool OR
+		pObject^.P_eObjectType = E_ObjectType.OBJECTTYPE_Exposure THEN
+		M_AddChild := SUPER^.M_AddChild(pObject,nSlotNr,nIndex);
+	ELSE
+		M_AddChild := E_ErrorIdObjMgmt.ERRORID_InvalidParentObject;
+	END_IF
+ELSE
+	M_AddChild := E_ErrorIdObjMgmt.ERRORID_InvalidParentObject;
+END_IF]]></ST>
+      </Implementation>
+    </Method>
+    <Method Name="M_CancelAction" Id="{913818c3-739d-47c2-8f9f-61bcaba57241}">
+      <Declaration><![CDATA[METHOD M_CancelAction
+VAR_INPUT
+	eAction : E_Action;
+END_VAR
+]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[IF eAction = E_Action.ACTION_TakePicture THEN
+	IF bTakePicture AND nStateA_TakePicture < 70 THEN
+		nStateA_TakePicture := 70;
+	END_IF
+ELSE
+	SUPER^.M_CancelAction(eAction);
+END_IF]]></ST>
+      </Implementation>
+    </Method>
+    <Method Name="M_CheckAction" Id="{9fbc6bc5-2680-450f-a2c1-5f570e5cb51f}">
+      <Declaration><![CDATA[METHOD M_CheckAction : ERRORID
+VAR_INPUT
+	refActionData 	: REFERENCE TO ST_ActionData;
+	pCorrelObject	: POINTER TO FB_Object;
+END_VAR
+
+VAR
+	pTarget : POINTER TO FB_TargetBase;
+	pRack	: POINTER TO FB_Rack;
+	pSlot	: POINTER TO FB_PieceSlot;
+END_VAR]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[IF refActionData.eAction = E_Action.ACTION_TakePicture THEN
+	RETURN;
+ELSE
+	M_CheckAction := SUPER^.M_CheckAction(refActionData, pCorrelObject);
+END_IF]]></ST>
+      </Implementation>
+    </Method>
+    <Method Name="M_ExeAction" Id="{ff212081-912a-4cff-b8c5-f2d1a4eaf519}">
+      <Declaration><![CDATA[METHOD M_ExeAction : ERRORID
+VAR_INPUT
+	refActionData : REFERENCE TO ST_ActionData;	
+END_VAR]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[IF NOT (eCurrentState = E_MachineState.MACHINESTATE_Idle OR
+	eCurrentState = E_MachineState.MACHINESTATE_Active OR
+	eCurrentState = E_MachineState.MACHINESTATE_Ready) THEN
+	M_ExeAction := E_ErrorIdCmd.ERRORID_InvalidState;
+	RETURN;
+END_IF
+
+IF refActionData.eAction = E_Action.ACTION_SwitchLight THEN
+	bCameraLightOn := DINT_TO_BOOL(refActionData.aParams[1]);
+ELSIF refActionData.eAction = E_Action.ACTION_TakePicture THEN
+	IF NOT bTakePicture THEN
+		tDelayTakePicture := DINT_TO_TIME(refActionData.aParams[1]);
+		nRequestArg1 := refActionData.aParams[2];
+		nRequestArg2 := refActionData.aParams[3];
+		nRequestArg3 := refActionData.aParams[4];
+		nRequestArg4 := refActionData.aParams[5];
+		
+		fbList.A_AddHeadValue(hList := hList, putValue := E_Action.ACTION_TakePicture);
+		bTakePicture := TRUE;
+	END_IF
+ELSE
+	M_ExeAction := SUPER^.M_ExeAction(refActionData);
+	RETURN;	
+END_IF
+
+bBusy := TRUE;
+eCurrentState := E_MachineState.MACHINESTATE_Active;]]></ST>
+      </Implementation>
+    </Method>
+    <Method Name="M_GetAllProps" Id="{ee3bbb9b-aa27-457d-998b-0872851fe694}">
+      <Declaration><![CDATA[METHOD M_GetAllProps : ERRORID
+VAR_INPUT
+	refCmdData : REFERENCE TO  ST_CmdData;
+END_VAR
+]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[SUPER^.M_GetAllProps(refCmdData);
+nCurrentPropIndex := nCurrentPropIndex + 1;
+refCmdData.n32Data[nCurrentPropIndex] := REAL_TO_DINT(rWorkingDistance);
+nCurrentPropIndex := nCurrentPropIndex + 1;
+refCmdData.n32Data[nCurrentPropIndex] := BOOL_TO_DINT(bInvertWorkingDistance);
+nCurrentPropIndex := nCurrentPropIndex + 1;
+refCmdData.n32Data[nCurrentPropIndex] := eLightOutput;
+nCurrentPropIndex := nCurrentPropIndex + 1;
+refCmdData.n32Data[nCurrentPropIndex] := nLightOutputChannel;
+
+]]></ST>
+      </Implementation>
+    </Method>
+    <Method Name="M_SetAllProps" Id="{5942dde0-2cc4-4175-8189-ee55fd5bd1a7}">
+      <Declaration><![CDATA[METHOD M_SetAllProps : ERRORID
+VAR_INPUT
+	refCmdData : REFERENCE TO  ST_CmdData;
+END_VAR
+]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[M_SetAllProps := SUPER^.M_SetAllProps(refCmdData);
+
+IF M_SetAllProps > 0 THEN
+	RETURN;
+END_IF
+
+//WorkingDistance
+nCurrentPropIndex := nCurrentPropIndex + 1;
+nSpecPropIndex := nCurrentPropIndex;
+rWorkingDistance := DINT_TO_REAL(refCmdData.n32Data[nCurrentPropIndex]);
+nCurrentPropIndex := nCurrentPropIndex + 1;
+bInvertWorkingDistance := DINT_TO_BOOL(refCmdData.n32Data[nCurrentPropIndex]);
+
+//LightOutput
+nCurrentPropIndex := nCurrentPropIndex + 1;
+eLightOutput := DINT_TO_USINT(refCmdData.n32Data[nCurrentPropIndex]);
+
+//LightOutputChannel
+nCurrentPropIndex := nCurrentPropIndex + 1;
+nLightOutputChannel := DINT_TO_USINT(refCmdData.n32Data[nCurrentPropIndex]);
+
+nNoOfProps := nCurrentPropIndex + 1;]]></ST>
+      </Implementation>
+    </Method>
+    <Method Name="M_SetSingleProp" Id="{5a3b6e7d-63ee-40a8-b359-252b2712110d}">
+      <Declaration><![CDATA[METHOD M_SetSingleProp : ERRORID
+VAR_INPUT
+	refCmdData : REFERENCE TO  ST_CmdData;
+END_VAR
+]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[IF nSpecPropIndex = refCmdData.aHeader[1] THEN
+	rWorkingDistance := DINT_TO_REAL(refCmdData.n32Data[0]);
+ELSIF nSpecPropIndex + 1 = refCmdData.aHeader[1] THEN
+	bInvertWorkingDistance := DINT_TO_BOOL(refCmdData.n32Data[0]);
+ELSIF nSpecPropIndex + 3 = refCmdData.aHeader[1] THEN
+	nLightOutputChannel := DINT_TO_USINT(refCmdData.n32Data[0]);
+ELSE
+	M_SetSingleProp := SUPER^.M_SetSingleProp(refCmdData);
+END_IF]]></ST>
+      </Implementation>
+    </Method>
+    <Property Name="P_stAbsPosTotal" Id="{05053f60-fb68-41b0-bdd5-cdb432e72623}">
+      <Declaration><![CDATA[PROPERTY P_stAbsPosTotal : ST_3DPoint]]></Declaration>
+      <Get Name="Get" Id="{9c92bc8d-37ca-4da7-8b85-6ccb9cf23d05}">
+        <Declaration><![CDATA[VAR
+	stPosTemp : ST_3DPoint;
+END_VAR
+]]></Declaration>
+        <Implementation>
+          <ST><![CDATA[stPosTemp := SUPER^.P_stAbsPosPhys;
+IF bInvertWorkingDistance THEN
+	stPosTemp.Z := stPosTemp.Z + rWorkingDistance;
+ELSE
+	stPosTemp.Z := stPosTemp.Z - rWorkingDistance;
+END_IF
+P_stAbsPosTotal := stPosTemp;]]></ST>
+        </Implementation>
+      </Get>
+    </Property>
+    <Property Name="P_stCurrentPosTotal" Id="{ead232df-6902-4ba7-b56f-60f77812030d}">
+      <Declaration><![CDATA[PROPERTY P_stCurrentPosTotal : ST_3DPoint]]></Declaration>
+      <Get Name="Get" Id="{af8adb17-0a1d-4c90-8336-a1cf5f4690b9}">
+        <Declaration><![CDATA[VAR
+	stPosTemp : ST_3DPoint;
+END_VAR]]></Declaration>
+        <Implementation>
+          <ST><![CDATA[stPosTemp := P_stCurrentPosPhys;
+IF bInvertWorkingDistance THEN
+	stPosTemp.Z := stPosTemp.Z + rWorkingDistance;
+ELSE
+	stPosTemp.Z := stPosTemp.Z - rWorkingDistance;
+END_IF
+P_stCurrentPosTotal := stPosTemp;
+
+]]></ST>
+        </Implementation>
+      </Get>
+    </Property>
+    <LineIds Name="FB_Camera">
+      <LineId Id="77" Count="17" />
+      <LineId Id="3" Count="1" />
+      <LineId Id="32" Count="0" />
+      <LineId Id="31" Count="0" />
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="FB_Camera.A_Reset">
+      <LineId Id="2" Count="0" />
+      <LineId Id="1" Count="0" />
+    </LineIds>
+    <LineIds Name="FB_Camera.A_Stop">
+      <LineId Id="2" Count="0" />
+      <LineId Id="16" Count="2" />
+      <LineId Id="20" Count="2" />
+      <LineId Id="1" Count="0" />
+    </LineIds>
+    <LineIds Name="FB_Camera.A_TakePicture">
+      <LineId Id="1" Count="0" />
+      <LineId Id="8" Count="0" />
+      <LineId Id="12" Count="0" />
+      <LineId Id="14" Count="0" />
+      <LineId Id="18" Count="0" />
+      <LineId Id="17" Count="0" />
+      <LineId Id="34" Count="0" />
+      <LineId Id="26" Count="0" />
+      <LineId Id="28" Count="0" />
+      <LineId Id="36" Count="1" />
+      <LineId Id="16" Count="0" />
+      <LineId Id="15" Count="0" />
+      <LineId Id="7" Count="0" />
+      <LineId Id="19" Count="1" />
+      <LineId Id="32" Count="0" />
+      <LineId Id="22" Count="0" />
+      <LineId Id="21" Count="0" />
+      <LineId Id="29" Count="1" />
+      <LineId Id="33" Count="0" />
+      <LineId Id="31" Count="0" />
+      <LineId Id="3" Count="0" />
+    </LineIds>
+    <LineIds Name="FB_Camera.FB_init">
+      <LineId Id="7" Count="1" />
+    </LineIds>
+    <LineIds Name="FB_Camera.M_AddChild">
+      <LineId Id="3" Count="11" />
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="FB_Camera.M_CancelAction">
+      <LineId Id="26" Count="0" />
+      <LineId Id="33" Count="2" />
+      <LineId Id="29" Count="0" />
+      <LineId Id="32" Count="0" />
+      <LineId Id="30" Count="0" />
+    </LineIds>
+    <LineIds Name="FB_Camera.M_CheckAction">
+      <LineId Id="233" Count="0" />
+      <LineId Id="238" Count="0" />
+      <LineId Id="236" Count="0" />
+      <LineId Id="239" Count="0" />
+      <LineId Id="237" Count="0" />
+    </LineIds>
+    <LineIds Name="FB_Camera.M_ExeAction">
+      <LineId Id="3" Count="5" />
+      <LineId Id="113" Count="0" />
+      <LineId Id="112" Count="0" />
+      <LineId Id="116" Count="0" />
+      <LineId Id="122" Count="0" />
+      <LineId Id="126" Count="0" />
+      <LineId Id="129" Count="1" />
+      <LineId Id="127" Count="0" />
+      <LineId Id="140" Count="1" />
+      <LineId Id="139" Count="0" />
+      <LineId Id="131" Count="1" />
+      <LineId Id="128" Count="0" />
+      <LineId Id="114" Count="0" />
+      <LineId Id="118" Count="0" />
+      <LineId Id="117" Count="0" />
+      <LineId Id="115" Count="0" />
+      <LineId Id="137" Count="1" />
+      <LineId Id="136" Count="0" />
+    </LineIds>
+    <LineIds Name="FB_Camera.M_GetAllProps">
+      <LineId Id="3" Count="3" />
+      <LineId Id="2" Count="0" />
+      <LineId Id="11" Count="0" />
+      <LineId Id="13" Count="1" />
+      <LineId Id="16" Count="0" />
+      <LineId Id="15" Count="0" />
+      <LineId Id="12" Count="0" />
+    </LineIds>
+    <LineIds Name="FB_Camera.M_SetAllProps">
+      <LineId Id="3" Count="10" />
+      <LineId Id="26" Count="0" />
+      <LineId Id="31" Count="0" />
+      <LineId Id="33" Count="1" />
+      <LineId Id="32" Count="0" />
+      <LineId Id="36" Count="1" />
+      <LineId Id="41" Count="0" />
+      <LineId Id="40" Count="0" />
+      <LineId Id="35" Count="0" />
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="FB_Camera.M_SetSingleProp">
+      <LineId Id="3" Count="2" />
+      <LineId Id="13" Count="0" />
+      <LineId Id="18" Count="1" />
+      <LineId Id="7" Count="1" />
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="FB_Camera.P_stAbsPosTotal.Get">
+      <LineId Id="3" Count="0" />
+      <LineId Id="8" Count="0" />
+      <LineId Id="11" Count="0" />
+      <LineId Id="9" Count="0" />
+      <LineId Id="12" Count="0" />
+      <LineId Id="10" Count="0" />
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="FB_Camera.P_stCurrentPosTotal.Get">
+      <LineId Id="3" Count="0" />
+      <LineId Id="9" Count="3" />
+      <LineId Id="4" Count="2" />
+      <LineId Id="2" Count="0" />
+    </LineIds>
+  </POU>
+</TcPlcObject>

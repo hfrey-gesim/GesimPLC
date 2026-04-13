@@ -1,0 +1,107 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<TcPlcObject Version="1.1.0.1">
+  <POU Name="FB_Dil_Init" Id="{14bb2e3c-7e64-4b4e-bdfe-62e1bf97ff8d}" SpecialFunc="None">
+    <Declaration><![CDATA[FUNCTION_BLOCK FB_Dil_Init
+VAR_INPUT
+	bExecute	: BOOL;
+END_VAR
+VAR_OUTPUT
+	bBusy		: BOOL;
+	bError		: BOOL;
+	nErrorId	: ERRORID;
+END_VAR
+VAR
+	nState		: USINT;
+	bStatus		: BOOL;
+	nReadValue	: UINT;
+END_VAR
+VAR_IN_OUT
+	DilSendCmd 	: FB_Dil_SendCmd;
+	pDilRef		: POINTER TO FB_HwRefDiluter;
+END_VAR]]></Declaration>
+    <Implementation>
+      <ST><![CDATA[IF pDilRef = 0 THEN
+	bError := TRUE;
+	RETURN;	
+END_IF
+
+IF bExecute THEN
+	CASE nState OF
+		0:	//Status abrufen
+			pDilRef^.bBusy := bBusy := TRUE;
+			pDilRef^.bIsInit := FALSE;
+			DilSendCmd(bExecute:= TRUE, bExpectReply:= TRUE, sSendData:= CONCAT(USINT_TO_STRING(pDilRef^.nChannel),'Q'));
+			IF NOT DilSendCmd.bBusy THEN
+				IF DilSendCmd.bError THEN
+					bError := TRUE;
+					nErrorId := DilSendCmd.nErrorId;
+				ELSE
+					IF DilSendCmd.bStatus THEN //ready
+						nState := 2;
+					ELSE //busy -> stoppen
+						nState := 1;
+					END_IF
+				END_IF
+				DilSendCmd(bExecute:= FALSE);
+			END_IF
+
+		1:	//Diluter stoppen
+			DilSendCmd(bExecute:= TRUE, bExpectReply:= TRUE, sSendData:= CONCAT(USINT_TO_STRING(pDilRef^.nChannel),'T'));
+			IF NOT DilSendCmd.bBusy THEN
+				IF DilSendCmd.bError THEN
+					bError := TRUE;
+					nErrorId := DilSendCmd.nErrorId;
+				ELSE
+					nState := 0; //nochmal Status abrufen
+				END_IF
+				DilSendCmd(bExecute:= FALSE);
+			END_IF
+		
+		2: //Init ausführen
+			DilSendCmd(bExecute:= TRUE, bExpectReply:= TRUE, sSendData:= CONCAT(USINT_TO_STRING(pDilRef^.nChannel),'ZN1R'));
+			IF NOT DilSendCmd.bBusy THEN
+				IF DilSendCmd.bError THEN
+					bError := TRUE;
+					nErrorId := DilSendCmd.nErrorId;
+				ELSE
+					nState := 3;
+				END_IF
+				DilSendCmd(bExecute:= FALSE);
+			END_IF
+		
+		3: //Status abrufen
+			DilSendCmd(bExecute:= TRUE, bExpectReply:= TRUE, sSendData:= CONCAT(USINT_TO_STRING(pDilRef^.nChannel),'Q'));
+			IF NOT DilSendCmd.bBusy THEN
+				IF DilSendCmd.bError THEN
+					bError := TRUE;
+					nErrorId := DilSendCmd.nErrorId;
+				ELSE
+					IF DilSendCmd.bStatus THEN
+						pDilRef^.bBusy := bBusy := FALSE;
+						pDilRef^.bIsInit := TRUE;
+						nState := 80;
+					END_IF
+				END_IF
+				DilSendCmd(bExecute:= FALSE);
+				
+			END_IF
+	END_CASE
+	
+	IF bError THEN
+		pDilRef^.bBusy := bBusy := FALSE;
+		nState := 99;
+	END_IF
+ELSE
+	DilSendCmd(bExecute:= FALSE);
+	nState := 0;
+	pDilRef^.bBusy := bBusy := FALSE;
+	bError := FALSE;
+	nErrorId := 0;
+END_IF]]></ST>
+    </Implementation>
+    <LineIds Name="FB_Dil_Init">
+      <LineId Id="155" Count="76" />
+      <LineId Id="2" Count="0" />
+    </LineIds>
+  </POU>
+</TcPlcObject>

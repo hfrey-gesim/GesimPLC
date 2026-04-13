@@ -1,0 +1,889 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<TcPlcObject Version="1.1.0.1" ProductVersion="3.1.4022.12">
+  <POU Name="FB_XYDrive_Lmt_DS" Id="{4073179f-38ad-4a46-846a-c2a752e71efa}" SpecialFunc="None">
+    <Declaration><![CDATA[FUNCTION_BLOCK FB_XYDrive_Lmt_DS EXTENDS FB_XYDriveNC
+VAR_INPUT
+END_VAR
+VAR_OUTPUT
+END_VAR
+VAR
+
+	nCapturedCounter	AT %I* : UINT;
+	nCapturedValue 		AT %I* : DINT;
+	nErrorCode			AT %I* : UINT;
+	nStatusWord			AT %I* : UINT;
+	nCapturedCounterOld : UDINT;
+	
+	fbCoeWrite				: FB_EcCoESdoWrite;
+	fbCoeRead				: FB_EcCoESdoRead;
+	nCoeData				: DINT;
+	//nCoeData16				: UINT;
+	fbLmtChangePID			: FB_LmtChangePID;
+	
+	tmrHoming : TON;
+	tmrTimeout : TON;
+	
+	nCycleCounter : USINT;
+	
+END_VAR
+]]></Declaration>
+    <Implementation>
+      <ST><![CDATA[pAxisRefMaster^.ReadStatus();
+rActPos := LREAL_TO_REAL(LIMIT(-999.0,pAxisRefMaster^.NcToPlc.ActPos,999.0) * 1000.0);
+
+bHomed := pAxisRefMaster^.Status.Homed AND nStatusWord.11;
+
+SUPER^();
+
+//Falls Antrieb im Error steht (0x4650) den antriebssprzifischen Error auslesen
+IF pAxisRefMaster^.Status.Error AND pAxisRefMaster^.Status.ErrorID = 16#4650 THEN
+	stError.ErrorId := nErrorCode;
+END_IF]]></ST>
+    </Implementation>
+    <Action Name="A_Capture" Id="{28aea44d-eb34-427b-80ff-007f71fd5319}">
+      <Implementation>
+        <ST><![CDATA[CASE nStateA_Capture OF
+	0:	//Capture
+		IF nCapturedCounter <> nCapturedCounterOld THEN
+			IF eXYOrientation = E_XYOrientation.X THEN
+				rCapturedPos := DINT_TO_REAL(nCapturedValue) / -10.0;
+			ELSE
+				rCapturedPos := DINT_TO_REAL(nCapturedValue) / 10.0;
+			END_IF
+			bCaptureOk := TRUE;
+			nStateA_Capture := 80;
+		END_IF
+	70:
+		nStateA_Capture := 80;
+		bCaptureStopped := TRUE;
+END_CASE]]></ST>
+      </Implementation>
+    </Action>
+    <Action Name="A_Error" Id="{08cddf4a-39c4-47d0-a0de-821f91e53489}">
+      <Implementation>
+        <ST><![CDATA[IF nStateA_Error = 0 THEN
+	IF nErrorId = 17744 OR nErrorId = 18000 THEN //Schleppabstandüberwachung "Position" bzw Antriebshardware nicht bereit
+		nStateA_Error := 1;
+	END_IF
+END_IF
+
+CASE nStateA_Error OF
+	1:	//Achse ausschalten
+		fbMcPower(Axis:= pAxisRefMaster^, Enable:= FALSE);
+		IF NOT fbMcPower.Busy THEN
+			nStateA_Error := 2;
+		END_IF		
+	
+	2:	//Calibration zurücksetzen
+		fbMcHome(Axis:= pAxisRefMaster^, Execute:= TRUE, HomingMode:= MC_ResetCalibration);
+		IF NOT fbMcHome.Busy THEN
+			IF fbMcHome.Error THEN
+				nStateA_Error := 99;
+			ELSE
+				nStateA_Error := 3;
+			END_IF
+ 			fbMcHome(Axis:= pAxisRefMaster^, Execute:= FALSE);
+		END_IF
+END_CASE]]></ST>
+      </Implementation>
+    </Action>
+    <Action Name="A_Init" Id="{75b398fe-d76d-40fa-8ecc-b2830e396013}">
+      <Implementation>
+        <ST><![CDATA[CASE nStateA_Init OF
+	0:	//DriveAdress der Achse ermitteln
+		bBusy := TRUE;
+		fbMcReadDriveAddress(Axis:= pAxisRefMaster^ ,Execute:= TRUE, DriveAddress=> stDriveAddress);
+		IF NOT fbMcReadDriveAddress.Busy THEN
+			IF fbMcReadDriveAddress.Error THEN
+				nErrorId := UDINT_TO_UINT(fbMcReadDriveAddress.ErrorID);
+				nStateA_Init := 99;
+			ELSE
+				nStateA_Init := 1;
+			END_IF
+			fbMcReadDriveAddress(Axis:= pAxisRefMaster^ ,Execute:= FALSE);
+		END_IF
+
+	1:	//Achse im Fehlerzustand?
+		IF pAxisRefMaster^.Status.Error OR fbMcReset.Busy  THEN
+			fbMcReset(Axis:= pAxisRefMaster^, Execute:= TRUE); 
+			IF fbMcReset.Error THEN
+				nErrorId := UDINT_TO_UINT(fbMcReset.ErrorID);
+				fbMcReset(Axis:= pAxisRefMaster^, Execute := FALSE);
+				nStateA_Init := 99;
+			ELSIF fbMcReset.Done THEN
+				fbMcReset(Axis:= pAxisRefMaster^, Execute := FALSE);
+				nStateA_Init := 2;
+			END_IF
+		ELSE
+			nStateA_Init := 2;
+		END_IF
+		
+	2:	//Schleppabstandüberwachung deaktivieren
+		fbMcWriteBoolParameter(Axis:= pAxisRefMaster^, Execute:= TRUE, ParameterNumber:= MC_AxisParameter.AxisEnPositionLagMonitoring, Value:= FALSE);
+		IF NOT fbMcWriteBoolParameter.Busy THEN
+			IF fbMcWriteBoolParameter.Error THEN
+				nStateA_Init := 99;
+			ELSE
+				nStateA_Init := 3;
+			END_IF
+			fbMcWriteBoolParameter(Axis:= pAxisRefMaster^, Execute:= FALSE);
+		END_IF
+		
+	3:	//NC "Referenziert-Flag" zurücksetzen
+		fbMcHome(Axis:= pAxisRefMaster^, Execute:= TRUE, HomingMode:= MC_HomingMode.MC_ResetCalibration);
+		IF NOT fbMcHome.Busy THEN
+			fbMcHome(Axis:= pAxisRefMaster^, Execute:= FALSE);
+			nStateA_Init := 4;
+		END_IF
+		
+	4:	//NC "SoftEndlagenüberwachung "Min" deaktivieren
+		fbMcWriteBoolParameter(Axis:= pAxisRefMaster^, Execute:= TRUE, ParameterNumber:= MC_AxisParameter.AxisEnMinSoftPosLimit, Value:= FALSE);
+		IF NOT fbMcWriteBoolParameter.Busy THEN
+			IF fbMcWriteBoolParameter.Error THEN
+				nStateA_Init := 99;
+			ELSE
+				nStateA_Init := 5;
+			END_IF
+			fbMcWriteBoolParameter(Axis:= pAxisRefMaster^, Execute:= FALSE);
+		END_IF
+
+	5:	//NC "SoftEndlagenüberwachung "Max" deaktivieren
+		fbMcWriteBoolParameter(Axis:= pAxisRefMaster^, Execute:= TRUE, ParameterNumber:= MC_AxisParameter.AxisEnMaxSoftPosLimit, Value:= FALSE);
+		IF NOT fbMcWriteBoolParameter.Busy THEN
+			IF fbMcWriteBoolParameter.Error THEN
+				nStateA_Init := 99;
+			ELSE
+				nStateA_Init := 6;
+			END_IF
+			fbMcWriteBoolParameter(Axis:= pAxisRefMaster^, Execute:= FALSE);
+		END_IF
+	
+	6:	//Achse freigegeben?
+		IF bStop THEN
+			fbMcPower(Axis:= pAxisRefMaster^, Enable:= FALSE);
+			nStateA_Init := 80;
+			RETURN;
+		END_IF
+		IF NOT pAxisRefMaster^.Status.ControlLoopClosed THEN
+			fbMcPower(Axis:= pAxisRefMaster^, Enable:= TRUE, Enable_Positive:= TRUE, Enable_Negative:= TRUE, Override:= 100);
+			IF fbMcPower.Error THEN
+				nErrorId := UDINT_TO_UINT(fbMcPower.ErrorID);
+				fbMcPower(Axis:= pAxisRefMaster^, Enable:= FALSE);
+				nStateA_Init := 99;
+			END_IF
+		ELSE
+			nStateA_Init := 7;
+		END_IF
+		
+	7:	//Homing notwendig?
+		IF NOT nStatusWord.11(*Homing Flag*) OR bReInit THEN
+			IF bInvertInitDir THEN
+				nCoeData := 16#A; //neg
+			ELSE
+				nCoeData := 16#B; //pos
+			END_IF
+			nStateA_Init := 8;
+		ELSE
+			nStateA_Init := 17;
+		END_IF
+		
+	8:	//Homing-Richtung schreiben
+		//Hier könnte es erforderlich sein, den Wert in dem ROM zu schreiben?
+		fbCoeWrite(sNetId:= stDriveAddress.NetId, nSlaveAddr:= stDriveAddress.SlaveAddress, nIndex:= 16#2000 + 16#13C4, nSubIndex:= 1, 
+				pSrcBuf:= ADR(nCoeData), cbBufLen:= SIZEOF(nCoeData), bExecute:= TRUE);
+		IF NOT fbCoeWrite.bBusy THEN
+			IF fbCoeWrite.bError THEN
+				nStateA_Init := 99;
+			ELSE
+				nStateA_Init := 9;
+				nCycleCounter := 0;
+			END_IF
+			fbCoeWrite(bExecute:= FALSE);
+		END_IF		
+	
+	9:	//Home-Position schreiben
+		IF eXYOrientation = E_XYOrientation.X THEN
+			nCoeData := REAL_TO_DINT(rHomePos * -10.0);
+		ELSE
+			nCoeData := REAL_TO_DINT(rHomePos * 10.0);	
+		END_IF
+		nCycleCounter := nCycleCounter + 1;		
+		fbCoeWrite(sNetId:= stDriveAddress.NetId, nSlaveAddr:= stDriveAddress.SlaveAddress, nIndex:= 16#2000 + 16#13C7, nSubIndex:= 1,
+				pSrcBuf:= ADR(nCoeData), cbBufLen:= SIZEOF(nCoeData), bExecute:= TRUE);
+		IF NOT fbCoeWrite.bBusy THEN
+			IF fbCoeWrite.bError THEN
+				nStateA_Init := 99;
+			ELSE
+				//SliderHomePos berechnen
+				IF eXYOrientation = E_XYOrientation.X THEN
+					nCoeData := REAL_TO_DINT(rHomePos * 10.0 + 378000.0);
+				ELSE
+					nCoeData := REAL_TO_DINT(rHomePos * 10.0 + 180000.0);	
+				END_IF	
+				nStateA_Init := 10;
+			END_IF
+			fbCoeWrite(bExecute:= FALSE);
+		END_IF
+		
+	10:	//Slider-Home-Position schreiben
+		fbCoeWrite(sNetId:= stDriveAddress.NetId, nSlaveAddr:= stDriveAddress.SlaveAddress, nIndex:= 16#2000 + 16#13CA, nSubIndex:= 1,
+				pSrcBuf:= ADR(nCoeData), cbBufLen:= SIZEOF(nCoeData), bExecute:= TRUE);
+		IF NOT fbCoeWrite.bBusy THEN
+			IF fbCoeWrite.bError THEN
+				nStateA_Init := 99;
+			ELSE
+				//nStateA_Init := 11;
+				nStateA_Init := 20;
+			END_IF
+			fbCoeWrite(bExecute:= FALSE);
+		END_IF
+		
+	20:	//PID-Parameter Regler modifizieren
+		fbLmtChangePID(nMode:= 0, sNetId:= stDriveAddress.NetId, nSlaveAddr:= stDriveAddress.SlaveAddress, bExecute:= TRUE);
+		IF NOT fbLmtChangePID.bBusy THEN
+			IF fbLmtChangePID.bError THEN
+				nStateA_Init := 99;
+			ELSE
+				nStateA_Init := 11;
+			END_IF
+			fbLmtChangePID(bExecute:= FALSE);
+		END_IF
+		
+	11:	//Homig - Force mask setzen
+		nCoeData := 1;
+		fbCoeWrite(sNetId:= stDriveAddress.NetId, nSlaveAddr:= stDriveAddress.SlaveAddress, nIndex:= 16#2000 + 16#13F7, nSubIndex:= 1, 
+				pSrcBuf:= ADR(nCoeData), cbBufLen:= SIZEOF(nCoeData), bExecute:= TRUE);
+		IF NOT fbCoeWrite.bBusy THEN
+			IF fbCoeWrite.bError THEN
+				nStateA_Init := 99;
+			ELSE
+				nStateA_Init := 12;
+			END_IF
+			fbCoeWrite(bExecute:= FALSE);
+		END_IF
+
+	12:	//Homig - starten
+		nCoeData := 1;
+		fbCoeWrite(sNetId:= stDriveAddress.NetId, nSlaveAddr:= stDriveAddress.SlaveAddress, nIndex:= 16#2000 + 16#141F, nSubIndex:= 1, 
+				pSrcBuf:= ADR(nCoeData), cbBufLen:= SIZEOF(nCoeData), bExecute:= TRUE);
+		IF NOT fbCoeWrite.bBusy THEN
+			IF fbCoeWrite.bError THEN
+				nStateA_Init := 99;
+			ELSE
+				nStateA_Init := 13;
+				tmrHoming(IN:= FALSE);				
+			END_IF
+			fbCoeWrite(bExecute:= FALSE);
+		END_IF
+		
+	13:	//Homing state abrufen
+		//Achse auf Error abfragen !!!
+		IF bStop OR pAxisRefMaster^.Status.Error THEN
+			fbMcPower(Axis:= pAxisRefMaster^, Enable:= FALSE);
+			fbCoeRead(bExecute:= FALSE);
+			nStateA_Init := 15;	//Stop Homing
+			RETURN;
+		END_IF
+		tmrHoming(IN:= TRUE, PT:= T#100S);
+		fbCoeRead(sNetId:= stDriveAddress.NetId, nSlaveAddr:= stDriveAddress.SlaveAddress, nIndex:= 16#2000 + 16#1B62, nSubIndex:= 1, 
+				pDstBuf:= ADR(nCoeData), cbBufLen:= SIZEOF(nCoeData), bExecute:= TRUE);
+		IF NOT fbCoeRead.bBusy THEN
+			IF fbCoeRead.bError THEN
+				nStateA_Init := 99;
+			ELSE
+				IF nCoeData = 16#090F THEN
+					//nStateA_Init := 14;
+					nStateA_Init := 21;
+				END_IF
+			END_IF
+			fbCoeRead(bExecute:= FALSE);
+		END_IF
+		
+	21:	//PID-Parameter Regler modifizieren
+		fbLmtChangePID(nMode:= 1, sNetId:= stDriveAddress.NetId, nSlaveAddr:= stDriveAddress.SlaveAddress, bExecute:= TRUE);
+		IF NOT fbLmtChangePID.bBusy THEN
+			IF fbLmtChangePID.bError THEN
+				nStateA_Init := 99;
+			ELSE
+				nStateA_Init := 14;
+			END_IF
+			fbLmtChangePID(bExecute:= FALSE);
+		END_IF
+
+		
+	14:	//Warten, bis Position sich eingependelt
+		Delay(IN:=TRUE , PT:=T#100MS);
+		IF Delay.Q THEN
+			Delay(IN:=FALSE);
+			nStateA_Init := 15;
+		END_IF
+
+	15:	//Axis resetten, dadurch wird die Zielpos gleich der Istpos gesetzt
+		fbMcReset(Axis:= pAxisRefMaster^, Execute:= TRUE);
+		IF NOT fbMcReset.Busy THEN
+			fbMcReset(Axis:= pAxisRefMaster^, Execute:= FALSE);
+			nStateA_Init := 16;
+		END_IF
+		
+	16:	//Homig - stoppen
+		nCoeData := 0;
+		fbCoeWrite(sNetId:= stDriveAddress.NetId, nSlaveAddr:= stDriveAddress.SlaveAddress, nIndex:= 16#2000 + 16#141F, nSubIndex:= 1, 
+				pSrcBuf:= ADR(nCoeData), cbBufLen:= SIZEOF(nCoeData), bExecute:= TRUE);
+		IF NOT fbCoeWrite.bBusy THEN
+			IF fbCoeWrite.bError THEN
+				nStateA_Init := 99;
+			ELSE
+				IF bStop OR pAxisRefMaster^.Status.Error THEN
+					nStateA_Init := 18;
+				ELSE
+					nStateA_Init := 17;	
+				END_IF
+				
+			END_IF
+			fbCoeWrite(bExecute:= FALSE);
+		END_IF
+		
+	17:	//NC "Referenziert-Flag" setzen
+		fbMcHome(Axis:= pAxisRefMaster^, Execute:= TRUE, HomingMode:= MC_HomingMode.MC_ForceCalibration);
+		IF NOT fbMcHome.Busy THEN
+			fbMcHome(Axis:= pAxisRefMaster^, Execute:= FALSE);
+			nStateA_Init := 18;
+		END_IF
+		
+	18:	//NC "SoftEndlagenüberwachung "Min" aktivieren
+		fbMcWriteBoolParameter(Axis:= pAxisRefMaster^, Execute:= TRUE, ParameterNumber:= MC_AxisParameter.AxisEnMinSoftPosLimit, Value:= TRUE);
+		IF NOT fbMcWriteBoolParameter.Busy THEN
+			IF fbMcWriteBoolParameter.Error THEN
+				nStateA_Init := 99;
+			ELSE
+				nStateA_Init := 19;
+			END_IF
+			fbMcWriteBoolParameter(Axis:= pAxisRefMaster^, Execute:= FALSE);
+		END_IF
+
+	19:	//NC "SoftEndlagenüberwachung "Max" aktivieren
+		fbMcWriteBoolParameter(Axis:= pAxisRefMaster^, Execute:= TRUE, ParameterNumber:= MC_AxisParameter.AxisEnMaxSoftPosLimit, Value:= TRUE);
+		IF NOT fbMcWriteBoolParameter.Busy THEN
+			IF fbMcWriteBoolParameter.Error THEN
+				nStateA_Init := 99;
+			ELSE
+				IF pAxisRefMaster^.Status.Error THEN
+					nStateA_Init := 99;
+				ELSE
+					nStateA_Init := 80;
+				END_IF
+				
+			END_IF
+			fbMcWriteBoolParameter(Axis:= pAxisRefMaster^, Execute:= FALSE);
+		END_IF
+		
+	99:	//Error
+		fbMcPower(Axis:= pAxisRefMaster^, Enable:= FALSE);
+		bError := TRUE;
+END_CASE]]></ST>
+      </Implementation>
+    </Action>
+    <Action Name="A_Reset" Id="{e32d83bf-0290-4681-9a6a-5a0e77921fa2}">
+      <Implementation>
+        <ST><![CDATA[
+CASE nStateA_Reset OF
+	0:	
+		bBusy := TRUE;
+		IF pAxisRefMaster^.Status.Error THEN
+			IF pAxisRefMaster^.Status.ErrorID = 16#4550 OR pAxisRefMaster^.Status.ErrorID = 16#4650 THEN
+				//16#4550 Schleppabstand, 16#4650 Antriebshardware nicht bereit
+				nStateA_Reset := 1;
+			ELSIF pAxisRefMaster^.Status.ErrorID = 16#4655 THEN //ungültige Daten (eventuell durch Resetting von anderem Device)
+				//warten bis WcState wieder "0" mit max. Timeout 15s
+				IF pAxisRefMaster^.Status.IoDataInvalid THEN
+					tmrTimeout(IN:= TRUE, PT:= T#15S);
+					IF tmrTimeout.Q THEN
+						tmrTimeout(IN:= FALSE);
+						nStateA_Reset := 99;
+					END_IF
+				ELSE
+					tmrTimeout(IN:= FALSE);
+					nStateA_Reset := 4;	
+				END_IF
+			ELSE
+				nStateA_Reset := 4;
+			END_IF
+		ELSE
+			nStateA_Reset := 5;
+		END_IF
+	
+	1:	//Reset Calibration
+		fbMcHome(Axis:= pAxisRefMaster^, Execute:= TRUE, HomingMode:= Tc2_MC2.MC_HomingMode.MC_ResetCalibration);
+		IF NOT fbMcHome.Busy THEN
+			fbMcHome(Axis:= pAxisRefMaster^, Execute:= FALSE);
+			nStateA_Reset := 2;
+		END_IF
+		
+	2:	IF pAxisRefMaster^.Status.ErrorID = 16#4650 THEN //Antriebshardware nicht bereit -> Drive zurcüksetzen
+			fbCoeWrite(sNetId:= stAdsAddress.sNetId, nSlaveAddr:= stAdsAddress.nPort, nIndex:= 16#2000, nSubIndex:= 16#0B,
+					pSrcBuf:= ADR(nCoeData), cbBufLen:= 0, tTimeout := T#10S, bExecute:= TRUE);
+			IF NOT fbCoeWrite.bBusy THEN
+				IF fbCoeWrite.bError THEN
+					nStateA_Reset := 99;
+				ELSE
+					tmrTimeout(IN:= TRUE, PT:= T#15S); //Achse sollte sich spätestens nach 15sec. wieder melden
+					nStateA_Reset := 3;
+				END_IF
+				fbCoeWrite(bExecute:= FALSE);
+			END_IF
+			
+		END_IF
+		
+	3:	//Fehler zurückgesetzt?
+		tmrTimeout();
+		IF tmrTimeout.Q THEN
+			tmrTimeout(IN:= FALSE);
+			nStateA_Reset := 99;
+		END_IF
+		
+		IF nErrorCode = 0 THEN
+			tmrTimeout(IN:= FALSE);
+			nStateA_Reset := 4;
+		END_IF
+	
+	4:	//Reset NC Achse
+		fbMcReset(Axis:= pAxisRefMaster^, Execute:= TRUE);
+		IF NOT fbMcReset.Busy THEN
+			fbMcReset(Axis:= pAxisRefMaster^, Execute:= FALSE);
+			nStateA_Reset := 5;
+		END_IF
+	
+	5:	//Checken, ob Achse fehlerfrei
+		IF pAxisRefMaster^.Status.Error THEN
+			nStateA_Reset := 99;
+		ELSE
+			//Motion-Bausteine zurücksetzen
+			fbMcMoveAbs(Axis:= pAxisRefMaster^, Execute:= FALSE);
+			fbMcMoveRel(Axis:= pAxisRefMaster^, Execute:= FALSE);
+			fbMcHalt(Axis:= pAxisRefMaster^, Execute:= FALSE);
+			nStateA_Reset := 80;
+			nStateA_Error := 0;
+			bError := FALSE;
+		END_IF
+END_CASE]]></ST>
+      </Implementation>
+    </Action>
+    <Action Name="A_Setup" Id="{04acad22-ad96-453c-a181-0cb8bde33a03}">
+      <Implementation>
+        <ST><![CDATA[CASE nStateA_Setup OF
+	0:	//Achsen initialisieren mit RefPos0 (RefPos0 wird in M_Setup() gesetzt
+		bInit := TRUE;
+		nStateA_Setup := 1;
+		bSetupWaitForResp := FALSE;
+		
+	1:	//Warten bis "Init" fertig"
+		IF NOT bInit THEN
+			nStateA_Setup := 2;
+		END_IF
+
+	2:	//Homed zurücksetzen durch die nächsten 3 Steps
+		//HomingSpeed auf "0" setzen
+		nCoeData := 0;
+		fbCoeWrite(sNetId:= stDriveAddress.NetId, nSlaveAddr:= stDriveAddress.SlaveAddress, nIndex:= 16#2000 + 16#13C8, nSubIndex:= 1, 
+				pSrcBuf:= ADR(nCoeData), cbBufLen:= SIZEOF(nCoeData), bExecute:= TRUE);
+		IF NOT fbCoeWrite.bBusy THEN
+			IF fbCoeWrite.bError THEN
+				nStateA_Setup := 99;
+			ELSE
+				nStateA_Setup := 3;
+			END_IF
+			fbCoeWrite(bExecute:= FALSE);
+		END_IF
+		
+	3:	//Homing starten
+		nCoeData := 1;
+		fbCoeWrite(sNetId:= stDriveAddress.NetId, nSlaveAddr:= stDriveAddress.SlaveAddress, nIndex:= 16#2000 + 16#141F, nSubIndex:= 1, 
+				pSrcBuf:= ADR(nCoeData), cbBufLen:= SIZEOF(nCoeData), bExecute:= TRUE);
+		IF NOT fbCoeWrite.bBusy THEN
+			IF fbCoeWrite.bError THEN
+				nStateA_Setup := 99;
+			ELSE
+				nStateA_Setup := 4;
+			END_IF
+			fbCoeWrite(bExecute:= FALSE);
+		END_IF
+		
+	4:	//Homing stoppen
+		nCoeData := 0;
+		fbCoeWrite(sNetId:= stDriveAddress.NetId, nSlaveAddr:= stDriveAddress.SlaveAddress, nIndex:= 16#2000 + 16#141F, nSubIndex:= 1, 
+				pSrcBuf:= ADR(nCoeData), cbBufLen:= SIZEOF(nCoeData), bExecute:= TRUE);
+		IF NOT fbCoeWrite.bBusy THEN
+			IF fbCoeWrite.bError THEN
+				nStateA_Setup := 99;
+			ELSE
+				nStateA_Setup := 5;
+			END_IF
+			fbCoeWrite(bExecute:= FALSE);
+		END_IF
+		
+	5:	//HomingSpeed auf "0.02" setzen
+		nCoeData := 20000;
+		fbCoeWrite(sNetId:= stDriveAddress.NetId, nSlaveAddr:= stDriveAddress.SlaveAddress, nIndex:= 16#2000 + 16#13C8, nSubIndex:= 1, 
+				pSrcBuf:= ADR(nCoeData), cbBufLen:= SIZEOF(nCoeData), bExecute:= TRUE);
+		IF NOT fbCoeWrite.bBusy THEN
+			IF fbCoeWrite.bError THEN
+				nStateA_Setup := 99;
+			ELSE
+				nStateA_Setup := 6;
+			END_IF
+			fbCoeWrite(bExecute:= FALSE);
+		END_IF
+		
+	6:	//Achse ausschalten
+		fbMcPower(Axis:= pAxisRefMaster^, Enable:= FALSE);
+		IF NOT pAxisRefMaster^.Status.ControlLoopClosed THEN
+			IF bStop THEN
+				nStateA_Setup := 80;
+			ELSE
+				nStateA_Setup := 10; //Weiterschalten zu "11" werfolgt durch fbConfigSetup
+				bSetupWaitForResp := TRUE; //Wartet auf Antwort vom User
+				bContinueSetup := FALSE;
+			END_IF
+		END_IF
+		
+	10:	//Warte auf UserResponse
+		IF bStop THEN
+			nStateA_Setup := 80;
+		ELSE
+			IF bContinueSetup THEN
+				nStateA_Setup := 11;
+			END_IF
+		END_IF
+		
+	11:	//Referenzposition berechnen
+		IF eXYOrientation = E_XYOrientation.X THEN
+			rRefPosMaster := rWorkplateLength - rActPos - rSetupPosDist - rNullPosDist;
+		ELSE
+			rRefPosMaster := (-rActPos) + rSetupPosDist - rNullPosDist;
+		END_IF
+		nStateA_Setup := 80;
+	
+END_CASE
+]]></ST>
+      </Implementation>
+    </Action>
+    <Action Name="A_StopCapture" Id="{4162ffa8-145a-4f33-bdb0-6d74ba1460f0}">
+      <Implementation>
+        <ST><![CDATA[CASE nStateA_StopCapture OF
+	0:	IF bCapture AND nStateA_Capture < 70 THEN
+			nStateA_Capture := 70;
+			nStateA_StopCapture := 1;
+		ELSE
+			nStateA_StopCapture := 80;
+		END_IF
+		
+	1:	IF NOT bCapture THEN
+			bCaptureStopped := TRUE;
+			nStateA_StopCapture := 80;
+		END_IF
+END_CASE]]></ST>
+      </Implementation>
+    </Action>
+    <Action Name="A_WriteAxisParameter" Id="{1233533e-5998-481e-b1c1-f27fa3e9dfaa}">
+      <Implementation>
+        <ST><![CDATA[IF nStateA_WriteAxisParamter = 0 THEN
+	//feststellen, welcher Parameter als nächstes geschrieben werden muss
+	IF nStateWriteLimitNegative = 1 THEN
+		nStateWriteLimitNegative := 2;
+	ELSIF nStateWriteLimitPositive = 1 THEN
+		nStateWriteLimitPositive := 2;
+	ELSIF nStateWriteNCIFastSpeed = 1 THEN
+		nStateWriteNCIFastSpeed := 2;
+	ELSE
+		nStateWriteLimitNegative := 1;
+		nStateWriteLimitPositive := 1;
+		nStateWriteNCIFastSpeed := 1;
+		nStateA_WriteAxisParamter := 80;
+		RETURN;
+	END_IF
+	
+	IF nStateWriteLimitNegative = 2 THEN
+		fbMcWriteParameter.ParameterNumber := MC_AxisParameter.SWLimitNeg;
+		fbMcWriteParameter.Value := P_rMinPos / 1000.0;
+		nStateA_WriteAxisParamter := 1;
+	END_IF
+	
+	IF nStateWriteLimitPositive = 2 THEN
+		fbMcWriteParameter.ParameterNumber := MC_AxisParameter.SWLimitPos;
+		fbMcWriteParameter.Value := P_rMaxPos / 1000.0;
+		nStateA_WriteAxisParamter := 1;
+	END_IF
+
+	IF nStateWriteNCIFastSpeed = 2 THEN
+		fbMcWriteParameter.ParameterNumber := MC_AxisParameter.AxisRapidTraverseVelocity;
+		fbMcWriteParameter.Value := rMaxSpeed / 1000.0;
+		nStateA_WriteAxisParamter := 1;
+	END_IF
+	
+END_IF
+
+IF nStateA_WriteAxisParamter = 1 THEN
+	fbMcWriteParameter(Axis:= pAxisRefMaster^, Execute:= TRUE);
+	//Hier kann es passieren, dass der Fehler "1793" auftritt. Das passiert manchmal beim Start der SPS
+	//In diesem Falle, sollte es solange probiert werden, bis dieser nicht mehr auftritt
+	IF NOT fbMcWriteParameter.Busy THEN
+		IF fbMcWriteParameter.Error THEN
+			IF fbMcWriteParameter.ErrorID <> 1793 THEN
+				nStateA_WriteAxisParamter := 99;
+			END_IF
+		ELSE
+			CASE fbMcWriteParameter.ParameterNumber OF
+				MC_AxisParameter.SWLimitNeg:
+					nStateWriteLimitNegative := 3;
+				MC_AxisParameter.SWLimitPos:
+					nStateWriteLimitPositive := 3;
+				MC_AxisParameter.AxisRapidTraverseVelocity:
+					nStateWriteNCIFastSpeed := 3;
+			END_CASE
+			nStateA_WriteAxisParamter := 0;
+		END_IF
+		fbMcWriteParameter(Axis:= pAxisRefMaster^, Execute:= FALSE);
+	END_IF	
+END_IF
+
+]]></ST>
+      </Implementation>
+    </Action>
+    <Method Name="FB_init" Id="{c001c009-fc69-4cfb-948c-330127cd9039}">
+      <Declaration><![CDATA[METHOD FB_init : BOOL
+VAR_INPUT
+	bInitRetains 	: BOOL; // if TRUE, the retain variables are initialized (warm start / cold start)
+	bInCopyCode 	: BOOL;  // if TRUE, the instance afterwards gets moved into the copy code (online change)
+	eXYOrientation	: E_XYOrientation;
+	pNCAxisRef		: POINTER TO AXIS_REF;
+END_VAR
+]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[THIS^.pAxisRefMaster := pNCAxisRef;]]></ST>
+      </Implementation>
+    </Method>
+    <Method Name="M_Capture" Id="{cedeb5a9-5e18-4c4b-87b8-edef698353ab}">
+      <Declaration><![CDATA[METHOD M_Capture : ERRORID
+VAR_INPUT
+END_VAR
+]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[nCapturedCounterOld := nCapturedCounter;
+bCapture := TRUE;
+bCaptureOk := FALSE;
+bCaptureStopped := FALSE;
+A_Capture();]]></ST>
+      </Implementation>
+    </Method>
+    <Property Name="P_bHasJob" Id="{079af19e-3b27-49ee-beed-996488b5ed9c}">
+      <Declaration><![CDATA[PROPERTY P_bHasJob : BOOL]]></Declaration>
+      <Get Name="Get" Id="{efac7493-232a-4154-adb6-02cd6cef15f3}">
+        <Declaration><![CDATA[VAR
+END_VAR
+]]></Declaration>
+        <Implementation>
+          <ST><![CDATA[pAxisRefMaster^.ReadStatus();
+P_bHasJob := pAxisRefMaster^.Status.HasJob;]]></ST>
+        </Implementation>
+      </Get>
+    </Property>
+    <Property Name="P_bIsMoving" Id="{52cdb550-af85-4549-b88b-5f618ade1758}">
+      <Declaration><![CDATA[PROPERTY P_bIsMoving : BOOL]]></Declaration>
+      <Get Name="Get" Id="{22dc649a-9236-4c8c-966a-739b694def23}">
+        <Declaration><![CDATA[VAR
+END_VAR
+]]></Declaration>
+        <Implementation>
+          <ST><![CDATA[pAxisRefMaster^.ReadStatus();
+P_bIsMoving :=  pAxisRefMaster^.Status.Moving;]]></ST>
+        </Implementation>
+      </Get>
+    </Property>
+    <Property Name="P_pAxisRef" Id="{60749172-4c60-4301-95b2-3e6db2ac38dc}">
+      <Declaration><![CDATA[PROPERTY P_pAxisRef : POINTER TO AXIS_REF]]></Declaration>
+      <Get Name="Get" Id="{930d3da8-9ee1-4b98-8d5a-f7b8ae14badd}">
+        <Declaration><![CDATA[VAR
+END_VAR
+]]></Declaration>
+        <Implementation>
+          <ST><![CDATA[P_pAxisRef := pAxisRefMaster;]]></ST>
+        </Implementation>
+      </Get>
+    </Property>
+    <Property Name="P_tHomingTime" Id="{9ab50cf4-b11e-486c-b97e-a2dcfa3c8f9e}">
+      <Declaration><![CDATA[PROPERTY P_tHomingTime : TIME]]></Declaration>
+      <Get Name="Get" Id="{b129fe01-3543-4a79-9970-beecbf3cdb60}">
+        <Declaration><![CDATA[VAR
+END_VAR
+]]></Declaration>
+        <Implementation>
+          <ST><![CDATA[P_tHomingTime := tmrHoming.ET;]]></ST>
+        </Implementation>
+      </Get>
+    </Property>
+    <LineIds Name="FB_XYDrive_Lmt_DS">
+      <LineId Id="18" Count="4" />
+      <LineId Id="9" Count="0" />
+      <LineId Id="42" Count="0" />
+      <LineId Id="41" Count="0" />
+      <LineId Id="43" Count="0" />
+      <LineId Id="48" Count="1" />
+    </LineIds>
+    <LineIds Name="FB_XYDrive_Lmt_DS.A_Capture">
+      <LineId Id="10" Count="1" />
+      <LineId Id="25" Count="1" />
+      <LineId Id="28" Count="1" />
+      <LineId Id="27" Count="0" />
+      <LineId Id="12" Count="0" />
+      <LineId Id="18" Count="2" />
+      <LineId Id="22" Count="2" />
+      <LineId Id="1" Count="0" />
+    </LineIds>
+    <LineIds Name="FB_XYDrive_Lmt_DS.A_Error">
+      <LineId Id="2" Count="22" />
+      <LineId Id="1" Count="0" />
+    </LineIds>
+    <LineIds Name="FB_XYDrive_Lmt_DS.A_Init">
+      <LineId Id="359" Count="69" />
+      <LineId Id="636" Count="0" />
+      <LineId Id="667" Count="0" />
+      <LineId Id="637" Count="0" />
+      <LineId Id="639" Count="0" />
+      <LineId Id="638" Count="0" />
+      <LineId Id="429" Count="31" />
+      <LineId Id="676" Count="0" />
+      <LineId Id="461" Count="15" />
+      <LineId Id="596" Count="0" />
+      <LineId Id="590" Count="5" />
+      <LineId Id="478" Count="2" />
+      <LineId Id="583" Count="1" />
+      <LineId Id="597" Count="7" />
+      <LineId Id="680" Count="0" />
+      <LineId Id="605" Count="1" />
+      <LineId Id="585" Count="0" />
+      <LineId Id="768" Count="1" />
+      <LineId Id="771" Count="0" />
+      <LineId Id="777" Count="1" />
+      <LineId Id="780" Count="0" />
+      <LineId Id="782" Count="1" />
+      <LineId Id="781" Count="0" />
+      <LineId Id="784" Count="0" />
+      <LineId Id="779" Count="0" />
+      <LineId Id="482" Count="22" />
+      <LineId Id="666" Count="0" />
+      <LineId Id="505" Count="5" />
+      <LineId Id="641" Count="0" />
+      <LineId Id="664" Count="0" />
+      <LineId Id="644" Count="0" />
+      <LineId Id="642" Count="0" />
+      <LineId Id="650" Count="0" />
+      <LineId Id="643" Count="0" />
+      <LineId Id="645" Count="0" />
+      <LineId Id="511" Count="4" />
+      <LineId Id="613" Count="0" />
+      <LineId Id="517" Count="0" />
+      <LineId Id="614" Count="0" />
+      <LineId Id="725" Count="0" />
+      <LineId Id="519" Count="3" />
+      <LineId Id="785" Count="0" />
+      <LineId Id="787" Count="8" />
+      <LineId Id="786" Count="0" />
+      <LineId Id="726" Count="0" />
+      <LineId Id="523" Count="13" />
+      <LineId Id="674" Count="0" />
+      <LineId Id="538" Count="6" />
+      <LineId Id="607" Count="0" />
+      <LineId Id="653" Count="1" />
+      <LineId Id="656" Count="1" />
+      <LineId Id="655" Count="0" />
+      <LineId Id="609" Count="0" />
+      <LineId Id="547" Count="27" />
+      <LineId Id="658" Count="1" />
+      <LineId Id="661" Count="1" />
+      <LineId Id="660" Count="0" />
+      <LineId Id="575" Count="2" />
+      <LineId Id="618" Count="1" />
+      <LineId Id="580" Count="2" />
+      <LineId Id="1" Count="0" />
+    </LineIds>
+    <LineIds Name="FB_XYDrive_Lmt_DS.A_Reset">
+      <LineId Id="43" Count="0" />
+      <LineId Id="2" Count="4" />
+      <LineId Id="86" Count="0" />
+      <LineId Id="7" Count="1" />
+      <LineId Id="89" Count="0" />
+      <LineId Id="97" Count="0" />
+      <LineId Id="100" Count="6" />
+      <LineId Id="98" Count="1" />
+      <LineId Id="90" Count="0" />
+      <LineId Id="9" Count="11" />
+      <LineId Id="51" Count="1" />
+      <LineId Id="55" Count="10" />
+      <LineId Id="53" Count="1" />
+      <LineId Id="66" Count="0" />
+      <LineId Id="68" Count="0" />
+      <LineId Id="107" Count="0" />
+      <LineId Id="69" Count="2" />
+      <LineId Id="67" Count="0" />
+      <LineId Id="72" Count="1" />
+      <LineId Id="76" Count="1" />
+      <LineId Id="75" Count="0" />
+      <LineId Id="21" Count="6" />
+      <LineId Id="79" Count="0" />
+      <LineId Id="29" Count="7" />
+      <LineId Id="40" Count="0" />
+      <LineId Id="37" Count="2" />
+      <LineId Id="1" Count="0" />
+    </LineIds>
+    <LineIds Name="FB_XYDrive_Lmt_DS.A_Setup">
+      <LineId Id="288" Count="5" />
+      <LineId Id="390" Count="0" />
+      <LineId Id="411" Count="0" />
+      <LineId Id="418" Count="0" />
+      <LineId Id="413" Count="0" />
+      <LineId Id="298" Count="56" />
+      <LineId Id="419" Count="1" />
+      <LineId Id="422" Count="0" />
+      <LineId Id="424" Count="2" />
+      <LineId Id="421" Count="0" />
+      <LineId Id="358" Count="1" />
+      <LineId Id="403" Count="1" />
+      <LineId Id="406" Count="4" />
+      <LineId Id="360" Count="0" />
+      <LineId Id="364" Count="3" />
+      <LineId Id="369" Count="1" />
+      <LineId Id="372" Count="1" />
+      <LineId Id="387" Count="1" />
+      <LineId Id="1" Count="0" />
+    </LineIds>
+    <LineIds Name="FB_XYDrive_Lmt_DS.A_StopCapture">
+      <LineId Id="12" Count="11" />
+      <LineId Id="1" Count="0" />
+    </LineIds>
+    <LineIds Name="FB_XYDrive_Lmt_DS.A_WriteAxisParameter">
+      <LineId Id="2" Count="59" />
+      <LineId Id="1" Count="0" />
+    </LineIds>
+    <LineIds Name="FB_XYDrive_Lmt_DS.FB_init">
+      <LineId Id="9" Count="0" />
+    </LineIds>
+    <LineIds Name="FB_XYDrive_Lmt_DS.M_Capture">
+      <LineId Id="8" Count="3" />
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="FB_XYDrive_Lmt_DS.P_bHasJob.Get">
+      <LineId Id="3" Count="0" />
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="FB_XYDrive_Lmt_DS.P_bIsMoving.Get">
+      <LineId Id="3" Count="0" />
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="FB_XYDrive_Lmt_DS.P_pAxisRef.Get">
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="FB_XYDrive_Lmt_DS.P_tHomingTime.Get">
+      <LineId Id="2" Count="0" />
+    </LineIds>
+  </POU>
+</TcPlcObject>

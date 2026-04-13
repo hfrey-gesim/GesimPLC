@@ -1,0 +1,58 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<TcPlcObject Version="1.1.0.1" ProductVersion="3.1.4024.9">
+  <DUT Name="E_ErrorIdMultiZ" Id="{b2fb720e-540b-4104-92b5-7907acd18b3d}">
+    <Declaration><![CDATA[TYPE E_ErrorIdMultiZ :
+(
+	ERRORID_NoError				:= 0,
+	ERRORID_NoZAxis				:= 41728,	//ErrorCode MultiZ: "1"
+	
+	(*ERRORID_ReInitFail			:= 41729, //ErrorCode MultiZ: "2"
+	ERRORID_LimitFail			:= 41730, //ErrorCode MultiZ: "3"
+	ERRORID_InitLoop			:= 41731, //ErrorCode MultiZ: "4"
+	ERRORID_StillMoving			:= 41732, //ErrorCode MultiZ: "5"
+	ERRORID_ForceThresholdErr	:= 41733, //ErrorCode MultiZ: "6"
+	ERRORID_PosAccuracy			:= 41734, //ErrorCode MultiZ: "7"
+	ERRORID_InvalidTriggerVers	:= 41735, //ErrorCode MultiZ: "8"
+	ERRORID_TipLimitFail		:= 41736, //ErrorCode MultiZ: "9"
+	ERRORID_I2cTimeOutGen		:= 41737, //ErrorCode MultiZ: "10"
+	ERRORID_TmcInvalidUdpateData:= 41738, //ErrorCode MultiZ: "11"
+	ERRORID_TmcUdpateFailed		:= 41739, //ErrorCode MultiZ: "12"
+	ERRORID_UnknownTool			:= 41740, //ErrorCode MultiZ: "13"
+	ERRORID_I2cCommError		:= 41741, //ErrorCode MultiZ: "14"
+	ERRORID_CommTimeoutMot		:= 41742, //ErrorCode MultiZ: "15"
+	ERRORID_InvalidPiezoParam	:= 41743, //ErrorCode MultiZ: "16"
+	ERRORID_AxisNotInitialized	:= 41744, //ErrorCode MultiZ: "17"
+	ERRORID_NodePreop			:= 41745, //ErrorCode MultiZ: "18"
+	ERRORID_ZSensSwitchFail		:= 41746, //ErrorCode MultiZ: "19"
+	ERRORID_ZSensSwitchNotFound	:= 41747, //ErrorCode MultiZ: "20"
+	ERRORID_No_Z_Limit			:= 41748, //ErrorCode MultiZ: "21"
+
+	ERRORID_InvalidToolMode		:= 41750, //ErrorCode MultiZ: "23"
+	
+	ERRORID_GenericError		:= 41981, //ErrorCode MultiZ: "254"
+	ERRORID_CommFailMot			:= 41982, //ErrorCode MultiZ: "255"*)
+	
+	ERRORID_ToResetErr				:= 41984,
+	ERRORID_ToWaitSetPointAck		:= 41985,
+	ERRORID_ToWaitTrgtReached		:= 41986,
+	ERRORID_ToWaitStop				:= 41987,
+	ERRORID_AxisNotHomed			:= 41988,
+	ERRORID_TimeOutXYWaitInitZ		:= 41989,
+	ERRORID_XYInitImpossible		:= 41990,
+	ERRORID_InvalidZChannel			:= 41991,
+	ERRORID_MultiZIsStillMoving		:= 41992,
+	ERRORID_InvalidZAxisToolType	:= 41993,
+	ERRORID_InvalidSdoVariType		:= 41994,
+	ERRORID_InvalidToolConfig		:= 41995,
+	ERRORID_InvalidHeaterConfig		:= 41996,
+	ERRORID_TimeoutSwivel			:= 41997,
+	ERRORID_TimeoutLock				:= 41998,
+	ERRORID_TimeoutUnLock			:= 41999,
+	ERRORID_TimeoutExtrude			:= 42000,
+	ERRORID_TimeoutMovePlunger		:= 42001,
+	ERRORID_FirmwareCartCoolerToLow := 42002,
+	ERRORID_UnknownError			:= 65535
+)UINT;
+END_TYPE]]></Declaration>
+  </DUT>
+</TcPlcObject>

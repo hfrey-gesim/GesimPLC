@@ -1,0 +1,15 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<TcPlcObject Version="1.1.0.1" ProductVersion="3.1.0.25">
+  <DUT Name="ST_WasteChannel" Id="{37990952-59c5-47c9-9270-5a9d47d88b5a}">
+    <Declaration><![CDATA[TYPE ST_WasteChannel :
+STRUCT
+	nNr		 	: USINT;
+	nSpecPointNr: USINT;
+	nPumpNr	 	: USINT;
+	nBottleNr	: USINT;
+END_STRUCT
+END_TYPE
+]]></Declaration>
+    <ObjectProperties />
+  </DUT>
+</TcPlcObject>

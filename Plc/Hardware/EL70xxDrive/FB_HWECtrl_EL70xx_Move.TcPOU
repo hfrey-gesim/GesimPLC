@@ -1,0 +1,153 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<TcPlcObject Version="1.1.0.1">
+  <POU Name="FB_HWECtrl_EL70xx_Move" Id="{a9e3adbb-090d-4e41-b2b3-ca2c5f61b231}" SpecialFunc="None">
+    <Declaration><![CDATA[FUNCTION_BLOCK FB_HWECtrl_EL70xx_Move
+VAR_INPUT
+	bExecute			: BOOL;
+	bStop				: BOOL;
+	nPosition			: DINT;	//Reale Einheit (µm oder µ°)
+	nSpeed				: DINT;	//Reale Einheit/s
+	nToleranceWindow 	: DINT;	//in diesem Bereich muss am Ende die Position liegen, wenn nicht, dann wird ein Fehler geworfen
+								//wenn ToleranceWindow auf 0 steht, dann wird nicht überwacht 
+END_VAR
+VAR_OUTPUT
+	bBusy 		: BOOL;
+	bError 		: BOOL;
+	nErrorId 	: ERRORID;		
+END_VAR
+VAR_IN_OUT
+	pHwRef : POINTER TO FB_HwRefEL70xxDrive; 
+END_VAR
+VAR
+	nState 			: USINT;
+	nReadjustments 	: USINT;
+	nPosDiffernce	: DINT;
+END_VAR
+]]></Declaration>
+    <Implementation>
+      <ST><![CDATA[IF bExecute THEN
+	//Vorbedingungen prüfen
+	IF nState = 0 THEN
+		nState := 1;
+		
+		IF pHwRef^.bError THEN
+			{warning 'Implement}
+			nErrorID := 8145;
+			nState := 99;
+		END_IF
+		
+		IF pHwRef^.bBusy THEN
+			{warning 'Implement}
+			nErrorID := 8146;
+			nState := 99;
+		END_IF
+		
+		IF NOT pHwRef^.P_bIsInit THEN
+			nErrorID := E_ErrorIdHwGeneral.ERRORID_DriveNotHomed;
+			nState := 99;
+		END_IF
+		
+		IF NOT pHwRef^.M_SetTargetPos(nPosition) THEN
+			nErrorID := E_ErrorIdHwGeneral.ERRORID_InvalidPosition;
+			nState := 99;
+		END_IF
+		
+		IF  NOT pHwRef^.M_SetSpeed(nSpeed) THEN
+			nErrorID := E_ErrorIdHwGeneral.ERRORID_InvalidSpeed;
+			nState := 99;
+		END_IF
+	END_IF
+
+	CASE nState OF
+		1:	//Starttype schreiben
+			bBusy := TRUE;
+			IF bStop THEN
+				nState := 80;
+			ELSE
+				pHwRef^.POS_Control.Execute := TRUE;
+				pHwRef^.STM_Control.ReduceTorque := FALSE;
+				nState := 2;
+			END_IF
+
+		2:	//Warten auf Busy
+			IF bError THEN
+				nErrorID := E_ErrorIdHwGeneral.ERRORID_UndefinedDriveError;
+				nState := 99;
+			ELSE
+				IF bStop THEN
+					pHwRef^.POS_Control.Execute := FALSE;
+					nState := 4;
+				ELSE
+					IF pHwRef^.POS_Status.Busy THEN
+						nState := 3;
+					END_IF
+				END_IF
+			END_IF
+
+		3:	IF bStop THEN
+				pHwRef^.POS_Control.Execute := FALSE;
+				nState := 4;
+			ELSE
+				IF NOT pHwRef^.POS_Status.Busy THEN
+					IF pHwRef^.POS_Status.Error OR pHwRef^.STM_Status.Error THEN
+						IF NOT pHwRef^.P_bHardwareEnable THEN
+							nErrorID := E_ErrorIdHwGeneral.ERRORID_HardwareNotEnabled;
+						ELSE
+							nErrorID := E_ErrorIdHwGeneral.ERRORID_UndefinedDriveError;
+						END_IF
+						pHwRef^.POS_Control.Execute := FALSE;
+						nState := 99;
+					ELSE
+						//InTarget?
+						IF pHwRef^.POS_Status.InTarget THEN
+							pHwRef^.POS_Control.Execute := FALSE;
+							nPosDiffernce := ABS(pHwRef^.M_GetPosDiff(nPosition));
+							nState := 80;
+							IF nToleranceWindow > 0 AND_THEN nPosDiffernce > nToleranceWindow THEN
+								IF pHwRef^.P_eEncoderType = E_EL70xx_EncoderType.ExternSingleturnAbs AND_THEN nReadjustments < 3 THEN //nachjustieren
+									nReadjustments := nReadjustments + 1;
+									nState := 0;
+								ELSE
+									//Positionierung war nicht im zulässigen Toleranzbereich
+									nErrorID := E_ErrorIdHwGeneral.ERRORID_PosOutsideToleranceWindow;
+									nState := 99;
+								END_IF
+							END_IF
+						ELSE
+							pHwRef^.POS_Control.Execute := FALSE;
+							nErrorID := E_ErrorIdHwGeneral.ERRORID_TargetPosNotReached;
+							nState := 99;
+						END_IF
+					END_IF
+				END_IF
+			END_IF
+			
+		4:	//Warten bis gestoppt
+			IF NOT pHwRef^.POS_Status.Busy THEN
+				nState := 80;
+			END_IF		
+	END_CASE
+	
+	IF nState >= 80 THEN
+		pHwRef^.STM_Control.ReduceTorque := TRUE;
+		IF nState = 99 THEN
+			bError := TRUE;	
+		END_IF
+		bBusy := FALSE;
+	END_IF
+
+ELSE
+	bBusy := FALSE;
+	bError := FALSE;
+	bStop := FALSE;
+	nErrorId := 0;
+	nState := 0;
+	nReadjustments := 0;	
+END_IF]]></ST>
+    </Implementation>
+    <LineIds Name="FB_HWECtrl_EL70xx_Move">
+      <LineId Id="683" Count="117" />
+      <LineId Id="25" Count="0" />
+    </LineIds>
+  </POU>
+</TcPlcObject>

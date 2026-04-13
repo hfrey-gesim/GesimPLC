@@ -1,0 +1,1544 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<TcPlcObject Version="1.1.0.1">
+  <POU Name="GCode" Id="{948e817f-cbf3-4354-82a1-8dc2570a31d8}" SpecialFunc="None">
+    <Declaration><![CDATA[PROGRAM GCode
+VAR
+	//NCI-Funktionsbausteine	
+	fbItpLoadProgEx 			: Tc2_NCI.ItpLoadProgEx;
+	fbItpResetEx2				: Tc2_NCI.ItpResetEx2;
+	fbItpStartStopEx			: Tc2_NCI.ItpStartStopEx;
+	fbItpWriteZeroShiftEx		: Tc2_NCI.ItpWriteZeroShiftEx;
+	fbItpSetCyclLrealOffs		: Tc2_NCI.ItpSetCyclicLrealOffsets;
+	fbItpSetCyclUdintOffs		: Tc2_NCI.ItpSetCyclicUdintOffsets;
+	fbItpEStopEx				: Tc2_NCI.ItpEStopEx;
+	fbItpStepOnAfterEStopEx 	: Tc2_NCI.ItpStepOnAfterEStopEx;
+	fbItpSingleBlock			: Tc2_NCI.ItpSingleBlock;
+	fbItpWriteRParams			: Tc2_NCI.ItpWriteRParamsEx;
+	fbMcPower					: Tc2_MC2.MC_Power;
+	fbAdsWrite					: ADSWRITE;
+	fbEnumFindFileEntry			: FB_EnumFindFileEntry;
+	stFindFile					: ST_FindFileEntry;
+	stGCodeRef					: ST_GCodeRef;
+	pXDrive						: POINTER TO FB_XYDriveBase;
+	pYDrive						: POINTER TO FB_XYDriveBase;
+	
+	//Allgemeine-Variablen
+	nState				: USINT;
+	sGCodeFile			: STRING;
+	stInfo				: ST_GCodeInfo;
+	aRParamInit			: ARRAY[0..9] OF LREAL;
+	lrAngle				: LREAL;
+	
+	dwAdsValue			: DWORD;
+	nProgress			: UINT;
+	stMethResult 		: ST_MethResult;
+	pTarget				: POINTER TO FB_TargetBase;	//Startpunkt
+	pHighVoltTray		: POINTER TO FB_HighVoltTray;
+	pTempTool			: POINTER TO FB_MzTool;
+	pMesCartDisp		: POINTER TO FB_CartDispenser;
+	pTwinPiezoHolder	: POINTER TO FB_TwinPiezoHolder;
+	pGCodeTool			: POINTER TO FB_GCodeTool;
+	bWriteZeroShift		: BOOL;
+	
+	bReadFileOffset		: BOOL;
+	fbAdsRead			: ADSREAD;
+	bAdsError			: BOOL;
+	stFileOffsetData	: ST_NciInfo;		
+	nFileOffset			: UDINT;
+	
+	bMoveActionsLocked	: BOOL;
+	
+	bStop				: BOOL;
+	bNciAvailable 		: BOOL;
+	
+	sAxesList			: Tc2_Nci.ST_ItpAxes;
+	eSingleBlockMode	: Tc2_Nci.E_ItpSingleBlockMode;
+	stError 			: ST_Error := (POU := E_POU.POU_GCode);
+	
+	iter				: FB_ObjCollectIterator;
+	iterDeep			: FB_ObjCollectIteratorDeep;
+
+	//*****Action-Variablen*****
+	
+	//Common
+	nStateA_Common 		: USINT;
+	nStateA_CommonNext	: USINT;
+
+	//A_BuildGroup + A_ClearGroup
+	fbBuildGroup		: FB_BuildGroup;
+	fbClearGroup		: FB_ClearGroup;
+	
+	stActionDataMoveZ	: ST_ActionData;
+	stActionData		: ST_ActionData;
+	
+	fbHskMFunc			: FB_HskMFunc;
+	fbFastMFunc			: FB_FastMFunc;
+	fbRestartPrintAct	: FB_RestartPrintAction;
+	
+	//A_Pause
+	nStateA_Pause		: USINT;
+	stCurrentPos		: ST_3DPoint;
+	bLockPause			: BOOL;
+	
+	nSpeed				: DINT;
+	
+	//Verkettete Liste für ausführbare Actions im State "Pause"
+	fbList				: FB_LinkedListCtrl;
+	hList				: T_HLINKEDLIST;
+	aNodes  			: ARRAY[0..6] OF T_LinkedListEntry;
+	getValue			: UDINT;
+	getPosPtr       	: POINTER TO T_LinkedListEntry := 0;
+	////////////////////////////////////////////////////////////
+	
+END_VAR
+VAR CONSTANT
+	cPathWIN_10			: STRING := 'C:\ftp\GCode\';
+	cPathWIN_EMBEDDED	: STRING := 'Hard Disk\ftp\GCode\';
+	cMaxGCodeTools		: USINT := 20;
+	cMaxGCodeTargets	: USINT := 20;
+END_VAR
+
+VAR_OUTPUT
+	bBusy			: BOOL;
+	bError  		: BOOL;
+	eGCodeState		: E_GCodeState;
+	bNciModeActive	: BOOL; 
+END_VAR]]></Declaration>
+    <Implementation>
+      <ST><![CDATA[IF bWriteZeroShift THEN //Nullpunktverschiebung während der GCode läuft (durch Action "ShiftGCodeZPos")
+	fbItpWriteZeroShiftEx(bExecute:= TRUE, sNciToPlc:= stGCodeRef.sNciToPlc, nZsNo:= 54, sZeroShiftDesc:= stGCodeRef.sZeroShiftDesc);
+	IF NOT fbItpWriteZeroShiftEx.bBusy THEN
+		fbItpWriteZeroShiftEx(bExecute:= FALSE, sNciToPlc:= stGCodeRef.sNciToPlc, nZsNo:= 54, sZeroShiftDesc:= stGCodeRef.sZeroShiftDesc);
+		bWriteZeroShift := FALSE;
+	END_IF	
+END_IF
+
+CASE nState OF
+	0:	//Init
+		bBusy := TRUE;
+		A_Init();
+		IF nStateA_Common >= 80 THEN
+			IF nStateA_Common >= 99 THEN
+				nState := 99;
+			ELSE
+				nState := 1;
+			END_IF
+			nStateA_Common := 0;
+			bBusy := FALSE;
+		END_IF
+
+	1:	//Idle (Warte-Zustand)
+		stInfo.eGCodeState := eGCodeState := E_GCodeState.GCodeState_Idle;
+		//Aus diesem Zustand wird duch Methode M_Start(..) in "Loading" geschaltet
+		bBusy := FALSE;
+		bMoveActionsLocked := FALSE;
+	
+	2:	//Loading GCode-File
+		stInfo.eGCodeState := eGCodeState := E_GCodeState.GCodeState_Loading;
+		nFileOffset := 0;
+		bBusy := TRUE;
+		bMoveActionsLocked := TRUE;
+		A_Load();
+		IF nStateA_Common >= 80 THEN
+			IF nStateA_Common >= 99 THEN
+				nState := 99;
+			ELSE
+				IF bStop THEN
+					nState := 1;
+				ELSE
+					nState := 3;
+				END_IF
+				
+			END_IF
+			nStateA_Common := 0;
+		END_IF
+	
+	3:	//Starting
+		stInfo.eGCodeState := eGCodeState := E_GCodeState.GCodeState_Starting;
+		A_Start();
+		IF nStateA_Common >= 80 THEN
+			IF nStateA_Common >= 99 THEN
+				nState := 99;
+			ELSE
+				nState := 4;
+			END_IF
+			nStateA_Common := 0;
+		END_IF
+	
+	4:	//Running (Waiting for HSK-Funktions)
+		bReadFileOffset := TRUE;
+		stInfo.eGCodeState := eGCodeState := E_GCodeState.GCodeState_Running;
+		A_Run();
+		IF nStateA_Common >= 80 THEN
+			IF nStateA_Common >= 99 THEN
+				nState := 99;
+			ELSE
+				nState := 1;	//zurück in Idle
+			END_IF
+			nStateA_Common := 0;
+		END_IF		
+	
+	5:	//PauseRequest
+		stInfo.eGCodeState := eGCodeState := E_GCodeState.GCodeState_PauseRequest;
+		A_Pause();
+		IF nStateA_Common >= 80 THEN
+			IF nStateA_Common >= 99 THEN
+				nState := 99;
+			ELSE
+				IF stInfo.nNciState = Tc2_NCI.NCI_INTERPRETER_READY THEN
+					nState := 1;	//weiter Idle
+				ELSE
+					nState := 6;	//weiter zu 6	
+				END_IF
+				
+			END_IF
+			nStateA_Common := 0;
+		END_IF
+	
+	6:	//Pause
+		bMoveActionsLocked := FALSE;
+		stInfo.eGCodeState := eGCodeState := E_GCodeState.GCodeState_Pause;
+		IF bStop THEN
+			IF fbHskMFunc.bBusy THEN
+				fbHskMFunc(stGCodeRef:= stGCodeRef,pXDrive:= pXDrive, pYDrive:= pYDrive, bStop:= TRUE);
+			END_IF
+			fbItpEStopEx(sNciToPlc:= GCode.stGCodeRef.sNciToPlc, bExecute:= TRUE);
+			IF NOT fbItpEStopEx.bBusy THEN
+				IF fbItpEStopEx.bErr THEN
+					stError.ErrorId := UDINT_TO_UINT(fbItpEStopEx.nErrId);
+					nState := 99;
+				ELSE
+					nState := 1;
+					fbHskMFunc(stGCodeRef:= stGCodeRef, pXDrive:= pXDrive, pYDrive:= pYDrive, bStop:= FALSE, bPause := FALSE, bContinue:= FALSE);
+				END_IF
+				fbItpEStopEx(sNciToPlc:= GCode.stGCodeRef.sNciToPlc, bExecute:= FALSE);
+				bStop := FALSE;
+			END_IF
+		END_IF
+		
+	7:	//Continue
+		bReadFileOffset := TRUE;
+		stInfo.eGCodeState := eGCodeState := E_GCodeState.GCodeState_ContinueRequest;
+		A_Continue();
+		IF nStateA_Common >= 80 THEN
+			IF nStateA_Common >= 99 THEN
+				nState := 99;
+			ELSE
+				nState := 4;	//weiter zu 4 (Running)
+			END_IF
+			nStateA_Common := 0;
+		END_IF			
+	
+	60:	//Reset
+		bBusy := TRUE;
+		A_Reset();
+		IF nStateA_Common >= 80 THEN
+			IF nStateA_Common >= 99 THEN
+				nState := 99;
+			ELSE
+				nState := 1;
+			END_IF
+			nStateA_Common := 0;
+			bBusy := FALSE;
+		END_IF		
+	
+END_CASE
+
+IF nState = 99 THEN
+	stInfo.eGCodeState := eGCodeState := E_GCodeState.GCodeState_Error;
+	bBusy := FALSE;
+	bError := TRUE;
+END_IF
+
+//FileOffset für info auslesen
+IF bReadFileOffset THEN
+	fbAdsRead(PORT:= 501, IDXGRP:= 16#2100 + ItpGetChannelId(stGCodeRef.sNciToPlc), IDXOFFS:= 16#12, 
+					LEN:= SIZEOF(stFileOffsetData), DESTADDR:= ADR(stFileOffsetData), READ:= TRUE);
+	IF NOT fbAdsRead.BUSY THEN
+		IF fbAdsRead.ERR THEN
+			bAdsError := TRUE;
+		END_IF
+		bReadFileOffset := FALSE;
+		fbAdsRead(READ:= FALSE);
+		
+		IF stFileOffsetData.FileOffset > 0 AND stFileOffsetData.FileOffset <= stFindFile.fileSize.dwLowPart THEN
+			nFileOffset := stFileOffsetData.FileOffset;
+			nProgress := UDINT_TO_UINT((100 * nFileOffset) / stFindFile.fileSize.dwLowPart);	
+		END_IF
+	END_IF
+END_IF
+stInfo.nNciState := ItpGetStateInterpreter(GCode.stGCodeRef.sNciToPlc);
+
+stInfo.nFileOffset := nFileOffset;
+
+IF GCode.stGCodeRef.pCurrentTool > 0 THEN
+	stInfo.nCurrentObj := GCode.stGCodeRef.pCurrentTool^.P_nObjectID;
+END_IF]]></ST>
+    </Implementation>
+    <Action Name="A_Continue" Id="{5f02862c-c3da-4c58-92de-4a865abbe039}">
+      <Implementation>
+        <ST><![CDATA[//HSKMFunc in Pause, dann diese nur fortsetzen
+//In diesem Fall wurde der Interpreter nicht gestoppt, da HSKMFunc noch nicht bestätigt wurde
+IF fbHskMFunc.bIsInPause THEN
+	fbHskMFunc(stGCodeRef:= stGCodeRef, pXDrive:= pXDrive, pYDrive:= pYDrive, bContinue := TRUE, bPause:= FALSE, bStop:= FALSE);
+	nStateA_Common := 80;
+	RETURN;
+ELSE
+	fbHskMFunc(stGCodeRef:= stGCodeRef, pXDrive:= pXDrive, pYDrive:= pYDrive, bContinue := FALSE, bPause:= FALSE, bStop:= FALSE);
+END_IF
+
+CASE nStateA_Common OF
+	0:	//Head freifahren
+		//MES-Cartridge vorhanden?, MES-Tray vorhanden?, HV eingeschalten?, steht MES-Cartridge über MES-Tray?
+		pMesCartDisp := 0;
+		pHighVoltTray := pTarget^.M_GetFirstParentOfType(E_ObjectType.OBJECTTYPE_HighVoltTray); 
+		IF pHighVoltTray > 0 THEN
+			IF pHighVoltTray^.P_nCurrentVoltage > 0 THEN
+				stGCodeRef.pHead^.P_pObjCollectNode^.nodes.M_GetIterator(iter);
+				WHILE iter.pNode > 0 DO
+					IF iter.pNode^.P_pObject > 0 AND_THEN iter.pNode^.P_pObject^.M_bIsGroup(E_ObjectGroup.OBJECTGROUP_MzTool) THEN
+						pTempTool := iter.pNode^.P_pObject;
+						IF pTempTool^.P_eObjectType = E_ObjectType.OBJECTTYPE_CartDispenser OR
+																pTempTool^.P_eObjectType = E_ObjectType.OBJECTTYPE_CartDispStirrer THEN
+							IF pTempTool^.P_bIsMESTool THEN
+								IF F_PointInnerRect(pTempTool^.P_stCurrentPosPhys,pHighVoltTray^.P_stAbsRect) THEN
+									//Dieses Tool wird vom nachfolgendem Freifahren ausgeschlossen
+									pMesCartDisp := pTempTool;
+									EXIT;
+								END_IF
+							END_IF
+						END_IF
+					END_IF				
+					iter.M_Increment();
+				END_WHILE
+			END_IF
+		END_IF
+		
+		bMoveActionsLocked := TRUE;
+		stError.ErrorId := stGCodeRef.pHead^.M_MoveFree(pMesCartDisp);
+		
+		IF stError.ErrorId > 0 THEN
+			nStateA_Common := 99;
+		ELSE
+			nStateA_Common := 1;
+		END_IF
+
+	1:	//Head frei?
+		IF NOT stGCodeRef.pHead^.M_GetActionBusy(E_Action.ACTION_MoveZ) THEN
+			IF stGCodeRef.pCurrentTool > 0 THEN
+				IF stGCodeRef.pCurrentTool^.P_eObjectType = E_ObjectType.OBJECTTYPE_TwinPiezoHolder THEN
+					pTwinPiezoHolder := stGCodeRef.pCurrentTool;
+					IF pTwinPiezoHolder^.P_eCurrentSwivelState <> E_SwivelState.Swiveled THEN
+						nStateA_Common := 2; //weiter zu Einschwenken
+					ELSE
+						nStateA_Common := 4; //weiter zu letzten Punkt fahren
+					END_IF
+				ELSIF pMesCartDisp > 0 THEN
+					nStateA_Common := 7; //weiter zu Gruppe bilden
+				ELSE
+					nStateA_Common := 4; //weiter zu letzten Punkt fahren
+				END_IF
+				
+			ELSE
+				nStateA_Common := 7; //weiter zu Gruppe bilden
+			END_IF
+		END_IF
+
+		IF stGCodeRef.pHead^.P_bError THEN
+			stError.ErrorId := stGCodeRef.pHead^.P_nErrorId;
+			stError.ObjectId := stGCodeRef.pHead^.P_nObjectID;
+			nStateA_Common := 99;
+		END_IF
+		
+	2:	//TwinPiezoHolder einschwenken
+		MEMSET(ADR(stActionData),0,SIZEOF(stActionData));
+		stActionData.eAction := E_Action.ACTION_Swivel;
+		stActionData.aParams[1] := 1;
+		stError.ErrorId := pTwinPiezoHolder^.M_ExeAction(stActionData);
+		IF stError.ErrorId > 0 THEN
+			nStateA_Common := 99;
+		ELSE
+			nStateA_Common := 3;
+		END_IF
+		
+	3:	//TwinPiezoHolder eingeschwenkt?
+		IF NOT pTwinPiezoHolder^.M_GetActionBusy(E_Action.ACTION_Swivel) THEN
+			IF pTwinPiezoHolder^.P_bError THEN
+				stError.ErrorId := pTwinPiezoHolder^.P_nErrorId;
+				nStateA_Common := 99;
+			ELSE
+				nStateA_Common := 4;
+			END_IF
+		END_IF
+		
+	4:	//zu letzem Punkt zurückfahren
+		IF pMesCartDisp > 0 THEN
+			nSpeed := 10000;
+		ELSE
+			nSpeed := -1;
+		END_IF
+		stActionData.eAction := E_Action.ACTION_MoveXY;
+		stActionData.aParams[1] := E_MoveMode.MODE_AbsWithOffset;
+		stActionData.aParams[2] := REAL_TO_DINT(stCurrentPos.X);
+		stActionData.aParams[3] := REAL_TO_DINT(stCurrentPos.Y);
+		stActionData.aParams[4] := nSpeed;
+		stActionData.aParams[5] := nSpeed;
+		
+		stError.ErrorId := stGCodeRef.pCurrentTool^.M_ExeAction(stActionData);
+		IF stError.ErrorId > 0 THEN
+			nStateA_Common := 99;
+		ELSE
+			nStateA_Common := 5;
+		END_IF	
+
+	5:	//MoveXY ready? -> MoveZ
+		IF NOT stGCodeRef.pCurrentTool^.M_GetActionBusy(E_Action.ACTION_MoveXY) THEN
+			MEMSET(ADR(stActionData),0,SIZEOF(stActionData));
+			stActionData.eAction := E_Action.ACTION_MoveZ;
+			stActionData.aParams[1] := E_MoveMode.MODE_AbsWithOffset;
+			stActionData.aParams[2] := REAL_TO_DINT(stCurrentPos.Z);
+			stActionData.aParams[3] := nSpeed;
+			
+			stError.ErrorId := stGCodeRef.pCurrentTool^.M_ExeAction(stActionData);
+			IF stError.ErrorId > 0 THEN
+				nStateA_Common := 99;
+			ELSE
+				nStateA_Common := 6;
+			END_IF			
+		END_IF
+
+	6:	//MoveZ ready?
+		IF NOT stGCodeRef.pCurrentTool^.M_GetActionBusy(E_Action.ACTION_MoveZ) THEN
+			nStateA_Common := 7;
+			IF stGCodeRef.pHead^.P_pXDrive^.P_bIsMoving OR stGCodeRef.pHead^.P_pYDrive^.P_bIsMoving THEN
+				nStateA_Common := 6;
+			END_IF
+		END_IF
+		
+	7:	//Gruppe bilden
+		fbBuildGroup(stGCodeRef:= stGCodeRef, bExecute:= TRUE);
+		IF NOT fbBuildGroup.bBusy THEN
+			IF fbBuildGroup.bError THEN
+				stError.ErrorId := fbBuildGroup.nErrorId;
+				nStateA_Common := 99;
+			ELSE
+				IF stGCodeRef.pCurrentTool > 0 THEN
+					IF (stGCodeRef.aToolTable[stGCodeRef.sNciToPlc.Tool].bIsInAction1 OR
+						stGCodeRef.aToolTable[stGCodeRef.sNciToPlc.Tool].bIsInAction2 OR
+						stGCodeRef.aToolTable[stGCodeRef.sNciToPlc.Tool].bIsInAction3) THEN
+						nStateA_Common := 8;
+					ELSE
+						nStateA_Common := 9;
+					END_IF
+				ELSE
+					nStateA_Common := 9;
+				END_IF
+			END_IF
+			fbBuildGroup(stGCodeRef:= stGCodeRef, bExecute:= FALSE);
+		END_IF
+		
+	8:	//letze PrintAction wieder starten (fall während des Prints unterbrochen)
+		fbRestartPrintAct(stGCodeRef:= stGCodeRef, bExecute:= TRUE);
+		IF NOT fbRestartPrintAct.bBusy THEN
+			IF fbRestartPrintAct.bError THEN
+				stError.ErrorId := fbRestartPrintAct.nErrorId;
+				nStateA_Common := 99;
+			ELSE
+				nStateA_Common := 9;
+			END_IF
+			fbRestartPrintAct(stGCodeRef := stGCodeRef, bExecute:= FALSE);
+		END_IF
+		
+	9:	//Interpreter starten
+		fbItpStepOnAfterEStopEx(bExecute:= TRUE, sNciToPlc:= GCode.stGCodeRef.sNciToPlc);
+		IF NOT fbItpStepOnAfterEStopEx.bBusy THEN
+			IF fbItpStepOnAfterEStopEx.bErr THEN
+				nStateA_Common := 99;
+			ELSE
+				nStateA_Common := 10;
+			END_IF
+			fbItpStepOnAfterEStopEx(bExecute:= FALSE, sNciToPlc:= GCode.stGCodeRef.sNciToPlc);
+		END_IF
+		
+	10:	//SingleBlock-Mode verlassen
+		fbItpSingleBlock(bExecuteModeChange:= TRUE,	nMode:= E_ItpSingleBlockMode.ItpSingleBlockOff, sNciToPlc:= GCode.stGCodeRef.sNciToPlc);
+		IF NOT fbItpSingleBlock.bBusy THEN
+			IF fbItpSingleBlock.bErr THEN
+				nStateA_Common := 99;
+			ELSE
+				IF pHighVoltTray > 0 THEN
+					//Strom-Überwachung wieder einschalten
+					pHighVoltTray^.M_CurrentMonitoring(TRUE);
+				END_IF				
+				nStateA_Common := 80;
+			END_IF
+			fbItpSingleBlock(bExecuteModeChange:= FALSE, sNciToPlc:= GCode.stGCodeRef.sNciToPlc);
+		END_IF		
+END_CASE]]></ST>
+      </Implementation>
+    </Action>
+    <Action Name="A_Init" Id="{4c18f164-dbc3-4f6d-a701-fc34216634df}">
+      <Implementation>
+        <ST><![CDATA[stError.POUState := nStateA_Common;
+
+CASE nStateA_Common OF
+	0:	//Checken, ob NCI vorhanden ist durch überprüfen des Mappings zur NCI
+		IF F_GetMappingStatus(ADR(GCode.stGCodeRef.sNciToPlc),SIZEOF(GCode.stGCodeRef.sNciToPlc)) = EPlcMappingStatus.MS_Mapped THEN
+			IF ItpGetStateInterpreter(GCode.stGCodeRef.sNciToPlc) > 0 THEN
+				nStateA_Common := 2;
+			END_IF
+			bNciAvailable := TRUE;
+		ELSE
+			nStateA_Common := 81;	//NCI nicht verfügbar
+		END_IF
+
+		
+	(*1:	//Berechnung der totalen Bahnlänge aktivieren
+		dwAdsValue := 1;
+		fbAdsWrite(PORT:= 501, IDXGRP:= 16#3000 + ItpGetGroupId(GCode.stGCodeRef.sNciToPlc), IDXOFFS:= 16#508, LEN:= SIZEOF(dwAdsValue), SRCADDR:=ADR(dwAdsValue), WRITE:= TRUE);
+		IF NOT fbAdsWrite.BUSY THEN
+			IF fbAdsWrite.ERR THEN
+				stError.ErrorId := UDINT_TO_UINT(fbAdsWrite.ERRID);
+				nStateA_Common := 99;
+			END_IF
+			fbAdsWrite(WRITE:= FALSE);
+			nStateA_Common := 2;
+		END_IF*)
+
+	2:	//Aktiviere das Lesen der akt. wirkenden Interpolationsregeln, Nullp.verschiebungen & Rotation
+		dwAdsValue := 1;
+		fbAdsWrite(PORT:= 501, IDXGRP:= 16#2000 + ItpGetChannelId(GCode.stGCodeRef.sNciToPlc), IDXOFFS:= 16#53, LEN:= SIZEOF(dwAdsValue), SRCADDR:=ADR(dwAdsValue), WRITE:= TRUE);
+		IF NOT fbAdsWrite.BUSY THEN
+			IF fbAdsWrite.ERR THEN
+				stError.ErrorId := UDINT_TO_UINT(fbAdsWrite.ERRID);
+				nStateA_Common := 99;
+			END_IF
+			fbAdsWrite(WRITE:= FALSE);
+			nStateA_Common := 3;
+		END_IF
+
+	3:	//Konfiguration zykl. Kanalinterface (frei konfigurierbaren "DoubleParams[0..3])
+		fbItpSetCyclLrealOffs(bExecute:= TRUE , //nIndexOffsetParam1:= 16#522, (*Bahnrestweg (verbleibende Bogenlänge) auf dem aktuellen Bahnsegment*)
+												//nIndexOffsetParam2:= 16#502, (*aktuelle Bahnsollgeschwindigkeit*)
+												//nIndexOffsetParam3:= 16#509, (*Segmentübergang*)
+												nIndexOffsetParam1:= 16#523, (*programmierte Geschwindigkeit des aktuellen Segments*)
+												sNciToPlc:= GCode.stGCodeRef.sNciToPlc);
+
+												
+		IF NOT fbItpSetCyclLrealOffs.bBusy THEN
+			nStateA_Common := 4;
+			IF fbItpSetCyclLrealOffs.bErr THEN
+				stError.ErrorId := UDINT_TO_UINT(fbItpSetCyclLrealOffs.nErrId);
+				nStateA_Common := 99;
+			END_IF
+			fbItpSetCyclLrealOffs(bExecute:= FALSE, sNciToPlc:= GCode.stGCodeRef.sNciToPlc);
+		END_IF
+		
+	4:	//Konfiguration zykl. Kanalinterface (frei konfigurierbaren "UdintParams[0..3])
+		fbItpSetCyclUdintOffs(bExecute:= TRUE,	nIndexOffsetParam1:= 16#05, //SAF-Gruppenstatus (main state)
+												sNciToPlc:= GCode.stGCodeRef.sNciToPlc);
+		IF NOT fbItpSetCyclUdintOffs.bBusy THEN
+			nStateA_Common := 5;
+			IF fbItpSetCyclUdintOffs.bErr THEN
+				stError.ErrorId := UDINT_TO_UINT(fbItpSetCyclUdintOffs.nErrId);
+				nStateA_Common := 99;
+			END_IF
+			fbItpSetCyclUdintOffs(bExecute:= FALSE, sNciToPlc:= GCode.stGCodeRef.sNciToPlc);
+		END_IF
+		
+	5:	//Q1-Achse einschalten (virtuell Achse)
+		fbMcPower(Axis:= AxisRefQ1, Enable:= TRUE, Enable_Positive:= TRUE, Enable_Negative:= TRUE, Override:= 100);
+		IF fbMcPower.Error THEN	 //Error bei Ausführung
+			stError.ErrorId := UDINT_TO_UINT(fbMcPower.ErrorID);
+			fbMcPower(Axis:= AxisRefQ1, Enable:= FALSE);
+			nStateA_Common := 99;
+		ELSE
+			nStateA_Common := 6;
+		END_IF
+		
+	6:	//Interpreter zurücksetzen
+		fbItpResetEx2(bExecute:= TRUE, sNciToPlc:= GCode.stGCodeRef.sNciToPlc);
+		IF NOT fbItpResetEx2.bBusy THEN
+			IF fbItpResetEx2.bErr THEN
+				stError.ErrorId := UDINT_TO_UINT(fbItpResetEx2.nErrId);
+				nStateA_Common := 99;
+			ELSE
+				//ActionList initialisieren
+				F_CreateLinkedListHnd(ADR(aNodes), SIZEOF(aNodes), hList);
+				nStateA_Common := 80;				
+			END_IF
+			fbItpResetEx2(bExecute:= FALSE, sNciToPlc:= GCode.stGCodeRef.sNciToPlc);
+		END_IF
+		
+END_CASE
+
+IF nStateA_Common = 99 THEN
+	stError.POUAction := E_POUACT.POUACT_A_Init;
+	fbErrorList.M_Add(stError);
+END_IF]]></ST>
+      </Implementation>
+    </Action>
+    <Action Name="A_Load" Id="{cdb4ee88-ef81-43a5-9974-af876f0a907f}">
+      <Implementation>
+        <ST><![CDATA[stError.POUState := nStateA_Common;
+
+CASE nStateA_Common OF
+	0:	//Interpreter zurücksetzen
+		fbItpResetEx2(bExecute:= TRUE, sNciToPlc:= GCode.stGCodeRef.sNciToPlc);
+		IF NOT fbItpResetEx2.bBusy THEN
+			IF fbItpResetEx2.bErr THEN
+				stError.ErrorId := UDINT_TO_UINT(fbItpResetEx2.nErrId);
+				nStateA_Common := 99;
+			ELSE
+				nProgress := 0;
+				nStateA_Common := 1;
+			END_IF
+			fbItpResetEx2(bExecute:= FALSE, sNciToPlc:= GCode.stGCodeRef.sNciToPlc);
+		END_IF
+
+	1:	//SingleBlock Mode ausschalten (falls durch Abbruch oder Fehler noch aktiv)
+		fbItpSingleBlock(bExecuteModeChange:= TRUE,	nMode:= Tc2_NCI.E_ItpSingleBlockMode.ItpSingleBlockOff,
+						bTriggerNext:= FALSE, sNciToPlc:= GCode.stGCodeRef.sNciToPlc);
+		IF NOT fbItpSingleBlock.bBusy THEN
+			IF fbItpSingleBlock.bErr THEN
+				stError.ErrorId := UDINT_TO_UINT(fbItpSingleBlock.nErrId);
+				nStateA_Common := 99;
+			ELSE
+				nStateA_Common := 2;
+			END_IF
+			fbItpSingleBlock(bExecuteModeChange:= FALSE, bTriggerNext:= FALSE, sNciToPlc:= GCode.stGCodeRef.sNciToPlc);
+		END_IF
+		
+	2:	//GCode-File laden (ab hier erfolgt Syntaxüberprüfung)
+		//Langes Timeout bei große Dateien erforderlich
+		fbItpLoadProgEx(bExecute:= TRUE, sNciToPlc:= GCode.stGCodeRef.sNciToPlc, sPrg:= sGCodeFile ,nLength:= INT_TO_UINT(LEN(sGCodeFile)),tTimeOut:= T#120S);
+		IF NOT fbItpLoadProgEx.bBusy THEN
+			IF fbItpLoadProgEx.bErr THEN
+				stError.ErrorId := UDINT_TO_UINT(fbItpLoadProgEx.nErrId);
+				nStateA_Common := 99;
+			ELSE
+				nStateA_Common := 3;	
+			END_IF
+			fbItpLoadProgEx(bExecute:= FALSE, sNciToPlc:= GCode.stGCodeRef.sNciToPlc);
+		END_IF
+		
+	3:	//Dateigröße ermitteln
+		fbEnumFindFileEntry(sPathName:= sGCodeFile,	eCmd:= E_EnumCmdType.eEnumCmd_First, bExecute:= TRUE, stFindFile=> stFindFile);
+		IF NOT fbEnumFindFileEntry.bBusy THEN
+			IF fbEnumFindFileEntry.bError THEN
+				nStateA_Common := 99;
+			ELSE
+				nStateA_Common := 4;
+			END_IF
+			fbEnumFindFileEntry(sPathName:= sGCodeFile,	eCmd:= E_EnumCmdType.eEnumCmd_First, bExecute:= FALSE);
+		END_IF
+		
+	4:	fbEnumFindFileEntry(eCmd:= E_EnumCmdType.eEnumCmd_Abort, bExecute:= TRUE);
+		IF NOT fbEnumFindFileEntry.bBusy THEN
+			IF fbEnumFindFileEntry.bError THEN
+				nStateA_Common := 99;
+			ELSE
+				nStateA_Common := 80;
+			END_IF
+			fbEnumFindFileEntry(sPathName:= sGCodeFile,	eCmd:= E_EnumCmdType.eEnumCmd_First, bExecute:= FALSE);
+		END_IF
+		
+END_CASE
+
+IF nStateA_Common = 99 THEN
+	stError.POUAction := E_POUACT.POUACT_A_Load;
+	fbErrorList.M_Add(stError);
+END_IF]]></ST>
+      </Implementation>
+    </Action>
+    <Action Name="A_Pause" Id="{ba4cdf0a-2892-43c9-b1e0-ac4bc71e7f45}">
+      <Implementation>
+        <ST><![CDATA[stError.POUState := nStateA_Common;
+
+IF stGCodeRef.sNciToPlc.IntParams[0] = E_SAF_State.Control AND bLockPause THEN
+	bLockPause := FALSE;
+END_IF
+
+//Falls noch eine FastMFunc anliegt, verhindern, dass SingleBlock aktiviert wird
+fbFastMFunc(stGCodeRef:= stGCodeRef, bStop:= FALSE);
+IF fbFastMFunc.bBusy THEN
+	fbFastMFunc(stGCodeRef:= stGCodeRef, bStop:= FALSE);
+	bLockPause := TRUE;
+	RETURN;
+END_IF
+
+//Falls noch eine HSKMFunc anliegt, verhindern, dass SingleBlock aktiviert wird
+//Falls eine pausierbare HSKMFunc anliegt, dann diese in Pause versetzen
+//In diesem Falls bleibt die HSKMFunc noch aktiv und der GCode-Interpreter wird nicht in Singleblock versetzt
+//wichtig beim Continue -> dort wird einfach die HSKMFunc wieder aktiv
+
+fbHskMFunc(stGCodeRef:= stGCodeRef, pXDrive:= pXDrive, pYDrive:= pYDrive, bStop:= FALSE, bPause:= TRUE, bContinue:= FALSE);
+IF fbHskMFunc.bBusy THEN
+	fbHskMFunc(stGCodeRef:= stGCodeRef, pXDrive:= pXDrive, pYDrive:= pYDrive, bStop:= FALSE, bPause:= TRUE, bContinue:= FALSE);
+	IF fbHskMFunc.bIsInPause THEN
+		bLockPause := FALSE;
+		nStateA_Common := 80;
+	ELSE
+		bLockPause := TRUE;	
+	END_IF
+	RETURN;
+END_IF
+
+IF stInfo.nNciState = Tc2_NCI.NCI_INTERPRETER_READY THEN
+	nStateA_Common := 80;
+	RETURN;
+END_IF
+
+CASE nStateA_Common OF
+	0:			
+		IF bLockPause THEN
+			RETURN;
+		END_IF
+		
+		//In Singleblock setzen, erst wenn SAF-State wieder Run
+		IF stGCodeRef.sNciToPlc.IntParams[0] = E_SAF_State.Control THEN
+			RETURN;
+		END_IF
+		
+		fbItpSingleBlock(bExecuteModeChange:= TRUE,	nMode:= E_ItpSingleBlockMode.ItpSingleBlockNck, bTriggerNext:= FALSE, sNciToPlc:= GCode.stGCodeRef.sNciToPlc);
+		IF NOT fbItpSingleBlock.bBusy THEN
+			IF fbItpSingleBlock.bErr THEN
+				stError.ErrorId := UDINT_TO_UINT(fbItpSingleBlock.nErrId);
+				nStateA_Common := 99;
+			ELSE
+				nStateA_Common := 1;	
+			END_IF
+			fbItpSingleBlock(bExecuteModeChange:= FALSE, sNciToPlc:= GCode.stGCodeRef.sNciToPlc);
+		END_IF
+		
+	1:	//letzer Befehl abgearbeitet?
+		IF NOT (stGCodeRef.pHead^.P_pXDrive^.P_bIsMoving OR stGCodeRef.pHead^.P_pYDrive^.P_bIsMoving) THEN	//Bewegung noch aktiv
+			nStateA_Common := 2;
+			//Aktive Tool eine MES-Cartridge? -> StopPrintAction überspringen
+			IF stGCodeRef.pCurrentTool^.P_eObjectType = E_ObjectType.OBJECTTYPE_CartDispenser OR
+										stGCodeRef.pCurrentTool^.P_eObjectType = E_ObjectType.OBJECTTYPE_CartDispStirrer THEN
+				pMesCartDisp := stGCodeRef.pCurrentTool;
+				IF pMesCartDisp^.P_bIsMESTool THEN
+					RETURN;
+				END_IF
+			END_IF
+			//Print-Action stoppen
+			fbFastMFunc.M_StopPrintAction(stGCodeRef.pCurrentTool,0);
+		END_IF
+		
+	2:	//Interpreter stoppen
+		fbItpEStopEx(sNciToPlc:= GCode.stGCodeRef.sNciToPlc, bExecute:= TRUE);
+		IF NOT fbItpEStopEx.bBusy THEN
+			IF fbItpEStopEx.bErr THEN
+				stError.ErrorId := UDINT_TO_UINT(fbItpEStopEx.nErrId);
+				nStateA_Common := 99;
+			ELSE
+				nStateA_Common := 3;
+			END_IF
+			fbItpEStopEx(sNciToPlc:= GCode.stGCodeRef.sNciToPlc, bExecute:= FALSE);
+		END_IF
+		
+	3:	//Warten bis SAF = Control
+		IF stGCodeRef.sNciToPlc.IntParams[0] = E_SAF_State.Control THEN
+			nStateA_Common := 4;
+		END_IF
+		
+	4:	//Gruppe auflösen
+		stMethResult := M_ClearGroup(TRUE);
+		IF NOT stMethResult.bBusy THEN
+			IF stMethResult.bError THEN
+				stError.ErrorId := stMethResult.nErrorId;
+				nStateA_Common := 99;
+			ELSE
+				//Aktuelle Position merken zum zurückfahren
+				//Wenn pCurrentTool noch nicht gesetzt wurde, weil die Hsk-Func SelectTool noch nicht ausgeführt wurde, dann
+				//braucht im Grunde nicht zurückgefahren werden
+				IF stGCodeRef.pCurrentTool > 0 THEN
+					//wird in A_Continue benötigt
+					stCurrentPos := stGCodeRef.pCurrentTool^.P_stCurrentPosTotal;
+				END_IF
+				nStateA_Common := 5;
+				IF stGCodeRef.pCurrentTool^.P_eObjectType = E_ObjectType.OBJECTTYPE_CartDispenser OR
+										stGCodeRef.pCurrentTool^.P_eObjectType = E_ObjectType.OBJECTTYPE_CartDispStirrer THEN
+					pMesCartDisp := stGCodeRef.pCurrentTool;
+					IF pMesCartDisp^.P_bIsMESTool THEN
+						nStateA_Common := 80;
+					END_IF
+				END_IF				
+			END_IF
+		END_IF
+		
+	5:	//MoveZ free
+		stActionDataMoveZ.eAction := E_Action.ACTION_MoveZ;
+		stActionDataMoveZ.aParams[1] := E_MoveMode.MODE_Free;
+		stActionDataMoveZ.aParams[3]:= -1; //MaxSpeed
+		stError.ErrorId := stGCodeRef.pCurrentTool^.M_ExeAction(stActionDataMoveZ);
+		
+		IF  stError.ErrorId > 0 THEN
+			nStateA_Common := 99;
+		ELSE
+			nStateA_Common := 6;
+		END_IF		
+	
+	6:	//MoveZ ready?
+		IF NOT stGCodeRef.pCurrentTool^.M_GetActionBusy(E_Action.ACTION_MoveZ) THEN
+			IF stGCodeRef.pCurrentTool^.P_bError THEN
+				stError.ErrorId := stGCodeRef.pCurrentTool^.P_nErrorId;
+				nStateA_Common := 99;
+			ELSE
+				nStateA_Common := 80;
+			END_IF
+		END_IF	
+END_CASE
+
+IF nStateA_Common = 99 THEN
+	stError.POUAction := E_POUACT.POUACT_A_Pause;
+	fbErrorList.M_Add(stError);
+END_IF]]></ST>
+      </Implementation>
+    </Action>
+    <Action Name="A_Reset" Id="{ece1ac22-5306-4602-8863-91708774072b}">
+      <Implementation>
+        <ST><![CDATA[stError.POUState := nStateA_Common;
+
+CASE nStateA_Common OF
+	0:	//Interpreter zurücksetzen
+		fbItpResetEx2(bExecute:= TRUE, sNciToPlc:= GCode.stGCodeRef.sNciToPlc);
+		IF NOT fbItpResetEx2.bBusy THEN
+			IF fbItpResetEx2.bErr THEN
+				stError.ErrorId := UDINT_TO_UINT(fbItpResetEx2.nErrId);
+				nStateA_Common := 99;
+			ELSE
+				nStateA_Common := 1;
+			END_IF
+			fbItpResetEx2(bExecute:= FALSE, sNciToPlc:= GCode.stGCodeRef.sNciToPlc);
+		END_IF
+		
+	1:	//Interpolationsgruppe löschen
+		stMethResult := M_ClearGroup(TRUE);
+		IF NOT stMethResult.bBusy THEN
+			IF stMethResult.bError THEN
+				stError.ErrorId := stMethResult.nErrorId;
+				nStateA_Common := 99;
+			ELSE
+				nStateA_Common := 80;
+				bError := FALSE;
+				bMoveActionsLocked := FALSE;
+			END_IF
+		END_IF
+
+END_CASE
+
+IF nStateA_Common = 99 THEN
+	stError.POUAction := E_POUACT.POUACT_A_Reset;
+	fbErrorList.M_Add(stError);	
+END_IF]]></ST>
+      </Implementation>
+    </Action>
+    <Action Name="A_Run" Id="{7664097a-bca3-4221-852b-9a85b515b1e9}">
+      <Implementation>
+        <ST><![CDATA[stError.POUState := nStateA_Common;
+stInfo.nNciState := ItpGetStateInterpreter(stGCodeRef.sNciToPlc);
+ItpSetOverridePercent(stGCodeRef.lrNcOverride,stGCodeRef.sPlcToNci);
+
+CASE nStateA_Common OF
+	0:	//*****Running*****
+		IF bStop THEN
+			nStateA_Common := 5;
+			//nStateA_CommonNext := 80;
+		ELSE
+			CASE stInfo.nNciState OF
+				Tc2_NCI.NCI_INTERPRETER_IDLE:
+					nStateA_Common := 10;
+					nStateA_CommonNext := 80;
+				Tc2_NCI.NCI_INTERPRETER_READY:
+					nStateA_Common := 10;
+					nStateA_CommonNext := 80;
+				Tc2_NCI.NCI_INTERPRETER_RUNNING:
+					//FastMFunc auswerten
+					fbFastMFunc(stGCodeRef:= stGCodeRef,bStop:= FALSE);
+					IF fbFastMFunc.bError THEN
+						stError.ErrorId := fbFastMFunc.nErrorId;
+						nStateA_Common := 10;
+						nStateA_CommonNext := 99;
+					ELSE
+						//HskMFunc auswerten
+						fbHskMFunc(stGCodeRef:= stGCodeRef, pXDrive:= pXDrive, pYDrive:= pYDrive, bStop:= FALSE);
+						IF fbHskMFunc.bError THEN
+							nStateA_Common := 10;
+							nStateA_CommonNext := 99;
+						ELSIF fbHskMFunc.bCanceled THEN
+							nStateA_Common := 10;
+							nStateA_CommonNext := 80;
+						ELSE
+							//Stromüberwachung
+							IF pHighVoltTray > 0 THEN
+								IF pHighVoltTray^.P_bPwrCutOffTriggered THEN
+									nStateA_Common := 5;
+								END_IF
+							END_IF
+							//Sobald das aktive Tool in Error geht, Abbrechen!
+							IF stGCodeRef.pCurrentTool > 0 AND_THEN stGCodeRef.pCurrentTool^.P_bError THEN
+								nStateA_Common := 5;
+							END_IF
+						END_IF
+					END_IF
+					
+				Tc2_NCI.NCI_INTERPRETER_SINGLESTOP:
+					;
+				Tc2_NCI.NCI_INTERPRETER_WAITFUNC:
+					;
+				Tc2_NCI.NCI_INTERPRETER_FAULT:
+					stError.ErrorId := UDINT_TO_UINT(ItpGetError(stGCodeRef.sNciToPlc));
+					nStateA_Common := 10;
+					nStateA_CommonNext := 99;
+				Tc2_NCI.NCI_INTERPRETER_ABORTED:
+					stError.ErrorId := UDINT_TO_UINT(ItpGetError(stGCodeRef.sNciToPlc));
+					nStateA_Common := 10;
+					nStateA_CommonNext := 99;
+				Tc2_NCI.NCI_INTERPRETER_FLUSHBUFFERS:
+					nStateA_Common := 10;
+					nStateA_CommonNext := 99;
+			END_CASE
+		END_IF
+		
+	5:	//Stoppen
+		//Sicherstellen, dass FastMFunc und HskMFunc beendet wurden bzw diese beenden
+		//Durch StopAll werden die Devices bzw. die ComplexActions gestoppt.
+		//Durch StopAction müssen diese noch gestoppt werden
+		//Die Methoden erhalten einen Eingang "bStop"
+		nStateA_Common := 10;
+		nStateA_CommonNext := 80;
+		IF fbFastMFunc.bBusy THEN
+			fbFastMFunc(stGCodeRef:= stGCodeRef, bStop:= TRUE);
+			nStateA_Common := 5;
+		END_IF
+		
+		IF fbHskMFunc.bBusy THEN
+			fbHskMFunc(stGCodeRef:= stGCodeRef, pXDrive:= pXDrive, pYDrive:= pYDrive, bStop:= TRUE, bPause:= FALSE, bContinue:= FALSE);
+			nStateA_Common := 5;
+		END_IF
+		
+		IF NOT (fbFastMFunc.bBusy OR fbHskMFunc.bBusy) THEN
+			fbFastMFunc.M_StopPrintAction(stGCodeRef.pCurrentTool,0);
+		END_IF
+	
+	10:	//*****ClearUp****
+		//Interpreter stoppen
+		fbItpStartStopEx(bStart:= FALSE, bStop:= TRUE, sNciToPlc:= stGCodeRef.sNciToPlc);
+		IF NOT fbItpStartStopEx.bBusy THEN
+			IF fbItpStartStopEx.bErr THEN
+				stError.ErrorId := UDINT_TO_UINT(fbItpStartStopEx.nErrId);
+				nStateA_Common := 99;
+			ELSE
+				nStateA_Common := 11;
+				fbFastMFunc.M_StopPrintAction(stGCodeRef.pCurrentTool,0);
+				IF stGCodeRef.pCurrentTool > 0 THEN
+					IF stGCodeRef.pCurrentTool^.P_eObjectType = E_ObjectType.OBJECTTYPE_VermesDisp THEN
+						//Druck ausschalten
+						MEMSET(ADR(stActionData),0,SIZEOF(stActionData));
+						stActionData.eAction := E_Action.ACTION_SwitchPressure;
+						stActionData.aParams[1] := 1;
+						stGCodeRef.pCurrentTool^.M_ExeAction(stActionData);
+					END_IF				
+				END_IF
+			END_IF
+			IF pHighVoltTray > 0 THEN
+				IF pHighVoltTray^.P_bPwrCutOffTriggered THEN
+					nStateA_CommonNext := 30;	//In Parking-Pos fahren
+				END_IF
+				//Strom-Überwachung ausschalten
+				pHighVoltTray^.M_CurrentMonitoring(FALSE);
+			END_IF	
+			fbItpStartStopEx(bStart:= FALSE, bStop:= FALSE, sNciToPlc:= stGCodeRef.sNciToPlc);
+		END_IF
+		
+	11:	//Interpreter resetten (nötig, um Interpolationsgruppe zu löschen)
+		fbItpResetEx2(bExecute:= TRUE, sNciToPlc:= stGCodeRef.sNciToPlc);
+		IF NOT fbItpResetEx2.bBusy THEN
+			IF fbItpResetEx2.bErr THEN
+				stError.ErrorId := UDINT_TO_UINT(fbItpResetEx2.nErrId);
+				nStateA_Common := 99;
+			ELSE
+				nStateA_Common := 20;
+			END_IF
+			fbItpResetEx2(bExecute:= FALSE, sNciToPlc:= stGCodeRef.sNciToPlc);
+		END_IF
+			
+	20:	//Interpolationsgruppe löschen
+		fbClearGroup(stGCodeRef:= stGCodeRef, bReGearInSlave:= TRUE, bExecute:= TRUE);
+		IF NOT fbClearGroup.bBusy THEN
+			IF fbClearGroup.bError THEN
+				stError.ErrorId := fbClearGroup.nErrorId;
+				nStateA_Common := 99;
+			ELSE
+				nStateA_Common := nStateA_CommonNext;
+			END_IF
+			fbClearGroup(stGCodeRef:= stGCodeRef, bExecute:= FALSE);
+		END_IF
+		
+	30:	//In Parking-Pos fahren (MoveAllHome)
+		MEMSET(ADR(stActionData),0,SIZEOF(stActionData));
+		stActionData.eAction := E_Action.ACTION_MoveAllHome;
+		stError.ErrorId := fbComplexAction.M_ExeAction(stActionData);
+		IF stError.ErrorId > 0 THEN
+			nStateA_Common := 99;
+		ELSE
+			nStateA_Common := 31;
+		END_IF
+		
+	31: //MoveAllHome ready?
+		IF NOT fbComplexAction.bBusy THEN
+			IF fbComplexAction.bError THEN
+				nStateA_Common := 99;
+			ELSE
+				nStateA_Common := 80;
+			END_IF
+		END_IF
+
+END_CASE
+
+IF nStateA_Common = 99 THEN
+	stError.POUAction := E_POUACT.POUACT_A_Run;
+	fbErrorList.M_Add(stError);
+END_IF]]></ST>
+      </Implementation>
+    </Action>
+    <Action Name="A_Start" Id="{258c2195-858f-440f-bf21-a1ae4c4feca7}">
+      <Implementation>
+        <ST><![CDATA[stError.POUState := nStateA_Common;
+
+CASE nStateA_Common OF
+	0:	//Interpolationsgruppe bilden
+		stError.ErrorId := 0;
+		fbBuildGroup(stGCodeRef:= stGCodeRef, bExecute:= TRUE);
+		IF NOT fbBuildGroup.bBusy THEN
+			IF fbBuildGroup.bError THEN
+				stError.ErrorId := fbBuildGroup.nErrorId;
+				nStateA_Common := 99;
+			ELSE
+				nStateA_Common := 1;
+			END_IF
+			fbBuildGroup(stGCodeRef:= stGCodeRef, bExecute:= FALSE);
+		END_IF
+		
+		//Tools iterieren, in ToolAssigTable eintragen und gleich das MES-Tool ermitteln, welches im nächsten Schritt
+		//eventuell vom Freifahren ausgeschlossen wird
+	1:  pGCodeTool := 0;
+		pMesCartDisp := 0;
+		pHighVoltTray := pTarget^.M_GetFirstParentOfType(E_ObjectType.OBJECTTYPE_HighVoltTray);
+		memset(ADR(GCode.stGCodeRef.aToolTable),0, SIZEOF(ST_GCodeTool) * GCode.cMaxGCodeTools);
+		stGCodeRef.pHead^.P_pObjCollectNode^.nodes.M_GetIterator(iterDeep);
+		WHILE iterDeep.pNode > 0 DO
+			IF iterDeep.pNode^.P_pObject > 0 AND_THEN iterDeep.pNode^.P_pObject^.M_bIsGroup(E_ObjectGroup.OBJECTGROUP_MzTool) THEN
+				pTempTool := iterDeep.pNode^.P_pObject;
+				IF fbObjectDirectory.M_ObjIsGCodeTool(pTempTool^.P_nObjectID) THEN //GCodeTool?
+					pGCodeTool := pTempTool;
+					IF pGCodeTool^.P_nGCodeToolNr > 0 THEN
+						IF pGCodeTool^.P_nGCodeToolNr <= cMaxGCodeTools THEN
+							IF stGCodeRef.aToolTable[pGCodeTool^.P_nGCodeToolNr].pMzTool = 0 THEN
+								stGCodeRef.aToolTable[pGCodeTool^.P_nGCodeToolNr].pMzTool := pGCodeTool;
+								//MES-Kartusche und MES-Tray vorhanden?
+								IF (pGCodeTool^.P_eObjectType = E_ObjectType.OBJECTTYPE_CartDispenser OR
+									pGCodeTool^.P_eObjectType = E_ObjectType.OBJECTTYPE_CartDispStirrer) AND pHighVoltTray > 0 THEN
+									pMesCartDisp := pGCodeTool;
+									IF NOT pMesCartDisp^.P_bIsMESTool THEN
+										//befindet sich MES-Kartusche über MES-Tray? Diese würde vom Freifahren ausgeschlossen
+										IF NOT F_PointInnerRect(pMesCartDisp^.P_stCurrentPosPhys,pHighVoltTray^.P_stAbsRect) THEN
+											pMesCartDisp := 0;	
+										END_IF
+									END_IF
+								END_IF
+								//Checken, ob Tool bereit für den Start im GCode-Mode
+								stError.ErrorId := pGCodeTool^.M_CheckGCodeStart();
+								IF stError.ErrorId > 0 THEN
+									stError.ObjectId := pGCodeTool^.P_nObjectID;
+									EXIT;
+								END_IF
+							ELSE
+								//schon belegt, zwei Tools haben die gleiche ToolNr
+								//sollte eigentlich schon in der GUI abgefangen werden
+								stError.ErrorId := E_ErrorIdGCode.ERRORID_InvalidToolNr;
+								EXIT;			
+							END_IF
+						ELSE
+							//ToolNr zu groß
+							//sollte eigentlich schon in der GUI abgefangen werden
+							stError.ErrorId := E_ErrorIdGCode.ERRORID_InvalidToolNr;
+							EXIT;			
+						END_IF
+					END_IF					
+				END_IF
+			END_IF
+			iterDeep.M_Increment();
+		END_WHILE
+		
+		//GCodeTargetNummern in TargetTable eintragen
+		memset(ADR(GCode.stGCodeRef.aTargetTable),0, SIZEOF(UINT) * GCode.cMaxGCodeTargets);
+		//wie komme ich hier an die Workplate ran?
+		//über den Head und die zugeordnete Workplate
+		stGCodeRef.pHead^.P_pAssignWorkplate^.P_pObjCollectNode^.nodes.M_GetIterator(iterDeep);
+		WHILE iterDeep.pNode > 0 DO
+			IF iterDeep.pNode^.P_pObject > 0 AND_THEN iterDeep.pNode^.P_pObject^.M_bIsGroup(E_ObjectGroup.OBJECTGROUP_Target) THEN
+				pTarget := iterDeep.pNode^.P_pObject;
+				IF pTarget^.P_nGCodeTargetNr > 0 THEN
+					//darf nicht größe als 20 sein 
+					IF  pTarget^.P_nGCodeTargetNr > GCode.cMaxGCodeTargets THEN
+						{warnig 'Imlement proper ErrorID'}
+						stError.ErrorId := E_ErrorIdGCode.ERRORID_InvalidToolNr;
+						RETURN;
+					END_IF
+					//darf noch nicht belegt sein
+					IF GCode.stGCodeRef.aTargetTable[pTarget^.P_nGCodeTargetNr] > 0 THEN
+						{warnig 'Imlement proper ErrorID'}
+						stError.ErrorId := E_ErrorIdGCode.ERRORID_InvalidToolNr;
+						RETURN;
+					END_IF
+					GCode.stGCodeRef.aTargetTable[pTarget^.P_nGCodeTargetNr] := pTarget^.P_nObjectID;
+				END_IF
+			END_IF
+			iterDeep.M_Increment();
+		END_WHILE
+	
+		//Tools freifahren
+		IF stError.ErrorId = 0 THEN
+			stError.ErrorId := stGCodeRef.pHead^.M_MoveFree(pMesCartDisp);
+			IF stError.ErrorId > 0 THEN
+				stError.ObjectId := stGCodeRef.pHead^.P_nObjectID;
+				nStateA_Common := 99;
+			ELSE
+				nStateA_Common := 2;
+			END_IF
+		ELSE
+			nStateA_Common := 99;
+		END_IF
+	
+	2:	//Tools frei?
+		IF NOT stGCodeRef.pHead^.M_GetActionBusy(E_Action.ACTION_MoveZ) THEN
+			nStateA_Common := 3;
+		END_IF
+		
+		IF stGCodeRef.pHead^.P_bError THEN
+			stError.ErrorId := stGCodeRef.pHead^.P_nErrorId;
+			stError.ObjectId := stGCodeRef.pHead^.P_nObjectID;
+			nStateA_Common := 99;
+		END_IF
+	
+	3:	//XY-Nullpunktverschiebung schreiben
+		fbItpWriteZeroShiftEx(bExecute:= TRUE, sNciToPlc:= stGCodeRef.sNciToPlc, nZsNo:= 54, sZeroShiftDesc:= stGCodeRef.sZeroShiftDesc);	
+		IF NOT fbItpWriteZeroShiftEx.bBusy THEN
+			IF fbItpWriteZeroShiftEx.bErr THEN
+				stError.ErrorId := UDINT_TO_UINT(fbItpWriteZeroShiftEx.nErrId);
+				nStateA_Common := 99;
+			ELSE
+				stGCodeRef.pCurrentTool := 0;
+				fbFastMFunc.M_Reset();
+				fbHskMFunc.M_Reset();
+				nStateA_Common := 4;
+			END_IF
+			fbItpWriteZeroShiftEx(bExecute:= FALSE, sNciToPlc:= GCode.stGCodeRef.sNciToPlc, nZsNo:= 54, sZeroShiftDesc:= stGCodeRef.sZeroShiftDesc);
+		END_IF
+		
+	4: //RParameter 101 bis 125 löschen
+		fbItpWriteRParams(bExecute:= TRUE, pAddr:= ADR(aRParamInit), nIndex:= 101 , nCount:= 25, sNciToPlc:= stGCodeRef.sNciToPlc); 
+		IF NOT fbItpWriteRParams.bBusy THEN
+			fbItpWriteRParams(bExecute:= FALSE, sNciToPlc:= stGCodeRef.sNciToPlc);
+			lrAngle := pTarget^.P_lrAbsAngle;
+			stGCodeRef.fbLimitCuboid.P_lrAngle := lrAngle;
+			nStateA_Common := 5;
+		END_IF
+		
+	5: //Verdrehwinkel des Targets in R126 schreiben (Winkel wird einen Schritt vorher ermittelt
+		fbItpWriteRParams(bExecute:= TRUE, pAddr:= ADR(lrAngle), nIndex:= 126 , nCount:= 1, sNciToPlc:= stGCodeRef.sNciToPlc);
+		IF NOT fbItpWriteRParams.bBusy THEN
+			fbItpWriteRParams(bExecute:= FALSE, sNciToPlc:= stGCodeRef.sNciToPlc);
+			nStateA_Common := 6;
+		END_IF
+
+	6:	//Interpreter starten
+		fbItpStartStopEx(bStart:= TRUE,	bStop:= FALSE, sNciToPlc:= GCode.stGCodeRef.sNciToPlc);
+		IF NOT fbItpStartStopEx.bBusy THEN
+			IF fbItpStartStopEx.bErr THEN
+				stError.ErrorId := UDINT_TO_UINT(fbItpStartStopEx.nErrId);
+				nStateA_Common := 99;
+			ELSE
+				nStateA_Common := 7;
+			END_IF
+			fbItpStartStopEx(bStart:= FALSE, bStop:= FALSE, sNciToPlc:= GCode.stGCodeRef.sNciToPlc);
+		END_IF
+END_CASE
+
+IF nStateA_Common = 7 THEN
+	//Abfrage  des InterpreterStatus
+	//Wechsel des States von Ready auf einen anderen State -> weiter zu A_Running
+	//Nach dem Laden des Programms geht der Interpreter in Ready
+	stInfo.nNciState := ItpGetStateInterpreter(GCode.stGCodeRef.sNciToPlc);
+	IF stInfo.nNciState <> Tc2_NCI.NCI_INTERPRETER_READY THEN
+		IF pHighVoltTray > 0 THEN
+			//Strom-Überwachung einschalten
+			pHighVoltTray^.M_CurrentMonitoring(TRUE);
+		END_IF
+		stGCodeRef.lrNcOverride := 100.0;
+		nStateA_Common := 80;
+	END_IF
+END_IF
+
+//Achtung, Implementation von Cancel ist hier schon wichtig!!!
+
+IF nStateA_Common = 99 THEN
+	stError.POUAction := E_POUACT.POUACT_A_Start;
+	fbErrorList.M_Add(stError);
+END_IF]]></ST>
+      </Implementation>
+    </Action>
+    <Method Name="M_ClearGroup" Id="{cf339799-8003-4552-888a-bdb8f7133a47}">
+      <Declaration><![CDATA[METHOD M_ClearGroup : ST_MethResult
+
+VAR_INPUT
+	bReGearIn : BOOL;
+END_VAR
+
+]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[IF pXDrive = 0 OR pYDrive = 0 THEN	//GCode-Modul wurde noch nicht gestartet und folglich kann auch keine Gruppe vorhanden sein
+	RETURN;
+END_IF
+M_ClearGroup.bBusy := TRUE;
+fbClearGroup(stGCodeRef:= stGCodeRef, bReGearInSlave:= bReGearIn, bExecute:= TRUE);
+IF NOT fbClearGroup.bBusy THEN
+	IF fbClearGroup.bError THEN
+		M_ClearGroup.bError := TRUE;
+		M_ClearGroup.nErrorId := fbClearGroup.nErrorId;
+	END_IF
+	M_ClearGroup.bBusy := FALSE;
+	fbClearGroup(stGCodeRef:= stGCodeRef, bExecute:= FALSE);
+END_IF]]></ST>
+      </Implementation>
+    </Method>
+    <Method Name="M_Continue" Id="{535873c7-449a-47f6-b44a-1ba5eaae8125}">
+      <Declaration><![CDATA[METHOD M_Continue : ERRORID
+VAR_INPUT
+END_VAR
+]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[IF nState = 6 THEN
+	eGCodeState := E_GCodeState.GCodeState_ContinueRequest;
+	nState := 7;
+END_IF]]></ST>
+      </Implementation>
+    </Method>
+    <Method Name="M_Pause" Id="{c904075a-d5e7-4e6e-912c-93189dbe6fe3}">
+      <Declaration><![CDATA[METHOD M_Pause : ERRORID
+VAR_INPUT
+END_VAR
+]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[IF stInfo.eGCodeState = E_GCodeState.GCodeState_Running AND nStateA_Common = 0 THEN
+	IF pHighVoltTray > 0 THEN
+		//Strom-Überwachung ausschalten
+		pHighVoltTray^.M_CurrentMonitoring(FALSE);
+	END_IF
+	nState := 5;
+END_IF]]></ST>
+      </Implementation>
+    </Method>
+    <Method Name="M_Reset" Id="{fcd1319b-71ec-4550-8855-02bfc986874e}">
+      <Declaration><![CDATA[METHOD M_Reset
+VAR_INPUT
+END_VAR
+]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[IF nState = 99 THEN
+	nState := 60;
+END_IF]]></ST>
+      </Implementation>
+    </Method>
+    <Method Name="M_SetSequenceIds" Id="{72fc2325-f31b-4a51-b18d-95a65e6be6dc}">
+      <Declaration><![CDATA[METHOD M_SetSequenceIds
+VAR_INPUT
+	pIdArray : POINTER TO ARRAY[1..5] OF DINT;
+END_VAR
+]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[MEMCPY(ADR(stGCodeRef.aSequenceIds),pIdArray,20);
+]]></ST>
+      </Implementation>
+    </Method>
+    <Method Name="M_SetStartZeroPoint" Id="{95747826-b9b9-47e8-a614-313c264939fb}">
+      <Declaration><![CDATA[METHOD M_SetStartZeroPoint : ERRORID
+VAR_INPUT
+	nTargetObjId 	: UINT;
+	eTargetRef		: E_TargetRef;
+	nCol			: UINT;
+	nRow			: UINT;
+	nZOffset		: DINT;
+	nPausePointObjId: UINT;
+	rHeight			: REAL;
+END_VAR
+
+VAR
+	pMtp		: POINTER TO FB_Mtp;
+	stPosTemp	: ST_3DPoint;
+	rHeightTemp	: REAL;
+END_VAR
+]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[CASE fbObjectDirectory.M_GetObjType(nTargetObjId) OF
+	E_ObjectType.OBJECTTYPE_Point, E_ObjectType.OBJECTTYPE_Slide:
+		//als TargetRef wird hier immer Mitte angenommen
+		pTarget := fbObjectDirectory.M_GetObjPointer(nTargetObjId);
+		stGCodeRef.stStartPos := pTarget^.M_GetAbsPos(0,E_TargetRef.TARGETREF_Center,0,0,0,1,nErrorId=> M_SetStartZeroPoint);
+		
+	E_ObjectType.OBJECTTYPE_Mtp:
+		pTarget := fbObjectDirectory.M_GetObjPointer(nTargetObjId);
+		IF eTargetRef <> E_TargetRef.TARGETREF_TwoDimArray THEN
+			M_SetStartZeroPoint := E_ErrorIdCmd.ERRORID_InvalidTargetPointRef;
+			RETURN;
+		END_IF
+		pMtp := pTarget;
+		stGCodeRef.stStartPos := pMtp^.M_GetAbsPos(0,eTargetRef, nCol, nRow, 0, 1, nErrorId=> M_SetStartZeroPoint);
+		IF M_SetStartZeroPoint > 0 THEN
+			RETURN;
+		END_IF
+ELSE
+	M_SetStartZeroPoint := E_ErrorIdCmd.ERRORID_UnsuitableTarget;
+	RETURN;
+END_CASE
+
+stGCodeRef.fbLimitCuboid.P_stRefPoint := stGCodeRef.stStartPos;
+
+stGCodeRef.pWaitPoint := 0;
+IF nPausePointObjId > 0 THEN
+	IF fbObjectDirectory.M_GetObjType(nPausePointObjId) = E_ObjectType.OBJECTTYPE_Point THEN
+		stGCodeRef.pWaitPoint := fbObjectDirectory.M_GetObjPointer(nPausePointObjId);
+	ELSE
+		M_SetStartZeroPoint := E_ErrorIdGCode.ERRORID_InvalidPausePoint;
+		RETURN;
+	END_IF
+END_IF
+
+//Es kann nur der obere Head GCode ausführen
+stGCodeRef.pHead := fbObjectDirectory.M_GetTopHead();
+
+pXDrive := stGCodeRef.pHead^.P_pXDrive;
+pYDrive := stGCodeRef.pHead^.P_pYDrive;
+
+//Da hier noch kein Tool ausgewählt ist, bezieht sich Nullpunktverschiebung in XY bezieht sich vorerst den Head
+//Bei der Toolauswahl wird entsprechend verrechnet 
+stPosTemp := F_Sub3DPoints(stGCodeRef.stStartPos, stGCodeRef.pHead^.P_stAbsPosTotal);
+stGCodeRef.sZeroShiftDesc.fShiftX := stPosTemp.X / 1000.0;
+stGCodeRef.sZeroShiftDesc.fShiftY := stPosTemp.Y / 1000.0;
+stGCodeRef.sZeroShiftDesc.fShiftZ := (stGCodeRef.stStartPos.Z + DINT_TO_REAL(nZOffset)) / 1000.0; ]]></ST>
+      </Implementation>
+    </Method>
+    <Method Name="M_ShiftZPos" Id="{81b3aabe-4032-47a8-82cf-e624cd99a630}">
+      <Declaration><![CDATA[METHOD M_ShiftZPos : ERRORID
+VAR_INPUT
+	rValue : REAL;
+END_VAR
+]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[//Wird nur verschoben, wenn in Running oder Pause
+IF (NOT bWriteZeroShift) AND (eGCodeState = E_GCodeState.GCodeState_Running OR eGCodeState = E_GCodeState.GCodeState_Pause) THEN
+	stGCodeRef.sZeroShiftDesc.fShiftZ := stGCodeRef.sZeroShiftDesc.fShiftZ + (rValue / 1000.0);
+	bWriteZeroShift := TRUE;
+END_IF
+ ]]></ST>
+      </Implementation>
+    </Method>
+    <Method Name="M_Start" Id="{4168af54-6a3e-45e4-a8cd-02a5308bcef1}">
+      <Declaration><![CDATA[METHOD M_Start : ERRORID
+VAR_INPUT
+	sFileNumber : STRING;
+END_VAR
+]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[//Kann nur aus dem State "Idle" ausgeführt werden
+IF stInfo.eGCodeState = E_GCodeState.GCodeState_Idle THEN
+	{IF defined(WIN10)}
+	sGCodeFile := CONCAT(cPathWIN_10, sFileNumber);
+	{ELSE}
+	sGCodeFile := CONCAT(cPathWIN_EMBEDDED, sFileNumber);
+	{END_IF}
+	sGCodeFile := CONCAT(sGCodeFile,'.nc');
+	bStop := FALSE;
+	nState := 2;
+	stInfo.eGCodeState := eGCodeState := E_GCodeState.GCodeState_Loading;
+	stInfo.nFileNr := STRING_TO_UDINT(sFileNumber);
+ELSE
+	M_Start := E_ErrorIdGCode.ERRORID_InvalidNciState;
+END_IF
+]]></ST>
+      </Implementation>
+    </Method>
+    <Method Name="M_Stop" Id="{fcc0251b-39be-4da5-9b6c-8c1a3cfb83c9}">
+      <Declaration><![CDATA[METHOD M_Stop
+VAR_INPUT
+END_VAR
+]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[IF nState > 1 THEN //Idle
+	bStop := TRUE;
+END_IF]]></ST>
+      </Implementation>
+    </Method>
+    <Property Name="P_bMoveActionsLocked" Id="{10f378d5-0275-48bc-a0cf-a18bd6acb306}">
+      <Declaration><![CDATA[PROPERTY P_bMoveActionsLocked : BOOL]]></Declaration>
+      <Get Name="Get" Id="{626a12d3-0fd3-4876-8f2e-6eae19499cb1}">
+        <Declaration><![CDATA[VAR
+END_VAR
+]]></Declaration>
+        <Implementation>
+          <ST><![CDATA[P_bMoveActionsLocked := bMoveActionsLocked;]]></ST>
+        </Implementation>
+      </Get>
+      <Set Name="Set" Id="{5aca67f5-a384-409e-8d10-d7e4007e2110}">
+        <Declaration><![CDATA[VAR
+END_VAR
+]]></Declaration>
+        <Implementation>
+          <ST><![CDATA[bMoveActionsLocked := P_bMoveActionsLocked;]]></ST>
+        </Implementation>
+      </Set>
+    </Property>
+    <Property Name="P_bNciAvailable" Id="{8f21840d-ef39-4d25-9ed9-a265fe15cd37}">
+      <Declaration><![CDATA[PROPERTY P_bNciAvailable : BOOL]]></Declaration>
+      <Get Name="Get" Id="{5cd2168f-99d9-4647-b5c7-2e251c9ae5cb}">
+        <Declaration><![CDATA[VAR
+END_VAR
+]]></Declaration>
+        <Implementation>
+          <ST><![CDATA[P_bNciAvailable := bNciAvailable;]]></ST>
+        </Implementation>
+      </Get>
+    </Property>
+    <Property Name="P_nProgress" Id="{f6427d43-510f-47cf-a42b-756e1709d0cb}">
+      <Declaration><![CDATA[PROPERTY P_nProgress : UINT]]></Declaration>
+      <Get Name="Get" Id="{4c8b0acc-48ee-4b24-a985-aa973b049a20}">
+        <Declaration><![CDATA[VAR
+END_VAR
+]]></Declaration>
+        <Implementation>
+          <ST><![CDATA[P_nProgress := nProgress; ]]></ST>
+        </Implementation>
+      </Get>
+    </Property>
+    <LineIds Name="GCode">
+      <LineId Id="1661" Count="167" />
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="GCode.A_Continue">
+      <LineId Id="198" Count="196" />
+      <LineId Id="1" Count="0" />
+    </LineIds>
+    <LineIds Name="GCode.A_Init">
+      <LineId Id="2" Count="43" />
+      <LineId Id="97" Count="0" />
+      <LineId Id="103" Count="10" />
+      <LineId Id="149" Count="0" />
+      <LineId Id="115" Count="33" />
+      <LineId Id="91" Count="4" />
+      <LineId Id="1" Count="0" />
+    </LineIds>
+    <LineIds Name="GCode.A_Load">
+      <LineId Id="2" Count="8" />
+      <LineId Id="82" Count="0" />
+      <LineId Id="11" Count="29" />
+      <LineId Id="47" Count="1" />
+      <LineId Id="51" Count="0" />
+      <LineId Id="62" Count="1" />
+      <LineId Id="65" Count="0" />
+      <LineId Id="67" Count="1" />
+      <LineId Id="66" Count="0" />
+      <LineId Id="69" Count="0" />
+      <LineId Id="64" Count="0" />
+      <LineId Id="72" Count="1" />
+      <LineId Id="49" Count="0" />
+      <LineId Id="74" Count="7" />
+      <LineId Id="41" Count="5" />
+      <LineId Id="1" Count="0" />
+    </LineIds>
+    <LineIds Name="GCode.A_Pause">
+      <LineId Id="141" Count="140" />
+      <LineId Id="1" Count="0" />
+    </LineIds>
+    <LineIds Name="GCode.A_Reset">
+      <LineId Id="2" Count="32" />
+      <LineId Id="1" Count="0" />
+    </LineIds>
+    <LineIds Name="GCode.A_Run">
+      <LineId Id="162" Count="163" />
+      <LineId Id="1" Count="0" />
+    </LineIds>
+    <LineIds Name="GCode.A_Start">
+      <LineId Id="1103" Count="181" />
+      <LineId Id="1" Count="0" />
+    </LineIds>
+    <LineIds Name="GCode.M_ClearGroup">
+      <LineId Id="18" Count="2" />
+      <LineId Id="3" Count="8" />
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="GCode.M_Continue">
+      <LineId Id="8" Count="0" />
+      <LineId Id="3" Count="1" />
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="GCode.M_Pause">
+      <LineId Id="8" Count="3" />
+      <LineId Id="3" Count="1" />
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="GCode.M_Reset">
+      <LineId Id="3" Count="1" />
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="GCode.M_SetSequenceIds">
+      <LineId Id="3" Count="0" />
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="GCode.M_SetStartZeroPoint">
+      <LineId Id="3" Count="19" />
+      <LineId Id="72" Count="0" />
+      <LineId Id="147" Count="1" />
+      <LineId Id="73" Count="0" />
+      <LineId Id="25" Count="8" />
+      <LineId Id="90" Count="0" />
+      <LineId Id="165" Count="0" />
+      <LineId Id="91" Count="0" />
+      <LineId Id="172" Count="0" />
+      <LineId Id="92" Count="0" />
+      <LineId Id="35" Count="7" />
+    </LineIds>
+    <LineIds Name="GCode.M_ShiftZPos">
+      <LineId Id="3" Count="4" />
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="GCode.M_Start">
+      <LineId Id="3" Count="1" />
+      <LineId Id="19" Count="0" />
+      <LineId Id="22" Count="0" />
+      <LineId Id="20" Count="0" />
+      <LineId Id="23" Count="0" />
+      <LineId Id="21" Count="0" />
+      <LineId Id="6" Count="7" />
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="GCode.M_Stop">
+      <LineId Id="3" Count="1" />
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="GCode.P_bMoveActionsLocked.Get">
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="GCode.P_bMoveActionsLocked.Set">
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="GCode.P_bNciAvailable.Get">
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="GCode.P_nProgress.Get">
+      <LineId Id="2" Count="0" />
+    </LineIds>
+  </POU>
+</TcPlcObject>

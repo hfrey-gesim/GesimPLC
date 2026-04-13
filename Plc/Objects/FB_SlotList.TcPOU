@@ -1,0 +1,206 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<TcPlcObject Version="1.1.0.1" ProductVersion="3.1.4020.12">
+  <POU Name="FB_SlotList" Id="{4cf46d43-eef9-4d90-8049-5f264e9f812f}" SpecialFunc="None">
+    <Declaration><![CDATA[FUNCTION_BLOCK FB_SlotList
+VAR_INPUT
+END_VAR
+VAR_OUTPUT
+END_VAR
+VAR
+	pHead	: POINTER TO ST_POINTER2;
+	pTail	: POINTER TO ST_POINTER2;
+	pCurrent: POINTER TO ST_POINTER2;
+	nCount	: UINT;
+END_VAR
+]]></Declaration>
+    <Implementation>
+      <ST><![CDATA[]]></ST>
+    </Implementation>
+    <Property Name="P_nCount" Id="{45fd7700-41a2-400a-bc4d-70474bee2ec5}">
+      <Declaration><![CDATA[PROPERTY P_nCount : UINT]]></Declaration>
+      <Get Name="Get" Id="{1fc1a22f-8ddc-416f-8c98-dffec85b7854}">
+        <Declaration><![CDATA[VAR
+END_VAR
+]]></Declaration>
+        <Implementation>
+          <ST><![CDATA[P_nCount := nCount;]]></ST>
+        </Implementation>
+      </Get>
+    </Property>
+    <Method Name="M_GetAtIndex" Id="{58b32ec9-e2fc-4380-a64f-5db5d0070ada}">
+      <Declaration><![CDATA[METHOD M_GetAtIndex : POINTER TO FB_Slot
+VAR_INPUT
+	nIndex : UINT;
+END_VAR
+
+VAR
+	i : UINT;
+	pItem : POINTER TO ST_POINTER2;
+END_VAR
+]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[//mit Index ist die fortlaufende Nummer eines Slots in der Liste gemeint
+IF nIndex > 0 AND nIndex <= nCount THEN
+	pItem := pHead;
+	FOR i := 1 TO nIndex - 1 BY 1 DO
+		pItem := pItem^.pNext;
+	END_FOR
+	M_GetAtIndex := pItem^.pContent;
+END_IF]]></ST>
+      </Implementation>
+    </Method>
+    <Method Name="M_GetAtNr" Id="{6f93f9bf-bedc-47fd-be1c-c7d58747dfde}">
+      <Declaration><![CDATA[METHOD M_GetAtNr : POINTER TO FB_Slot
+VAR_INPUT
+	nNr	: UINT;
+END_VAR
+
+VAR
+	pPointer : POINTER TO ST_POINTER2;
+	pSlot: POINTER TO FB_Slot; 
+END_VAR
+]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[//Gibt Slot anhand der SlotNr zurück
+pPointer := pHead;
+WHILE pPointer > 0 DO
+	pSlot := pPointer^.pContent;
+	IF pSlot^.P_nNr = nNr THEN
+		EXIT;
+	ELSE
+		pSlot := 0;
+	END_IF
+	pPointer := pPointer^.pNext;
+END_WHILE
+
+IF pSlot > 0 THEN
+	M_GetAtNr := pSlot;
+END_IF]]></ST>
+      </Implementation>
+    </Method>
+    <Method Name="M_SetCurrentToHead" Id="{d23479f9-9c12-485a-a952-2fff5ea0c0d8}">
+      <Declaration><![CDATA[METHOD M_SetCurrentToHead : BOOL
+VAR_INPUT
+END_VAR]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[pCurrent := pHead;]]></ST>
+      </Implementation>
+    </Method>
+    <Method Name="M_Add" Id="{e21ecc7b-255a-4d0f-b14f-e8abb80fd21c}">
+      <Declaration><![CDATA[METHOD M_Add : ERRORID
+VAR_INPUT
+	pSlot : POINTER TO FB_Slot;
+END_VAR
+
+VAR
+	pNew : POINTER TO ST_POINTER2;
+END_VAR]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[pNew := pHead;
+WHILE pNew > 0 DO
+	IF pNew^.pContent = pSlot THEN
+		M_Add := 43434;
+		RETURN;
+	END_IF
+	pNew := pNew^.pNext;
+END_WHILE
+
+pNew := __NEW(ST_Pointer2);
+MEMSET(pNew,0,SIZEOF(ST_POINTER2));
+pNew^.pContent := pSlot;
+IF pHead = 0 THEN
+	pHead := pTail := pNew;
+ELSE
+	pNew^.pPrev := pTail; 
+	pTail^.pNext := pNew;
+	pTail := pNew;
+END_IF
+nCount := nCount + 1;
+]]></ST>
+      </Implementation>
+    </Method>
+    <Method Name="M_Reset" Id="{f32da28c-fe0c-4c52-bf3d-875eab7ba948}">
+      <Declaration><![CDATA[METHOD M_Reset
+VAR_INPUT
+END_VAR
+
+VAR
+	pDelete : POINTER TO ST_Pointer2;
+	pNext	: POINTER TO ST_Pointer2;
+	pSlot	: POINTER TO FB_SLOT;
+END_VAR]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[pDelete := pHead;
+WHILE  pDelete > 0 DO
+	pNext := pDelete^.pNext;
+	pSlot := pDelete^.pContent; 
+	IF pSlot > 0 THEN
+		__DELETE(pSlot);
+	END_IF
+	__DELETE(pDelete);
+	pDelete := pNext;
+END_WHILE
+pHead := 0;
+pTail := 0;
+pCurrent := 0;
+nCount := 0;]]></ST>
+      </Implementation>
+    </Method>
+    <Method Name="M_GetNext" Id="{f616f28b-5554-4d7c-9265-cae37f0f0333}">
+      <Declaration><![CDATA[METHOD M_GetNext : POINTER TO FB_Slot
+VAR_INPUT
+END_VAR
+
+VAR
+	pSlot : POINTER TO FB_Slot;
+END_VAR
+]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[IF pCurrent > 0 THEN
+	pSlot := pCurrent^.pContent;
+	IF pSlot > 0 THEN
+		M_GetNext := pSlot;
+	END_IF
+	pCurrent := pCurrent^.pNext;
+END_IF]]></ST>
+      </Implementation>
+    </Method>
+    <LineIds Name="FB_SlotList">
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="FB_SlotList.P_nCount.Get">
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="FB_SlotList.M_GetAtIndex">
+      <LineId Id="7" Count="0" />
+      <LineId Id="16" Count="0" />
+      <LineId Id="8" Count="0" />
+      <LineId Id="14" Count="1" />
+      <LineId Id="18" Count="0" />
+      <LineId Id="9" Count="0" />
+      <LineId Id="5" Count="0" />
+    </LineIds>
+    <LineIds Name="FB_SlotList.M_GetAtNr">
+      <LineId Id="25" Count="0" />
+      <LineId Id="3" Count="12" />
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="FB_SlotList.M_SetCurrentToHead">
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="FB_SlotList.M_Add">
+      <LineId Id="3" Count="19" />
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="FB_SlotList.M_Reset">
+      <LineId Id="3" Count="2" />
+      <LineId Id="23" Count="0" />
+      <LineId Id="6" Count="8" />
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="FB_SlotList.M_GetNext">
+      <LineId Id="3" Count="5" />
+      <LineId Id="2" Count="0" />
+    </LineIds>
+  </POU>
+</TcPlcObject>

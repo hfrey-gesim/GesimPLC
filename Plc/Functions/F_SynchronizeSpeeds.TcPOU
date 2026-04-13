@@ -1,0 +1,38 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<TcPlcObject Version="1.1.0.1" ProductVersion="3.1.4024.5">
+  <POU Name="F_SynchronizeSpeeds" Id="{c7dca28b-ecfa-43b5-877f-9d440d570b33}" SpecialFunc="None">
+    <Declaration><![CDATA[FUNCTION F_SynchronizeSpeeds : ARRAY[0..1] OF REAL;
+VAR_INPUT
+	rSpeedSum 	: REAL;
+	rDistance1 	: REAL;
+	rDistance2 	: REAL;
+END_VAR
+VAR_IN_OUT
+	rSpeed1 : REAL;
+	rSpeed2 : REAL;
+END_VAR
+VAR
+	rDistSum : REAL;
+	rTime : REAL;
+END_VAR
+]]></Declaration>
+    <Implementation>
+      <ST><![CDATA[//Gesamtweg (Vektor) berechnen
+rDistSum := SQRT(rDistance1 * rDistance1 + rDistance2 * rDistance2);
+rTime := rDistSum / rSpeedSum;
+rSpeed1 := ABS(rDistance1 / rTime);
+rSpeed2 := ABS(rDistance2 / rTime);
+
+
+]]></ST>
+    </Implementation>
+    <LineIds Name="F_SynchronizeSpeeds">
+      <LineId Id="7" Count="0" />
+      <LineId Id="17" Count="0" />
+      <LineId Id="21" Count="2" />
+      <LineId Id="19" Count="0" />
+      <LineId Id="18" Count="0" />
+      <LineId Id="16" Count="0" />
+    </LineIds>
+  </POU>
+</TcPlcObject>

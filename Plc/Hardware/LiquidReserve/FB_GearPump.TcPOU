@@ -1,0 +1,236 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<TcPlcObject Version="1.1.0.1" ProductVersion="3.1.4020.6">
+  <POU Name="FB_GearPump" Id="{3bfad825-ac2d-4fe6-870e-90a0773e908d}" SpecialFunc="None">
+    <Declaration><![CDATA[FUNCTION_BLOCK FB_GearPump
+
+VAR_OUTPUT
+	bError : BOOL;
+	bBusy : BOOL;
+END_VAR
+VAR
+	bPumpConst 		: BOOL;
+	bPumpQuantity 	: BOOL;
+	nPumpMicroSteps	: DINT;
+	nPumpSpeed		: DINT;
+	nPumpSpeedNew	: DINT;
+	nStateA_Pump	: USINT;
+	nStateA_PumpNext: USINT;
+	bStop			: BOOL;
+	
+	fbTMCM6110		: FB_TMCM6110;
+	nPumpNr			: USINT;	//wird in M_init gesetzt und wird automatisch mit jeder neuen Instanzierung inkrementiert
+END_VAR
+
+VAR_STAT
+	nHighestPumpNr : USINT; //Klassenvariable zum inkrementieren von nPumpNr
+END_VAR
+
+VAR CONSTANT
+	//Konstanten zur Umrechnung von Flow 10tel µl/s in Speed
+	cFactorFlowToSpeed	: REAL := 402653184; //16(2ExpPulsdivisor X 2048 X 32 X 16(MicroStepRes) X 24(FullStep/U)
+	cDivisorFlowToSpeed	: REAL := 240000000; //16000(Frequ) X 1.5 µl/U(Fördervolumen Pumpe/U) X 10(10telµl)
+	//Konstanten zur Umrechnung von Quantity µl in MircoSteps
+	cFactorQuantToMicroSteps	: REAL := 25.6; //384 MircoSteps/U / 15 10telµl/U
+END_VAR
+]]></Declaration>
+    <Implementation>
+      <ST><![CDATA[IF bPumpConst THEN
+	bBusy := TRUE;
+	A_PumpConst();
+	IF nStateA_Pump >= 80 THEN
+		IF nStateA_Pump >= 99 THEN
+			bError := TRUE;
+		END_IF
+		nStateA_Pump := 0;
+		bPumpConst := FALSE;
+	END_IF
+ELSIF bPumpQuantity THEN
+	bBusy := TRUE;
+	A_PumpQuantity();
+	IF nStateA_Pump >= 80 THEN
+		IF nStateA_Pump >= 99 THEN
+			bError := TRUE;
+		END_IF
+		nStateA_Pump := 0;
+		bPumpQuantity := FALSE;
+	END_IF
+ELSE
+	bBusy := FALSE;
+	bStop := FALSE;
+END_IF
+
+]]></ST>
+    </Implementation>
+    <Method Name="M_PumpConst" Id="{396d643d-9bd7-422e-83c5-d3db84e2832e}">
+      <Declaration><![CDATA[METHOD M_PumpConst : ERRORID
+VAR_INPUT
+	nFlow	: DINT;
+END_VAR
+]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[bPumpConst := TRUE;
+nPumpSpeedNew := REAL_TO_DINT(DINT_TO_REAL(nFlow) * cFactorFlowToSpeed / cDivisorFlowToSpeed);
+bBusy := TRUE;
+bStop := FALSE;
+]]></ST>
+      </Implementation>
+    </Method>
+    <Method Name="FB_init" Id="{4f2ebf67-63d4-41d3-83cc-bd5abe6a5341}">
+      <Declaration><![CDATA[METHOD FB_init : BOOL
+VAR_INPUT
+	bInitRetains : BOOL; // if TRUE, the retain variables are initialized (warm start / cold start)
+	bInCopyCode : BOOL;  // if TRUE, the instance afterwards gets moved into the copy code (online change)
+END_VAR
+]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[nHighestPumpNr := nHighestPumpNr + 1;
+nPumpNr := nHighestPumpNr; 
+]]></ST>
+      </Implementation>
+    </Method>
+    <Action Name="A_PumpConst" Id="{9ef8cfa3-c565-4af6-ba61-82f723b42ad2}">
+      <Implementation>
+        <ST><![CDATA[//Egal in welchem State, wenn Flow neu gesetzt wird, dann Rotate neu senden
+//Wenn bStop, in jedem State zu Stop gehen
+
+IF nStateA_Pump = 0 THEN
+	nPumpSpeed := nPumpSpeedNew;
+	nStateA_Pump := 1;
+END_IF
+
+CASE nStateA_Pump OF
+	1:	//Motor rechts drehen
+		fbTMCM6110(bExecute:= TRUE, eCommand:= E_TMCMCommand.ROTATE_R, nSendValue:= nPumpSpeed, nMotorNr:= nPumpNr);
+		IF NOT fbTMCM6110.bBusy THEN
+			IF fbTMCM6110.bError THEN
+				nStateA_Pump := 99;	
+			ELSE
+				IF nPumpSpeed = nPumpSpeedNew THEN
+					nStateA_Pump := 2;
+				ELSE
+					nStateA_Pump := 0;
+				END_IF
+			END_IF
+			fbTMCM6110(bExecute:= FALSE, nMotorNr:= nPumpNr);
+		END_IF
+		
+	2:	//IstSpeed abfragen
+		fbTMCM6110(bExecute:= TRUE, eCommand:= E_TMCMCommand.GET_ACT_SPEED, nMotorNr:= nPumpNr);
+		IF NOT fbTMCM6110.bBusy THEN
+			IF fbTMCM6110.bError THEN
+				nStateA_Pump := 99;	
+			ELSE
+				IF nPumpSpeed <> nPumpSpeedNew THEN
+					nStateA_Pump := 0;
+				ELSE
+					IF fbTMCM6110.nReceiveValue = nPumpSpeed THEN	//SollSpeed erreicht
+						IF nPumpSpeed = 0 THEN
+							nStateA_Pump := 80;
+						END_IF
+					END_IF
+				END_IF
+			END_IF
+			fbTMCM6110(bExecute:= FALSE, nMotorNr:= nPumpNr);
+		END_IF
+END_CASE]]></ST>
+      </Implementation>
+    </Action>
+    <Method Name="M_Stop" Id="{9f1b35f2-95c8-4ac7-aa14-4d0dcfe61124}">
+      <Declaration><![CDATA[METHOD M_Stop : ERRORID
+VAR_INPUT
+END_VAR
+]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[IF bBusy THEN
+	bStop := TRUE;
+	nPumpSpeedNew := 0;
+END_IF
+ ]]></ST>
+      </Implementation>
+    </Method>
+    <Action Name="A_PumpQuantity" Id="{ae28bad1-f322-4371-b8fd-de21c3a4ae22}">
+      <Implementation>
+        <ST><![CDATA[//Wenn bStop, in jedem State zu Stop gehen
+//Vor Absenden des Move-Befehls, Speed setzen
+CASE nStateA_Pump OF
+	
+	0:	//Set Speed
+		nPumpSpeed := nPumpSpeedNew;
+		fbTMCM6110(bExecute:= TRUE, eCommand:= E_TMCMCommand.SET_SPEED, nSendValue:= nPumpSpeed, nMotorNr:= nPumpNr);
+		IF NOT fbTMCM6110.bBusy THEN
+			IF fbTMCM6110.bError THEN
+				nStateA_Pump := 99;	
+			ELSE
+				IF bStop THEN
+					nStateA_Pump := 80;
+				ELSE
+					nStateA_Pump := 1;
+				END_IF
+			END_IF
+			fbTMCM6110(bExecute:= FALSE, nMotorNr:= nPumpNr);
+		END_IF
+		
+	1:	//MoveRel
+		fbTMCM6110(bExecute:= TRUE, eCommand:= E_TMCMCommand.MOVE_REL, nSendValue:= nPumpMicroSteps, nMotorNr:= nPumpNr);
+		IF NOT fbTMCM6110.bBusy THEN
+			IF fbTMCM6110.bError THEN
+				nStateA_Pump := 99;	
+			ELSE
+				IF bStop THEN
+					nStateA_Pump := 3;
+				ELSE
+					nStateA_Pump := 2;
+				END_IF
+			END_IF
+			fbTMCM6110(bExecute:= FALSE, nMotorNr:= nPumpNr);
+		END_IF
+		
+	2:	//Warten, bis Position erreicht
+		fbTMCM6110(bExecute:= TRUE, eCommand:= E_TMCMCommand.GET_POS_REACHED, nSendValue:= 0, nMotorNr:= nPumpNr);
+		IF NOT fbTMCM6110.bBusy THEN
+			IF fbTMCM6110.bError THEN
+				nStateA_Pump := 99;	
+			ELSE
+				IF bStop THEN
+					nStateA_Pump := 3;	//Stoppen
+				ELSE
+					IF fbTMCM6110.nReceiveValue = 1 THEN
+						nStateA_Pump := 80;	
+					END_IF
+				END_IF
+			END_IF
+			fbTMCM6110(bExecute:= FALSE, nMotorNr:= nPumpNr);
+		END_IF
+		
+	3:	//Stoppen
+		fbTMCM6110(bExecute:= TRUE, eCommand:= E_TMCMCommand.STOP, nSendValue:= 0, nMotorNr:= nPumpNr);
+		IF NOT fbTMCM6110.bBusy THEN
+			IF fbTMCM6110.bError THEN
+				nStateA_Pump := 99;	
+			ELSE
+				nStateA_Pump := 80;	
+			END_IF
+			fbTMCM6110(bExecute:= FALSE, nMotorNr:= nPumpNr);
+		END_IF
+		
+END_CASE
+
+]]></ST>
+      </Implementation>
+    </Action>
+    <Method Name="M_PumpQuantity" Id="{d00cf452-d7ae-40d6-b384-672371f1ca58}">
+      <Declaration><![CDATA[METHOD M_PumpQuantity : ERRORID
+VAR_INPUT
+	nQuantity 	: DINT;
+	nFlow		: DINT;
+END_VAR
+]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[bPumpQuantity := TRUE;
+nPumpMicroSteps := REAL_TO_DINT(DINT_TO_REAL(nQuantity) * cFactorQuantToMicroSteps);
+nPumpSpeedNew := REAL_TO_DINT(DINT_TO_REAL(nFlow) * cFactorFlowToSpeed / cDivisorFlowToSpeed);
+bBusy := TRUE;]]></ST>
+      </Implementation>
+    </Method>
+  </POU>
+</TcPlcObject>

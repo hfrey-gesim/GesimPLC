@@ -1,0 +1,332 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<TcPlcObject Version="1.1.0.1" ProductVersion="3.1.4024.11">
+  <POU Name="FB_ActiveTarget" Id="{f71f8edd-f391-4a79-953f-1ef5fbc17e11}" SpecialFunc="None">
+    <Declaration><![CDATA[FUNCTION_BLOCK FB_ActiveTarget EXTENDS FB_TargetBase IMPLEMENTS I_Device
+VAR_INPUT
+END_VAR
+VAR_OUTPUT
+END_VAR
+VAR
+	bInitFB			: BOOL := TRUE;
+	nNotifyId		: UINT;
+	bError			: BOOL;
+	nErrorId		: ERRORID;
+	bCanceled		: BOOL;
+	bStop			: BOOL;
+	bBusy			: BOOL;
+	eCurrentState	: E_MachineState := E_MachineState.MACHINESTATE_Idle;
+	stError			: ST_Error;
+	bIsInit			: BOOL;	
+	stProcessData	: ST_ObjectProcData;
+	eCurrentAction	: E_Action;
+	
+	//Verkettete Liste für BasicActions
+	fbList				: FB_LinkedListCtrl;
+	hList				: T_HLINKEDLIST;
+	aNodes           	: ARRAY[0..4] OF T_LinkedListEntry;
+	getValue			: PVOID;
+	getPosPtr       	: POINTER TO T_LinkedListEntry := 0;
+	
+	
+	//Action: "Init"
+	bInit				: BOOL;				//Action A_Init() aktiv setzen
+	nStateA_Init		: USINT;			//State von A_Init()
+	bFlagA_Init			: BOOL := TRUE;		//Hilfsflag A_Init()
+	
+	//Action: Stop
+	nStateA_Stop		: USINT;	//Statemachine von A_Stop()
+	bStopAllOnError		: BOOL;
+	
+	//Action: "Reset"
+	nStateA_Reset		: USINT;	//Statemachine von A_Reset();	
+END_VAR
+]]></Declaration>
+    <Implementation>
+      <ST><![CDATA[]]></ST>
+    </Implementation>
+    <Method Name="M_CancelAction" Id="{259fb960-548c-47e0-a706-3237938bcacc}">
+      <Declaration><![CDATA[METHOD M_CancelAction
+VAR_INPUT
+	eAction	: E_Action;
+END_VAR
+]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[]]></ST>
+      </Implementation>
+    </Method>
+    <Method Name="M_CheckProcDataType" Id="{fc140985-521b-420d-b63a-4091e80d7eb5}">
+      <Declaration><![CDATA[METHOD M_CheckProcDataType : BOOL
+VAR_INPUT
+	eProcDataType : E_ProcDataType;
+END_VAR
+]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[]]></ST>
+      </Implementation>
+    </Method>
+    <Method Name="M_ExeAction" Id="{716c8509-50bf-4c86-85ed-eafa60eb7961}">
+      <Declaration><![CDATA[METHOD M_ExeAction : ERRORID
+VAR_INPUT
+	refActionData	: REFERENCE TO ST_ActionData;
+END_VAR
+]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[]]></ST>
+      </Implementation>
+    </Method>
+    <Method Name="M_GetActionBusy" Id="{9a6380bc-025b-4a37-99a3-7eb0066118f5}">
+      <Declaration><![CDATA[METHOD M_GetActionBusy : BOOL
+VAR_INPUT
+	eAction	: E_Action;
+END_VAR
+]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[]]></ST>
+      </Implementation>
+    </Method>
+    <Method Name="M_GetAllProps" Id="{bd35db0b-f5db-4f94-be53-888817275f9f}">
+      <Declaration><![CDATA[METHOD M_GetAllProps : ERRORID
+VAR_INPUT
+	refCmdData : REFERENCE TO ST_CmdData;
+END_VAR
+]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[M_GetAllProps := SUPER^.M_GetAllProps(refCmdData);
+refCmdData.aHeader[2] := nNotifyId;]]></ST>
+      </Implementation>
+    </Method>
+    <Method Name="M_GetDevice" Id="{1acc045b-7fb2-43b1-afdb-46301bfde7fe}">
+      <Declaration><![CDATA[METHOD M_GetDevice : I_Device
+VAR_INPUT
+END_VAR
+]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[M_GetDevice := THIS^;]]></ST>
+      </Implementation>
+    </Method>
+    <Method Name="M_GetProcData" Id="{c5fe35ab-f162-46e9-a230-5f9164983253}">
+      <Declaration><![CDATA[METHOD M_GetProcData : DINT
+VAR_INPUT
+	eProcDataType : E_ProcDataType;
+END_VAR
+]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[]]></ST>
+      </Implementation>
+    </Method>
+    <Method Name="M_Reset" Id="{53156c17-4a46-4002-b3af-bc5d6d07a4bb}">
+      <Declaration><![CDATA[METHOD M_Reset
+]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[bBusy := TRUE;
+eCurrentState := E_MachineState.MACHINESTATE_Reset;
+]]></ST>
+      </Implementation>
+    </Method>
+    <Method Name="M_Stop" Id="{2fd9dd19-8a3e-41d4-8cae-d39f6ea2c4f5}">
+      <Declaration><![CDATA[METHOD M_Stop : ERRORID
+]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[//Stop braucht nur ausgeführt werden, wenn irgendwas aktiv ist
+IF NOT bStop AND eCurrentState = E_MachineState.MACHINESTATE_Active THEN
+	bStop := TRUE;
+	fbList.A_AddHeadValue(hList := hList, putValue := E_Action.ACTION_Stop);
+END_IF]]></ST>
+      </Implementation>
+    </Method>
+    <Property Name="P_bBusy" Id="{76b0dc27-93e2-4f0c-8c46-1182f9e0266c}">
+      <Declaration><![CDATA[PROPERTY P_bBusy : BOOL
+]]></Declaration>
+      <Get Name="Get" Id="{f0e5cbed-3bfe-4f04-9e93-28db2db1c409}">
+        <Declaration><![CDATA[VAR
+END_VAR
+]]></Declaration>
+        <Implementation>
+          <ST><![CDATA[P_bBusy := bBusy;]]></ST>
+        </Implementation>
+      </Get>
+    </Property>
+    <Property Name="P_bCanceled" Id="{a2523f95-5c48-4e04-a8bc-344e88f3b58d}">
+      <Declaration><![CDATA[PROPERTY P_bCanceled : BOOL
+]]></Declaration>
+      <Get Name="Get" Id="{5d2c1e46-089e-4c9d-8df5-4b32e578c889}">
+        <Declaration><![CDATA[VAR
+END_VAR
+]]></Declaration>
+        <Implementation>
+          <ST><![CDATA[P_bCanceled := bCanceled;]]></ST>
+        </Implementation>
+      </Get>
+    </Property>
+    <Property Name="P_bError" Id="{531d40a1-5514-4de8-bb35-6f7be3009006}">
+      <Declaration><![CDATA[PROPERTY P_bError : BOOL
+]]></Declaration>
+      <Get Name="Get" Id="{b53ded85-1d01-4c62-b396-aca953357d94}">
+        <Declaration><![CDATA[VAR
+END_VAR
+]]></Declaration>
+        <Implementation>
+          <ST><![CDATA[P_bError := bError;]]></ST>
+        </Implementation>
+      </Get>
+    </Property>
+    <Property Name="P_bIsInit" Id="{b921bcca-ca77-43da-8f6e-84a267199db5}">
+      <Declaration><![CDATA[PROPERTY P_bIsInit : BOOL
+]]></Declaration>
+      <Get Name="Get" Id="{b661a2ef-aa49-4274-aab5-6587d179fc26}">
+        <Declaration><![CDATA[VAR
+END_VAR
+]]></Declaration>
+        <Implementation>
+          <ST><![CDATA[P_bIsInit := bIsInit;]]></ST>
+        </Implementation>
+      </Get>
+    </Property>
+    <Property Name="P_bStopAllOnError" Id="{19e7b204-f0c5-484b-8e2d-0707f459394d}">
+      <Declaration><![CDATA[PROPERTY P_bStopAllOnError : BOOL
+]]></Declaration>
+      <Get Name="Get" Id="{c0e63914-7ea4-4539-966e-8649061a65a0}">
+        <Declaration><![CDATA[VAR
+END_VAR
+]]></Declaration>
+        <Implementation>
+          <ST><![CDATA[P_bStopAllOnError := bStopAllOnError;]]></ST>
+        </Implementation>
+      </Get>
+    </Property>
+    <Property Name="P_eCurrentState" Id="{e959f0e8-af35-4e45-a2c9-59cebd5de9be}">
+      <Declaration><![CDATA[PROPERTY P_eCurrentState : E_MachineState
+]]></Declaration>
+      <Get Name="Get" Id="{80711c4f-899f-4dca-9950-e894f3a97d09}">
+        <Declaration><![CDATA[VAR
+END_VAR
+]]></Declaration>
+        <Implementation>
+          <ST><![CDATA[P_eCurrentState := eCurrentState;]]></ST>
+        </Implementation>
+      </Get>
+    </Property>
+    <Property Name="P_nErrorId" Id="{6bc192be-ee4d-491a-aaee-300ef9c989f2}">
+      <Declaration><![CDATA[PROPERTY P_nErrorId : ERRORID
+]]></Declaration>
+      <Get Name="Get" Id="{e12f00e9-4ec0-4d30-865a-99ed3e6efbd5}">
+        <Declaration><![CDATA[VAR
+END_VAR
+]]></Declaration>
+        <Implementation>
+          <ST><![CDATA[P_nErrorID := nErrorID;]]></ST>
+        </Implementation>
+      </Get>
+    </Property>
+    <Property Name="P_nNotifyId" Id="{5043a063-c4fe-4a50-95fe-dae7381ec7e0}">
+      <Declaration><![CDATA[PROPERTY P_nNotifyId : UINT
+]]></Declaration>
+      <Get Name="Get" Id="{c9a37f0d-4123-4f95-b1ae-aefb8444bb00}">
+        <Declaration><![CDATA[VAR
+END_VAR
+]]></Declaration>
+        <Implementation>
+          <ST><![CDATA[P_nNotifyId := nNotifyId;]]></ST>
+        </Implementation>
+      </Get>
+      <Set Name="Set" Id="{b6d7917c-f37d-4f49-89d2-a47fa6948bba}">
+        <Declaration><![CDATA[VAR
+END_VAR
+]]></Declaration>
+        <Implementation>
+          <ST><![CDATA[nNotifyId := P_nNotifyId;]]></ST>
+        </Implementation>
+      </Set>
+    </Property>
+    <Property Name="P_pObject" Id="{ce810d74-28ca-4cb4-b244-55d2a6d28539}">
+      <Declaration><![CDATA[PROPERTY P_pObject : POINTER TO FB_Object]]></Declaration>
+      <Get Name="Get" Id="{7144deb9-2972-4940-bd60-f94f935dbad7}">
+        <Declaration><![CDATA[VAR
+END_VAR
+]]></Declaration>
+        <Implementation>
+          <ST><![CDATA[P_pObject := THIS;]]></ST>
+        </Implementation>
+      </Get>
+    </Property>
+    <Property Name="P_stError" Id="{56337beb-6f12-4441-ab58-c1374d7c7643}">
+      <Declaration><![CDATA[PROPERTY P_stError : ST_Error
+]]></Declaration>
+      <Get Name="Get" Id="{baac5684-bae2-4366-b394-d8d8a66af21f}">
+        <Declaration><![CDATA[VAR
+END_VAR
+]]></Declaration>
+        <Implementation>
+          <ST><![CDATA[P_stError := stError;]]></ST>
+        </Implementation>
+      </Get>
+    </Property>
+    <LineIds Name="FB_ActiveTarget">
+      <LineId Id="9" Count="0" />
+    </LineIds>
+    <LineIds Name="FB_ActiveTarget.M_CancelAction">
+      <LineId Id="7" Count="0" />
+    </LineIds>
+    <LineIds Name="FB_ActiveTarget.M_CheckProcDataType">
+      <LineId Id="5" Count="0" />
+    </LineIds>
+    <LineIds Name="FB_ActiveTarget.M_ExeAction">
+      <LineId Id="7" Count="0" />
+    </LineIds>
+    <LineIds Name="FB_ActiveTarget.M_GetActionBusy">
+      <LineId Id="7" Count="0" />
+    </LineIds>
+    <LineIds Name="FB_ActiveTarget.M_GetAllProps">
+      <LineId Id="7" Count="0" />
+      <LineId Id="6" Count="0" />
+    </LineIds>
+    <LineIds Name="FB_ActiveTarget.M_GetDevice">
+      <LineId Id="5" Count="0" />
+    </LineIds>
+    <LineIds Name="FB_ActiveTarget.M_GetProcData">
+      <LineId Id="6" Count="0" />
+    </LineIds>
+    <LineIds Name="FB_ActiveTarget.M_Reset">
+      <LineId Id="7" Count="0" />
+      <LineId Id="9" Count="0" />
+      <LineId Id="4" Count="0" />
+    </LineIds>
+    <LineIds Name="FB_ActiveTarget.M_Stop">
+      <LineId Id="7" Count="3" />
+      <LineId Id="4" Count="0" />
+    </LineIds>
+    <LineIds Name="FB_ActiveTarget.P_bBusy.Get">
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="FB_ActiveTarget.P_bCanceled.Get">
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="FB_ActiveTarget.P_bError.Get">
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="FB_ActiveTarget.P_bIsInit.Get">
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="FB_ActiveTarget.P_bStopAllOnError.Get">
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="FB_ActiveTarget.P_eCurrentState.Get">
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="FB_ActiveTarget.P_nErrorId.Get">
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="FB_ActiveTarget.P_nNotifyId.Get">
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="FB_ActiveTarget.P_nNotifyId.Set">
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="FB_ActiveTarget.P_pObject.Get">
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="FB_ActiveTarget.P_stError.Get">
+      <LineId Id="2" Count="0" />
+    </LineIds>
+  </POU>
+</TcPlcObject>

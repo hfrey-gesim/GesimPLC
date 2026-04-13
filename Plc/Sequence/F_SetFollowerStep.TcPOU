@@ -1,0 +1,31 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<TcPlcObject Version="1.1.0.1" ProductVersion="3.1.4020.6">
+  <POU Name="F_SetFollowerStep" Id="{911b170e-d5eb-4262-8d4e-2cb0ec8f210b}" SpecialFunc="None">
+    <Declaration><![CDATA[FUNCTION F_SetFollowerStep : ERRORID
+VAR_INPUT
+	pStep			: POINTER TO ST_Step;
+	nFollowerStepNr : UINT;
+END_VAR
+VAR
+	i : USINT;
+	nMaxFollowers : USINT;
+END_VAR
+]]></Declaration>
+    <Implementation>
+      <ST><![CDATA[IF pStep > 0 THEN
+	IF nFollowerStepNr > 0 THEN
+		nMaxFollowers := UINT_TO_USINT(SIZEOF (pStep^.aFollower) / 2);
+		FOR i:= 0 TO (nMaxFollowers - 1) BY 1 DO
+			IF pStep^.aFollower[i] = 0 THEN
+				pStep^.aFollower[i] := nFollowerStepNr;
+				RETURN;
+			END_IF
+		END_FOR
+		F_SetFollowerStep := E_ErrorIdCmd.ERRORID_NoOfFollowerStepsExeeded;		
+	ELSE
+		F_SetFollowerStep := E_ErrorIdCmd.ERRORID_InvalidStepNr;
+	END_IF
+END_IF]]></ST>
+    </Implementation>
+  </POU>
+</TcPlcObject>

@@ -1,0 +1,328 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<TcPlcObject Version="1.1.0.1" ProductVersion="3.1.4022.10">
+  <POU Name="FB_LmtChangePID" Id="{912d3327-22f8-4596-aedf-e9d8b10f563b}" SpecialFunc="None">
+    <Declaration><![CDATA[FUNCTION_BLOCK FB_LmtChangePID
+VAR_INPUT
+	nMode		: USINT; //0= B_ROM_To_A_RAM ;  1= A_ROM_TO_A_RAM
+	sNetId 		: T_AmsNetID;
+	nSlaveAddr 	: UINT;
+	bExecute	: BOOL;
+END_VAR
+VAR_OUTPUT
+	bBusy : BOOL;
+	bError : BOOL;
+END_VAR
+VAR
+	nState 		: USINT;
+	nStateAct	: USINT;
+	fbCoeWrite	: FB_EcCoESdoWrite;
+	fbCoeRead	: FB_EcCoESdoRead;
+	
+	nPGainRomA : DINT;
+	nDGainRomA : DINT;
+	nIGainRomA : DINT;
+	nPGainRomB : DINT;
+	nDGainRomB : DINT;
+	nIGainRomB : DINT;
+	nPGainRamA : DINT;
+	nDGainRamA : DINT;	
+	nIGainRamA : DINT;
+	
+	nStep : USINT;
+	nPGainIncreaseValue : DINT;
+	nDGainIncreaseValue : DINT;
+	nIGainIncreaseValue : DINT;
+	
+END_VAR	
+]]></Declaration>
+    <Implementation>
+      <ST><![CDATA[//Dient zum Anpassen der aktuellen ParameterA im RAM
+IF bExecute THEN
+	bBusy := TRUE;
+
+	IF nState = 0 THEN	//Read ROM B
+		A_ReadRomB();
+		IF nStateAct >= 80 THEN
+			IF nStateAct >= 99 THEN
+				nState := 99;
+			ELSE
+				IF nMode = 0 THEN
+					nPGainRamA := nPGainRomB;
+					nDGainRamA := nDGainRomB;
+					nIGainRamA := nIGainRomB;
+					nState := 3;
+				ELSE
+					nState := 1;
+				END_IF
+			END_IF
+			nStateAct := 0;
+		END_IF
+	END_IF
+
+	IF nState = 1 THEN	//Read ROM A
+		A_ReadRomA();
+		IF nStateAct >= 80 THEN
+			IF nStateAct >= 99 THEN
+				nState := 99;
+			ELSE
+				nStep := 0;
+				nPGainIncreaseValue := (nPGainRomA - nPGainRomB) / 10;
+				nDGainIncreaseValue := (nDGainRomA - nDGainRomB) / 10;
+				nIGainIncreaseValue := (nIGainRomA - nIGainRomB) / 10;
+				nPGainRamA := nPGainRomB;
+				nDGainRamA := nDGainRomB;
+				nIGainRamA := nIGainRomB;
+				
+				nState := 2;
+			END_IF
+			nStateAct := 0;
+		END_IF
+	END_IF
+	
+	IF nState = 2 THEN	//Increase
+		nStep := nStep + 1;
+		nPGainRamA := MIN(nPGainRomA,nPGainRamA + nPGainIncreaseValue);
+		nDGainRamA := MIN(nDGainRomA,nDGainRamA + nDGainIncreaseValue);
+		nIGainRamA := MIN(nIGainRomA,nIGainRamA + nPGainIncreaseValue);
+		nState := 3;
+	END_IF
+	
+	IF nState = 3 THEN	//Write ROM A
+		A_WriteRamA();
+		IF nStateAct >= 80 THEN
+			IF nStateAct >= 99 THEN
+				nState := 99;
+			ELSE
+				IF nMode = 0 THEN
+					nState := 80;
+				ELSIF nMode = 1 THEN
+					IF nPGainRomA = nPGainRamA AND nDGainRomA = nDGainRamA AND nIGainRomA = nIGainRamA THEN
+						nState := 80;
+					ELSE
+						nState := 2; //Increase
+					END_IF
+				END_IF
+			END_IF
+			nStateAct := 0;
+		END_IF
+	END_IF
+
+	IF nState >= 80 THEN
+		IF nState >= 99 THEN
+			bError := TRUE;			
+		END_IF
+		bBusy := FALSE;
+	END_IF
+
+ELSE
+	nState := 0;
+	nStateAct := 0;
+	bError := FALSE;
+	fbCoeRead(bExecute:= FALSE);
+	fbCoeWrite(bExecute:= FALSE);
+END_IF]]></ST>
+    </Implementation>
+    <Action Name="A_ReadRomA" Id="{f19f21a7-d3fc-430a-bec3-3734e83dde1e}">
+      <Implementation>
+        <ST><![CDATA[IF nStateAct = 0 THEN	//PGain
+	fbCoeRead(sNetId:= sNetId, nSlaveAddr:= nSlaveAddr, nIndex:= 16#2000 + 16#13A2, nSubIndex:= 2(*Read Rom = 2*), 
+			pDstBuf:= ADR(nPGainRomA), cbBufLen:= SIZEOF(nPGainRomB), bExecute:= TRUE);
+	IF NOT fbCoeRead.bBusy THEN
+		IF fbCoeRead.bError THEN
+			nStateAct := 99;
+		ELSE
+			nStateAct := 1;
+		END_IF
+		fbCoeRead(bExecute:= FALSE);
+	END_IF			
+END_IF
+
+IF nStateAct = 1 THEN	//DGain
+	fbCoeRead(sNetId:= sNetId, nSlaveAddr:= nSlaveAddr, nIndex:= 16#2000 + 16#13A3, nSubIndex:= 2(*Read Rom = 2*), 
+			pDstBuf:= ADR(nDGainRomA), cbBufLen:= SIZEOF(nDGainRomB), bExecute:= TRUE);
+	IF NOT fbCoeRead.bBusy THEN
+		IF fbCoeRead.bError THEN
+			nStateAct := 99;
+		ELSE
+			nStateAct := 2;
+		END_IF
+		fbCoeRead(bExecute:= FALSE);
+	END_IF		
+END_IF
+
+IF nStateAct = 2 THEN	//IGain
+	fbCoeRead(sNetId:= sNetId, nSlaveAddr:= nSlaveAddr, nIndex:= 16#2000 + 16#13A4, nSubIndex:= 2(*Read Rom = 2*), 
+			pDstBuf:= ADR(nIGainRomA), cbBufLen:= SIZEOF(nIGainRomB), bExecute:= TRUE);
+	IF NOT fbCoeRead.bBusy THEN
+		IF fbCoeRead.bError THEN
+			nStateAct := 99;
+		ELSE
+			nStateAct := 80;
+		END_IF
+		fbCoeRead(bExecute:= FALSE);
+	END_IF		
+END_IF]]></ST>
+      </Implementation>
+    </Action>
+    <Action Name="A_ReadRomB" Id="{5c4b4776-098a-4660-a094-6558dab07241}">
+      <Implementation>
+        <ST><![CDATA[IF nStateAct = 0 THEN	//PGain
+	fbCoeRead(sNetId:= sNetId, nSlaveAddr:= nSlaveAddr, nIndex:= 16#2000 + 16#13B6, nSubIndex:= 2(*Read Rom = 2*), 
+			pDstBuf:= ADR(nPGainRomB), cbBufLen:= SIZEOF(nPGainRomB), bExecute:= TRUE);
+	IF NOT fbCoeRead.bBusy THEN
+		IF fbCoeRead.bError THEN
+			nStateAct := 99;
+		ELSE
+			nStateAct := 1;
+		END_IF
+		fbCoeRead(bExecute:= FALSE);
+	END_IF			
+END_IF
+
+IF nStateAct = 1 THEN	//DGain
+	fbCoeRead(sNetId:= sNetId, nSlaveAddr:= nSlaveAddr, nIndex:= 16#2000 + 16#13B7, nSubIndex:= 2(*Read Rom = 2*), 
+			pDstBuf:= ADR(nDGainRomB), cbBufLen:= SIZEOF(nDGainRomB), bExecute:= TRUE);
+	IF NOT fbCoeRead.bBusy THEN
+		IF fbCoeRead.bError THEN
+			nStateAct := 99;
+		ELSE
+			nStateAct := 2;
+		END_IF
+		fbCoeRead(bExecute:= FALSE);
+	END_IF		
+END_IF
+
+IF nStateAct = 2 THEN	//IGain
+	fbCoeRead(sNetId:= sNetId, nSlaveAddr:= nSlaveAddr, nIndex:= 16#2000 + 16#13B8, nSubIndex:= 2(*Read Rom = 2*), 
+			pDstBuf:= ADR(nIGainRomB), cbBufLen:= SIZEOF(nIGainRomB), bExecute:= TRUE);
+	IF NOT fbCoeRead.bBusy THEN
+		IF fbCoeRead.bError THEN
+			nStateAct := 99;
+		ELSE
+			nStateAct := 80;
+		END_IF
+		fbCoeRead(bExecute:= FALSE);
+	END_IF		
+END_IF]]></ST>
+      </Implementation>
+    </Action>
+    <Action Name="A_WriteRamA" Id="{18194f4d-f81c-4664-8ebb-ec593d2f5b30}">
+      <Implementation>
+        <ST><![CDATA[IF nStateAct = 0 THEN	//PGain
+	fbCoeWrite(sNetId:= sNetId, nSlaveAddr:= nSlaveAddr, nIndex:= 16#2000 + 16#13A2, nSubIndex:= 1(*1=RAM*), 
+			pSrcBuf:= ADR(nPGainRamA), cbBufLen:= SIZEOF(nPGainRamA), bExecute:= TRUE);
+	IF NOT fbCoeWrite.bBusy THEN
+		IF fbCoeWrite.bError THEN
+			nStateAct := 99;
+		ELSE
+			nStateAct := 1;
+		END_IF
+		fbCoeWrite(bExecute:= FALSE);
+	END_IF	
+END_IF
+
+IF nStateAct = 1 THEN	//DGain
+	fbCoeWrite(sNetId:= sNetId, nSlaveAddr:= nSlaveAddr, nIndex:= 16#2000 + 16#13A3, nSubIndex:= 1(*1=RAM*), 
+			pSrcBuf:= ADR(nDGainRamA), cbBufLen:= SIZEOF(nDGainRamA), bExecute:= TRUE);
+	IF NOT fbCoeWrite.bBusy THEN
+		IF fbCoeWrite.bError THEN
+			nStateAct := 99;
+		ELSE
+			nStateAct := 2;
+		END_IF
+		fbCoeWrite(bExecute:= FALSE);
+	END_IF	
+END_IF
+
+IF nStateAct = 2 THEN	//IGain
+	fbCoeWrite(sNetId:= sNetId, nSlaveAddr:= nSlaveAddr, nIndex:= 16#2000 + 16#13A4, nSubIndex:= 1(*1=RAM*), 
+			pSrcBuf:= ADR(nIGainRamA), cbBufLen:= SIZEOF(nIGainRamA), bExecute:= TRUE);
+	IF NOT fbCoeWrite.bBusy THEN
+		IF fbCoeWrite.bError THEN
+			nStateAct := 99;
+		ELSE
+			nStateAct := 80;
+		END_IF
+		fbCoeWrite(bExecute:= FALSE);
+	END_IF	
+END_IF]]></ST>
+      </Implementation>
+    </Action>
+    <LineIds Name="FB_LmtChangePID">
+      <LineId Id="9" Count="0" />
+      <LineId Id="21" Count="0" />
+      <LineId Id="122" Count="0" />
+      <LineId Id="200" Count="1" />
+      <LineId Id="205" Count="0" />
+      <LineId Id="218" Count="0" />
+      <LineId Id="223" Count="0" />
+      <LineId Id="220" Count="0" />
+      <LineId Id="232" Count="1" />
+      <LineId Id="263" Count="2" />
+      <LineId Id="258" Count="0" />
+      <LineId Id="260" Count="1" />
+      <LineId Id="259" Count="0" />
+      <LineId Id="222" Count="0" />
+      <LineId Id="224" Count="0" />
+      <LineId Id="221" Count="0" />
+      <LineId Id="206" Count="0" />
+      <LineId Id="202" Count="0" />
+      <LineId Id="207" Count="0" />
+      <LineId Id="225" Count="3" />
+      <LineId Id="234" Count="0" />
+      <LineId Id="269" Count="0" />
+      <LineId Id="272" Count="2" />
+      <LineId Id="277" Count="2" />
+      <LineId Id="276" Count="0" />
+      <LineId Id="275" Count="0" />
+      <LineId Id="229" Count="2" />
+      <LineId Id="209" Count="1" />
+      <LineId Id="212" Count="0" />
+      <LineId Id="254" Count="3" />
+      <LineId Id="213" Count="1" />
+      <LineId Id="211" Count="0" />
+      <LineId Id="215" Count="0" />
+      <LineId Id="236" Count="4" />
+      <LineId Id="245" Count="0" />
+      <LineId Id="248" Count="1" />
+      <LineId Id="246" Count="0" />
+      <LineId Id="250" Count="0" />
+      <LineId Id="252" Count="1" />
+      <LineId Id="251" Count="0" />
+      <LineId Id="247" Count="0" />
+      <LineId Id="242" Count="2" />
+      <LineId Id="217" Count="0" />
+      <LineId Id="203" Count="0" />
+      <LineId Id="112" Count="0" />
+      <LineId Id="115" Count="0" />
+      <LineId Id="117" Count="1" />
+      <LineId Id="116" Count="0" />
+      <LineId Id="114" Count="0" />
+      <LineId Id="28" Count="0" />
+      <LineId Id="22" Count="0" />
+      <LineId Id="25" Count="0" />
+      <LineId Id="219" Count="0" />
+      <LineId Id="120" Count="1" />
+      <LineId Id="194" Count="0" />
+      <LineId Id="23" Count="0" />
+    </LineIds>
+    <LineIds Name="FB_LmtChangePID.A_ReadRomA">
+      <LineId Id="2" Count="32" />
+      <LineId Id="36" Count="3" />
+      <LineId Id="1" Count="0" />
+    </LineIds>
+    <LineIds Name="FB_LmtChangePID.A_ReadRomB">
+      <LineId Id="2" Count="32" />
+      <LineId Id="36" Count="3" />
+      <LineId Id="1" Count="0" />
+    </LineIds>
+    <LineIds Name="FB_LmtChangePID.A_WriteRamA">
+      <LineId Id="2" Count="10" />
+      <LineId Id="1" Count="0" />
+      <LineId Id="14" Count="11" />
+      <LineId Id="13" Count="0" />
+      <LineId Id="27" Count="11" />
+      <LineId Id="26" Count="0" />
+    </LineIds>
+  </POU>
+</TcPlcObject>

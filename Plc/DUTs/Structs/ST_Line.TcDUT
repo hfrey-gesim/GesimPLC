@@ -1,0 +1,10 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<TcPlcObject Version="1.1.0.1" ProductVersion="3.1.4020.12">
+  <DUT Name="ST_Line" Id="{39d54bd3-c2a5-46af-a37e-65e8f9ce9473}">
+    <Declaration><![CDATA[TYPE ST_Line EXTENDS ST_Rectangle :
+STRUCT
+END_STRUCT
+END_TYPE
+]]></Declaration>
+  </DUT>
+</TcPlcObject>

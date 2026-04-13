@@ -1,0 +1,477 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<TcPlcObject Version="1.1.0.1" ProductVersion="3.1.4024.9">
+  <POU Name="FB_DryPad" Id="{c813f7bc-ba8a-40e8-ac5b-dfae4e90dc74}" SpecialFunc="None">
+    <Declaration><![CDATA[FUNCTION_BLOCK FB_DryPad EXTENDS FB_TargetBase
+VAR_INPUT
+END_VAR
+
+VAR_OUTPUT
+	nCol 	: USINT;
+	nRow 	: USINT;
+END_VAR
+
+VAR
+	nNotifyId 				: UINT;
+	stArea1Point1 			: ST_2DPoint;
+	stArea1Point2 			: ST_2DPoint;
+ 	nArea1IntermedPointsX 	: UINT;
+	nArea1IntermedPointsY 	: UINT;
+	nArea1CountPoints		: UINT;
+	stArea2Point1 			: ST_2DPoint;
+	stArea2Point2 			: ST_2DPoint;
+ 	nArea2IntermedPointsX 	: UINT;
+	nArea2IntermedPointsY 	: UINT;
+	nArea2CountPoints		: UINT;
+	nGCodeTargetNr			: UINT;
+END_VAR
+
+VAR PERSISTENT
+	nCurrentColArea1		: USINT;
+	nCurrentRowArea1		: USINT;
+	nCurrentColArea2		: USINT;
+	nCurrentRowArea2		: USINT;
+END_VAR]]></Declaration>
+    <Implementation>
+      <ST><![CDATA[]]></ST>
+    </Implementation>
+    <Method Name="FB_init" Id="{e3ef5bce-2d2c-481b-81a9-222bb5e5eb40}">
+      <Declaration><![CDATA[METHOD FB_init : BOOL
+VAR_INPUT
+	bInitRetains : BOOL; // if TRUE, the retain variables are initialized (warm start / cold start)
+	bInCopyCode : BOOL;  // if TRUE, the instance afterwards gets moved into the copy code (online change)
+END_VAR
+]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[eObjectType := E_ObjectType.OBJECTTYPE_DryPad;
+eObjectGroup := E_ObjectGroup.OBJECTGROUP_Target;]]></ST>
+      </Implementation>
+    </Method>
+    <Method Name="M_AddChild" Id="{be00230e-3d68-4b2c-b0ac-8de0193ce7a3}">
+      <Declaration><![CDATA[METHOD M_AddChild : ERRORID
+VAR_INPUT
+	pObject	: POINTER TO FB_Object;
+	nSlotNr	: UINT;
+	nIndex 	: INT;
+END_VAR
+]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[//Kann folgende Objekte aufnehmen:
+//Point
+IF pObject > 0 THEN
+	IF pObject^.P_eObjectType = E_ObjectType.OBJECTTYPE_Point THEN
+		M_AddChild := SUPER^.M_AddChild(pObject,nSlotNr,nIndex);
+	ELSE
+		M_AddChild := E_ErrorIdObjMgmt.ERRORID_InvalidParentObject;
+	END_IF
+ELSE
+	M_AddChild := E_ErrorIdObjMgmt.ERRORID_InvalidParentObject;
+END_IF]]></ST>
+      </Implementation>
+    </Method>
+    <Method Name="M_CalcNextPosData" Id="{f1a0bd44-395e-46b7-b013-bdba635520b5}">
+      <Declaration><![CDATA[METHOD M_CalcNextPosData
+VAR_INPUT
+	nArea : USINT;
+END_VAR
+]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[IF nArea = 1 THEN
+	//nächste Spalte ermitteln
+	IF (nCurrentColArea1 = 0) OR (nCurrentColArea1 >= nArea1IntermedPointsX + 2) THEN
+		nCurrentColArea1 := 1;
+	ELSE
+		nCurrentColArea1 := nCurrentColArea1 + 1;
+	END_IF
+	
+	IF nCurrentColArea1 = 1 THEN
+		//nächste Zeile ermitteln
+		IF (nCurrentRowArea1 = 0) OR (nCurrentRowArea1 >= nArea1IntermedPointsY + 2) THEN
+			nCurrentRowArea1 := 1;
+		ELSE
+			nCurrentRowArea1 := nCurrentRowArea1 + 1;
+		END_IF
+	END_IF
+	
+	nCol := nCurrentColArea1;
+	nRow := nCurrentRowArea1;
+	M_UpdateProcessData();
+	//fbSettings.bWritePersitentData := TRUE;
+
+ELSIF nArea = 2 THEN
+	//nächste Spalte ermitteln
+	IF (nCurrentColArea2 = 0) OR (nCurrentColArea2 >= nArea2IntermedPointsX + 2) THEN
+		nCurrentColArea2 := 1;
+	ELSE
+		nCurrentColArea2 := nCurrentColArea2 + 1;
+	END_IF
+	
+	IF nCurrentColArea2 = 1 THEN
+		//nächste Zeile ermitteln
+		IF (nCurrentRowArea2 = 0) OR (nCurrentRowArea2 >= nArea2IntermedPointsY + 2) THEN
+			nCurrentRowArea2 := 1;
+		ELSE
+			nCurrentRowArea2 := nCurrentRowArea2 + 1;
+		END_IF
+	END_IF
+	
+	nCol := nCurrentColArea2;
+	nRow := nCurrentRowArea2;	
+	M_UpdateProcessData();
+	//fbSettings.bWritePersitentData := TRUE;
+END_IF]]></ST>
+      </Implementation>
+    </Method>
+    <Method Name="M_ChangeCleanMat" Id="{97f24cbf-d869-400c-82c4-6cd8487e5fe6}">
+      <Declaration><![CDATA[METHOD M_ChangeCleanMat
+VAR_INPUT
+END_VAR
+]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[nCurrentColArea1 := 0;
+nCurrentRowArea1 := 0;
+nCurrentColArea2 := 0;
+nCurrentRowArea2 := 0;
+M_UpdateProcessData();]]></ST>
+      </Implementation>
+    </Method>
+    <Method Name="M_CheckProps" Id="{4ccdd28f-c821-45ee-8824-4051cb77fe74}">
+      <Declaration><![CDATA[METHOD M_CheckProps : ERRORID
+VAR_INPUT
+END_VAR
+]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[M_CheckProps := SUPER^.M_CheckProps();
+
+IF M_CheckProps = 0 THEN
+	M_UpdateProcessData();
+END_IF]]></ST>
+      </Implementation>
+    </Method>
+    <Method Name="M_GetAbsPos" Id="{8a81ec54-1199-4e0e-9cd3-b43dbfe57a08}">
+      <Declaration><![CDATA[METHOD M_GetAbsPos : ST_3DPoint
+VAR_INPUT
+	pChildPos	: POINTER TO ST_3DPoint;
+	eTargetRef 	: E_TargetRef;
+	nParam1		: UINT;
+ 	nParam2		: UINT;
+	nParam3		: USINT;
+	nZLevel		: USINT;
+END_VAR
+VAR_OUTPUT
+	nErrorId 	: ERRORID;
+	lrAngle		: LREAL;
+END_VAR
+VAR
+	stLocPos : ST_3DPoint;
+END_VAR
+]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[IF eTargetRef = E_TargetRef.TARGETREF_TwoDimArray THEN
+	stLocPos := P_stRelPosLB;
+	
+	IF nParam3 = 1 THEN	//Area1
+		IF nArea1CountPoints = 0 THEN
+			nErrorId := E_ErrorIdObjMgmt.ERRORID_InvalidDrypadArea;  //Error
+			RETURN;
+		END_IF
+		//X-Position berechnen
+		stLocPos.X := stLocPos.X + stArea1Point1.X + (stArea1Point2.X - stArea1Point1.X) / (nArea1IntermedPointsX + 1) * (nParam1 - 1);
+		//Y-Position berechnen
+		stLocPos.Y := stLocPos.Y + stArea1Point1.Y + (stArea1Point2.Y - stArea1Point1.Y) / (nArea1IntermedPointsY + 1) * (nParam2 - 1);		
+	ELSIF nParam3 = 2 THEN	//Area2
+		IF nArea2CountPoints = 0 THEN
+			nErrorId := E_ErrorIdObjMgmt.ERRORID_InvalidDrypadArea;  //Error
+			RETURN;
+		END_IF
+		//X-Position berechnen
+		stLocPos.X := stLocPos.X + stArea2Point1.X + (stArea2Point2.X - stArea2Point1.X) / (nArea2IntermedPointsX + 1) * (nParam1 - 1);
+		//Y-Position berechnen
+		stLocPos.Y := stLocPos.Y + stArea2Point1.Y + (stArea2Point2.Y - stArea2Point1.Y) / (nArea2IntermedPointsY + 1) * (nParam2 - 1);		
+	END_IF
+	
+	M_GetAbsPos := pParentTarget^.M_GetAbsPos(pChildPos := ADR(stLocPos), eTargetRef:= E_TargetRef.TARGETREF_LeftBottom,
+													nParam1:= 0,
+													nParam2:= 0, nParam3:= 0,nZLevel:= 0,
+													lrAngle => lrAngle, nErrorId=> nErrorId);
+ELSE
+	M_GetAbsPos := SUPER^.M_GetAbsPos(pChildPos := pChildPos, eTargetRef:= eTargetRef,
+													nParam1:= nParam1,
+													nParam2:= nParam2, nParam3:= nParam3, nZLevel:= nZLevel,
+													lrAngle => lrAngle, nErrorId=> nErrorId);	
+END_IF]]></ST>
+      </Implementation>
+    </Method>
+    <Method Name="M_GetAllProps" Id="{cfe8d513-e667-4d3e-b89c-7c1219e59db5}">
+      <Declaration><![CDATA[METHOD M_GetAllProps : ERRORID
+VAR_INPUT
+	refCmdData : REFERENCE TO  ST_CmdData;
+END_VAR
+]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[SUPER^.M_GetAllProps(refCmdData);
+refCmdData.aHeader[2] := nNotifyId;
+
+nCurrentPropIndex := nCurrentPropIndex + 1;
+refCmdData.n32Data[nCurrentPropIndex] := REAL_TO_DINT(rZOffset);
+nCurrentPropIndex := nCurrentPropIndex + 1;
+refCmdData.n32Data[nCurrentPropIndex] := REAL_TO_DINT(stArea1Point1.X);
+nCurrentPropIndex := nCurrentPropIndex + 1;
+refCmdData.n32Data[nCurrentPropIndex] := REAL_TO_DINT(stArea1Point1.Y);
+nCurrentPropIndex := nCurrentPropIndex + 1;
+refCmdData.n32Data[nCurrentPropIndex] := REAL_TO_DINT(stArea1Point2.X);
+nCurrentPropIndex := nCurrentPropIndex + 1;
+refCmdData.n32Data[nCurrentPropIndex] := REAL_TO_DINT(stArea1Point2.Y);
+nCurrentPropIndex := nCurrentPropIndex + 1;
+refCmdData.n32Data[nCurrentPropIndex] := nArea1IntermedPointsX;
+nCurrentPropIndex := nCurrentPropIndex + 1;
+refCmdData.n32Data[nCurrentPropIndex] := nArea1IntermedPointsY;
+nCurrentPropIndex := nCurrentPropIndex + 1;
+refCmdData.n32Data[nCurrentPropIndex] := REAL_TO_DINT(stArea2Point1.X);
+nCurrentPropIndex := nCurrentPropIndex + 1;
+refCmdData.n32Data[nCurrentPropIndex] := REAL_TO_DINT(stArea2Point1.Y);
+nCurrentPropIndex := nCurrentPropIndex + 1;
+refCmdData.n32Data[nCurrentPropIndex] := REAL_TO_DINT(stArea2Point2.X);
+nCurrentPropIndex := nCurrentPropIndex + 1;
+refCmdData.n32Data[nCurrentPropIndex] := REAL_TO_DINT(stArea2Point2.Y);
+nCurrentPropIndex := nCurrentPropIndex + 1;
+refCmdData.n32Data[nCurrentPropIndex] := nArea2IntermedPointsX;
+nCurrentPropIndex := nCurrentPropIndex + 1;
+refCmdData.n32Data[nCurrentPropIndex] := nArea2IntermedPointsY;
+nCurrentPropIndex := nCurrentPropIndex + 1;
+refCmdData.n32Data[nCurrentPropIndex] := nGCodeTargetNr;]]></ST>
+      </Implementation>
+    </Method>
+    <Method Name="M_ResetPosData" Id="{56539a40-f2c2-46e4-8b54-8dfdafe03c59}">
+      <Declaration><![CDATA[METHOD M_ResetPosData
+VAR_INPUT
+END_VAR
+]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[nCurrentColArea1 := 0;
+nCurrentRowArea1 := 0;
+nCurrentColArea2 := 0;
+nCurrentRowArea2 := 0;]]></ST>
+      </Implementation>
+    </Method>
+    <Method Name="M_SetAllProps" Id="{cdbdbcbc-cab1-42e9-806d-c873bd451084}">
+      <Declaration><![CDATA[METHOD M_SetAllProps : ERRORID
+VAR_INPUT
+	refCmdData : REFERENCE TO  ST_CmdData;
+END_VAR
+]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[//Basisproperties schreiben (0 bis 7)
+M_SetAllProps := SUPER^.M_SetAllProps(refCmdData);
+
+IF M_SetAllProps > 0 THEN	//Error beim setzen der Base-Parameter
+	RETURN;
+END_IF
+
+nCurrentPropIndex := nCurrentPropIndex + 1;
+nSpecPropIndex := nCurrentPropIndex; 
+rZOffset := DINT_TO_REAL(refCmdData.n32Data[nCurrentPropIndex]);
+nCurrentPropIndex := nCurrentPropIndex + 1;
+stArea1Point1.X := DINT_TO_REAL(refCmdData.n32Data[nCurrentPropIndex]);
+nCurrentPropIndex := nCurrentPropIndex + 1;
+stArea1Point1.Y	:= DINT_TO_REAL(refCmdData.n32Data[nCurrentPropIndex]);
+nCurrentPropIndex := nCurrentPropIndex + 1;
+stArea1Point2.X := DINT_TO_REAL(refCmdData.n32Data[nCurrentPropIndex]);
+nCurrentPropIndex := nCurrentPropIndex + 1;
+stArea1Point2.Y := DINT_TO_REAL(refCmdData.n32Data[nCurrentPropIndex]);
+nCurrentPropIndex := nCurrentPropIndex + 1;
+nArea1IntermedPointsX := DINT_TO_UINT(refCmdData.n32Data[nCurrentPropIndex]);
+nCurrentPropIndex := nCurrentPropIndex + 1;
+nArea1IntermedPointsY := DINT_TO_UINT(refCmdData.n32Data[nCurrentPropIndex]);
+
+nArea1CountPoints := (nArea1IntermedPointsX + 2) * (nArea1IntermedPointsY + 2);
+
+nCurrentPropIndex := nCurrentPropIndex + 1; 
+stArea2Point1.X	:= DINT_TO_REAL(refCmdData.n32Data[nCurrentPropIndex]);
+nCurrentPropIndex := nCurrentPropIndex + 1;
+stArea2Point1.Y	:= DINT_TO_REAL(refCmdData.n32Data[nCurrentPropIndex]);
+nCurrentPropIndex := nCurrentPropIndex + 1;
+stArea2Point2.X	:= DINT_TO_REAL(refCmdData.n32Data[nCurrentPropIndex]);
+nCurrentPropIndex := nCurrentPropIndex + 1;
+stArea2Point2.Y	:= DINT_TO_REAL(refCmdData.n32Data[nCurrentPropIndex]);
+nCurrentPropIndex := nCurrentPropIndex + 1;
+nArea2IntermedPointsX := DINT_TO_UINT(refCmdData.n32Data[nCurrentPropIndex]);
+nCurrentPropIndex := nCurrentPropIndex + 1;
+nArea2IntermedPointsY := DINT_TO_UINT(refCmdData.n32Data[nCurrentPropIndex]);
+
+IF stArea2Point1.X <  stArea2Point2.X AND stArea2Point1.Y <  stArea2Point2.Y THEN
+	nArea2CountPoints := (nArea2IntermedPointsX + 2) * (nArea2IntermedPointsY + 2);
+ELSE
+ 	nArea2CountPoints := 0;
+END_IF
+
+nCurrentPropIndex := nCurrentPropIndex + 1;
+nGCodeTargetNr := DINT_TO_UINT(refCmdData.n32Data[nCurrentPropIndex]);
+nNoOfProps := nCurrentPropIndex + 1;]]></ST>
+      </Implementation>
+    </Method>
+    <Method Name="M_SetSingleProp" Id="{2d11cea9-54d9-46a8-a7d3-29b7051d4e1c}">
+      <Declaration><![CDATA[METHOD M_SetSingleProp : ERRORID
+VAR_INPUT
+	refCmdData : REFERENCE TO  ST_CmdData;
+END_VAR
+]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[IF nSpecPropIndex = refCmdData.aHeader[1] THEN
+	rZOffset := DINT_TO_REAL(refCmdData.n32Data[0]);
+ELSIF (nSpecPropIndex + 1) = refCmdData.aHeader[1] THEN
+	stArea1Point1.X := DINT_TO_REAL(refCmdData.n32Data[0]);
+ELSIF (nSpecPropIndex + 2) = refCmdData.aHeader[1] THEN
+	stArea1Point1.Y := DINT_TO_REAL(refCmdData.n32Data[0]);
+ELSIF (nSpecPropIndex + 3) = refCmdData.aHeader[1] THEN
+	stArea1Point2.X := DINT_TO_REAL(refCmdData.n32Data[0]);
+ELSIF (nSpecPropIndex + 4) = refCmdData.aHeader[1] THEN
+	stArea1Point2.Y := DINT_TO_REAL(refCmdData.n32Data[0]);
+ELSIF (nSpecPropIndex + 5) = refCmdData.aHeader[1] THEN
+	nArea1IntermedPointsX := DINT_TO_UINT(refCmdData.n32Data[0]);
+ELSIF (nSpecPropIndex + 6) = refCmdData.aHeader[1] THEN
+	nArea1IntermedPointsY := DINT_TO_UINT(refCmdData.n32Data[0]);
+ELSIF (nSpecPropIndex + 7) = refCmdData.aHeader[1] THEN
+	stArea2Point1.X := DINT_TO_REAL(refCmdData.n32Data[0]);
+ELSIF (nSpecPropIndex + 8) = refCmdData.aHeader[1] THEN
+	stArea2Point1.Y := DINT_TO_REAL(refCmdData.n32Data[0]);
+ELSIF (nSpecPropIndex + 9) = refCmdData.aHeader[1] THEN
+	stArea2Point2.X := DINT_TO_REAL(refCmdData.n32Data[0]);
+ELSIF (nSpecPropIndex + 10) = refCmdData.aHeader[1] THEN
+	stArea2Point2.Y := DINT_TO_REAL(refCmdData.n32Data[0]);
+ELSIF (nSpecPropIndex + 11) = refCmdData.aHeader[1] THEN
+	nArea2IntermedPointsX := DINT_TO_UINT(refCmdData.n32Data[0]);
+ELSIF (nSpecPropIndex + 12) = refCmdData.aHeader[1] THEN
+	nArea2IntermedPointsY := DINT_TO_UINT(refCmdData.n32Data[0]);
+ELSE
+	M_SetSingleProp := SUPER^.M_SetSingleProp(refCmdData);
+END_IF]]></ST>
+      </Implementation>
+    </Method>
+    <Method Name="M_UpdateProcessData" Id="{f1fe5256-98c2-4ee4-8a01-d7d8027f63fc}">
+      <Declaration><![CDATA[METHOD M_UpdateProcessData
+VAR_INPUT
+END_VAR
+]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[//Processdaten übetragen
+aObjProcData[nNotifyId].nObjId := nObjectID;
+aObjProcData[nNotifyId].n32Data[0] := nArea1CountPoints;
+IF nCurrentColArea1 = 0 THEN
+	aObjProcData[nNotifyId].n32Data[1] := 0;
+ELSE
+	aObjProcData[nNotifyId].n32Data[1] := (nArea1IntermedPointsX + 2) * (nCurrentRowArea1 - 1) + nCurrentColArea1;
+END_IF
+
+aObjProcData[nNotifyId].n32Data[2] := nArea2CountPoints;
+
+IF nCurrentColArea2 = 0 THEN
+	aObjProcData[nNotifyId].n32Data[3] := 0;
+ELSE
+	aObjProcData[nNotifyId].n32Data[3] := (nArea2IntermedPointsX + 2) * (nCurrentRowArea2 - 1) + nCurrentColArea2;
+END_IF
+
+]]></ST>
+      </Implementation>
+    </Method>
+    <Property Name="P_nGCodeTargetNr" Id="{b6739461-1ddf-4cb5-80b3-428afba6b961}">
+      <Declaration><![CDATA[PROPERTY P_nGCodeTargetNr : UINT]]></Declaration>
+      <Get Name="Get" Id="{da9b9ae4-04a3-44ad-aba5-91cc449e7be6}">
+        <Declaration><![CDATA[VAR
+END_VAR
+]]></Declaration>
+        <Implementation>
+          <ST><![CDATA[P_nGCodeTargetNr := nGCodeTargetNr;]]></ST>
+        </Implementation>
+      </Get>
+    </Property>
+    <Property Name="P_nNotifyId" Id="{61b21060-26c3-4013-b05e-ea7b472ec72b}">
+      <Declaration><![CDATA[PROPERTY P_nNotifyId : UINT]]></Declaration>
+      <Get Name="Get" Id="{33237173-6fb9-49ee-87e5-0039a7a9de6b}">
+        <Declaration><![CDATA[VAR
+END_VAR
+]]></Declaration>
+        <Implementation>
+          <ST><![CDATA[P_nNotifyId := nNotifyId;]]></ST>
+        </Implementation>
+      </Get>
+      <Set Name="Set" Id="{288ade54-22a2-4b00-b45c-339ba1d67c18}">
+        <Declaration><![CDATA[VAR
+END_VAR
+]]></Declaration>
+        <Implementation>
+          <ST><![CDATA[nNotifyId := P_nNotifyId;]]></ST>
+        </Implementation>
+      </Set>
+    </Property>
+    <LineIds Name="FB_DryPad">
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="FB_DryPad.FB_init">
+      <LineId Id="7" Count="1" />
+    </LineIds>
+    <LineIds Name="FB_DryPad.M_AddChild">
+      <LineId Id="19" Count="0" />
+      <LineId Id="8" Count="0" />
+      <LineId Id="25" Count="0" />
+      <LineId Id="16" Count="2" />
+      <LineId Id="15" Count="0" />
+      <LineId Id="11" Count="0" />
+      <LineId Id="13" Count="0" />
+      <LineId Id="12" Count="0" />
+      <LineId Id="5" Count="0" />
+    </LineIds>
+    <LineIds Name="FB_DryPad.M_CalcNextPosData">
+      <LineId Id="3" Count="42" />
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="FB_DryPad.M_ChangeCleanMat">
+      <LineId Id="3" Count="3" />
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="FB_DryPad.M_CheckProps">
+      <LineId Id="3" Count="3" />
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="FB_DryPad.M_GetAbsPos">
+      <LineId Id="129" Count="1" />
+      <LineId Id="132" Count="29" />
+      <LineId Id="36" Count="0" />
+    </LineIds>
+    <LineIds Name="FB_DryPad.M_GetAllProps">
+      <LineId Id="3" Count="0" />
+      <LineId Id="35" Count="0" />
+      <LineId Id="4" Count="26" />
+      <LineId Id="40" Count="0" />
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="FB_DryPad.M_ResetPosData">
+      <LineId Id="3" Count="2" />
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="FB_DryPad.M_SetAllProps">
+      <LineId Id="3" Count="37" />
+      <LineId Id="43" Count="3" />
+      <LineId Id="2" Count="0" />
+      <LineId Id="52" Count="1" />
+      <LineId Id="51" Count="0" />
+      <LineId Id="54" Count="0" />
+    </LineIds>
+    <LineIds Name="FB_DryPad.M_SetSingleProp">
+      <LineId Id="3" Count="27" />
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="FB_DryPad.M_UpdateProcessData">
+      <LineId Id="3" Count="16" />
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="FB_DryPad.P_nGCodeTargetNr.Get">
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="FB_DryPad.P_nNotifyId.Get">
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="FB_DryPad.P_nNotifyId.Set">
+      <LineId Id="2" Count="0" />
+    </LineIds>
+  </POU>
+</TcPlcObject>

@@ -1,0 +1,59 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<TcPlcObject Version="1.1.0.1" ProductVersion="3.1.4020.6">
+  <POU Name="F_CompVersion" Id="{d07737e6-713e-4984-9a5d-bc80fa45e161}" SpecialFunc="None">
+    <Declaration><![CDATA[FUNCTION F_CompVersion : SINT
+VAR_INPUT
+	sVersion1 : STRING;
+	sVersion2 : STRING;
+END_VAR
+VAR
+	nChar	: BYTE;
+	aVersion1 : ARRAY[0..2] OF UINT;
+	aVersion2 : ARRAY[0..2] OF UINT;
+	i : INT;
+	j : USINT;
+	sTemp	: STRING;
+END_VAR
+]]></Declaration>
+    <Implementation>
+      <ST><![CDATA[//Version1 in Array einlesen
+FOR i:= 0 TO LEN(sVersion1) BY 1 DO
+	nChar := sVersion1[i];
+	IF nChar >= 48 AND nChar <= 57 THEN //numerisch
+		sTemp := CONCAT(sTemp,F_ToCHR(nChar));
+	ELSIF nChar = 46 OR nChar = 32 OR nChar = 0 THEN //Punkt Leerzeichen oder ENDE
+		aVersion1[j] := STRING_TO_UINT(sTemp);
+		sTemp := '';
+		j := j + 1;
+		IF j = 3 THEN
+			EXIT;
+		END_IF
+	END_IF
+END_FOR
+//Version2 in Array einlesen
+j := 0;
+sTemp := '';
+FOR i:= 0 TO LEN(sVersion2) BY 1 DO
+	nChar := sVersion2[i];
+	IF nChar >= 48 AND nChar <= 57 THEN //numerisch
+		sTemp := CONCAT(sTemp,F_ToCHR(nChar));
+	ELSIF nChar = 46 OR nChar = 32 OR nChar = 0 THEN //Punkt Leerzeichen oder ENDE
+		aVersion2[j] := STRING_TO_UINT(sTemp);
+		sTemp := '';
+		j := j + 1;
+		IF j = 3 THEN
+			EXIT;
+		END_IF
+	END_IF
+END_FOR
+
+FOR i:= 2 TO 0 BY -1 DO
+	IF aVersion1[i] < aVersion2[i] THEN
+		F_CompVersion := -1;
+	ELSIF aVersion1[i] > aVersion2[i] THEN
+		F_CompVersion := 1;
+	END_IF
+END_FOR]]></ST>
+    </Implementation>
+  </POU>
+</TcPlcObject>

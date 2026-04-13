@@ -1,0 +1,257 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<TcPlcObject Version="1.1.0.1" ProductVersion="3.1.4022.7">
+  <POU Name="FB_ExtruderControl" Id="{1f5c1974-2d1b-4933-8f2e-3ffa11d6d9fe}" SpecialFunc="None">
+    <Declaration><![CDATA[FUNCTION_BLOCK FB_ExtruderControl
+
+VAR_OUTPUT
+	bBusy : BOOL;
+	bError : BOOL;
+	nErrorId : ERRORID;
+END_VAR
+
+VAR_IN_OUT
+	pFbExtruderRef : POINTER TO FB_ExtruderRef;
+END_VAR
+
+VAR
+END_VAR
+]]></Declaration>
+    <Implementation>
+      <ST><![CDATA[//Basisklasse]]></ST>
+    </Implementation>
+    <Method Name="M_HardStop" Id="{ce74034e-3c6e-474d-856d-56197108640a}">
+      <Declaration><![CDATA[METHOD M_HardStop
+VAR_INPUT
+END_VAR
+]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[]]></ST>
+      </Implementation>
+    </Method>
+    <Method Name="M_Reset" Id="{cd8b4f9a-aa86-4489-937b-2726d865be40}">
+      <Declaration><![CDATA[METHOD M_Reset
+VAR_INPUT
+END_VAR
+]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[IF bError THEN
+	bError := FALSE;
+	nErrorId := 0;
+END_IF]]></ST>
+      </Implementation>
+    </Method>
+    <Method Name="M_SetCompDistance" Id="{cb415c34-3144-4bf0-a8e0-9eba48c0a516}">
+      <Declaration><![CDATA[METHOD M_SetCompDistance : ERRORID
+VAR_INPUT
+	nValue : DINT;
+END_VAR
+]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[]]></ST>
+      </Implementation>
+    </Method>
+    <Method Name="M_SetCompFeed" Id="{265b6c7d-50d7-4a23-97f7-9ed47f3dda46}">
+      <Declaration><![CDATA[METHOD M_SetCompFeed : ERRORID
+VAR_INPUT
+	nValue : DINT;
+END_VAR
+]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[]]></ST>
+      </Implementation>
+    </Method>
+    <Method Name="M_SetDistance" Id="{39ac75e4-39a1-4c59-b5f2-7c19c527fd59}">
+      <Declaration><![CDATA[METHOD M_SetDistance : ERRORID
+VAR_INPUT
+	nValue : DINT;
+END_VAR
+]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[]]></ST>
+      </Implementation>
+    </Method>
+    <Method Name="M_SetFeed" Id="{b926a646-5fdd-4746-b071-bdaa5fcd26dc}">
+      <Declaration><![CDATA[METHOD M_SetFeed : ERRORID
+VAR_INPUT
+	nValue : DINT;
+END_VAR
+]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[]]></ST>
+      </Implementation>
+    </Method>
+    <Method Name="M_SetRelaxDistance" Id="{06b28c7d-c98b-4679-818e-7664186e4190}">
+      <Declaration><![CDATA[METHOD M_SetRelaxDistance : ERRORID
+VAR_INPUT
+	nValue : DINT;
+END_VAR
+]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[]]></ST>
+      </Implementation>
+    </Method>
+    <Method Name="M_Init" Id="{26697688-714f-4287-b27a-9f23c99d5872}">
+      <Declaration><![CDATA[METHOD M_Init
+VAR_INPUT
+END_VAR
+]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[]]></ST>
+      </Implementation>
+    </Method>
+    <Method Name="M_SetRelaxFeed" Id="{b5c1db9a-da29-4ec6-82be-96329ee4fcd5}">
+      <Declaration><![CDATA[METHOD M_SetRelaxFeed : ERRORID
+VAR_INPUT
+	nValue : DINT;
+END_VAR
+]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[]]></ST>
+      </Implementation>
+    </Method>
+    <Method Name="M_StartStop" Id="{2bd9aed1-bfb2-4975-9e5a-d21407db42ee}">
+      <Declaration><![CDATA[METHOD M_StartStop
+VAR_INPUT
+	bStart : BOOL;
+END_VAR
+]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[]]></ST>
+      </Implementation>
+    </Method>
+    <Property Name="P_nCompDistance" Id="{3d802bda-1af6-4b3e-833e-de3fdedb2e9c}">
+      <Declaration><![CDATA[PROPERTY P_nCompDistance : DINT]]></Declaration>
+      <Get Name="Get" Id="{aada73ff-d028-455c-a9b0-e0b91aab6825}">
+        <Declaration><![CDATA[VAR
+END_VAR
+]]></Declaration>
+        <Implementation>
+          <ST><![CDATA[IF pFbExtruderRef > 0 THEN
+	P_nCompDistance := pFbExtruderRef^.P_nCompDistanceOrgin;
+END_IF]]></ST>
+        </Implementation>
+      </Get>
+    </Property>
+    <Property Name="P_nCompFeed" Id="{378969a5-f23b-470c-a788-a07178365022}">
+      <Declaration><![CDATA[PROPERTY P_nCompFeed : DINT]]></Declaration>
+      <Get Name="Get" Id="{d046f663-74e7-4137-9d14-7e33f531af75}">
+        <Declaration><![CDATA[VAR
+END_VAR
+]]></Declaration>
+        <Implementation>
+          <ST><![CDATA[IF pFbExtruderRef > 0 THEN
+	P_nCompFeed := pFbExtruderRef^.P_nCompFeedOrgin; 
+END_IF]]></ST>
+        </Implementation>
+      </Get>
+    </Property>
+    <Property Name="P_nDistance" Id="{83675b98-e15d-4b1b-8780-69d67a1e8c7e}">
+      <Declaration><![CDATA[PROPERTY P_nDistance : DINT]]></Declaration>
+      <Get Name="Get" Id="{ab3c2596-78cc-4777-a2a2-b590724c0fb7}">
+        <Declaration><![CDATA[VAR
+END_VAR
+]]></Declaration>
+        <Implementation>
+          <ST><![CDATA[IF pFbExtruderRef > 0 THEN
+	P_nDistance := pFbExtruderRef^.P_nDistanceOrgin; 
+END_IF]]></ST>
+        </Implementation>
+      </Get>
+    </Property>
+    <Property Name="P_nFeed" Id="{45f5e17d-a024-40e8-9630-a736c49ca335}">
+      <Declaration><![CDATA[PROPERTY P_nFeed : DINT]]></Declaration>
+      <Get Name="Get" Id="{bb9dedff-bd5d-4bf1-bf5c-3032ac3a61ea}">
+        <Declaration><![CDATA[VAR
+END_VAR
+]]></Declaration>
+        <Implementation>
+          <ST><![CDATA[IF pFbExtruderRef > 0 THEN
+	P_nFeed := pFbExtruderRef^.P_nFeedOrgin; 
+END_IF]]></ST>
+        </Implementation>
+      </Get>
+    </Property>
+    <Property Name="P_nRelaxDistance" Id="{aa5cbfd4-6adb-4e79-84b3-4fd470e682b9}">
+      <Declaration><![CDATA[PROPERTY P_nRelaxDistance : DINT]]></Declaration>
+      <Get Name="Get" Id="{8e512c5c-e68d-4f82-8373-5ec023e405dc}">
+        <Declaration><![CDATA[VAR
+END_VAR
+]]></Declaration>
+        <Implementation>
+          <ST><![CDATA[IF pFbExtruderRef > 0 THEN
+	P_nRelaxDistance := pFbExtruderRef^.P_nRelaxDistanceOrgin; 
+END_IF]]></ST>
+        </Implementation>
+      </Get>
+    </Property>
+    <Property Name="P_nRelaxFeed" Id="{335f3d6d-0d9c-43c6-b179-d537d4c66bf6}">
+      <Declaration><![CDATA[PROPERTY P_nRelaxFeed : DINT]]></Declaration>
+      <Get Name="Get" Id="{9272ce5c-6297-4bb2-be7a-4f7aa8bb33fc}">
+        <Declaration><![CDATA[VAR
+END_VAR
+]]></Declaration>
+        <Implementation>
+          <ST><![CDATA[IF pFbExtruderRef > 0 THEN
+	P_nRelaxFeed := pFbExtruderRef^.P_nRelaxFeedOrgin; 
+END_IF]]></ST>
+        </Implementation>
+      </Get>
+    </Property>
+    <LineIds Name="FB_ExtruderControl">
+      <LineId Id="9" Count="0" />
+    </LineIds>
+    <LineIds Name="FB_ExtruderControl.M_HardStop">
+      <LineId Id="5" Count="0" />
+    </LineIds>
+    <LineIds Name="FB_ExtruderControl.M_Reset">
+      <LineId Id="5" Count="1" />
+      <LineId Id="8" Count="0" />
+      <LineId Id="7" Count="0" />
+    </LineIds>
+    <LineIds Name="FB_ExtruderControl.M_SetCompDistance">
+      <LineId Id="5" Count="0" />
+    </LineIds>
+    <LineIds Name="FB_ExtruderControl.M_SetCompFeed">
+      <LineId Id="5" Count="0" />
+    </LineIds>
+    <LineIds Name="FB_ExtruderControl.M_SetDistance">
+      <LineId Id="5" Count="0" />
+    </LineIds>
+    <LineIds Name="FB_ExtruderControl.M_SetFeed">
+      <LineId Id="5" Count="0" />
+    </LineIds>
+    <LineIds Name="FB_ExtruderControl.M_SetRelaxDistance">
+      <LineId Id="5" Count="0" />
+    </LineIds>
+    <LineIds Name="FB_ExtruderControl.M_SetRelaxFeed">
+      <LineId Id="5" Count="0" />
+    </LineIds>
+    <LineIds Name="FB_ExtruderControl.M_StartStop">
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="FB_ExtruderControl.P_nCompDistance.Get">
+      <LineId Id="5" Count="1" />
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="FB_ExtruderControl.P_nCompFeed.Get">
+      <LineId Id="5" Count="1" />
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="FB_ExtruderControl.P_nDistance.Get">
+      <LineId Id="5" Count="1" />
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="FB_ExtruderControl.P_nFeed.Get">
+      <LineId Id="5" Count="1" />
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="FB_ExtruderControl.P_nRelaxDistance.Get">
+      <LineId Id="5" Count="1" />
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="FB_ExtruderControl.P_nRelaxFeed.Get">
+      <LineId Id="5" Count="1" />
+      <LineId Id="2" Count="0" />
+    </LineIds>
+  </POU>
+</TcPlcObject>

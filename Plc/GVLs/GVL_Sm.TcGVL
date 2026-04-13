@@ -1,0 +1,29 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<TcPlcObject Version="1.1.0.1" ProductVersion="3.1.4024.11">
+  <GVL Name="GVL_Sm" Id="{01787dd9-d767-45fe-804a-d732bcf37a78}">
+    <Declaration><![CDATA[VAR_GLOBAL
+	fbComplexAction		: FB_ComplexAction;
+	
+	//Variablen für Ads-Notifictaion
+	aObjProcData		: ARRAY[1..(cMaxDevices + cMaxDrayPads)] OF ST_ObjectProcData;
+	
+	//aktuelle Werte der Pneu-Channels und der Interlocks
+	aHardwProcData		: ARRAY[0..13] OF ST_HardwareProcData;
+
+	//Variablen für Interaktive Kommunikation während der Abarbeitung von Actionen
+	stInteractRequest	: ST_Interaction;
+	stInterResponse		: ST_Interaction;
+	
+	timeStamp 			: T_FILETIME;//Locale Sytemzeit für ST_Error.TimeStamp
+	//Errorstruktur
+	stNotifyError		: ST_Error;
+	fbErrorList			: FB_ErrorList;
+	
+	//Für Notification der aktuellen Sequenzabarbeitung
+	fbSequenceList		: FB_SequenceList;	
+	fbSequenceInfo		: FB_SequenceInfo;
+	stSequenceInfo		: ST_SequenceInfo;
+	
+END_VAR]]></Declaration>
+  </GVL>
+</TcPlcObject>

@@ -1,0 +1,18 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<TcPlcObject Version="1.1.0.1" ProductVersion="3.1.0.25">
+  <DUT Name="ST_GCodeTool" Id="{1283e7f4-60d7-4d45-9810-b71426506324}">
+    <Declaration><![CDATA[TYPE ST_GCodeTool :
+STRUCT
+	nObjId			: UINT;
+	pMzTool			: POINTER TO FB_MzTool;
+	nPress1 		: DINT;
+	nPress2			: DINT;
+	bIsDispensing1 	: BOOL;
+	bIsDispensing2 	: BOOL;
+	nDelayStart 	: DINT;
+	nDelayEnd 		: DINT;
+END_STRUCT
+END_TYPE]]></Declaration>
+    <ObjectProperties />
+  </DUT>
+</TcPlcObject>

@@ -1,0 +1,67 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<TcPlcObject Version="1.1.0.1" ProductVersion="3.1.4020.12">
+  <POU Name="FB_CondiStepReady" Id="{805f5333-7568-4680-9a48-e6261b9d6669}" SpecialFunc="None">
+    <Declaration><![CDATA[{attribute 'enable_dynamic_creation'}
+FUNCTION_BLOCK FB_CondiStepReady EXTENDS FB_CondiBase
+VAR_INPUT
+END_VAR
+VAR_OUTPUT
+END_VAR
+VAR
+	pStep : POINTER TO ST_Step;
+END_VAR
+]]></Declaration>
+    <Implementation>
+      <ST><![CDATA[]]></ST>
+    </Implementation>
+    <Method Name="M_Check" Id="{deaf7195-1476-4b78-9f45-5deea4ad0759}">
+      <Declaration><![CDATA[METHOD M_Check : BYTE
+VAR_INPUT
+	nPreResult : BYTE;
+END_VAR
+
+VAR
+	bResult : BOOL;
+END_VAR]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[//es wird nur Bit0 entsprechend verknüpft
+//Bit1 steht für "Cancel" und wird derzeit nur FB_CondiStepResult verküpft
+
+IF eCondiOperator = E_LogicOperator.LOGIC_OP_AND THEN
+	nPreResult.0 := nPreResult.0 AND (pStep^.eState = E_StepState.STEPSTATUS_Ready);
+ELSIF eCondiOperator = E_LogicOperator.LOGIC_OP_OR THEN
+	nPreResult.0 := nPreResult.0 OR (pStep^.eState = E_StepState.STEPSTATUS_Ready);
+END_IF
+
+IF pNextCondi > 0 THEN
+	M_Check := pNextCondi^.M_Check(nPreResult);
+ELSE
+	M_Check  := nPreResult;
+END_IF]]></ST>
+      </Implementation>
+    </Method>
+    <Property Name="P_pStep" Id="{eafaebb9-2ac7-44b9-9b67-c28d56f6defe}">
+      <Declaration><![CDATA[PROPERTY P_pStep : POINTER TO ST_Step]]></Declaration>
+      <Set Name="Set" Id="{1ae2e3a2-e575-4c02-978a-fd160527b6df}">
+        <Declaration><![CDATA[VAR
+END_VAR
+]]></Declaration>
+        <Implementation>
+          <ST><![CDATA[pStep := P_pStep;]]></ST>
+        </Implementation>
+      </Set>
+    </Property>
+    <LineIds Name="FB_CondiStepReady">
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="FB_CondiStepReady.M_Check">
+      <LineId Id="21" Count="1" />
+      <LineId Id="20" Count="0" />
+      <LineId Id="3" Count="9" />
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="FB_CondiStepReady.P_pStep.Set">
+      <LineId Id="2" Count="0" />
+    </LineIds>
+  </POU>
+</TcPlcObject>

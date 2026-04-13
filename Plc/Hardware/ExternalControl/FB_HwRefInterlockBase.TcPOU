@@ -1,0 +1,38 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<TcPlcObject Version="1.1.0.1" ProductVersion="3.1.4022.7">
+  <POU Name="FB_HwRefInterlockBase" Id="{b5db477d-5c7e-44a0-92a7-31f4293dad49}" SpecialFunc="None">
+    <Declaration><![CDATA[FUNCTION_BLOCK FB_HwRefInterlockBase
+VAR_INPUT
+END_VAR
+VAR_OUTPUT
+	eCurrentState : E_InterlockState := E_InterlockState.Locked;
+END_VAR
+VAR
+END_VAR
+]]></Declaration>
+    <Implementation>
+      <ST><![CDATA[]]></ST>
+    </Implementation>
+    <Method Name="M_LockUnlock" Id="{397d4a1e-5405-4a50-bdc3-32af3a942589}">
+      <Declaration><![CDATA[METHOD M_LockUnlock : ERRORID
+VAR_INPUT
+	bLock : BOOL;
+END_VAR
+]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[IF bLock THEN
+	eCurrentState := E_InterlockState.Locked;
+ELSE
+	eCurrentState := E_InterlockState.Unlocked;
+END_IF]]></ST>
+      </Implementation>
+    </Method>
+    <LineIds Name="FB_HwRefInterlockBase">
+      <LineId Id="9" Count="0" />
+    </LineIds>
+    <LineIds Name="FB_HwRefInterlockBase.M_LockUnlock">
+      <LineId Id="3" Count="3" />
+      <LineId Id="2" Count="0" />
+    </LineIds>
+  </POU>
+</TcPlcObject>

@@ -1,0 +1,231 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<TcPlcObject Version="1.1.0.1" ProductVersion="3.1.4022.18">
+  <POU Name="FB_ZM_Move" Id="{a7ab8997-7204-48b7-b376-221376fd4a22}" SpecialFunc="None">
+    <Declaration><![CDATA[FUNCTION_BLOCK FB_ZM_Move
+VAR_INPUT
+	bExecute		: BOOL;
+	rPosition		: REAL;	//Zielposition bzw. Distance bei relativer Fahrt
+	rSpeed			: REAL;	//Geschwindigkeit
+	eMoveMode		: E_MoveMode;
+	pfbZAxisRef		: POINTER TO FB_ZAxisRef;
+END_VAR
+
+VAR_OUTPUT
+	bBusy			: BOOL;
+	bCommandAborted	: BOOL;
+	bError			: BOOL;
+	nErrorID		: ERRORID;
+END_VAR
+
+VAR
+	nState				: USINT;
+	rCurrentPosition	: REAL;
+	tWaitForTrgtReached	: TIME;
+	timeOut				: TON;
+	fbSdoRead			: FB_SDO_READ;
+END_VAR
+]]></Declaration>
+    <Implementation>
+      <ST><![CDATA[IF bExecute THEN
+	IF pfbZAxisRef = 0 THEN
+		nErrorId := E_ErrorIdMultiZ.ERRORID_InvalidZChannel;
+		bBusy := FALSE;
+		bError := TRUE;
+		nState := 99;
+		RETURN;
+	END_IF
+	
+	//Wird Achse momentan von anderem Movebaustein genutzt?
+	IF (pfbZAxisRef^.pCurrentFb > 0) AND (pfbZAxisRef^.pCurrentFb <> THIS) THEN //wird von anderem FB genutzt
+		RETURN;
+	END_IF
+	
+	IF pFbZAxisRef^.stInput.nStatus.3 THEN //Error
+		pFbZAxisRef^.stStatus.bError := TRUE;
+		pFbZAxisRef^.stOutput.nMode := 0;
+		pFbZAxisRef^.stOutput.nCtrl := 0;
+		timeOut(IN:= FALSE);
+		nErrorID := F_MultiZError_TO_ErrorId(pFbZAxisRef^.stInput.nError);
+		bBusy := FALSE;
+		bError := TRUE;
+		nState := 99;
+		RETURN;
+	END_IF
+	
+	IF pFbZAxisRef^.stStatus.bError THEN
+		nErrorID := F_MultiZError_TO_ErrorId(pFbZAxisRef^.stInput.nError);
+		bBusy := FALSE;
+		bError := TRUE;
+		nState := 99;
+		RETURN;
+	END_IF
+
+	//Wenn durch anderen FB Achse gestoppt, dann abbrechen
+	IF pFbZAxisRef^.stStatus.bCmdAborted THEN	//Muss noch irgendwo gesetzt werden!!!!
+		bCommandAborted := TRUE;
+		bBusy := FALSE;
+	END_IF
+	
+	IF timeOut.Q THEN
+		timeOut(IN:= FALSE);
+		bError := TRUE;
+		bBusy := FALSE;
+		pFbZAxisRef^.stStatus.bError := TRUE;
+		pFbZAxisRef^.stOutput.nCtrl.1 := TRUE;	//Stopbit setzen
+		
+		CASE nState OF
+			2: //Timeout wait for setpointacknowledge
+				nErrorId := E_ErrorIdMultiZ.ERRORID_ToWaitSetPointAck;
+			3: //Timeout wait for targetreached
+				nErrorId := E_ErrorIdMultiZ.ERRORID_ToWaitTrgtReached;
+		ELSE
+			nErrorId := E_ErrorIdMultiZ.ERRORID_UnknownError;	
+		END_CASE
+		nState := 99;
+		RETURN;
+	END_IF		
+	
+	CASE nState OF
+		0:	bBusy := TRUE;
+			//Wenn Achse schon aktiv, warten bis wieder frei
+			(*IF pstMultiZRef^.stZAxisStatus[nChannel].bHasJob THEN
+				RETURN;
+			END_IF*)
+			pfbZAxisRef^.pCurrentFb := THIS; 
+		
+			//Geschwindigkeit innerhalb zulässiger Grenzen?
+			IF rSpeed <= 0.0 OR rSpeed > pFbZAxisRef^.P_rMaxSpeed THEN
+				nErrorID := E_ErrorIdCmd.ERRORID_VelocityOutOfRange;
+				bBusy := FALSE;
+				bError := TRUE;
+				nState := 99;
+				RETURN;
+			END_IF
+			
+			pFbZAxisRef^.stStatus.bIsMoving := TRUE;
+			pFbZAxisRef^.stStatus.bHasJob := TRUE;
+			
+			//Aktuelle Position holen
+			rCurrentPosition := pFbZAxisRef^.P_rCurrentPos;
+
+			//Targetposition innerhalb zulässiger Grenzen?
+			CASE eMoveMode OF
+				E_MoveMode.MODE_Relative,E_MoveMode.MODE_Measure:
+					IF (rCurrentPosition + rPosition) < pFbZAxisRef^.P_rMinPos OR (rCurrentPosition + rPosition) > pFbZAxisRef^.P_rMaxPos THEN
+						nErrorID := E_ErrorIdCmd.ERRORID_TargetPosOutOfRangeZ;
+						bError := TRUE;
+						bBusy := FALSE;
+						nState := 99;
+					ELSE
+						//Timeout-Zeit für Wait for Targetreached berechnen
+						IF eMoveMode = E_MoveMode.MODE_Measure THEN
+							//Measure hat fixe Speed "15000"
+							tWaitForTrgtReached := REAL_TO_TIME(ABS(rPosition) / 15000 * 1000 + 2000);
+						ELSE
+							tWaitForTrgtReached := REAL_TO_TIME(ABS(rPosition) / rSpeed * 1000.0 + 2000.0);
+						END_IF
+					END_IF				
+
+				E_MoveMode.MODE_AbsWithOffset,E_MoveMode.MODE_AbsNoneOffset,E_MoveMode.MODE_Free,E_MoveMode.MODE_Home:
+					IF eMoveMode = E_MoveMode.MODE_Home THEN
+						rPosition := pFbZAxisRef^.P_rHomePos;
+					END_IF
+					
+					IF rPosition < pFbZAxisRef^.P_rMinPos OR rPosition > pFbZAxisRef^.P_rMaxPos THEN
+						nErrorID := E_ErrorIdCmd.ERRORID_TargetPosOutOfRangeZ;
+						bError := TRUE;
+						bBusy := FALSE;
+						nState := 99;
+					ELSE
+						//Timeout-Zeit für Wait for Targetreached berechnen
+						tWaitForTrgtReached := REAL_TO_TIME(ABS(rCurrentPosition - rPosition) / rSpeed * 1000.0 + 2000.0);
+					END_IF				
+			END_CASE
+			
+			IF NOT bError THEN
+				//Betriebsart Positionsmodus und TargetPos setzen
+				IF eMoveMode = E_MoveMode.MODE_Measure THEN
+					pFbZAxisRef^.stOutput.nMode := 5;  //Measure
+					//Zielposition setzen
+					pFbZAxisRef^.P_rRelTargetPos := rPosition;
+				ELSIF eMoveMode = E_MoveMode.MODE_Relative THEN
+					pFbZAxisRef^.stOutput.nMode := 1;  //Positioniermodus
+					//Zielposition setzen
+					pFbZAxisRef^.P_rRelTargetPos := rPosition;
+				ELSE
+					pFbZAxisRef^.stOutput.nMode := 1;
+					//Zielposition setzen
+					pFbZAxisRef^.P_rAbsTargetPos := rPosition;
+				END_IF
+				//Geschwindigkeit setzen
+				pFbZAxisRef^.stOutput.nVelo := REAL_TO_DINT(rSpeed);
+				nState := 1;
+			END_IF
+
+		1:	//Fahrauftrag starten
+			IF eMoveMode = E_MoveMode.MODE_Relative THEN	//Relativ
+				pFbZAxisRef^.stOutput.nCtrl := 5;
+			ELSE
+				pFbZAxisRef^.stOutput.nCtrl := 1;	
+			END_IF
+			nState := 2;
+	
+		2:	//SetpointAcknowledge?
+			IF pFbZAxisRef^.stInput.nStatus.1 THEN
+				pFbZAxisRef^.stOutput.nCtrl.0 := FALSE;	//Fahrauftrag zurücksetzen
+				timeOut(IN:= FALSE);
+				nState := 3;
+			ELSE
+				timeOut(IN:= TRUE, PT:=T#1200MS);	//Timer für Timeout starten
+			END_IF
+			
+		3:	//TargetReached?
+			//IF pFbZAxisRef^.stInput.nStatus.0 THEN
+			IF pFbZAxisRef^.stInput.nStatus = 193 THEN
+				timeOut(IN:= FALSE);
+				IF eMoveMode = E_MoveMode.MODE_Measure THEN
+					nState := 4;
+				ELSE
+					bBusy := FALSE;	
+				END_IF
+			ELSE
+				timeOut(IN:= TRUE, PT:= tWaitForTrgtReached);	//Timer für Timeout starten
+			END_IF
+		
+		4:	//wenn "MODE_Measure", dann ZOffset holen
+			fbSdoRead(sADSNetID:= pFbZAxisRef^.pMultiZRef^.P_sAdsNetId,	nPortNr:= pFbZAxisRef^.pMultiZRef^.P_nAdsPort,
+					nIndex:= cZSensOffset.nIndex, nSubIndex:= pFbZAxisRef^.nChannel, nDataLength:= cZSensOffset.nLength, bExecute:= TRUE);
+			IF NOT fbSdoRead.bBusy THEN
+				IF fbSdoRead.bError THEN
+					bError := TRUE;
+					nState := 99;
+				ELSE
+					pFbZAxisRef^.P_nZSensorID := fbSdoRead.nData;
+				END_IF
+				fbSdoRead(bExecute:= FALSE);
+				bBusy := FALSE;
+			END_IF
+	END_CASE
+ELSE
+	bBusy := FALSE;
+	nState := 0;
+	bError := FALSE;
+	nErrorID := 0;
+	timeOut(IN:= FALSE);
+	IF pfbZAxisRef^.pCurrentFb > 0 THEN
+		IF pfbZAxisRef^.pCurrentFb = THIS THEN
+			pfbZAxisRef^.pCurrentFb := 0;
+			pFbZAxisRef^.stStatus.bCmdAborted := FALSE;
+			pFbZAxisRef^.stOutput.nMode := 0;
+			pFbZAxisRef^.stStatus.bHasJob := FALSE;
+			pFbZAxisRef^.stStatus.bIsMoving := FALSE;		
+		END_IF		
+	END_IF
+END_IF]]></ST>
+    </Implementation>
+    <LineIds Name="FB_ZM_Move">
+      <LineId Id="220" Count="194" />
+      <LineId Id="2" Count="0" />
+    </LineIds>
+  </POU>
+</TcPlcObject>

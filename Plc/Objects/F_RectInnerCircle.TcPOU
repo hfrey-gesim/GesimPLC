@@ -1,0 +1,50 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<TcPlcObject Version="1.1.0.1" ProductVersion="3.1.4020.12">
+  <POU Name="F_RectInnerCircle" Id="{6743fe3e-fde8-460d-b54e-ece825131a95}" SpecialFunc="None">
+    <Declaration><![CDATA[FUNCTION F_RectInnerCircle : BOOL
+VAR_INPUT
+	stRect 		: FB_Rectangle;
+	stCircle	: ST_Circle;
+END_VAR
+VAR
+	rSquareRad	: REAL;
+	stPoint1	: ST_2DPoint;
+	stPoint2	: ST_2DPoint;
+	stPoint3	: ST_2DPoint;
+	stPoint4	: ST_2DPoint;
+END_VAR]]></Declaration>
+    <Implementation>
+      <ST><![CDATA[//Berechnet, ob sich Rechteck innerhalb eines Kreises befindet
+rSquareRad := (stCircle.rD / 2.0) * (stCircle.rD / 2.0);	//Quadrat Radius des Kreises
+//Alle Eckpunkte des Rechteckes
+stPoint1.X := stRect.X1;
+stPoint1.Y := stRect.Y1;
+stPoint2.X := stRect.X2;
+stPoint2.Y := stRect.Y1;
+stPoint3.X := stRect.X2;
+stPoint3.Y := stRect.Y2;
+stPoint4.X := stRect.X1;
+stPoint4.Y := stRect.Y2;
+//4* Satz des Pythagoras - überprüfen, ob alle Punkte innerhalb des Kreises
+F_RectInnerCircle := 
+	((stCircle.rX - stPoint1.X) * (stCircle.rX - stPoint1.X) + (stCircle.rY - stPoint1.Y) * (stCircle.rY - stPoint1.Y)) <= rSquareRad AND
+	((stCircle.rX - stPoint2.X) * (stCircle.rX - stPoint2.X) + (stCircle.rY - stPoint2.Y) * (stCircle.rY - stPoint2.Y)) <= rSquareRad AND
+	((stCircle.rX - stPoint3.X) * (stCircle.rX - stPoint3.X) + (stCircle.rY - stPoint3.Y) * (stCircle.rY - stPoint3.Y)) <= rSquareRad AND
+	((stCircle.rX - stPoint4.X) * (stCircle.rX - stPoint4.X) + (stCircle.rY - stPoint4.Y) * (stCircle.rY - stPoint4.Y)) <= rSquareRad;]]></ST>
+    </Implementation>
+    <LineIds Name="F_RectInnerCircle">
+      <LineId Id="48" Count="0" />
+      <LineId Id="18" Count="0" />
+      <LineId Id="49" Count="0" />
+      <LineId Id="25" Count="0" />
+      <LineId Id="24" Count="0" />
+      <LineId Id="26" Count="2" />
+      <LineId Id="30" Count="2" />
+      <LineId Id="29" Count="0" />
+      <LineId Id="35" Count="0" />
+      <LineId Id="10" Count="0" />
+      <LineId Id="33" Count="1" />
+      <LineId Id="7" Count="0" />
+    </LineIds>
+  </POU>
+</TcPlcObject>

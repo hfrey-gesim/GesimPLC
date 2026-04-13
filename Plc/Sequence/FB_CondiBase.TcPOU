@@ -1,0 +1,101 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<TcPlcObject Version="1.1.0.1" ProductVersion="3.1.4020.12">
+  <POU Name="FB_CondiBase" Id="{2a9839b6-9855-4f86-932c-c570a380e71d}" SpecialFunc="None">
+    <Declaration><![CDATA[{attribute 'enable_dynamic_creation'}
+FUNCTION_BLOCK FB_CondiBase
+VAR_INPUT
+END_VAR
+VAR_OUTPUT
+END_VAR
+VAR_IN_OUT
+END_VAR
+VAR
+	eCondition		: E_Condition;
+	pNextCondi		: POINTER TO FB_CondiBase;
+	eCondiOperator	: E_LogicOperator;
+END_VAR
+]]></Declaration>
+    <Implementation>
+      <ST><![CDATA[]]></ST>
+    </Implementation>
+    <Property Name="P_eCondition" Id="{31d9fe1b-c5cd-479e-bf53-3234e8b3d5b0}">
+      <Declaration><![CDATA[PROPERTY P_eCondition : E_Condition]]></Declaration>
+      <Set Name="Set" Id="{1ce07daf-d2fc-4616-bfd3-e893d0cbd520}">
+        <Declaration><![CDATA[VAR
+END_VAR
+]]></Declaration>
+        <Implementation>
+          <ST><![CDATA[eCondition := P_eCondition;]]></ST>
+        </Implementation>
+      </Set>
+    </Property>
+    <Method Name="M_ClearNext" Id="{4f55be51-86e5-4f49-9aa8-c81e942ea396}">
+      <Declaration><![CDATA[METHOD M_ClearNext
+VAR_INPUT
+END_VAR
+]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[IF pNextCondi > 0 THEN
+	pNextCondi^.M_ClearNext();
+	__DELETE(pNextCondi);
+END_IF]]></ST>
+      </Implementation>
+    </Method>
+    <Property Name="P_eOperator" Id="{6e53ba03-9935-4026-aa20-d42cde9cf3c7}">
+      <Declaration><![CDATA[PROPERTY P_eOperator : E_LogicOperator]]></Declaration>
+      <Set Name="Set" Id="{2f4a9737-d101-4cb2-8c79-57b3923ae24f}">
+        <Declaration><![CDATA[VAR
+END_VAR
+]]></Declaration>
+        <Implementation>
+          <ST><![CDATA[eCondiOperator := P_eOperator;]]></ST>
+        </Implementation>
+      </Set>
+    </Property>
+    <Method Name="M_AddNext" Id="{79c20188-50fd-41e8-9b4c-b0b5ddd88bc3}">
+      <Declaration><![CDATA[METHOD M_AddNext
+VAR_INPUT
+	pCondi : POINTER TO FB_CondiBase;
+END_VAR
+]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[IF pNextCondi = 0 THEN
+	pNextCondi := pCondi;
+ELSE
+	pNextCondi^.M_AddNext(pCondi);
+END_IF]]></ST>
+      </Implementation>
+    </Method>
+    <Method Name="M_Check" Id="{9709da70-775f-4593-8395-0e31a180cd82}">
+      <Declaration><![CDATA[METHOD M_Check : BYTE
+VAR_INPUT
+	//bPreResult	: BOOL;
+	nPreResult : BYTE;
+END_VAR
+]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[]]></ST>
+      </Implementation>
+    </Method>
+    <LineIds Name="FB_CondiBase">
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="FB_CondiBase.P_eCondition.Set">
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="FB_CondiBase.M_ClearNext">
+      <LineId Id="3" Count="2" />
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="FB_CondiBase.P_eOperator.Set">
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="FB_CondiBase.M_AddNext">
+      <LineId Id="3" Count="3" />
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="FB_CondiBase.M_Check">
+      <LineId Id="2" Count="0" />
+    </LineIds>
+  </POU>
+</TcPlcObject>

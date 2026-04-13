@@ -1,0 +1,52 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<TcPlcObject Version="1.1.0.1" ProductVersion="3.1.0.25">
+  <POU Name="FB_HwRefInkStatDriveCover" Id="{78490ab0-7182-474f-b71b-963c9a2ebe35}">
+    <Declaration><![CDATA[FUNCTION_BLOCK FB_HwRefInkStatDriveCover EXTENDS FB_CanNodeBase
+VAR_INPUT
+	//Ausgänge
+	nControl		AT %Q* : UINT; 	//Controlword
+	nOpMode			AT %Q* : USINT;	//Mode of Operations
+	nTargetPos		AT %Q* : DINT;	//Target Position
+	bDigiOut0		AT %Q* : BOOL;	//Digitaler Ausgang0
+	bDigiOut1		AT %Q* : BOOL;	//Digitaler Ausgang1
+	bIsInit 		: BOOL;
+END_VAR
+VAR_OUTPUT
+	//Eingänge
+	nStatus	 		AT %I* : UINT;	//Statusword
+	nCurrentOpMode	AT %I* : USINT; //Aktueller Wert von Mode of Operation
+	bClosedSwitch	AT %I* : BOOL;	//LimitSwitch Deckel geschlossen
+	bOpenSwitch		AT %I* : BOOL;	//LimitSwitch Deckel geöffnet
+	
+END_VAR
+VAR
+	eCoverState		: E_OpClState;
+END_VAR
+]]></Declaration>
+    <Implementation>
+      <ST><![CDATA[IF bNodeEnabled THEN
+	SUPER^();	
+END_IF]]></ST>
+    </Implementation>
+    <Property Name="P_eCoverState" Id="{50714de5-f78d-4cfa-ac26-63dd8bfa29c8}">
+      <Declaration><![CDATA[PROPERTY P_eCoverState : E_OpClState]]></Declaration>
+      <Set Name="Set" Id="{b9ff712e-1022-4a3e-8232-d986371cddce}">
+        <Declaration><![CDATA[VAR
+END_VAR
+]]></Declaration>
+        <Implementation>
+          <ST><![CDATA[eCoverState := P_eCoverState;]]></ST>
+        </Implementation>
+      </Set>
+      <Get Name="Get" Id="{cc3993fb-9a6e-4086-bca1-04982d63ed7b}">
+        <Declaration><![CDATA[VAR
+END_VAR
+]]></Declaration>
+        <Implementation>
+          <ST><![CDATA[P_eCoverState := eCoverState;]]></ST>
+        </Implementation>
+      </Get>
+    </Property>
+    <ObjectProperties />
+  </POU>
+</TcPlcObject>

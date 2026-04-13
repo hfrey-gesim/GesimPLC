@@ -1,0 +1,22 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<TcPlcObject Version="1.1.0.1" ProductVersion="3.1.4024.11">
+  <DUT Name="E_TMCM_HomingMethode" Id="{0e69c887-a28d-4804-bc48-c2376851fe6a}">
+    <Declaration><![CDATA[TYPE E_TMCM_HomingMethode :
+(
+	NoHoming := 0,
+	SearchLeftEndSwitchNextIndex := 1,
+	SearchRightEndSwitchNextIndex := 2,
+	SearchPosHomeSwitchNextIndex := 3,
+	SearchNegHomeSwitchNextIndex := 5,
+	SearchLeftEndSwitch := 17,
+	SearchRightEndSwitch := 18,
+	SearchPosHomeSwitch := 19,
+	SearchNegHomeSwitch := 21,
+	SearchNextIndexInNegDir := 33,
+	SearchNextIndesInPosDir := 35,
+	ActualPosAsHomePos := 36
+)USINT;
+END_TYPE
+]]></Declaration>
+  </DUT>
+</TcPlcObject>

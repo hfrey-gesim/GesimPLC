@@ -1,0 +1,90 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<TcPlcObject Version="1.1.0.1" ProductVersion="3.1.4020.6">
+  <POU Name="FB_SwitchPressure" Id="{ae554725-8f72-4926-94bc-109e24b55a20}" SpecialFunc="None">
+    <Declaration><![CDATA[FUNCTION_BLOCK FB_SwitchPressure
+VAR_INPUT
+	bExecute	: BOOL;
+	nChannel	: USINT;
+	tDelay 		: TIME;
+	iDevice		: I_Device;
+END_VAR
+
+VAR_OUTPUT
+	bBusy		: BOOL;
+	bError		: BOOL;
+	nErrorId	: ERRORID;
+END_VAR
+
+VAR
+	timer 		: TON;
+	nState		: USINT;
+	stActionData: ST_ActionData := (eAction:= E_Action.ACTION_SwitchPressure);
+END_VAR
+]]></Declaration>
+    <Implementation>
+      <ST><![CDATA[IF bExecute THEN
+	CASE nState OF
+		0:
+			bBusy := TRUE;
+			IF ADR(iDevice) > 0 THEN
+				IF NOT(iDevice.P_eObjectType = E_ObjectType.OBJECTTYPE_CartridgeDisp OR
+						iDevice.P_eObjectType = E_ObjectType.OBJECTTYPE_CoreShellDisp OR
+						iDevice.P_eObjectType = E_ObjectType.OBJECTTYPE_DeloDot) THEN
+					bError := TRUE;
+					bBusy := FALSE;
+					RETURN;		
+				END_IF
+			ELSE
+				bError := TRUE;
+				bBusy := FALSE;
+				RETURN;
+			END_IF
+		
+			stActionData.aParams[2] := 1; //On
+			IF tDelay > T#0S THEN
+				timer(IN:= TRUE, PT:= tDelay);	//Timer starten
+				nState := 1;
+				//Wenn zwei Kanäle angesprochen werden sollen, dann Aktion mit jedem Kanal ausführen
+				IF nChannel.0 THEN
+					stActionData.aParams[1] := 1;
+					nErrorId := iDevice.M_ExeAction(stActionData);
+				END_IF
+				IF nChannel.1 THEN
+					stActionData.aParams[1] := 2;
+					nErrorId := iDevice.M_ExeAction(stActionData);
+				END_IF
+			ELSE //Delay = 0
+				//Wenn zwei Kanäle angesprochen werden sollen, dann Aktion mit jedem Kanal ausführen
+				IF nChannel.0 THEN
+					stActionData.aParams[1] := 1;
+					nErrorId := iDevice.M_ExeAction(stActionData);
+				END_IF
+				IF nChannel.1 THEN
+					stActionData.aParams[1] := 2;
+					nErrorId := iDevice.M_ExeAction(stActionData);
+				END_IF
+				bBusy := FALSE;
+			END_IF
+			
+			IF nErrorId > 0 THEN
+				bBusy  := FALSE;
+				bError := TRUE;
+				RETURN;
+			END_IF
+			
+		1:	//Warten
+			timer();
+			IF timer.Q THEN
+				bBusy := FALSE;
+			END_IF
+	END_CASE
+ELSE
+	timer(IN:= FALSE);
+	bBusy := FALSE;
+	bError := FALSE; 
+	nErrorId := 0;
+	nState := 0;
+END_IF]]></ST>
+    </Implementation>
+  </POU>
+</TcPlcObject>

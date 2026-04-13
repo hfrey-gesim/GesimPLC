@@ -1,0 +1,943 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<TcPlcObject Version="1.1.0.1" ProductVersion="3.1.4022.10">
+  <POU Name="FB_XYDriveBase" Id="{0cc81cef-caec-4402-ba44-d8abe23431c9}" SpecialFunc="None">
+    <Declaration><![CDATA[FUNCTION_BLOCK FB_XYDriveBase EXTENDS FB_HwModule
+VAR PERSISTENT
+	rRefPosMaster		: REAL;
+	rWorkplateLength 	: REAL;
+	rNullPosDist 		: REAL;
+	rMaxPosDist 		: REAL;
+	rSetupPosDist 		: REAL;
+	rLimitMargeNeg 		: REAL;
+	rLimitMargePos 		: REAL;
+	rMaxSpeed 			: REAL;
+	bSetupOK 			: BOOL; //Setup wurde durchgeführt	
+	bInvertInitDir 		: BOOL; //Richtung bei Initialisierung umkehren(negativ)
+END_VAR
+
+VAR
+	nErrorId 			: ERRORID;
+	rActPos				: REAL;
+	bHomed				: BOOL;
+	
+	eXYOrientation		: E_XYOrientation;
+
+	bWriteAxisParameter : BOOL;
+	nStateA_WriteAxisParamter : USINT;
+	nStateWriteLimitNegative : USINT;
+	nStateWriteLimitPositive : USINT;
+	nStateWriteNCIFastSpeed : USINT;
+
+	bSetup : BOOL;
+	nStateA_Setup : USINT;
+	bSetupWaitForResp : BOOL;
+	bContinueSetup : BOOL;
+	bSetupError: BOOL;
+	
+	bInit : BOOL;
+	nStateA_Init : USINT;
+	bReInit : BOOL;
+	rHomePos : REAL;
+	Delay : TON;
+	bStopInit : BOOL;
+	
+	bJog : BOOL;
+	nStateA_Jog : USINT;
+	bJogForward : BOOL;
+	bJogBackward : BOOL;
+	bJogInching : BOOL;
+	tmrJog : TON;	
+	
+	bMoveAbs : BOOL;
+	nStateMoveAbs : USINT;
+	bMoveRel : BOOL;
+	nStateMoveRel : USINT;
+	
+	bCapture : BOOL;
+	nStateA_Capture : USINT;
+	bStopCapture : BOOL;
+	nStateA_StopCapture : USINT;
+	bCaptureOk 			: BOOL;
+	bCaptureStopped 	: BOOL;
+	rCapturedPos		: REAL;
+	
+	bStop	: BOOL;
+	nStateA_Stop : USINT;
+	
+	bReset : BOOL;
+	nStateA_Reset : USINT;
+	
+	nStateA_Error : USINT;
+	
+	pMultiZRef : POINTER TO FB_MultiZRef;
+	
+	stAdsAddress : ST_AdsAdress;
+	
+	rTrigError	: R_TRIG;
+
+END_VAR]]></Declaration>
+    <Implementation>
+      <ST><![CDATA[
+IF bWriteAxisParameter THEN
+	A_WriteAxisParameter();
+	IF nStateA_WriteAxisParamter >= 80 THEN
+		IF nStateA_WriteAxisParamter >= 99 THEN
+			bError := TRUE;
+		END_IF
+		nStateA_WriteAxisParamter := 0;
+		bWriteAxisParameter := FALSE;
+	END_IF
+END_IF
+
+IF bSetup THEN
+	A_Setup();
+	IF nStateA_Setup >= 80 THEN
+		IF nStateA_Setup >= 99 THEN
+			bError := TRUE;
+		END_IF
+		nStateA_Setup := 0;
+		bSetup := FALSE;
+	END_IF
+END_IF
+
+IF bInit THEN
+	A_Init();
+	IF nStateA_Init = 80 THEN
+		nStateA_Init := 0;
+		bInit := FALSE;
+	END_IF
+
+	IF nStateA_Init = 99 THEN	//Error
+		nStateA_Init := 0;
+		bInit := FALSE;
+		bError := TRUE;
+	END_IF
+END_IF
+
+IF bMoveAbs THEN
+	A_MoveAbs();
+	IF nStateMoveAbs >= 80 THEN
+		IF nStateMoveAbs >= 99 THEN	//Error
+			bError := TRUE;
+		END_IF
+		nStateMoveAbs := 0;
+		bMoveAbs := FALSE;
+	END_IF	
+END_IF
+
+IF bMoveRel THEN
+	A_MoveRel();
+	IF nStateMoveRel >= 80 THEN
+		IF nStateMoveRel >= 99 THEN	//Error
+			bError := TRUE;
+		END_IF
+		nStateMoveRel := 0;
+		bMoveRel := FALSE;
+	END_IF	
+END_IF
+
+IF bJog THEN
+	A_Jog();
+	IF nStateA_Jog >= 80 THEN
+		IF nStateA_Jog >= 99 THEN	//Error
+			bError := TRUE;
+		END_IF
+		nStateA_Jog := 0;
+		bJog := FALSE;
+	END_IF	
+END_IF
+
+IF bCapture THEN
+	A_Capture();
+	IF nStateA_Capture >= 80 THEN
+		IF nStateA_Capture >= 99 THEN	//Error
+			bError := TRUE;
+		END_IF
+		nStateA_Capture := 0;
+		bCapture := FALSE;
+	END_IF	
+END_IF
+
+IF bStopCapture THEN
+	A_StopCapture();
+	IF nStateA_StopCapture >= 80 THEN
+		IF nStateA_StopCapture >= 99 THEN	//Error
+			bError := TRUE;
+		END_IF
+		nStateA_StopCapture := 0;
+		bStopCapture := FALSE;
+	END_IF	
+END_IF
+
+IF bReset THEN
+	A_Reset();
+	IF nStateA_Reset >= 80 THEN
+		IF nStateA_Reset >= 99 THEN
+			bError := TRUE;
+		END_IF
+		nStateA_Reset := 0;
+		bReset := FALSE;
+	END_IF
+END_IF
+
+IF bError THEN
+	A_Error();
+END_IF
+
+IF NOT (bInit OR bMoveAbs OR bMoveRel OR bJog OR bReset OR bSetup) THEN
+	bStop := FALSE;
+	bBusy := FALSE;
+ELSE
+	bBusy := TRUE;
+END_IF
+
+rTrigError(CLK:= bError);
+IF rTrigError.Q THEN
+	stError.ErrorId := nErrorId;
+	fbErrorList.M_Add(stError);
+END_IF]]></ST>
+    </Implementation>
+    <Property Name="P_bHomed" Id="{0afa9711-bb3c-49da-ad4b-fbfada4352e5}">
+      <Declaration><![CDATA[PROPERTY P_bHomed : BOOL]]></Declaration>
+      <Get Name="Get" Id="{0a2af32c-6156-41c7-aca2-e1a42e26b21c}">
+        <Declaration><![CDATA[VAR
+END_VAR
+]]></Declaration>
+        <Implementation>
+          <ST><![CDATA[P_bHomed := bHomed;]]></ST>
+        </Implementation>
+      </Get>
+    </Property>
+    <Action Name="A_Setup" Id="{14c9e388-d3ed-4560-9f65-f8749935e4e1}">
+      <Implementation>
+        <ST><![CDATA[]]></ST>
+      </Implementation>
+    </Action>
+    <Method Name="M_GetProperty" Id="{14ca934f-2dd6-4c93-a9fb-0f709d4531b2}">
+      <Declaration><![CDATA[METHOD M_GetProperty : ERRORID
+VAR_INPUT
+	eType	: E_HardwarePropType;
+END_VAR
+VAR_OUTPUT
+	nValue 	: DINT;
+END_VAR
+]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[CASE eType OF
+	E_HardwarePropType.RefPos1:
+		nValue := REAL_TO_DINT(rRefPosMaster);
+	E_HardwarePropType.MinPos:
+		nValue := REAL_TO_DINT(P_rMinPos);
+	E_HardwarePropType.MaxPos:
+		nValue := REAL_TO_DINT(P_rMaxPos);
+	E_HardwarePropType.LimitMargeNeg:
+		nValue := REAL_TO_DINT(rLimitMargeNeg);
+	E_HardwarePropType.LimitMargePos:
+		nValue := REAL_TO_DINT(rLimitMargePos);
+	E_HardwarePropType.MaxSpeed:
+		nValue := REAL_TO_DINT(rMaxSpeed);
+	E_HardwarePropType.WorkplateDim:
+		nValue := REAL_TO_DINT(rWorkplateLength);
+	E_HardwarePropType.NullPosDist:
+		nValue := REAL_TO_DINT(rNullPosDist);
+	E_HardwarePropType.MaxPosDist:
+		nValue := REAL_TO_DINT(rMaxPosDist);
+	E_HardwarePropType.SetupPosDist:
+		nValue := REAL_TO_DINT(rSetupPosDist);
+	E_HardwarePropType.InvertInitDir:
+		nValue := BOOL_TO_DINT(bInvertInitDir);		
+ELSE
+	M_GetProperty := E_ErrorIdCmd.ERRORID_InvalidHwProperty;	
+END_CASE]]></ST>
+      </Implementation>
+    </Method>
+    <Method Name="M_Init" Id="{1b2c623a-418c-45db-902e-4b8ea38aef27}">
+      <Declaration><![CDATA[METHOD M_Init : ERRORID
+VAR_INPUT
+	bReInit : BOOL;
+END_VAR
+]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[IF bBusy THEN
+	M_Init := E_ErrorIdCmd.ERRORID_AxisStillBusy;
+ELSE
+	THIS^.bReInit := bReInit;
+	//Die Action wird von hier aus einmalig ausgeführt damit ein Aufruf schon in diesem Zyklus stattfindet
+	rHomePos := rRefPosMaster;
+	bInit := TRUE;
+	A_Init();		
+END_IF
+
+]]></ST>
+      </Implementation>
+    </Method>
+    <Method Name="M_PowerOn" Id="{216e1f12-de0f-4dec-8889-60cf5373273f}">
+      <Declaration><![CDATA[METHOD M_PowerOn : ERRORID
+VAR_INPUT
+END_VAR
+]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[]]></ST>
+      </Implementation>
+    </Method>
+    <Method Name="M_MoveRel" Id="{24027711-a8d6-4c59-b064-7a440d5f5e62}">
+      <Declaration><![CDATA[METHOD M_MoveRel : ERRORID
+VAR_INPUT
+	rDistance		: REAL;
+	rSpeed			: REAL;
+	rAcceleration 	: REAL;
+	rDeceleration 	: REAL;	
+END_VAR
+]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[]]></ST>
+      </Implementation>
+    </Method>
+    <Action Name="A_Reset" Id="{256c51dd-d237-4e59-a72f-a71ce6c88c28}">
+      <Implementation>
+        <ST><![CDATA[]]></ST>
+      </Implementation>
+    </Action>
+    <Property Name="P_bIsTwinDrive" Id="{27648e45-e8f1-4feb-bb47-fd58e1996c82}">
+      <Declaration><![CDATA[PROPERTY P_bIsTwinDrive : BOOL]]></Declaration>
+      <Get Name="Get" Id="{ed72dd8f-7120-407f-a8aa-e69a074a3e48}">
+        <Declaration><![CDATA[VAR
+END_VAR
+]]></Declaration>
+        <Implementation>
+          <ST><![CDATA[]]></ST>
+        </Implementation>
+      </Get>
+    </Property>
+    <Method Name="M_Stop" Id="{279f7bea-7b16-4217-becd-66382dc12fd0}">
+      <Declaration><![CDATA[METHOD M_Stop : ERRORID
+VAR_INPUT
+END_VAR
+]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[IF bBusy AND NOT bStop THEN
+	bStop := TRUE;
+END_IF]]></ST>
+      </Implementation>
+    </Method>
+    <Method Name="M_Setup" Id="{2e8c7a39-7c20-435f-b3f0-a05db367cb6c}">
+      <Declaration><![CDATA[METHOD M_Setup : ERRORID
+VAR_INPUT
+END_VAR
+]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[IF bBusy THEN
+	M_Setup := E_ErrorIdCmd.ERRORID_AxisStillBusy;
+ELSE
+	THIS^.bReInit := TRUE;
+	rHomePos := 0;
+	bSetup := TRUE;
+END_IF
+]]></ST>
+      </Implementation>
+    </Method>
+    <Property Name="P_nErrorId" Id="{322aee4c-3a11-410f-ac6d-3d0409c85581}">
+      <Declaration><![CDATA[PROPERTY P_nErrorId : ERRORID]]></Declaration>
+      <Get Name="Get" Id="{76b00358-761e-4f3e-8b70-deae12e11cb3}">
+        <Declaration><![CDATA[VAR
+END_VAR
+]]></Declaration>
+        <Implementation>
+          <ST><![CDATA[P_nErrorId := nErrorId;]]></ST>
+        </Implementation>
+      </Get>
+    </Property>
+    <Method Name="M_PowerOff" Id="{33422e5e-33d5-43d2-aa3b-d1d01826f319}">
+      <Declaration><![CDATA[METHOD M_PowerOff : ERRORID
+VAR_INPUT
+END_VAR
+]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[]]></ST>
+      </Implementation>
+    </Method>
+    <Property Name="P_bIsMoving" Id="{3aa4a2d6-db9b-4ba4-b74c-97220efc3414}">
+      <Declaration><![CDATA[PROPERTY P_bIsMoving : BOOL]]></Declaration>
+      <Get Name="Get" Id="{1f08278c-4143-4a0a-87f9-a3acb4a06cd6}">
+        <Declaration><![CDATA[VAR
+END_VAR
+]]></Declaration>
+        <Implementation>
+          <ST><![CDATA[]]></ST>
+        </Implementation>
+      </Get>
+    </Property>
+    <Action Name="A_Error" Id="{3c25752f-a382-4eb7-b10a-fff8d5b78520}">
+      <Implementation>
+        <ST><![CDATA[]]></ST>
+      </Implementation>
+    </Action>
+    <Property Name="P_pAxisRef" Id="{3ef539f9-3218-47a3-9bc8-7c5de0adb7b2}">
+      <Declaration><![CDATA[PROPERTY P_pAxisRef : POINTER TO AXIS_REF]]></Declaration>
+      <Get Name="Get" Id="{c29c0e80-a1c8-4ea8-be7a-8b3c59458184}">
+        <Declaration><![CDATA[VAR
+END_VAR
+]]></Declaration>
+        <Implementation>
+          <ST><![CDATA[]]></ST>
+        </Implementation>
+      </Get>
+    </Property>
+    <Action Name="A_Init" Id="{4751a626-e337-464d-bf84-c2d1d22328f5}">
+      <Implementation>
+        <ST><![CDATA[]]></ST>
+      </Implementation>
+    </Action>
+    <Method Name="M_StopCapture" Id="{4ee21139-487d-4c71-bcb3-7a126d15500d}">
+      <Declaration><![CDATA[METHOD M_StopCapture : ERRORID
+VAR_INPUT
+END_VAR
+]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[bStopCapture := TRUE;
+bCaptureStopped := FALSE;
+A_StopCapture();]]></ST>
+      </Implementation>
+    </Method>
+    <Method Name="M_SetProperty" Id="{62ecbc0a-3c2d-4526-83a2-576239b2a1e6}">
+      <Declaration><![CDATA[METHOD M_SetProperty : ERRORID
+VAR_INPUT
+	eType	: E_HardwarePropType;
+	nValue 	: DINT;
+END_VAR
+]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[CASE eType OF
+	E_HardwarePropType.RefPos1:
+		rRefPosMaster := DINT_TO_REAL(nValue);
+	E_HardwarePropType.MinPos:
+		M_SetProperty := E_ErrorIdCmd.ERRORID_OnlyReadHwProp;
+	E_HardwarePropType.MaxPos:
+		M_SetProperty := E_ErrorIdCmd.ERRORID_OnlyReadHwProp;
+	E_HardwarePropType.LimitMargeNeg:
+		rLimitMargeNeg := DINT_TO_REAL(nValue);
+		bWriteAxisParameter := TRUE;
+	E_HardwarePropType.LimitMargePos:
+		rLimitMargePos := DINT_TO_REAL(nValue);
+		bWriteAxisParameter := TRUE;
+	E_HardwarePropType.MaxSpeed:
+		rMaxSpeed := DINT_TO_REAL(nValue);
+		bWriteAxisParameter := TRUE;
+	E_HardwarePropType.WorkplateDim:
+		rWorkplateLength := DINT_TO_REAL(nValue);
+		bWriteAxisParameter := TRUE;
+	E_HardwarePropType.NullPosDist:
+		rNullPosDist := DINT_TO_REAL(nValue);
+		bWriteAxisParameter := TRUE;
+	E_HardwarePropType.MaxPosDist:
+		rMaxPosDist := DINT_TO_REAL(nValue);
+		bWriteAxisParameter := TRUE;
+	E_HardwarePropType.SetupPosDist:
+		rSetupPosDist := DINT_TO_REAL(nValue);
+	E_HardwarePropType.InvertInitDir:
+		bInvertInitDir := DINT_TO_BOOL(nValue);
+ELSE
+	M_SetProperty := E_ErrorIdCmd.ERRORID_InvalidHwProperty;	
+END_CASE]]></ST>
+      </Implementation>
+    </Method>
+    <Method Name="M_GearOut" Id="{64cb8fc5-86d3-400c-9de1-b21edba39dae}">
+      <Declaration><![CDATA[METHOD M_GearOut : ST_MethResult
+
+]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[]]></ST>
+      </Implementation>
+    </Method>
+    <Property Name="P_tHomingTime" Id="{67a74226-24cb-4f82-a29a-6b82401c965e}">
+      <Declaration><![CDATA[PROPERTY P_tHomingTime : TIME]]></Declaration>
+      <Get Name="Get" Id="{52255e40-7f87-4e15-b700-6c2c4b24ff95}">
+        <Declaration><![CDATA[VAR
+END_VAR
+]]></Declaration>
+        <Implementation>
+          <ST><![CDATA[//nur aus Kompatibilitätsgründen PlattformD impl.
+P_tHomingTime := T#0s;]]></ST>
+        </Implementation>
+      </Get>
+    </Property>
+    <Method Name="M_Capture" Id="{792a12ea-3b2a-45bc-ad43-df4c476b3151}">
+      <Declaration><![CDATA[METHOD M_Capture : ERRORID
+VAR_INPUT
+END_VAR
+]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[]]></ST>
+      </Implementation>
+    </Method>
+    <Property Name="P_stAdsAddress" Id="{7cae8055-8d16-459e-b2b9-d3c9d8fbf257}">
+      <Declaration><![CDATA[PROPERTY P_stAdsAddress : ST_AdsAdress]]></Declaration>
+      <Set Name="Set" Id="{619d1ae6-a98b-4c57-9b0f-10ca5c2c3149}">
+        <Declaration><![CDATA[VAR
+END_VAR
+]]></Declaration>
+        <Implementation>
+          <ST><![CDATA[stAdsAddress := P_stAdsAddress;]]></ST>
+        </Implementation>
+      </Set>
+      <Get Name="Get" Id="{f66b9e27-78c0-4609-9c4f-c2c7fe14c945}">
+        <Declaration><![CDATA[VAR
+END_VAR
+]]></Declaration>
+        <Implementation>
+          <ST><![CDATA[P_stAdsAddress := stAdsAddress;]]></ST>
+        </Implementation>
+      </Get>
+    </Property>
+    <Property Name="P_bHasJob" Id="{7e0bf8a6-9d83-4101-b0bf-d54da13d6849}">
+      <Declaration><![CDATA[PROPERTY P_bHasJob : BOOL]]></Declaration>
+      <Get Name="Get" Id="{1381b6da-b637-4c56-86ee-8aa5067694fb}">
+        <Declaration><![CDATA[VAR
+END_VAR
+]]></Declaration>
+        <Implementation>
+          <ST><![CDATA[]]></ST>
+        </Implementation>
+      </Get>
+    </Property>
+    <Property Name="P_bCoupled" Id="{7e4a197d-8e5b-4c2e-85d7-f275ad56aa50}">
+      <Declaration><![CDATA[PROPERTY P_bCoupled : BOOL]]></Declaration>
+      <Get Name="Get" Id="{68f56ea4-c0e1-4076-9a24-9f7258f242aa}">
+        <Declaration><![CDATA[VAR
+END_VAR
+]]></Declaration>
+        <Implementation>
+          <ST><![CDATA[]]></ST>
+        </Implementation>
+      </Get>
+    </Property>
+    <Action Name="A_Capture" Id="{8a54ddcf-76bf-44fa-9892-f44e3b817e0c}">
+      <Implementation>
+        <ST><![CDATA[]]></ST>
+      </Implementation>
+    </Action>
+    <Property Name="P_bHoming" Id="{91859e49-6b34-4faa-95c2-18304acd1fc8}">
+      <Declaration><![CDATA[PROPERTY P_bHoming : BOOL]]></Declaration>
+      <Get Name="Get" Id="{445a323c-2ede-447f-8465-3aea52762b32}">
+        <Declaration><![CDATA[VAR
+END_VAR
+]]></Declaration>
+        <Implementation>
+          <ST><![CDATA[P_bHoming := bInit;]]></ST>
+        </Implementation>
+      </Get>
+    </Property>
+    <Property Name="P_bSetupWaitForResp" Id="{91c11fb4-d097-4185-9c94-563304f29bb0}">
+      <Declaration><![CDATA[PROPERTY P_bSetupWaitForResp : BOOL]]></Declaration>
+      <Get Name="Get" Id="{919eff76-220e-46e2-905c-a8915f32ae50}">
+        <Declaration><![CDATA[VAR
+END_VAR
+]]></Declaration>
+        <Implementation>
+          <ST><![CDATA[P_bSetupWaitForResp := bSetupWaitForResp;]]></ST>
+        </Implementation>
+      </Get>
+    </Property>
+    <Method Name="FB_init" Id="{9abca8ee-ae85-4801-94c4-58115703a121}">
+      <Declaration><![CDATA[METHOD FB_init : BOOL
+VAR_INPUT
+	bInitRetains 	: BOOL; // if TRUE, the retain variables are initialized (warm start / cold start)
+	bInCopyCode 	: BOOL;  // if TRUE, the instance afterwards gets moved into the copy code (online change)
+	eXYOrientation	: E_XYOrientation;
+END_VAR
+]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[THIS^.eXYOrientation := eXYOrientation;]]></ST>
+      </Implementation>
+    </Method>
+    <Method Name="M_Reset" Id="{9c9639dd-55f6-42b0-a285-0a909cf687b6}">
+      <Declaration><![CDATA[METHOD M_Reset
+VAR_INPUT
+END_VAR
+]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[IF bError AND NOT bReset THEN
+	bReset := TRUE;
+END_IF]]></ST>
+      </Implementation>
+    </Method>
+    <Action Name="A_StopCapture" Id="{a2ea8618-2dd9-4c47-be86-55522d1963ee}">
+      <Implementation>
+        <ST><![CDATA[]]></ST>
+      </Implementation>
+    </Action>
+    <Method Name="M_ContinueSetup" Id="{a59d986e-fde5-4eaa-a4eb-861120ca9e14}">
+      <Declaration><![CDATA[METHOD M_ContinueSetup
+VAR_INPUT
+END_VAR
+]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[bContinueSetup := TRUE;]]></ST>
+      </Implementation>
+    </Method>
+    <Action Name="A_WriteAxisParameter" Id="{a7f6a6b2-9ddb-4517-8e4b-8c7ce5bf3d56}">
+      <Implementation>
+        <ST><![CDATA[]]></ST>
+      </Implementation>
+    </Action>
+    <Property Name="P_rActPos" Id="{a9ac9edd-94e3-4164-a91b-d3b861572bbf}">
+      <Declaration><![CDATA[PROPERTY P_rActPos : REAL]]></Declaration>
+      <Get Name="Get" Id="{43335aac-5854-48e2-99f1-59ff4549841a}">
+        <Declaration><![CDATA[VAR
+END_VAR
+]]></Declaration>
+        <Implementation>
+          <ST><![CDATA[P_rActPos := rActPos;]]></ST>
+        </Implementation>
+      </Get>
+    </Property>
+    <Property Name="P_rMaxPos" Id="{ab3736b2-c991-4290-bf0d-14f6db5fd116}">
+      <Declaration><![CDATA[PROPERTY P_rMaxPos : REAL]]></Declaration>
+      <Get Name="Get" Id="{5123c556-e68e-41c9-a8e1-8cf6952b1637}">
+        <Declaration><![CDATA[VAR
+END_VAR
+]]></Declaration>
+        <Implementation>
+          <ST><![CDATA[P_rMaxPos := rWorkplateLength - rNullPosDist - rMaxPosDist - rLimitMargePos;]]></ST>
+        </Implementation>
+      </Get>
+    </Property>
+    <Method Name="M_Jog" Id="{afc6d32a-b361-4350-bc84-2f5062b33e38}">
+      <Declaration><![CDATA[METHOD M_Jog : ERRORID
+VAR_INPUT
+	bForward	: BOOL;
+	bBackward	: BOOL;
+	bInching	: BOOL;
+	rDistance	: REAL;
+	rSpeed		: REAL;		
+END_VAR
+]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[]]></ST>
+      </Implementation>
+    </Method>
+    <Action Name="A_Jog" Id="{b3e42fd9-bc26-4355-846b-92c95fe00050}">
+      <Implementation>
+        <ST><![CDATA[]]></ST>
+      </Implementation>
+    </Action>
+    <Action Name="A_MoveRel" Id="{bccc647a-1fde-4e68-8643-46fbf2332be0}">
+      <Implementation>
+        <ST><![CDATA[]]></ST>
+      </Implementation>
+    </Action>
+    <Property Name="P_rMinPos" Id="{cf7f4876-d302-44bb-b965-91999a976977}">
+      <Declaration><![CDATA[PROPERTY P_rMinPos : REAL]]></Declaration>
+      <Get Name="Get" Id="{54c8dec3-28b8-4dd6-b594-2cc751a9d839}">
+        <Declaration><![CDATA[VAR
+END_VAR
+]]></Declaration>
+        <Implementation>
+          <ST><![CDATA[P_rMinPos := rLimitMargeNeg;]]></ST>
+        </Implementation>
+      </Get>
+    </Property>
+    <Method Name="M_MoveAbs" Id="{dd244f91-23be-4549-b353-0c9cf48ff295}">
+      <Declaration><![CDATA[METHOD M_MoveAbs : ERRORID
+VAR_INPUT
+	rPosition 		: REAL;
+	rSpeed			: REAL;
+	rAcceleration 	: REAL;
+	rDeceleration 	: REAL;
+END_VAR]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[]]></ST>
+      </Implementation>
+    </Method>
+    <Property Name="P_bCaptureOk" Id="{dff6745d-29cc-44de-9196-207bdcc83e78}">
+      <Declaration><![CDATA[PROPERTY P_bCaptureOk : BOOL]]></Declaration>
+      <Get Name="Get" Id="{2d150d8f-92bb-456d-86b5-f302b98d775c}">
+        <Declaration><![CDATA[VAR
+END_VAR
+]]></Declaration>
+        <Implementation>
+          <ST><![CDATA[P_bCaptureOk := bCaptureOk;]]></ST>
+        </Implementation>
+      </Get>
+    </Property>
+    <Method Name="M_GearIn" Id="{e0389d41-a025-4494-a8e8-8807006b16a3}">
+      <Declaration><![CDATA[METHOD M_GearIn : ST_MethResult
+]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[]]></ST>
+      </Implementation>
+    </Method>
+    <Property Name="P_pMultiZRef" Id="{e3fef9e9-5e4e-4f1f-9f4b-0faf5e7c1a76}">
+      <Declaration><![CDATA[PROPERTY P_pMultiZRef : POINTER TO FB_MultiZRef]]></Declaration>
+      <Set Name="Set" Id="{041fc1ad-9993-4c1c-a8d5-4305592ed50c}">
+        <Declaration><![CDATA[VAR
+END_VAR
+]]></Declaration>
+        <Implementation>
+          <ST><![CDATA[pMultiZRef := P_pMultiZRef;]]></ST>
+        </Implementation>
+      </Set>
+      <Get Name="Get" Id="{cfed0216-64cf-409a-b46e-7362e18f78f9}">
+        <Declaration><![CDATA[VAR
+END_VAR
+]]></Declaration>
+        <Implementation>
+          <ST><![CDATA[P_pMultiZRef := pMultiZRef;]]></ST>
+        </Implementation>
+      </Get>
+    </Property>
+    <Property Name="P_rMaxSpeed" Id="{e57cb094-1782-4942-abbd-97030eaba74f}">
+      <Declaration><![CDATA[PROPERTY P_rMaxSpeed : REAL]]></Declaration>
+      <Get Name="Get" Id="{f7adb38e-a48d-421c-998b-ac4ef760978e}">
+        <Declaration><![CDATA[VAR
+END_VAR
+]]></Declaration>
+        <Implementation>
+          <ST><![CDATA[P_rMaxSpeed := rMaxSpeed;]]></ST>
+        </Implementation>
+      </Get>
+    </Property>
+    <Method Name="M_SetProperties" Id="{e68af8b7-80e2-487b-878f-ea663738d48a}">
+      <Declaration><![CDATA[METHOD M_SetProperties : ERRORID
+VAR_INPUT
+	refCmdData : REFERENCE TO ST_CmdData;
+END_VAR
+]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[rWorkplateLength := DINT_TO_REAL(refCmdData.n32Data[1]);
+rNullPosDist := DINT_TO_REAL(refCmdData.n32Data[2]);
+rMaxPosDist := DINT_TO_REAL(refCmdData.n32Data[3]);
+rSetupPosDist := DINT_TO_REAL(refCmdData.n32Data[4]);
+bInvertInitDir := DINT_TO_BOOL(refCmdData.n32Data[5]);]]></ST>
+      </Implementation>
+    </Method>
+    <Action Name="A_MoveAbs" Id="{e7f55a16-4d1c-4c93-9cb1-51dd93930984}">
+      <Implementation>
+        <ST><![CDATA[]]></ST>
+      </Implementation>
+    </Action>
+    <Property Name="P_rCapturedPos" Id="{ef8ace4b-e2fd-45e0-8f57-13fe0a27df22}">
+      <Declaration><![CDATA[PROPERTY P_rCapturedPos : REAL]]></Declaration>
+      <Get Name="Get" Id="{950aca10-d2b2-4dea-ae9c-4d096db9382d}">
+        <Declaration><![CDATA[VAR
+END_VAR
+]]></Declaration>
+        <Implementation>
+          <ST><![CDATA[P_rCapturedPos := rCapturedPos;]]></ST>
+        </Implementation>
+      </Get>
+    </Property>
+    <Property Name="P_bCaptureStopped" Id="{f0a5292a-b23f-4890-b7e6-4bf5f13dbf2a}">
+      <Declaration><![CDATA[PROPERTY P_bCaptureStopped : BOOL]]></Declaration>
+      <Get Name="Get" Id="{c54b5aa6-90f5-4fbb-bc7e-b63b1d9192d0}">
+        <Declaration><![CDATA[VAR
+END_VAR
+]]></Declaration>
+        <Implementation>
+          <ST><![CDATA[P_bCaptureStopped := bCaptureStopped;]]></ST>
+        </Implementation>
+      </Get>
+    </Property>
+    <Property Name="P_bIsCoupled" Id="{da95dd73-9e58-43d4-8cd5-cbb2292d71dc}">
+      <Declaration><![CDATA[PROPERTY P_bIsCoupled : BOOL]]></Declaration>
+      <Get Name="Get" Id="{5443a479-9e4b-4a5d-a882-4d6bb445f6ca}">
+        <Declaration><![CDATA[VAR
+END_VAR
+]]></Declaration>
+        <Implementation>
+          <ST><![CDATA[]]></ST>
+        </Implementation>
+      </Get>
+    </Property>
+    <Property Name="P_eXYOrientation" Id="{f4574d76-994b-4afc-90ca-0364de61bcf5}">
+      <Declaration><![CDATA[PROPERTY P_eXYOrientation : E_XYOrientation]]></Declaration>
+      <Get Name="Get" Id="{2a3d925c-2e61-4e4c-bc6f-81325e4efcc6}">
+        <Declaration><![CDATA[VAR
+END_VAR
+]]></Declaration>
+        <Implementation>
+          <ST><![CDATA[P_eXYOrientation := eXYOrientation;]]></ST>
+        </Implementation>
+      </Get>
+      <Set Name="Set" Id="{ca38c8e9-0e79-42f7-a799-92b12ee12cff}">
+        <Declaration><![CDATA[VAR
+END_VAR
+]]></Declaration>
+        <Implementation>
+          <ST><![CDATA[eXYOrientation := P_eXYOrientation;]]></ST>
+        </Implementation>
+      </Set>
+    </Property>
+    <LineIds Name="FB_XYDriveBase">
+      <LineId Id="1232" Count="117" />
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="FB_XYDriveBase.P_bHomed.Get">
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="FB_XYDriveBase.A_Setup">
+      <LineId Id="1" Count="0" />
+    </LineIds>
+    <LineIds Name="FB_XYDriveBase.M_GetProperty">
+      <LineId Id="3" Count="19" />
+      <LineId Id="33" Count="1" />
+      <LineId Id="23" Count="2" />
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="FB_XYDriveBase.M_Init">
+      <LineId Id="3" Count="9" />
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="FB_XYDriveBase.M_PowerOn">
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="FB_XYDriveBase.M_MoveRel">
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="FB_XYDriveBase.A_Reset">
+      <LineId Id="1" Count="0" />
+    </LineIds>
+    <LineIds Name="FB_XYDriveBase.P_bIsTwinDrive.Get">
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="FB_XYDriveBase.M_Stop">
+      <LineId Id="3" Count="1" />
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="FB_XYDriveBase.M_Setup">
+      <LineId Id="3" Count="6" />
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="FB_XYDriveBase.P_nErrorId.Get">
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="FB_XYDriveBase.M_PowerOff">
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="FB_XYDriveBase.P_bIsMoving.Get">
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="FB_XYDriveBase.A_Error">
+      <LineId Id="1" Count="0" />
+    </LineIds>
+    <LineIds Name="FB_XYDriveBase.P_pAxisRef.Get">
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="FB_XYDriveBase.A_Init">
+      <LineId Id="1" Count="0" />
+    </LineIds>
+    <LineIds Name="FB_XYDriveBase.M_StopCapture">
+      <LineId Id="18" Count="1" />
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="FB_XYDriveBase.M_SetProperty">
+      <LineId Id="3" Count="25" />
+      <LineId Id="37" Count="1" />
+      <LineId Id="29" Count="2" />
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="FB_XYDriveBase.M_GearOut">
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="FB_XYDriveBase.P_tHomingTime.Get">
+      <LineId Id="3" Count="0" />
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="FB_XYDriveBase.M_Capture">
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="FB_XYDriveBase.P_stAdsAddress.Set">
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="FB_XYDriveBase.P_stAdsAddress.Get">
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="FB_XYDriveBase.P_bHasJob.Get">
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="FB_XYDriveBase.P_bCoupled.Get">
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="FB_XYDriveBase.A_Capture">
+      <LineId Id="1" Count="0" />
+    </LineIds>
+    <LineIds Name="FB_XYDriveBase.P_bHoming.Get">
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="FB_XYDriveBase.P_bSetupWaitForResp.Get">
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="FB_XYDriveBase.FB_init">
+      <LineId Id="7" Count="0" />
+    </LineIds>
+    <LineIds Name="FB_XYDriveBase.M_Reset">
+      <LineId Id="3" Count="1" />
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="FB_XYDriveBase.A_StopCapture">
+      <LineId Id="1" Count="0" />
+    </LineIds>
+    <LineIds Name="FB_XYDriveBase.M_ContinueSetup">
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="FB_XYDriveBase.A_WriteAxisParameter">
+      <LineId Id="1" Count="0" />
+    </LineIds>
+    <LineIds Name="FB_XYDriveBase.P_rActPos.Get">
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="FB_XYDriveBase.P_rMaxPos.Get">
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="FB_XYDriveBase.M_Jog">
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="FB_XYDriveBase.A_Jog">
+      <LineId Id="1" Count="0" />
+    </LineIds>
+    <LineIds Name="FB_XYDriveBase.A_MoveRel">
+      <LineId Id="1" Count="0" />
+    </LineIds>
+    <LineIds Name="FB_XYDriveBase.P_rMinPos.Get">
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="FB_XYDriveBase.M_MoveAbs">
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="FB_XYDriveBase.P_bCaptureOk.Get">
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="FB_XYDriveBase.M_GearIn">
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="FB_XYDriveBase.P_pMultiZRef.Set">
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="FB_XYDriveBase.P_pMultiZRef.Get">
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="FB_XYDriveBase.P_rMaxSpeed.Get">
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="FB_XYDriveBase.M_SetProperties">
+      <LineId Id="3" Count="2" />
+      <LineId Id="10" Count="0" />
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="FB_XYDriveBase.A_MoveAbs">
+      <LineId Id="1" Count="0" />
+    </LineIds>
+    <LineIds Name="FB_XYDriveBase.P_rCapturedPos.Get">
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="FB_XYDriveBase.P_bCaptureStopped.Get">
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="FB_XYDriveBase.P_eXYOrientation.Get">
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="FB_XYDriveBase.P_eXYOrientation.Set">
+      <LineId Id="2" Count="0" />
+    </LineIds>
+  </POU>
+</TcPlcObject>

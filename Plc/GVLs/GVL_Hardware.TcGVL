@@ -1,0 +1,316 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<TcPlcObject Version="1.1.0.1" ProductVersion="3.1.4024.14">
+  <GVL Name="GVL_Hardware" Id="{b606a3d5-2d26-4aaf-9b08-3c8a2832d1b3}">
+    <Declaration><![CDATA[{attribute 'contextName':='PlcTask'}
+VAR_GLOBAL CONSTANT
+	//Definition der Hardwarecomponenten
+	{define MtpHeater}
+	{IF defined(MtpHeater)}
+	cNoOfMtpHeaters	: USINT := 1;
+	cNodeIdMtpHeater1 : USINT := 10;
+	{END_IF}
+	
+	{define SubstHeater}
+	{IF defined(SubstHeater)}
+	cNoOfSubstHeaters : USINT := 1;
+	cNodeIdSubstHeater1 : USINT := 12;
+	{END_IF}
+
+	//{define Reactor}
+	{IF defined(Reactor)}
+	cNoOfReactDrives : USINT := 1;
+	cNodeIdReactDrive1	: USINT := 4;
+	cNoOfReactHeaters : USINT := 1;
+	cNodeIdReactHeater1	: USINT := 5;
+	{END_IF}
+	
+	//{define BottleRack}
+	{IF defined(BottleRack)}
+	cNoOfBottleRacks : USINT := 1;
+	cNodeIdBottleRack1 : USINT := 20;
+	{END_IF}
+	
+	{define IOExpander}
+	{IF defined(IOExpander)}
+	cNoOfIOExpanders : USINT := 1;
+	cNodeIdIOExpander1 : USINT := 16;
+	{END_IF}
+	
+	//{define TripleTrigger}
+	{IF defined(TripleTrigger)}
+	cNoOfTripleTriggers : USINT := 1;
+	cNodeIdTripleTrigger1 : USINT := 14;
+	{END_IF}
+	
+	//{define PowderStation}
+	{IF defined(PowderStation)}
+	cNoOfPowderStations : USINT := 1;
+	cNodeIdPowderStation1 : USINT := 24;
+	{END_IF}
+	
+	//{define InkStation}
+	{IF defined(InkStation)}
+	cNoOfInkStatSpinDrives 		: USINT := 1;
+	cNodeIdInkStatSpinDrive1	: USINT := 32;
+	cNoOfInkStatCoverDrives 	: USINT := 1;
+	cNodeIdInkStatCoverDrive1	: USINT := 33;
+	{END_IF}
+	
+	{define MultiPurpIO}
+	{IF defined(MultiPurpIO)}
+	cNoOfMultiPurpIO			: USINT := 1;
+	cNodeIdMultiPurpIO			: USINT := 25;
+	{END_IF}
+	
+	cNoOfLiquidBottles 	: USINT := 1;
+	cNoOfWasteBottles 	: USINT := 1;
+	cNoOfPneuChannels	: USINT := 4;
+	cNoOfPumps			: USINT := 9; //höchste Pumpennummer
+	cNoOfGearPumps		: USINT := 4; //hochste Nummer Zahnradpumpen
+	cNoOfValves			: USINT := 14;//höchste Ventilnummer
+	cNoOfDiluters		: USINT	:= 8;
+	
+	cLiquidBottleNrPCV	: USINT := 1;
+	
+END_VAR
+
+VAR_GLOBAL
+	
+	stPlcInfo			: ST_PlcInfo;	//Information über Seriennummer und Versionen der Plc
+	
+	//CAN-Nodes
+	aCanNodes				: ARRAY[1..126] OF BOOL;
+	
+	//Settings
+	fbSettings 				: FB_Settings;
+	
+	fbCANOpenHwModuleList	: FB_HwModuleList;	//alle GeSim CANopen-Module
+	
+	//Diluter	
+	aFbDiluterRef			: ARRAY[1..cNoOfDiluters] OF FB_HwRefDiluter;
+	
+	//MultiZ-Module
+	aFbMultiZRef			: ARRAY[1..cMaxMzHeads] OF FB_MultiZRef;	//Gerätereferenz zu MultiZ 1 (2)
+	fbMultiZRefList			: FB_HwModuleList;
+	
+	{IF defined(MtpHeater)}
+	aFbMtpHeatRef			: ARRAY[1..cNoOfMtpHeaters] OF FB_HwRef4ChHeater;
+	{END_IF}
+	
+	{IF defined(SubstHeater)}
+	aFbSubstHeatRef			: ARRAY[1..cNoOfSubstHeaters] OF FB_HwRef4ChHeater;
+	{END_IF}	
+
+	{IF defined(Reactor)}
+	aFbReactDriveRef		: ARRAY[1..cNoOfReactDrives] OF FB_HwRefReactDrive;
+	aFbReactHeatRef			: ARRAY[1..cNoOfReactHeaters] OF FB_HwRefReactHeater;
+	{END_IF}
+	
+	{IF defined(BottleRack)}
+	aFbBottleRackRef		: ARRAY[1..cNoOfBottleRacks] OF FB_HwRefBottleRack;
+	{END_IF}
+	
+	{IF defined(IOExpander)}
+	aFbIOExpanderRef		: ARRAY[1..cNoOfIOExpanders] OF FB_HwRefIOExpander;
+	{END_IF}
+	
+	{IF defined(TripleTrigger)}
+	aFbTripleTriggerRef		: ARRAY[1..cNoOfTripleTriggers] OF FB_HwRefTripleTrigger;
+	{END_IF}
+	
+	{IF defined(PowderStation)}
+	aFbPowderStatRef		: ARRAY[1..cNoOfPowderStations] OF FB_HwRefPowderStat;
+	{END_IF}
+	
+	{IF defined(InkStation)}
+	aFbInkStatDrvSpinRef	: ARRAY[1..cNoOfInkStatSpinDrives] OF FB_HwRefInkStatDriveSpin;
+	aFbInkStatDrvCoverRef	: ARRAY[1..cNoOfInkStatCoverDrives] OF FB_HwRefInkStatDriveCover;
+	{END_IF}
+	
+	//Muss in Compilerdefinitionen definiert werden
+	{IF defined(TrayTransporterL)}
+	fbHwRefTrayLock			: FB_HwRefTrayLock;
+	fbHwRefTrayTransSlider 	: FB_HwRefNanotecPD;
+	fbHwRefDrivingPinLeft	: FB_HwRefTMCM1140(bSetDigiOut0:= FALSE, bSetDigiOut1:= TRUE,
+											eLimitSwitchLeftConfig := E_TMCM_SwitchConfig.Deactivated,
+											eLimitSwitchRightConfig := E_TMCM_SwitchConfig.Deactivated,
+											eHomeSwitchConfig := E_TMCM_SwitchConfig.Inverted,
+											eHomingMethode := E_TMCM_HomingMethode.SearchNegHomeSwitch,
+											nMicrostepResol := 64, nPulseDivisor := 2, nFullStepRevo := 200);
+	{ELSIF defined(TrayTransporterR)}
+	fbHwRefTrayLock			: FB_HwRefTrayLock;
+	fbHwRefTrayTransSlider 	: FB_HwRefNanotecPD;
+	fbHwRefDrivingPinRight	: FB_HwRefTMCM1140(bSetDigiOut0:= FALSE, bSetDigiOut1:= TRUE,
+											eLimitSwitchLeftConfig := E_TMCM_SwitchConfig.Deactivated,
+											eLimitSwitchRightConfig := E_TMCM_SwitchConfig.Deactivated,
+											eHomeSwitchConfig := E_TMCM_SwitchConfig.Inverted,
+											eHomingMethode := E_TMCM_HomingMethode.SearchNegHomeSwitch,
+											nMicrostepResol := 64, nPulseDivisor := 2, nFullStepRevo := 200);
+	{ELSIF defined(TrayTransporterLR)}
+	fbHwRefTrayLock			: FB_HwRefTrayLock;
+	fbHwRefTrayTransSlider  : FB_HwRefNanotecPD;
+	fbHwRefDrivingPinLeft	: FB_HwRefTMCM1140(bSetDigiOut0:= FALSE, bSetDigiOut1:= TRUE,
+											eLimitSwitchLeftConfig := E_TMCM_SwitchConfig.Deactivated,
+											eLimitSwitchRightConfig := E_TMCM_SwitchConfig.Deactivated,
+											eHomeSwitchConfig := E_TMCM_SwitchConfig.Inverted,
+											eHomingMethode := E_TMCM_HomingMethode.SearchNegHomeSwitch,
+											nMicrostepResol := 64, nPulseDivisor := 2, nFullStepRevo := 200);
+	fbHwRefDrivingPinRight	: FB_HwRefTMCM1140(bSetDigiOut0:= FALSE, bSetDigiOut1:= TRUE,
+											eLimitSwitchLeftConfig := E_TMCM_SwitchConfig.Deactivated,
+											eLimitSwitchRightConfig := E_TMCM_SwitchConfig.Deactivated,
+											eHomeSwitchConfig := E_TMCM_SwitchConfig.Inverted,
+											eHomingMethode := E_TMCM_HomingMethode.SearchNegHomeSwitch,
+											nMicrostepResol := 64, nPulseDivisor := 2, nFullStepRevo := 200);
+	{END_IF}
+	
+	//Der jeweils erste Parameter muss mit der EtherCAT Addr der zugeordneten Klemme übereinstimmen.
+	{IF defined (Stacker)}
+	fbHwRefSpinDrive	: FB_HwRefEL70xxDriveExtEncoder(1011, E_EL70xx_StartType.SetCalibration, E_EL70xx_EncoderType.ExternSingleturnAbs, 262144); //Encoder mit 18bit Auflösung);
+	fbHwRefLiftDrive	: FB_HwRefEL70xxDrive(1013, E_EL70xx_StartType.CaliHwSync);
+	fbHwRefTrayStop		: FB_HwRefEL70xxDrive(1014, E_EL70xx_StartType.CaliPlcCam);
+	{END_IF}
+	
+	//TipCleaner
+	stTipCleanerRef			: ST_TipCleanerRef;
+	
+	//TipCalibrator
+	stTipCalibrator			: ST_TipCalibrator;
+	
+	//FBox
+	aValves					: ARRAY[1..cNoOfValves] OF FB_Valve;
+	aPumps					: ARRAY[1..cNoOfPumps] OF FB_Pump;
+	aFbGearPumps			: ARRAY[1..cNoOfGearPumps] OF FB_GearPump;
+	aSensSysLiquidBottle	AT %I* : ARRAY[1..cNoOfLiquidBottles] OF BOOL;	
+	aSensWasteBottle		AT %I* : ARRAY[1..cNoOfWasteBottles] OF BOOL;
+	
+	{IF defined(MultiPurpIO)}
+	aFbHwRefMultiPurpIO		: ARRAY[1..cNoOfMultiPurpIO] OF FB_HwRefMultiPurpIO;
+	{END_IF}
+	
+	//Pneumatik-Kanäle
+	aFbPneuChannel			: ARRAY[1..cNoOfPneuChannels] OF FB_PneuChannelRef;
+	
+	fbPCV					: FB_PCV;
+	
+	//Hochspannungsquelle	
+	{define HighVoltSupply}
+	{IF defined(HighVoltSupply)}
+	fbHighVoltSupplyRef		: FB_HighVoltSupply;
+	{END_IF}
+
+	{IF defined(FDM1)}
+	//Referenz zur Pulse Train Klemme für FDM-Head von STEPCRAFT
+	stPTOStepperRef			: ST_PTOStepperRef;
+	fbFDM_EL2521Ref			: FB_FDM_EL2521_Ref(ADR(stPTOStepperRef));
+	{END_IF}
+	
+	{IF defined(FDM2)}
+	fbHwRefFDM_TMCM	: FB_HwRefTMCM1140(bSetDigiOut0:= TRUE, bSetDigiOut1:= FALSE,
+									eLimitSwitchLeftConfig := E_TMCM_SwitchConfig.Deactivated,
+									eLimitSwitchRightConfig := E_TMCM_SwitchConfig.Deactivated,
+									eHomeSwitchConfig := E_TMCM_SwitchConfig.Deactivated,
+									eHomingMethode := E_TMCM_HomingMethode.NoHoming,
+									nMicrostepResol := 256, nFullStepRevo := 200, nRampDivisor:= 7, nPulseDivisor := 2);
+	fbEndlessExtrTMCMRef	: FB_EndlessExtruderTMCM_Ref(ADR(fbHwRefFDM_TMCM));									
+	{END_IF}
+	
+	{IF defined(Pure1)}
+	fbHwRefTMCM_Pure1	: FB_HwRefTMCM1140(bSetDigiOut0:= TRUE, bSetDigiOut1:= FALSE,
+									eLimitSwitchLeftConfig := E_TMCM_SwitchConfig.Deactivated,
+									eLimitSwitchRightConfig := E_TMCM_SwitchConfig.Deactivated,
+									eHomeSwitchConfig := E_TMCM_SwitchConfig.Deactivated,
+									eHomingMethode := E_TMCM_HomingMethode.NoHoming,
+									nMicrostepResol := 8, nFullStepRevo := 24, nRampDivisor:= 7, nPulseDivisor := 2);
+	fbEndlessExtrTMCMRef_Pure1	: FB_EndlessExtruderTMCM_Ref(ADR(fbHwRefTMCM_Pure1));									
+	{END_IF}
+	
+	{IF defined(Pure2)}
+	fbHwRefTMCM_Pure2	: FB_HwRefTMCM1140(bSetDigiOut0:= TRUE, bSetDigiOut1:= FALSE,
+									eLimitSwitchLeftConfig := E_TMCM_SwitchConfig.Deactivated,
+									eLimitSwitchRightConfig := E_TMCM_SwitchConfig.Deactivated,
+									eHomeSwitchConfig := E_TMCM_SwitchConfig.Deactivated,
+									eHomingMethode := E_TMCM_HomingMethode.NoHoming,
+									nMicrostepResol := 8, nFullStepRevo := 24, nRampDivisor:= 7, nPulseDivisor := 2);
+	fbEndlessExtrTMCMRef_Pure2	: FB_EndlessExtruderTMCM_Ref(ADR(fbHwRefTMCM_Pure2));									
+	{END_IF}
+	
+	{IF defined(Pure3)}
+	fbHwRefTMCM_Pure3	: FB_HwRefTMCM1140(bSetDigiOut0:= TRUE, bSetDigiOut1:= FALSE,
+									eLimitSwitchLeftConfig := E_TMCM_SwitchConfig.Deactivated,
+									eLimitSwitchRightConfig := E_TMCM_SwitchConfig.Deactivated,
+									eHomeSwitchConfig := E_TMCM_SwitchConfig.Deactivated,
+									eHomingMethode := E_TMCM_HomingMethode.NoHoming,
+									nMicrostepResol := 8, nFullStepRevo := 24, nRampDivisor:= 7, nPulseDivisor := 2);
+	fbEndlessExtrTMCMRef_Pure3	: FB_EndlessExtruderTMCM_Ref(ADR(fbHwRefTMCM_Pure3));									
+	{END_IF}
+	
+	{IF defined(SCREWEXTR1)}
+	fbHwRefScrewExtr_TMCM	: FB_HwRefTMCM1140_Gen2(bSetDigiOut0:= FALSE, bSetDigiOut1:= FALSE,
+									eLimitSwitchLeftConfig := E_TMCM_SwitchConfig.Deactivated,
+									eLimitSwitchRightConfig := E_TMCM_SwitchConfig.Deactivated,
+									eHomeSwitchConfig := E_TMCM_SwitchConfig.Deactivated,
+									eHomingMethode := E_TMCM_HomingMethode.NoHoming,
+									nMicrostepResol := 256, nPulseDivisor := 2, nFullStepRevo := 200);
+	{END_IF}
+	
+	//Referenz zum Huber Unistat
+	{IF defined(Unistat)}
+	fbUnistatRef			: FB_HwRefUnistat(GVL_RS232.fbSerialPortUnistat);
+	{END_IF}
+	
+	//Safety
+	fbSafety				: FB_Safety;
+	fbSafetyPseudo			: FB_SafetyPseudo;		//nur für ein spezielles Gerät (IWS)
+	fbSafetyBase			: FB_SafetyBase;
+	pFbSafety				: POINTER TO FB_SafetyBase; //dieser Zeiger verweist auf die eigentliche Safety Instanz, welche in "ScanHwModules" diesem
+													//Zeiger in Abhängigkeit von der Hardware zugeordnet wird und dann entsprechend in "PerformHardware"
+													//aufgerufen wird
+													
+	{IF defined(Stacker)}
+	fbSafetyStacker 		: FB_SafetyStacker;
+	fbSignalLightStacker	: FB_SignalLight;	
+	{END_IF}
+													
+	fbStopButton	: FB_HwRefStopButton;
+	
+	fbSignalLight	: FB_SignalLight;
+	
+	fbPlcTriggerOut	: FB_TriggerOut;
+	
+	fbMultiZDigiOut : FB_TriggerOut;
+	
+	fbMultiZPWM		: FB_MultiZPWM;
+
+	//XY-Antriebe
+	//NC-Achsenreferenzen (mit Ec-Slaves verknüpfen und NC-Achsen zuweisen
+	AxisRefX1		: Tc2_MC2.AXIS_REF;
+	AxisRefX2		: Tc2_MC2.AXIS_REF;	//derzeit nur Plattform C
+	AxisRefY1		: Tc2_MC2.AXIS_REF;	//bei Plattform D unten
+	AxisRefY2		: Tc2_MC2.AXIS_REF; //bei Plattform D oben
+
+	AxisRefQ1		: Tc2_MC2.AXIS_REF;	//Virtuelle Achse(Z) für GCode
+	
+	//Linmot-Achsenreferenzen (nur für Antriebe C1100-EC-XC)
+	lmAxisRefX		: Tc3_LinMot.tstLM_Axis;
+	lmAxisRefY1		: Tc3_LinMot.tstLM_Axis; //untere Achse
+	lmAxisRefY2		: Tc3_LinMot.tstLM_Axis; //obere Achse
+	
+	
+	fbX1DriveLmtDS	: FB_XYDrive_Lmt_DS(pNCAxisRef:= ADR(AxisRefX1), eXYOrientation:= E_XYOrientation.X);
+	fbY1DriveLmtDS	: FB_XYDrive_Lmt_DS(pNCAxisRef:= ADR(AxisRefY1), eXYOrientation:= E_XYOrientation.Y);
+	fbY2DriveLmtDS	: FB_XYDrive_Lmt_DS(pNCAxisRef:= ADR(AxisRefY2), eXYOrientation:= E_XYOrientation.Y);
+	
+	fbX1DriveLmtEC	: FB_XYDrive_Lmt_EC(pAxisRef:= ADR(lmAxisRefX), eXYOrientation:= E_XYOrientation.X);
+	fbY1DriveLmtEC	: FB_XYDrive_Lmt_EC(pAxisRef:= ADR(lmAxisRefY1),eXYOrientation:= E_XYOrientation.Y);
+	fbY2DriveLmtEC	: FB_XYDrive_Lmt_EC(pAxisRef:= ADR(lmAxisRefY2),eXYOrientation:= E_XYOrientation.Y);	
+	
+	fbXDriveBeck	: FB_XYDrive_Beck_Twin(pNCAxisRefMaster:= ADR(AxisRefX1), pNCAxisRefSlave:= ADR(AxisRefX2), eXYOrientation:= E_XYOrientation.X);
+	fbYDriveBeck	: FB_XYDrive_Beck(pNCAxisRefMaster:= ADR(AxisRefY1), eXYOrientation:= E_XYOrientation.Y);
+	
+	fbXYDriveList 	: FB_HwModuleList;	//wird in Prog "ScanHwModules" gefüllt
+
+END_VAR
+
+]]></Declaration>
+  </GVL>
+</TcPlcObject>

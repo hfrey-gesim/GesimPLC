@@ -1,0 +1,23 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<TcPlcObject Version="1.1.0.1" ProductVersion="3.1.0.25">
+  <DUT Name="ST_TipCleanerRef" Id="{e0715fc3-4149-42ec-8702-70a261c6fbe7}">
+    <Declaration><![CDATA[TYPE ST_TipCleanerRef :
+STRUCT
+	stAdsAdress			: ST_AdsAdress;
+	//Eingänge
+	nStatus		 		AT %I* : UINT;	//Statusword 
+	nModeDisp			AT %I* : USINT; //Aktueller Wert von Mode of Operation
+	nCurrentPos			AT %I* : DINT;	//Aktuelle Position
+	//bOpticSensor		AT %I* : BOOL;	//Lichtschranke Digitaler Eingang 0
+
+	//Ausgänge
+	nControl			AT %Q* : UINT; 	//Controlword
+	nMode				AT %Q* : USINT;	//Mode of Operations
+	nTargetPos			AT %Q* : DINT;	//Target Position 
+	bVDD5V				AT %Q* : BOOL;	//Digitaler Ausgang1 5V VDD
+ END_STRUCT
+END_TYPE
+]]></Declaration>
+    <ObjectProperties />
+  </DUT>
+</TcPlcObject>

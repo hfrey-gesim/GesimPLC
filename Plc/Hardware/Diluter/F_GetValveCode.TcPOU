@@ -1,0 +1,43 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<TcPlcObject Version="1.1.0.1" ProductVersion="3.1.0.25">
+  <POU Name="F_GetValveCode" Id="{47c97069-9ac9-4ffc-92e6-47947dc6060b}">
+    <Declaration><![CDATA[FUNCTION F_GetValveCode : STRING[2]
+VAR_INPUT
+	nNewValvePos : SINT;
+	nOldValvePos : SINT;
+	eValveType   : E_DilValveType;
+END_VAR
+VAR
+	bDirRight	: BOOL;	//ValveMovement CW
+END_VAR
+]]></Declaration>
+    <Implementation>
+      <ST><![CDATA[IF eValveType = E_DilValveType.VALVETYPE_3Way THEN
+	//Beim 3-Way-Valve ist keine Drehrichtung zu beachten
+	IF nNewValvePos = 1 THEN //Input
+		F_GetValveCode := 'I';
+	ELSIF nNewValvePos = 2 THEN //Output
+		F_GetValveCode := 'O';
+	ELSIF nNewValvePos = 3 THEN //Bypass
+		F_GetValveCode := 'B';
+	END_IF	
+ELSIF eValveType = E_DilValveType.VALVETYPE_4Distribution THEN
+	//Beim 4-Port-Distribution-Valve wird nach dem kürzestem Weg gesucht ausgehend von "nOldValvePos"
+	IF nNewValvePos >= 1 AND nNewValvePos <= 4 THEN
+		IF nNewValvePos > nOldValvePos THEN
+			bDirRight := TRUE;
+		END_IF
+		IF ABS(nNewValvePos - nOldValvePos) > 2 THEN
+			bDirRight := NOT bDirRight;
+		END_IF
+		IF bDirRight THEN
+			F_GetValveCode := CONCAT('I',SINT_TO_STRING(nNewValvePos));
+		ELSE
+			F_GetValveCode := CONCAT('O',SINT_TO_STRING(nNewValvePos));
+		END_IF		
+	END_IF
+END_IF]]></ST>
+    </Implementation>
+    <ObjectProperties />
+  </POU>
+</TcPlcObject>

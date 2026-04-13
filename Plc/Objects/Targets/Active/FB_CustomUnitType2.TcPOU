@@ -1,0 +1,490 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<TcPlcObject Version="1.1.0.1">
+  <POU Name="FB_CustomUnitType2" Id="{937bcb47-b267-41e0-83ad-103e899ba384}" SpecialFunc="None">
+    <Declaration><![CDATA[FUNCTION_BLOCK FB_CustomUnitType2 EXTENDS FB_ActiveTarget
+VAR
+	bLevelSensor		AT %I* : BOOL;
+	
+	//Spec-Properties
+	nPumpNrWaste		: USINT;
+	nBottleNrWaste 		: USINT;
+	
+	//****************************************Aktionvariablen****************************************************
+	
+	//Action: "SuckOff"
+	bSuckOff			: BOOL;
+	nStateA_SuckOff		: USINT;
+	bSuckOff_On			: BOOL;
+	tSuckOffTime		: TIME;
+	tmrSuckOffTime		: TON;
+	
+	//Empty (keine von außen ausführbare Action)
+	bEmpty				: BOOL;
+	nStateA_Empty		: USINT;
+	tmrEmptyTimout		: TON;
+	
+END_VAR
+
+]]></Declaration>
+    <Implementation>
+      <ST><![CDATA[IF bInitFB THEN
+	bInitFB := FALSE;
+	//Fehlerstruktur vorausfüllen
+	stError.ObjectId := nObjectID;
+	stError.HardwareGrp := E_HardwareGrp.Nothing;
+	stError.POU := E_POU.POU_FB_CustomUnitType2;
+END_IF
+
+CASE eCurrentState OF
+	E_MachineState.MACHINESTATE_Idle:
+
+	IF MainDispacher.eCurrentMode = E_MachineMode.MACHINEMODE_Manu OR MainDispacher.eCurrentMode = E_MachineMode.MACHINEMODE_Auto THEN
+		IF MainDispacher.eCurrentState <> E_MachineState.MACHINESTATE_Error THEN
+			IF bIsInit THEN
+				IF NOT bLevelSensor THEN 	//Leeren
+					bEmpty := TRUE;
+					bBusy := TRUE;
+					eCurrentState := E_MachineState.MACHINESTATE_Active;	
+				END_IF
+			END_IF
+		END_IF
+	END_IF
+	
+	E_MachineState.MACHINESTATE_Active:
+	
+	IF bEmpty THEN //Ist nur eine interne Action, welche niemals in Error geht?
+		A_Empty();
+		IF nStateA_Empty >= 80 THEN
+			IF nStateA_Empty >= 99 THEN
+				bError := TRUE;
+			END_IF
+			bEmpty := FALSE;
+			nStateA_Empty := 0;
+		END_IF
+	END_IF
+	
+	IF bSuckOff THEN
+		A_SuckOff();
+		IF nStateA_SuckOff >= 80 THEN
+			IF nStateA_SuckOff >= 99 THEN
+				bError := TRUE;	
+			END_IF
+			bSuckOff := FALSE;
+			nStateA_SuckOff := 0;
+		END_IF
+	END_IF
+	
+	IF NOT (bSuckOff OR bEmpty) THEN
+		bBusy := FALSE;
+		eCurrentState := E_MachineState.MACHINESTATE_Idle;
+	END_IF
+	
+	E_MachineState.MACHINESTATE_Reset:
+		bError := FALSE;
+		
+END_CASE
+
+IF bError THEN
+	eCurrentState := E_MachineState.MACHINESTATE_Error;
+	bBusy := FALSE;
+	aPumps[nPumpNrWaste].M_Off();
+END_IF
+
+//Prozessdaten aktualisieren
+stProcessData.nObjId := nObjectID;
+stProcessData.n32Data[0] := BOOL_TO_DINT(bIsInit);
+stProcessData.n32Data[1] := eCurrentState;
+stProcessData.n32Data[2] := stError.ErrorId;
+aObjProcData[nNotifyId] := stProcessData;]]></ST>
+    </Implementation>
+    <Action Name="A_Empty" Id="{59a1f36d-2209-4689-b022-b8c96590fb7b}">
+      <Implementation>
+        <ST><![CDATA[IF nStateA_Empty = 0 THEN
+	stError.ErrorId := M_CheckBottles();
+	IF stError.ErrorId > 0 THEN
+		stError.POUState := nStateA_Empty;
+		nStateA_Empty := 99;
+	ELSE
+		aPumps[nPumpNrWaste].M_On();
+		tmrEmptyTimout(IN:= TRUE, PT:= T#15S);
+		nStateA_Empty := 1;		
+	END_IF
+ELSIF nStateA_Empty = 1 THEN //Warten auf Timer und Wastepumpe ausschalten
+	tmrEmptyTimout();
+	IF tmrEmptyTimout.Q THEN
+		tmrEmptyTimout(IN:= FALSE);
+		aPumps[nPumpNrWaste].M_Off();
+		IF NOT bLevelSensor THEN
+			aPumps[nPumpNrWaste].M_Off();
+			stError.ErrorId := ERRORID_TimeOutSuckOffLiquid;
+			stError.POUState := nStateA_Empty;
+			nStateA_Empty := 99;
+		ELSE
+			nStateA_Empty := 80;
+		END_IF
+	END_IF
+ELSIF nStateA_Empty = 70 THEN
+	tmrEmptyTimout(IN:= FALSE);
+	nStateA_Empty := 80;
+END_IF
+
+//Errorhandling
+IF nStateA_Empty = 99 THEN
+	stError.Cmd := E_Action.ACTION_EmptyWaste;
+	stError.POUAction := E_POUACT.POUACT_A_EmptyWaste;
+	fbErrorList.M_Add(stError);
+END_IF]]></ST>
+      </Implementation>
+    </Action>
+    <Action Name="A_SuckOff" Id="{6d930b2b-1bf6-4ca6-9aac-01323a422ebe}">
+      <Implementation>
+        <ST><![CDATA[CASE nStateA_SuckOff OF
+	0:	//Ventil und Pumpe einschalten
+		IF bSuckOff_On THEN
+			aPumps[nPumpNrWaste].M_On();
+			IF tSuckOffTime > T#0S THEN
+				nStateA_SuckOff := 1;
+			ELSE
+				nStateA_SuckOff := 80;
+			END_IF
+		ELSE
+			nStateA_SuckOff := 2;
+		END_IF
+		tmrSuckOffTime(IN:= FALSE);
+	
+	1:	//Time
+		tmrSuckOffTime(IN:= TRUE, PT:= tSuckOffTime);
+		IF tmrSuckOffTime.Q THEN
+			nStateA_SuckOff := 2;
+		END_IF
+	
+	2:	//Ausschalten
+		aPumps[nPumpNrWaste].M_Off();
+		nStateA_SuckOff := 80;
+		
+	70:	//Abbrechen
+		aPumps[nPumpNrWaste].M_Off();
+		nStateA_SuckOff := 80;
+		
+END_CASE]]></ST>
+      </Implementation>
+    </Action>
+    <Method Name="FB_init" Id="{1eaf9f62-0506-46b9-ba5b-f77ab103f9c5}">
+      <Declaration><![CDATA[METHOD FB_init : BOOL
+VAR_INPUT
+	bInitRetains : BOOL; // if TRUE, the retain variables are initialized (warm start / cold start)
+	bInCopyCode : BOOL;  // if TRUE, the instance afterwards gets moved into the copy code (online change)
+END_VAR
+]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[eObjectType := E_ObjectType.OBJECTTYPE_CustomUnitType2;
+eObjectGroup := E_ObjectGroup.OBJECTGROUP_Target OR E_ObjectGroup.OBJECTGROUP_Device;]]></ST>
+      </Implementation>
+    </Method>
+    <Method Name="M_CancelAction" Id="{03384fbd-498c-49d8-b99c-472d33ac46e2}">
+      <Declaration><![CDATA[METHOD M_CancelAction
+VAR_INPUT
+	eAction : E_Action;
+END_VAR
+]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[IF eAction = E_Action.ACTION_SuckOff THEN
+	IF bSuckOff AND nStateA_SuckOff < 70 THEN
+		nStateA_SuckOff := 70;
+	END_IF
+END_IF]]></ST>
+      </Implementation>
+    </Method>
+    <Method Name="M_CheckAction" Id="{87ffe679-fd5a-431e-8603-3dcaeb104922}">
+      <Declaration><![CDATA[METHOD M_CheckAction : ERRORID
+VAR_INPUT
+	refActionData 	: REFERENCE TO ST_ActionData;
+	pCorrelObject	: POINTER TO FB_Object;
+END_VAR
+]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[IF refActionData.eAction = E_Action.ACTION_SuckOff THEN
+	//BottleState prüfen
+	M_CheckAction := M_CheckBottles();
+ELSE
+	M_CheckAction := SUPER^.M_CheckAction(refActionData,pCorrelObject);
+END_IF]]></ST>
+      </Implementation>
+    </Method>
+    <Method Name="M_CheckBottles" Id="{2af44130-0c84-4482-948b-8096451742ec}">
+      <Declaration><![CDATA[METHOD M_CheckBottles : ERRORID
+VAR_INPUT
+END_VAR
+]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[//Wastebottle OK?
+IF nBottleNrWaste > 0 THEN
+	IF NOT aSensWasteBottle[nBottleNrWaste] THEN //Voll
+		M_CheckBottles := E_ErrorIdCmd.ERRORID_WasteBottleFull;
+		RETURN;
+	END_IF
+END_IF ]]></ST>
+      </Implementation>
+    </Method>
+    <Method Name="M_CheckProcDataType" Id="{d63a05d6-db1a-4cc8-b2f0-5b9375305305}">
+      <Declaration><![CDATA[METHOD M_CheckProcDataType : BOOL
+VAR_INPUT
+	eProcDataType : E_ProcDataType;
+END_VAR
+]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[]]></ST>
+      </Implementation>
+    </Method>
+    <Method Name="M_ExeAction" Id="{161ffa94-30e7-4b1a-9d10-56aacdf0c8b4}">
+      <Declaration><![CDATA[METHOD M_ExeAction : ERRORID
+VAR_INPUT
+	refActionData : REFERENCE TO ST_ActionData;	
+END_VAR]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[IF refActionData.eAction = E_Action.ACTION_Init THEN
+	bIsInit := TRUE;
+	RETURN;
+ELSIF refActionData.eAction = E_Action.ACTION_SuckOff THEN
+	
+	IF NOT aSensWasteBottle[nBottleNrWaste] THEN
+		M_ExeAction := E_ErrorIdCmd.ERRORID_WasteBottleFull;
+		RETURN;
+	END_IF
+	
+	nStateA_SuckOff := 0;
+	bSuckOff_On := DINT_TO_BOOL(refActionData.aParams[2]);
+	tSuckOffTime := DINT_TO_TIME(refActionData.aParams[3]);
+	bSuckOff := TRUE;
+	
+ELSE
+	M_ExeAction := E_ErrorIdCmd.ERRORID_InvalidAction;
+	RETURN;
+END_IF
+bBusy := TRUE;
+eCurrentState:= E_MachineState.MACHINESTATE_Active;]]></ST>
+      </Implementation>
+    </Method>
+    <Method Name="M_GetActionBusy" Id="{e98d8640-3472-4203-b4d3-26b5e684e1c8}">
+      <Declaration><![CDATA[METHOD M_GetActionBusy : BOOL
+VAR_INPUT
+	eAction : E_Action;
+END_VAR
+]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[IF eAction = E_Action.ACTION_SuckOff THEN
+	M_GetActionBusy := bSuckOff;
+END_IF]]></ST>
+      </Implementation>
+    </Method>
+    <Method Name="M_GetAllProps" Id="{5631455e-648a-4381-a1da-ec9b655134ad}">
+      <Declaration><![CDATA[METHOD M_GetAllProps : ERRORID
+VAR_INPUT
+	refCmdData : REFERENCE TO  ST_CmdData;
+END_VAR]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[SUPER^.M_GetAllProps(refCmdData); 
+nCurrentPropIndex := nCurrentPropIndex + 1;
+refCmdData.n32Data[nCurrentPropIndex] := nPumpNrWaste;
+nCurrentPropIndex := nCurrentPropIndex + 1;
+refCmdData.n32Data[nCurrentPropIndex] := nBottleNrWaste;]]></ST>
+      </Implementation>
+    </Method>
+    <Method Name="M_GetProcData" Id="{d8e00f91-1a0f-4acc-ab6d-675246dc4c1f}">
+      <Declaration><![CDATA[METHOD M_GetProcData : DINT
+VAR_INPUT
+	eProcDataType : E_ProcDataType;
+END_VAR
+]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[]]></ST>
+      </Implementation>
+    </Method>
+    <Method Name="M_Reset" Id="{619183f9-33d5-4533-9260-19d5478eb69e}">
+      <Declaration><![CDATA[METHOD M_Reset
+]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[bError := FALSE;
+bBusy := FALSE;
+eCurrentState := E_MachineState.MACHINESTATE_Idle;
+
+]]></ST>
+      </Implementation>
+    </Method>
+    <Method Name="M_SetAllProps" Id="{45e23f57-e35e-4355-a3db-8cbae59e15b9}">
+      <Declaration><![CDATA[METHOD M_SetAllProps : ERRORID
+VAR_INPUT
+	refCmdData : REFERENCE TO  ST_CmdData;
+END_VAR
+
+VAR
+	i : UINT;
+END_VAR]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[M_SetAllProps := SUPER^.M_SetAllProps(refCmdData);
+
+IF M_SetAllProps > 0 THEN
+	RETURN;
+END_IF
+
+nCurrentPropIndex := nCurrentPropIndex + 1;
+nSpecPropIndex := nCurrentPropIndex;
+
+nPumpNrWaste := DINT_TO_USINT(refCmdData.n32Data[nCurrentPropIndex]);
+IF NOT (nPumpNrWaste > 0 AND nPumpNrWaste <= cNoOfPumps) THEN
+	M_SetAllProps := E_ErrorIdObjMgmt.ERRORID_InvalidPumpNumber;
+	RETURN;
+END_IF
+
+nCurrentPropIndex := nCurrentPropIndex + 1;
+nBottleNrWaste := DINT_TO_USINT(refCmdData.n32Data[nCurrentPropIndex]);
+IF NOT (nBottleNrWaste > 0 AND nBottleNrWaste <= cNoOfWasteBottles) THEN
+	M_SetAllProps := E_ErrorIdObjMgmt.ERRORID_InvalidWastebottle;
+	RETURN;
+END_IF
+
+nNoOfProps := nCurrentPropIndex + 1;]]></ST>
+      </Implementation>
+    </Method>
+    <Method Name="M_SetSingleProp" Id="{de010e4d-ef4d-4ac0-b04c-cb15817d7906}">
+      <Declaration><![CDATA[METHOD M_SetSingleProp : ERRORID
+VAR_INPUT
+	refCmdData : REFERENCE TO  ST_CmdData;
+END_VAR
+
+VAR
+	value : USINT;
+END_VAR]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[IF nSpecPropIndex = refCmdData.aHeader[1] THEN
+	//PumpNrWaste
+	IF refCmdData.n32Data[0] > 0 AND refCmdData.n32Data[0] <= cNoOfPumps THEN
+		nPumpNrWaste := DINT_TO_USINT(refCmdData.n32Data[0]);
+	ELSE
+		M_SetSingleProp := E_ErrorIdObjMgmt.ERRORID_InvalidPumpNumber;
+	END_IF
+ELSIF nSpecPropIndex + 1 = refCmdData.aHeader[1] THEN
+	//BottleNrWaste
+	IF refCmdData.n32Data[0] > 0 AND refCmdData.n32Data[0] <= cNoOfWasteBottles THEN
+		nBottleNrWaste := DINT_TO_USINT(refCmdData.n32Data[0]);
+	ELSE
+		M_SetSingleProp := E_ErrorIdObjMgmt.ERRORID_InvalidWastebottle;
+	END_IF	
+ELSE
+	M_SetSingleProp := SUPER^.M_SetSingleProp(refCmdData);
+END_IF]]></ST>
+      </Implementation>
+    </Method>
+    <Method Name="M_Stop" Id="{21cc948a-af8b-428a-b8a8-659518003f97}">
+      <Declaration><![CDATA[METHOD M_Stop : ERRORID
+VAR_INPUT
+END_VAR
+]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[IF bSuckOff AND nStateA_SuckOff < 70 THEN
+	nStateA_SuckOff:= 70;
+END_IF
+]]></ST>
+      </Implementation>
+    </Method>
+    <LineIds Name="FB_CustomUnitType2">
+      <LineId Id="286" Count="67" />
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="FB_CustomUnitType2.A_Empty">
+      <LineId Id="114" Count="33" />
+      <LineId Id="29" Count="0" />
+    </LineIds>
+    <LineIds Name="FB_CustomUnitType2.A_SuckOff">
+      <LineId Id="89" Count="27" />
+      <LineId Id="37" Count="0" />
+    </LineIds>
+    <LineIds Name="FB_CustomUnitType2.FB_init">
+      <LineId Id="7" Count="1" />
+    </LineIds>
+    <LineIds Name="FB_CustomUnitType2.M_CancelAction">
+      <LineId Id="21" Count="1" />
+      <LineId Id="24" Count="1" />
+      <LineId Id="23" Count="0" />
+    </LineIds>
+    <LineIds Name="FB_CustomUnitType2.M_CheckAction">
+      <LineId Id="7" Count="0" />
+      <LineId Id="20" Count="1" />
+      <LineId Id="37" Count="1" />
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="FB_CustomUnitType2.M_CheckBottles">
+      <LineId Id="10" Count="5" />
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="FB_CustomUnitType2.M_CheckProcDataType">
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="FB_CustomUnitType2.M_ExeAction">
+      <LineId Id="3" Count="2" />
+      <LineId Id="19" Count="0" />
+      <LineId Id="83" Count="0" />
+      <LineId Id="20" Count="3" />
+      <LineId Id="27" Count="0" />
+      <LineId Id="62" Count="0" />
+      <LineId Id="66" Count="0" />
+      <LineId Id="77" Count="0" />
+      <LineId Id="79" Count="0" />
+      <LineId Id="57" Count="0" />
+      <LineId Id="48" Count="4" />
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="FB_CustomUnitType2.M_GetActionBusy">
+      <LineId Id="3" Count="1" />
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="FB_CustomUnitType2.M_GetAllProps">
+      <LineId Id="3" Count="0" />
+      <LineId Id="60" Count="0" />
+      <LineId Id="83" Count="0" />
+      <LineId Id="86" Count="0" />
+      <LineId Id="85" Count="0" />
+    </LineIds>
+    <LineIds Name="FB_CustomUnitType2.M_GetProcData">
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="FB_CustomUnitType2.M_Reset">
+      <LineId Id="3" Count="3" />
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="FB_CustomUnitType2.M_SetAllProps">
+      <LineId Id="3" Count="4" />
+      <LineId Id="111" Count="0" />
+      <LineId Id="153" Count="0" />
+      <LineId Id="110" Count="0" />
+      <LineId Id="156" Count="0" />
+      <LineId Id="172" Count="0" />
+      <LineId Id="176" Count="2" />
+      <LineId Id="175" Count="0" />
+      <LineId Id="180" Count="0" />
+      <LineId Id="179" Count="0" />
+      <LineId Id="181" Count="4" />
+      <LineId Id="85" Count="0" />
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="FB_CustomUnitType2.M_SetSingleProp">
+      <LineId Id="2" Count="0" />
+      <LineId Id="16" Count="0" />
+      <LineId Id="20" Count="1" />
+      <LineId Id="27" Count="1" />
+      <LineId Id="22" Count="0" />
+      <LineId Id="19" Count="0" />
+      <LineId Id="26" Count="0" />
+      <LineId Id="24" Count="1" />
+      <LineId Id="29" Count="1" />
+      <LineId Id="23" Count="0" />
+      <LineId Id="14" Count="0" />
+      <LineId Id="18" Count="0" />
+      <LineId Id="15" Count="0" />
+    </LineIds>
+    <LineIds Name="FB_CustomUnitType2.M_Stop">
+      <LineId Id="7" Count="2" />
+      <LineId Id="2" Count="0" />
+    </LineIds>
+  </POU>
+</TcPlcObject>

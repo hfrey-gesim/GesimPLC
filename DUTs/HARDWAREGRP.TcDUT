@@ -1,8 +1,0 @@
-﻿<?xml version="1.0" encoding="utf-8"?>
-<TcPlcObject Version="1.1.0.1" ProductVersion="3.1.0.25">
-  <DUT Name="HARDWAREGRP" Id="{60fe8c73-27ac-437c-a638-4b02e2e8623b}">
-    <Declaration><![CDATA[TYPE HARDWAREGRP : UINT; END_TYPE
-]]></Declaration>
-    <ObjectProperties />
-  </DUT>
-</TcPlcObject>

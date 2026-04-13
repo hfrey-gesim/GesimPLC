@@ -1,0 +1,12 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<TcPlcObject Version="1.1.0.1" ProductVersion="3.1.4020.6">
+  <DUT Name="ST_StepStatus" Id="{64864cae-8c97-4c1b-a94d-4de70035929d}">
+    <Declaration><![CDATA[TYPE ST_StepStatus :
+STRUCT
+	nStepNr	: UINT;
+	eStatus : E_StepState;
+END_STRUCT
+END_TYPE
+]]></Declaration>
+  </DUT>
+</TcPlcObject>

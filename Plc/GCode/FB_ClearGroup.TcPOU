@@ -1,0 +1,108 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<TcPlcObject Version="1.1.0.1" ProductVersion="3.1.4022.18">
+  <POU Name="FB_ClearGroup" Id="{8850850b-5fba-4fe1-a1cc-da8aff52c60f}" SpecialFunc="None">
+    <Declaration><![CDATA[FUNCTION_BLOCK FB_ClearGroup
+VAR_INPUT
+	bExecute	: BOOL;
+	bReGearInSlave : BOOL;
+END_VAR
+VAR_OUTPUT
+	bBusy		: BOOL;
+	bError		: BOOL;
+	nErrorId	: ERRORID;	
+END_VAR
+VAR_IN_OUT
+	stGCodeRef : ST_GCodeRef;
+END_VAR
+VAR
+	nState				: USINT;
+	fbCfgReconfigGroup	: Tc2_NCI.CfgReconfigGroup;
+	fbMcGearIn			: Tc2_MC2.MC_GearIn;
+	fbMcGearOut			: Tc2_MC2.MC_GearOut;
+	pNciToPlc 			: POINTER TO NCTOPLC_NCICHANNEL_REF;
+	pXDrive				: POINTER TO FB_XYDriveBase;
+	pYDrive				: POINTER TO FB_XYDriveBase;
+	pTwinDrive			: POINTER TO FB_XYDrive_Beck_Twin;;
+END_VAR
+]]></Declaration>
+    <Implementation>
+      <ST><![CDATA[IF bExecute THEN
+	IF nState = 0 THEN	//X-Slave-Achse gekoppelt?
+		pNciToPlc := ADR(stGCodeRef.sNciToPlc);
+		IF stGCodeRef.pHead = 0 THEN //GCode wurde noch nicht benutzt und entsprechend braucht auch keine Gruppe gelöscht werden
+			RETURN;	
+		END_IF
+		pXDrive := stGCodeRef.pHead^.P_pXDrive;
+		pYDrive := stGCodeRef.pHead^.P_pYDrive;
+		bBusy := TRUE;
+		IF pXDrive^.P_bIsTwinDrive AND_THEN pXDrive^.P_bCoupled THEN
+			pTwinDrive := pXDrive;
+			nState := 1;
+		ELSE
+			nState := 2;
+		END_IF		
+	END_IF
+	
+	IF nState = 1 THEN	//X-Slave auskopplen
+		fbMcGearOut(Slave := pTwinDrive^.P_pAxisRefSlave^, Execute:= TRUE);
+		IF NOT fbMcGearOut.Busy THEN
+			IF fbMcGearOut.Error THEN
+				nErrorId := UDINT_TO_UINT(fbMcGearOut.ErrorID);
+				nState := 99;
+			ELSE
+				nState := 2;
+			END_IF
+			fbMcGearOut(Slave := pTwinDrive^.P_pAxisRefSlave^, Execute:= FALSE);
+		END_IF
+	END_IF	
+
+	IF nState = 2 THEN
+		fbCfgReconfigGroup(bExecute:= TRUE, nGroupId:= ItpGetGroupId(pNciToPlc^));
+		IF NOT fbCfgReconfigGroup.bBusy THEN
+			IF fbCfgReconfigGroup.bErr THEN
+				nErrorId := UDINT_TO_UINT(fbCfgReconfigGroup.nErrId);
+				nState := 99;
+			ELSE
+				IF bReGearInSlave AND pXDrive^.P_bIsTwinDrive THEN
+					pTwinDrive := pXDrive;
+					nState := 3;
+				ELSE
+					bBusy := FALSE;
+					nState := 80;
+				END_IF
+			END_IF
+			fbCfgReconfigGroup(bExecute:= FALSE);
+		END_IF		
+	END_IF	
+
+	IF nState = 3 THEN	//X-Slave einkopplen
+		fbMcGearIn(Master:= pTwinDrive^.P_pAxisRef^, Slave:= pTwinDrive^.P_pAxisRefSlave^, Execute:= TRUE, RatioNumerator:= 1.0);
+		IF NOT fbMcGearIn.Busy THEN
+			IF fbMcGearIn.Error THEN
+				nErrorId := UDINT_TO_UINT(fbMcGearIn.ErrorID);
+				nState := 99;
+			ELSE
+				bBusy := FALSE;
+				nState := 80;
+			END_IF
+			fbMcGearIn(Master:= pTwinDrive^.P_pAxisRef^, Slave:= pTwinDrive^.P_pAxisRefSlave^, Execute:= FALSE);
+		END_IF		
+	END_IF
+	
+	IF nState = 99 THEN
+		bError := TRUE;
+		bBusy := FALSE;	
+	END_IF	
+
+ELSE
+	bError := FALSE;
+	nErrorId := 0;
+	nState := 0;	
+END_IF]]></ST>
+    </Implementation>
+    <LineIds Name="FB_ClearGroup">
+      <LineId Id="118" Count="71" />
+      <LineId Id="2" Count="0" />
+    </LineIds>
+  </POU>
+</TcPlcObject>

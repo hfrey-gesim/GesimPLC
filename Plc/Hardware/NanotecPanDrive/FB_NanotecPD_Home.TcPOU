@@ -1,0 +1,257 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<TcPlcObject Version="1.1.0.1" ProductVersion="3.1.4024.11">
+  <POU Name="FB_NanotecPD_Home" Id="{e62114fb-8409-4c13-8c17-7a6a8283316b}" SpecialFunc="None">
+    <Declaration><![CDATA[FUNCTION_BLOCK FB_NanotecPD_Home
+VAR_INPUT
+	bExecute 	: BOOL;
+	bStop		: BOOL;
+END_VAR
+VAR_OUTPUT
+	bBusy 		: BOOL;
+	bError 		: BOOL;
+	nErrorId 	: ERRORID;	
+END_VAR
+VAR_IN_OUT
+	pHwRef : POINTER TO FB_HwRefNanotecPD; 
+END_VAR
+VAR
+	nState 				: USINT;
+	nStateNext			: USINT;
+	fbSdoWrite 			: FB_SDO_WRITE;
+	eCurrentHomingState : E_CoDS402HomingState;
+END_VAR]]></Declaration>
+    <Implementation>
+      <ST><![CDATA[IF bExecute THEN
+	CASE nState OF
+		0:	//Set fast homing speed
+			bBusy := TRUE;
+			fbSdoWrite.nIndex := 16#6099;
+			fbSdoWrite.nSubIndex := 1;
+			fbSdoWrite.nDataLength := 4;
+			fbSdoWrite.nData := pHwRef^.M_RealToInternSpeed(pHwRef^.P_nFastHomingSpeed);
+			nState := 40;
+			nStateNext := 1;
+			
+		1:	//Set slow homing speed
+			fbSdoWrite.nIndex := 16#6099;
+			fbSdoWrite.nSubIndex := 2;
+			fbSdoWrite.nDataLength := 4;
+			fbSdoWrite.nData := pHwRef^.M_RealToInternSpeed(pHwRef^.P_nSlowHomingSpeed);
+			nState := 40;
+			nStateNext := 2;
+			
+		2:	//Set homing methode
+			fbSdoWrite.nIndex := 16#6098;
+			fbSdoWrite.nSubIndex := 0;
+			fbSdoWrite.nDataLength := 1;
+			IF pHwRef^.P_bInvertInitDir THEN
+				fbSdoWrite.nData := 2;
+			ELSE
+				fbSdoWrite.nData := 1;
+			END_IF
+			nState := 40;
+			nStateNext := 3;
+			
+		3: 	//Write home offset
+			fbSdoWrite.nIndex := 16#607C;
+			fbSdoWrite.nSubIndex := 0;
+			fbSdoWrite.nDataLength := 4;
+			//Hier braucht es Umrechnung von Real to intern Pos
+			fbSdoWrite.nData := pHwRef^.M_RealToInternPos(pHwRef^.P_nRefPos);
+			nState := 40;
+			IF pHwRef^.M_GetDS402State() = E_CoDS402States.DS402STATE_OperationEnabled THEN
+				nStateNext := 4;
+			ELSE
+				nStateNext := 5;
+			END_IF
+			
+		4:	//Mode lässt sich nicht in "OperationEnabled" setzen
+			pHwRef^.nControlword := 7;
+			IF pHwRef^.M_GetDS402State() = E_CoDS402States.DS402STATE_SwitchedOn THEN
+				nState := 5;	
+			END_IF
+			
+		5:	//Set Mode of operation to "6" (Homing)
+			pHwRef^.nMode := 6; //Homing
+			IF pHwRef^.nCurrentMode = 6 THEN
+				nState := 6;	
+			END_IF
+
+		6:	//Statemachine in "OperationEnabled" setzen
+			pHwRef^.nControlword := 15;
+			IF pHwRef^.M_GetDS402State() = E_CoDS402States.DS402STATE_OperationEnabled THEN
+				nState := 7;
+			END_IF
+			
+		7:	//Start homing
+			pHwRef^.nControlword := 31;
+			eCurrentHomingState := pHwRef^.M_GetHomingState();
+			IF eCurrentHomingState = E_CoDS402HomingState.HomingInProgress THEN
+				nState := 8;
+			END_IF
+			
+		8:	//Wait for State "Homing in process
+			IF pHwRef^.M_GetDS402State() = E_CoDS402States.DS402STATE_OperationEnabled THEN
+				IF bStop THEN
+					pHwRef^.nControlword := 15;
+					nState := 80;
+				ELSE
+					eCurrentHomingState := pHwRef^.M_GetHomingState();
+					CASE eCurrentHomingState OF
+						E_CoDS402HomingState.HomingAttainedButNotReached,
+						E_CoDS402HomingState.HomingError,
+						E_CoDS402HomingState.HomingInteruptedOrNotReached:
+							nErrorId := E_ErrorIdDS402.ERRORID_HomingInterruptedOrNotReached;
+							nState := 99;
+						E_CoDS402HomingState.HomingSuccess:
+							pHwRef^.P_bIsHomed := TRUE;
+							pHwRef^.nControlword := 7;
+							pHwRef^.nMode := 1;
+							pHwRef^.nTargetSpeed := DINT_TO_INT(pHwRef^.M_RealToInternSpeed(pHwRef^.P_nFastHomingSpeed));
+							pHwRef^.nTargetPosition := pHwRef^.M_RealToInternPos(pHwRef^.P_nHomePos);
+							nState := 9;
+					END_CASE
+				END_IF
+			ELSE
+				nErrorId := E_ErrorIdDS402.ERRORID_OperationNotEnabled;
+				nState := 99;
+			END_IF
+			
+		9:	//Move to WorkingPos1
+			IF pHwRef^.nCurrentMode = 1 THEN
+				pHwRef^.nControlword := 15;
+				nState := 10;
+			END_IF
+			
+		10:	IF pHwRef^.M_GetDS402State() = E_CoDS402States.DS402STATE_OperationEnabled THEN
+				pHwRef^.nControlword := 31;
+				nState := 11;
+			END_IF
+			
+		11:	//Wait for setpoint acknowledge
+			IF pHwRef^.nStatusword.12 THEN
+				pHwRef^.nControlword := 15;
+				nState := 12;
+			END_IF
+			
+		12:	//Wait for target reached
+			IF pHwRef^.M_GetDS402State() = E_CoDS402States.DS402STATE_OperationEnabled THEN
+				IF bStop THEN
+					pHwRef^.nControlword.8 := TRUE;
+					nState := 13;
+				ELSE
+					IF pHwRef^.nStatusword.10 THEN
+						nState := 80;	
+					END_IF
+				END_IF
+			ELSE
+				nErrorId := E_ErrorIdDS402.ERRORID_OperationNotEnabled;
+				nState := 99;
+			END_IF
+			
+		13:	//Warten bis Motor sich nicht mehr dreht -> dann Power-STM in SwitchedOn setzen, damit Fahrauftrag gelöscht wird
+			IF pHwRef^.nCurrentSpeed = 0 THEN
+				pHwRef^.nControlword := 7;
+				nState := 14;
+			END_IF
+			
+		14:	//Power-STM wieder in OperationEnable setzen
+			IF pHwRef^.M_GetDS402State() = E_CoDS402States.DS402STATE_SwitchedOn THEN
+				pHwRef^.nControlword := 15;
+				pHwRef^.P_bIsHomed := TRUE;
+				nState := 80;
+			END_IF		
+
+	END_CASE
+	
+	//Sdo senden
+	IF nState = 40 THEN
+		fbSdoWrite(sADSNetID:= pHwRef^.P_sAdsNetId, nPortNr:= pHwRef^.P_nAdsPort, bExecute:= TRUE);
+		IF NOT fbSdoWrite.bBusy THEN
+			IF fbSdoWrite.bError THEN
+				nErrorId := fbSdoWrite.nAdsErrorId;
+				nState := 99;
+			ELSE
+				nState := nStateNext;
+			END_IF
+			fbSdoWrite(bExecute:= FALSE);
+		END_IF		
+	END_IF
+	
+	IF nState >= 80 THEN
+		bBusy := FALSE;
+		IF nState = 99 THEN
+			bError := TRUE;
+		END_IF
+	END_IF
+	
+ELSE
+	bError := FALSE;
+	nErrorId := 0;
+	nState := 0;	
+END_IF]]></ST>
+    </Implementation>
+    <LineIds Name="FB_NanotecPD_Home">
+      <LineId Id="9" Count="0" />
+      <LineId Id="27" Count="0" />
+      <LineId Id="31" Count="0" />
+      <LineId Id="200" Count="0" />
+      <LineId Id="35" Count="5" />
+      <LineId Id="50" Count="0" />
+      <LineId Id="43" Count="6" />
+      <LineId Id="51" Count="0" />
+      <LineId Id="53" Count="10" />
+      <LineId Id="52" Count="0" />
+      <LineId Id="65" Count="3" />
+      <LineId Id="76" Count="0" />
+      <LineId Id="69" Count="6" />
+      <LineId Id="77" Count="0" />
+      <LineId Id="81" Count="3" />
+      <LineId Id="78" Count="0" />
+      <LineId Id="85" Count="0" />
+      <LineId Id="87" Count="3" />
+      <LineId Id="86" Count="0" />
+      <LineId Id="92" Count="4" />
+      <LineId Id="91" Count="0" />
+      <LineId Id="97" Count="0" />
+      <LineId Id="99" Count="4" />
+      <LineId Id="98" Count="0" />
+      <LineId Id="105" Count="0" />
+      <LineId Id="107" Count="11" />
+      <LineId Id="208" Count="0" />
+      <LineId Id="120" Count="3" />
+      <LineId Id="135" Count="0" />
+      <LineId Id="124" Count="0" />
+      <LineId Id="126" Count="6" />
+      <LineId Id="136" Count="0" />
+      <LineId Id="138" Count="5" />
+      <LineId Id="145" Count="3" />
+      <LineId Id="144" Count="0" />
+      <LineId Id="150" Count="5" />
+      <LineId Id="157" Count="10" />
+      <LineId Id="211" Count="0" />
+      <LineId Id="213" Count="0" />
+      <LineId Id="170" Count="0" />
+      <LineId Id="156" Count="0" />
+      <LineId Id="171" Count="4" />
+      <LineId Id="149" Count="0" />
+      <LineId Id="176" Count="5" />
+      <LineId Id="34" Count="0" />
+      <LineId Id="32" Count="0" />
+      <LineId Id="182" Count="0" />
+      <LineId Id="185" Count="5" />
+      <LineId Id="192" Count="2" />
+      <LineId Id="196" Count="0" />
+      <LineId Id="214" Count="0" />
+      <LineId Id="197" Count="1" />
+      <LineId Id="201" Count="2" />
+      <LineId Id="205" Count="2" />
+      <LineId Id="204" Count="0" />
+      <LineId Id="184" Count="0" />
+      <LineId Id="25" Count="0" />
+      <LineId Id="29" Count="1" />
+      <LineId Id="28" Count="0" />
+      <LineId Id="26" Count="0" />
+    </LineIds>
+  </POU>
+</TcPlcObject>

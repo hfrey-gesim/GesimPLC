@@ -1,0 +1,101 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<TcPlcObject Version="1.1.0.1" ProductVersion="3.1.4020.12">
+  <POU Name="FB_HwRefInkStatDriveSpin" Id="{da497482-61e8-4d46-9bd1-e43542b9be37}" SpecialFunc="None">
+    <Declaration><![CDATA[FUNCTION_BLOCK FB_HwRefInkStatDriveSpin EXTENDS FB_CanNodeBase
+VAR_INPUT
+	//Ausgänge
+	nControl		AT %Q* : UINT; 	//Controlword
+	nOpMode			AT %Q* : USINT;	//Mode of Operations
+	nSpeed			AT %Q* : INT;	//Speed
+	bDigiOut0		AT %Q* : BOOL;	//Digitaler Ausgang0
+	bDigiOut1		AT %Q* : BOOL;	//Digitaler Ausgang1
+	bIsInit 		: BOOL;
+END_VAR
+VAR_OUTPUT
+	//Eingänge
+	nStatus	 		AT %I* : UINT;	//Statusword
+	nCurrentOpMode	AT %I* : USINT; //Aktueller Wert von Mode of Operation
+	bHallSens		AT %I* : BOOL;	//Hall-Sensor
+	bZSensor		AT %I* : BOOL;	//ZSensor
+	nCurrentSpeed	AT %I* : INT;	//Aktuelle Drehzahl
+	nCurrentVacuum : INT;
+END_VAR
+VAR
+	timer : TON;
+	nState	: USINT;
+END_VAR]]></Declaration>
+    <Implementation>
+      <ST><![CDATA[IF bNodeEnabled THEN
+	SUPER^();
+	//Vacuum abrufen alle 1s
+	IF bIsInit THEN
+		CASE nState OF
+			0:	//Analogwert per SDO auslesen
+				fbSdoRead(sADSNetID:= stAdsAdress.sNetId,nPortNr:= stAdsAdress.nPort,
+						nIndex:= 16#270E, nSubIndex:= 1, nDataLength:= 4, bExecute:= TRUE);
+						
+				IF NOT fbSdoRead.bBusy THEN
+					IF NOT fbSdoRead.bError THEN
+						//Vacuum-Sensor misst den Absolutdruck.
+						//Messbereich 20-400kPa (absolut) bei Ausgangsspannung 0,2V - 4,8V
+						//als atmosphärischer Druck wird 100kPa angenommen
+						nCurrentVacuum := REAL_TO_INT((F_YFuncX(rxMin:= 0.2, rxMax:= 4.8,
+												ryMin:= 20.0, ryMax:= 400.0,
+												rx:= 10.0/4095.0* DINT_TO_REAL(fbSdoRead.nData))) - 100.0);
+						
+						fbSdoRead(bExecute:= FALSE);
+						
+					END_IF
+					nState := 1;
+				END_IF
+				
+			1:	//Warten
+				timer(IN:= TRUE, PT:= T#1S);
+				IF timer.Q THEN
+					timer(IN:= FALSE);
+					nState := 0;
+				END_IF
+		END_CASE
+		
+		//LED-Anzeige (nur bei manchen Bauformen)
+		IF nCurrentSpeed = 0 THEN
+			bDigiOut0 := FALSE;
+		ELSE
+			bDigiOut0 := TRUE;
+		END_IF
+		
+	ELSE
+		nCurrentVacuum := 0;
+ 	END_IF
+	
+END_IF]]></ST>
+    </Implementation>
+    <LineIds Name="FB_HwRefInkStatDriveSpin">
+      <LineId Id="3" Count="2" />
+      <LineId Id="71" Count="1" />
+      <LineId Id="74" Count="1" />
+      <LineId Id="77" Count="0" />
+      <LineId Id="76" Count="0" />
+      <LineId Id="78" Count="4" />
+      <LineId Id="84" Count="5" />
+      <LineId Id="92" Count="0" />
+      <LineId Id="90" Count="0" />
+      <LineId Id="93" Count="2" />
+      <LineId Id="97" Count="1" />
+      <LineId Id="100" Count="0" />
+      <LineId Id="99" Count="0" />
+      <LineId Id="96" Count="0" />
+      <LineId Id="6" Count="0" />
+      <LineId Id="64" Count="0" />
+      <LineId Id="58" Count="0" />
+      <LineId Id="60" Count="0" />
+      <LineId Id="62" Count="1" />
+      <LineId Id="61" Count="0" />
+      <LineId Id="59" Count="0" />
+      <LineId Id="29" Count="2" />
+      <LineId Id="55" Count="0" />
+      <LineId Id="32" Count="0" />
+      <LineId Id="2" Count="0" />
+    </LineIds>
+  </POU>
+</TcPlcObject>

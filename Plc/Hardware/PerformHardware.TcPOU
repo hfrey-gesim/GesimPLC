@@ -1,0 +1,209 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<TcPlcObject Version="1.1.0.1" ProductVersion="3.1.4024.11">
+  <POU Name="PerformHardware" Id="{1db1cc30-435e-4b47-8274-f383225b4373}" SpecialFunc="None">
+    <Declaration><![CDATA[PROGRAM PerformHardware
+VAR
+	i : UINT;
+	nIndex : USINT;
+	nHwDataIndex : USINT;
+	stHardwareId : ST_HardwareId;
+	pHwModule : POINTER TO FB_HwModule;
+END_VAR
+VAR_OUTPUT
+	bError : BOOL;
+END_VAR
+]]></Declaration>
+    <Implementation>
+      <ST><![CDATA[bError := FALSE;
+
+nHwDataIndex := 0;
+
+fbPCV();
+
+fbStopButton();
+IF fbStopButton.P_bTriggered THEN
+	MainDispacher.M_StopAll();
+	{IF defined (variable:fbHighVoltSupplyRef)}
+	fbHighVoltSupplyRef.M_SwitchVoltage(1, FALSE);
+	fbHighVoltSupplyRef.M_SwitchVoltage(2, FALSE);
+	{END_IF}
+END_IF
+
+pFbSafety^();
+IF pFbSafety^.eCurrentState <> E_SafetyState.Locked THEN
+	MainDispacher.M_StopAll();
+END_IF
+
+//HardwareId bilden (Safety)
+stHardwareId.eGroup := E_HardwareGrp.Interlock;
+stHardwareId.nParentItem := 0;
+stHardwareId.nItem := 1;
+MEMCPY(ADR(aHardwProcData[nHwDataIndex].nHardwareId),ADR(stHardwareId),4);
+
+aHardwProcData[nHwDataIndex].nInterpretation := 0;
+aHardwProcData[nHwDataIndex].nValue := pFbSafety^.eCurrentState;
+nHwDataIndex := nHwDataIndex + 1;
+
+{IF defined(variable:fbSafetyStacker)}
+fbSafetyStacker();
+stHardwareId.eGroup := E_HardwareGrp.Interlock;
+stHardwareId.nParentItem := 0;
+stHardwareId.nItem := 2;
+MEMCPY(ADR(aHardwProcData[nHwDataIndex].nHardwareId),ADR(stHardwareId),4);
+
+aHardwProcData[nHwDataIndex].nInterpretation := 0;
+aHardwProcData[nHwDataIndex].nValue := fbSafetyStacker.eCurrentState;
+nHwDataIndex := nHwDataIndex + 1;
+{END_IF}
+
+fbXYDriveList.M_SetCurrentToHead();
+REPEAT
+	pHwModule := fbXYDriveList.M_Get();
+	IF pHwModule > 0 THEN
+		pHwModule^();
+		IF pHwModule^.P_bError THEN
+			bError := TRUE;
+		END_IF
+	END_IF
+UNTIL pHwModule = 0
+END_REPEAT
+
+fbCANOpenHwModuleList.M_SetCurrentToHead();
+REPEAT
+	pHwModule := fbCANOpenHwModuleList.M_Get();
+	IF pHwModule > 0 THEN
+		pHwModule^();
+		IF pHwModule^.P_bError THEN
+			bError := TRUE;	
+		END_IF
+	END_IF
+UNTIL pHwModule = 0
+END_REPEAT
+
+FOR i:= 1 TO cNoOfGearPumps BY 1 DO
+	aFbGearPumps[i]();
+END_FOR
+
+//Ampel für Printer allgemein
+fbSignalLight(eSafetyState:= fbSafety.eCurrentState, eMachineState:= MainDispacher.eCurrentState);	
+//Ampel für Stacker
+{IF defined(Stacker)}
+fbSignalLightStacker(eSafetyState:= fbSafetyStacker.eCurrentState, eMachineState:= afbStacker[1].P_eCurrentState);
+{END_IF}
+
+fbMultiZDigiOut();
+fbPlcTriggerOut();
+fbMultiZPWM();
+
+{IF defined(variable:fbHighVoltSupplyRef)}
+fbHighVoltSupplyRef();
+{END_IF}
+
+{IF defined(variable:fbUnistatRef)}
+fbUnistatRef();
+{END_IF}
+
+{IF defined(variable:fbHwRefTrayLock)}
+fbHwRefTrayLock();
+{END_IF}
+
+{IF defined(variable:fbHwRefSpinDrive)}
+fbHwRefSpinDrive();
+{END_IF}
+
+{IF defined(variable:fbHwRefLiftDrive)}
+fbHwRefLiftDrive();
+{END_IF}
+
+{IF defined(variable:fbHwRefTrayStop)}
+fbHwRefTrayStop();
+{END_IF}
+
+//Aktuelle Werte PneuChannels für GUI (wird in aktueller GUI nicht ausgewertet)
+stHardwareId.eGroup := E_HardwareGrp.PneuChannel;
+stHardwareId.nParentItem := 0;
+FOR i:= 0 TO cNoOfPneuChannels - 1 BY 1 DO
+	nIndex := UINT_TO_USINT(i + 1);
+	stHardwareId.nItem := nIndex;
+	aFbPneuChannel[nIndex]();
+	MEMCPY(ADR(aHardwProcData[nHwDataIndex].nHardwareId),ADR(stHardwareId),4);	
+	aHardwProcData[nHwDataIndex].nInterpretation := 0;
+	aHardwProcData[nHwDataIndex].nValue := BOOL_TO_DINT(aFbPneuChannel[nIndex].P_bSupplyOk);
+	nHwDataIndex := nHwDataIndex + 1;
+	MEMCPY(ADR(aHardwProcData[nHwDataIndex].nHardwareId),ADR(stHardwareId),4);
+	aHardwProcData[nHwDataIndex].nInterpretation := 1;
+	aHardwProcData[nHwDataIndex].nValue := aFbPneuChannel[nIndex].P_nSetPressure;
+	nHwDataIndex := nHwDataIndex + 1;
+	MEMCPY(ADR(aHardwProcData[nHwDataIndex].nHardwareId),ADR(stHardwareId),4);	
+	aHardwProcData[nHwDataIndex].nInterpretation := 2;
+	aHardwProcData[nHwDataIndex].nValue := aFbPneuChannel[nIndex].P_nCurrentPressure;
+	nHwDataIndex := nHwDataIndex + 1;
+END_FOR
+]]></ST>
+    </Implementation>
+    <Action Name="A_ResetError" Id="{d277900e-cca6-439d-8971-88726d4cb56e}">
+      <Implementation>
+        <ST><![CDATA[fbXYDriveList.M_SetCurrentToHead();
+REPEAT
+	pHwModule := fbXYDriveList.M_Get();
+	IF pHwModule > 0 THEN
+		pHwModule^.M_Reset();
+	END_IF
+UNTIL pHwModule = 0
+END_REPEAT
+
+fbCANOpenHwModuleList.M_SetCurrentToHead();
+REPEAT
+	pHwModule := fbCANOpenHwModuleList.M_Get();
+	IF pHwModule > 0 THEN
+		pHwModule^.M_Reset();
+	END_IF
+UNTIL pHwModule = 0
+END_REPEAT]]></ST>
+      </Implementation>
+    </Action>
+    <LineIds Name="PerformHardware">
+      <LineId Id="690" Count="8" />
+      <LineId Id="980" Count="1" />
+      <LineId Id="983" Count="0" />
+      <LineId Id="982" Count="0" />
+      <LineId Id="699" Count="5" />
+      <LineId Id="913" Count="0" />
+      <LineId Id="706" Count="8" />
+      <LineId Id="919" Count="0" />
+      <LineId Id="931" Count="0" />
+      <LineId Id="922" Count="0" />
+      <LineId Id="924" Count="6" />
+      <LineId Id="923" Count="0" />
+      <LineId Id="918" Count="0" />
+      <LineId Id="715" Count="27" />
+      <LineId Id="955" Count="0" />
+      <LineId Id="743" Count="0" />
+      <LineId Id="958" Count="2" />
+      <LineId Id="962" Count="0" />
+      <LineId Id="961" Count="0" />
+      <LineId Id="744" Count="0" />
+      <LineId Id="746" Count="0" />
+      <LineId Id="802" Count="0" />
+      <LineId Id="790" Count="0" />
+      <LineId Id="747" Count="6" />
+      <LineId Id="755" Count="0" />
+      <LineId Id="841" Count="3" />
+      <LineId Id="857" Count="2" />
+      <LineId Id="870" Count="3" />
+      <LineId Id="884" Count="3" />
+      <LineId Id="898" Count="0" />
+      <LineId Id="943" Count="0" />
+      <LineId Id="757" Count="19" />
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="PerformHardware.A_ResetError">
+      <LineId Id="64" Count="4" />
+      <LineId Id="72" Count="1" />
+      <LineId Id="3" Count="1" />
+      <LineId Id="75" Count="4" />
+      <LineId Id="83" Count="1" />
+      <LineId Id="7" Count="0" />
+    </LineIds>
+  </POU>
+</TcPlcObject>

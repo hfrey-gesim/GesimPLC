@@ -1,0 +1,639 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<TcPlcObject Version="1.1.0.1" ProductVersion="3.1.4024.9">
+  <POU Name="FB_VermesDisp" Id="{c112f78f-4336-469a-b0ac-3a252615955a}" SpecialFunc="None">
+    <Declaration><![CDATA[FUNCTION_BLOCK FB_VermesDisp EXTENDS FB_GCodeTool
+VAR_INPUT
+END_VAR
+VAR_OUTPUT
+END_VAR
+VAR
+	//Reference zu TripleTrigger
+	pPulseTrainChannel : POINTER TO ST_PulseTrainChannel;
+	fbPulseTrainControl : FB_PulseTrainControl;
+
+	//Specproperties
+	nTriggerChannel		: USINT;
+	pPneuChannelPress	: POINTER TO FB_PneuChannelRef;
+	nDOutChanValvePress	: USINT;	//Digitaler Ausgangskanal MzHead Druckventil
+	nValveNrCool		: USINT;
+	
+	
+	//****************************************Aktionvariablen****************************************************
+	
+	stActionDataSpec	: ST_ActionData;
+	
+	//Action: "SetPressure"
+	bSetPress			: BOOL;
+	fbSetPress			: FB_SetPressure;
+
+	//Action: "Dispense"
+	bDispense				: BOOL;
+	nStateA_Dispense		: USINT;
+	nDrops					: UINT;
+	bDispenseStart			: BOOL;
+	
+END_VAR
+]]></Declaration>
+    <Implementation>
+      <ST><![CDATA[IF eCurrentState = E_MachineState.MACHINESTATE_Active THEN
+
+	IF bSetPress THEN
+		fbSetPress(pPneuChannelRef:= pPneuChannelPress);
+		IF NOT fbSetPress.bBusy THEN
+			IF fbSetPress.bError THEN
+				bError := TRUE;
+				stError.ErrorId := fbSetPress.nErrorId;
+				stError.POU := E_POU.POU_FB_VermesDisp;
+				fbErrorList.M_Add(stError);
+			END_IF
+			bSetPress := FALSE;
+			fbSetPress(pPneuChannelRef:= pPneuChannelPress, bExecute:= FALSE);
+			M_RemoveListEntry(nSearchValue:= E_Action.ACTION_SetPressure);
+		END_IF
+	END_IF
+
+	IF bDispense THEN
+		A_Dispense();
+		IF nStateA_Dispense >= 80 THEN
+			IF nStateA_Dispense >= 99 THEN
+				bError := TRUE;	
+			END_IF
+			bDispense := FALSE;
+			nStateA_Dispense := 0;
+			M_RemoveListEntry(nSearchValue:= E_Action.ACTION_DispenseDrops);
+		END_IF
+	END_IF
+END_IF
+
+SUPER^();	//FB_MzTool aufrufen
+
+//Prozessdaten aktualisieren
+IF pPneuChannelPress > 0 THEN
+	stProcessData.n32Data[7] := pPneuChannelPress^.P_nCurrentPressure;
+END_IF
+
+IF pFbMultiZ > 0 THEN
+	IF nDOutChanValvePress > 0 AND nDOutChanValvePress < 8 THEN
+		stProcessData.n32Data[8] := BOOL_TO_DINT(pFbMultiZ^.aDigiOut[nDOutChanValvePress]);
+	END_IF
+END_IF
+//DispenserStatus
+stProcessData.n32Data[9] := BOOL_TO_DINT(fbPulseTrainControl.P_bBusy);
+
+//ValveStatusCool
+IF nValveNrCool > 0 THEN
+	stProcessData.n32Data[10] := BOOL_TO_DINT(aValves[nValveNrCool].bDigiOut1);
+END_IF
+
+aObjProcData[nNotifyId] := stProcessData;]]></ST>
+    </Implementation>
+    <Action Name="A_Dispense" Id="{337d0f5c-7b0b-4860-8831-ebf5c94b0be8}">
+      <Implementation>
+        <ST><![CDATA[CASE nStateA_Dispense OF
+	0:
+		fbPulseTrainControl.M_Start(nDrops);
+		nStateA_Dispense := 1;
+
+	1:	//Einen Zyklus warten
+		nStateA_Dispense := 2;
+		
+	2:	//Warten bis Dispensen fertig
+		IF NOT fbPulseTrainControl.P_bBusy THEN
+			fbPulseTrainControl.M_Stop();
+			nStateA_Dispense := 80;
+		END_IF
+		
+	70:	//Abbrechen
+		fbPulseTrainControl.M_Stop();
+		nStateA_Dispense := 80;
+END_CASE]]></ST>
+      </Implementation>
+    </Action>
+    <Action Name="A_Reset" Id="{e7b24403-0d5d-45ac-b716-be2f1f2f614e}">
+      <Implementation>
+        <ST><![CDATA[//Ist noch eine Aktion aktiv?
+IF nStateA_ResetSpec = 0 THEN
+	IF bDispense THEN
+		bDispense := FALSE;
+		nStateA_Dispense := 0;
+	END_IF
+	
+	IF bSetPress THEN
+		bSetPress := FALSE;
+		fbSetPress(bExecute:= FALSE, pPneuChannelRef:= pPneuChannelPress);
+	END_IF
+ 
+	nStateA_ResetSpec := 80;
+END_IF
+
+SUPER^.A_Reset();]]></ST>
+      </Implementation>
+    </Action>
+    <Action Name="A_Stop" Id="{8730914c-a663-4582-97bf-ca0df2c72cce}">
+      <Implementation>
+        <ST><![CDATA[IF nStateA_Stop = 0 THEN
+	
+	IF bSetPress THEN
+		fbSetPress(bExecute:= FALSE, pPneuChannelRef:= pPneuChannelPress);
+	END_IF
+
+	IF bDispense AND nStateA_Dispense < 70 THEN
+		nStateA_Dispense := 70;
+	END_IF
+	
+	nStateA_Stop := 1;	
+END_IF
+
+SUPER^.A_Stop();]]></ST>
+      </Implementation>
+    </Action>
+    <Method Name="FB_init" Id="{d52ced24-58d1-49b4-b0e9-431fc4ac93e3}">
+      <Declaration><![CDATA[METHOD FB_init : BOOL
+VAR_INPUT
+	bInitRetains : BOOL; // if TRUE, the retain variables are initialized (warm start / cold start)
+	bInCopyCode : BOOL;  // if TRUE, the instance afterwards gets moved into the copy code (online change)
+END_VAR
+]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[eObjectType := E_ObjectType.OBJECTTYPE_VermesDisp;
+eObjectGroup := E_ObjectGroup.OBJECTGROUP_MzTool OR E_ObjectGroup.OBJECTGROUP_Device;]]></ST>
+      </Implementation>
+    </Method>
+    <Method Name="M_AddChild" Id="{c23097a4-687d-490d-a1c3-ec612c965217}">
+      <Declaration><![CDATA[METHOD M_AddChild : ERRORID
+VAR_INPUT
+	pObject : POINTER TO FB_Object;
+	nSlotNr	: UINT;
+	nIndex 	: INT;
+END_VAR
+]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[//Kann keine Objekte aufnehmen
+M_AddChild := E_ErrorIdObjMgmt.ERRORID_ObjectCanNotTakeChilds;
+]]></ST>
+      </Implementation>
+    </Method>
+    <Method Name="M_CancelAction" Id="{2eabfe90-9daf-4e58-b64d-8bc6f9020c79}">
+      <Declaration><![CDATA[METHOD M_CancelAction
+VAR_INPUT
+	eAction : E_Action;
+END_VAR
+]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[CASE eAction OF
+	E_Action.ACTION_SetPressure:
+		IF bSetPress THEN
+			fbSetPress(bExecute:= FALSE, pPneuChannelRef:= pPneuChannelPress);
+		END_IF
+		
+	E_Action.ACTION_DispenseDrops:
+		IF bDispense AND nStateA_Dispense < 70 THEN
+			nStateA_Dispense := 70;
+		END_IF
+ELSE
+	SUPER^.M_CancelAction(eAction);
+END_CASE]]></ST>
+      </Implementation>
+    </Method>
+    <Method Name="M_CheckAction" Id="{97be1996-4686-44e5-bc03-352268f1da41}">
+      <Declaration><![CDATA[METHOD M_CheckAction : ERRORID
+VAR_INPUT
+	refActionData 	: REFERENCE TO ST_ActionData;
+	pCorrelObject	: POINTER TO FB_Object;
+END_VAR
+
+VAR
+END_VAR]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[CASE refActionData.eAction OF
+	E_Action.ACTION_DispenseDrops, //BasicAction für ActionOnArray
+	E_Action.ACTION_TeachTarget:
+		RETURN;
+ELSE
+	M_CheckAction := SUPER^.M_CheckAction(refActionData, pCorrelObject);
+END_CASE]]></ST>
+      </Implementation>
+    </Method>
+    <Method Name="M_CheckProcDataType" Id="{5546da2b-2cba-497d-bdab-3ea2f2c01ad5}">
+      <Declaration><![CDATA[METHOD M_CheckProcDataType : BOOL
+VAR_INPUT
+	eProcDataType : E_ProcDataType;
+END_VAR
+]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[IF eProcDataType = E_ProcDataType.PROCDATATYPE_Temp1 THEN
+	M_CheckProcDataType := TRUE;
+END_IF]]></ST>
+      </Implementation>
+    </Method>
+    <Method Name="M_ClearAllProps" Id="{6cb27cf2-a21b-4a26-8ede-e2e5d64a4c57}">
+      <Declaration><![CDATA[METHOD M_ClearAllProps
+VAR_INPUT
+	bIgnoreParent : BOOL; //Es wird das gesamte OD gelöscht. -> Zeiger auf Parent nicht mehr gültig!
+END_VAR
+]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[pPneuChannelPress := 0;
+SUPER^.M_ClearAllProps(bIgnoreParent);]]></ST>
+      </Implementation>
+    </Method>
+    <Method Name="M_ExeAction" Id="{8da4433f-3443-4fc5-8b0d-6fdce7dec1d5}">
+      <Declaration><![CDATA[METHOD M_ExeAction : ERRORID
+VAR_INPUT
+	refActionData : REFERENCE TO ST_ActionData;	
+END_VAR]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[IF NOT (eCurrentState = E_MachineState.MACHINESTATE_Idle OR
+	eCurrentState = E_MachineState.MACHINESTATE_Active OR
+	eCurrentState = E_MachineState.MACHINESTATE_Ready) THEN
+	M_ExeAction := E_ErrorIdCmd.ERRORID_InvalidState;
+	RETURN;
+END_IF
+
+CASE refActionData.eAction OF
+		
+	E_Action.ACTION_SetPressure:
+		fbSetPress(bExecute:= FALSE, pPneuChannelRef:= pPneuChannelPress); //eventueller Fehler wird auch zurückgesetzt
+		fbSetPress.bAwait := DINT_TO_BOOL(refActionData.aParams[1]);
+		fbSetPress.nValue := DINT_TO_INT(refActionData.aParams[2]);
+		fbSetPress.nTolerancePlus := DINT_TO_INT(refActionData.aParams[3]);
+		fbSetPress.nToleranceMinus := DINT_TO_INT(refActionData.aParams[4]);
+		fbSetPress.tTimeout := DINT_TO_TIME(refActionData.aParams[5]);
+		
+		fbSetPress(bExecute:= TRUE,	pPneuChannelRef:= pPneuChannelPress,nErrorId=> M_ExeAction);
+		IF fbSetPress.bError THEN
+			RETURN;
+		END_IF
+		
+		IF NOT bSetPress AND fbSetPress.bBusy THEN
+			bSetPress := TRUE;
+			fbList.A_AddHeadValue(hList := hList, putValue := E_Action.ACTION_SetPressure);
+		ELSE
+			RETURN;	
+		END_IF
+
+	E_Action.ACTION_SwitchPressure:
+		IF nDOutChanValvePress > 0 AND nDOutChanValvePress < 8 THEN
+			IF refActionData.aParams[1] = 1 THEN
+				pFbMultiZ^.aDigiOut[nDOutChanValvePress] := TRUE;
+			ELSE
+				pFbMultiZ^.aDigiOut[nDOutChanValvePress] := FALSE;
+			END_IF
+		END_IF
+		
+	E_Action.ACTION_DispenseDrops:
+		bDispenseStart := DINT_TO_BOOL(refActionData.aParams[2]);
+		IF NOT bDispense AND bDispenseStart THEN
+			nDrops := DINT_TO_UINT(refActionData.aParams[1]);
+			fbList.A_AddHeadValue( hList := hList, putValue := E_Action.ACTION_DispenseDrops);
+			bDispense := TRUE;
+		ELSE
+			fbPulseTrainControl.M_Stop();
+		END_IF
+		
+	E_Action.ACTION_Cooling:
+		IF nValveNrCool > 0 THEN
+			IF refActionData.aParams[2] = 1 THEN
+				aValves[nValveNrCool].M_On(1);
+			ELSE
+				aValves[nValveNrCool].M_Off();
+			END_IF
+		END_IF
+	ELSE
+		M_ExeAction := SUPER^.M_ExeAction(refActionData);
+		RETURN;
+END_CASE
+bBusy := TRUE;
+eCurrentState := E_MachineState.MACHINESTATE_Active;]]></ST>
+      </Implementation>
+    </Method>
+    <Method Name="M_GetAllProps" Id="{f2e08df6-506b-4ce9-ba5c-b9da9bf582f9}">
+      <Declaration><![CDATA[METHOD M_GetAllProps : ERRORID
+VAR_INPUT
+	refCmdData : REFERENCE TO  ST_CmdData;
+END_VAR
+]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[//BaseProperties lesen
+SUPER^.M_GetAllProps(refCmdData);
+//BaseProperties lesen
+nCurrentPropIndex := nCurrentPropIndex + 1;
+refCmdData.n32Data[nCurrentPropIndex] := nTriggerChannel;
+nCurrentPropIndex := nCurrentPropIndex + 1;
+refCmdData.n32Data[nCurrentPropIndex] := fbPulseTrainControl.M_GetFrequency();
+nCurrentPropIndex := nCurrentPropIndex + 1;
+refCmdData.n32Data[nCurrentPropIndex] := fbPulseTrainControl.M_GetPulse();
+
+nCurrentPropIndex := nCurrentPropIndex + 1;
+IF pPneuChannelPress > 0 THEN
+	refCmdData.n32Data[nCurrentPropIndex] := pPneuChannelPress^.nChannel;
+ELSE
+	refCmdData.n32Data[nCurrentPropIndex] := 0;
+END_IF
+
+nCurrentPropIndex := nCurrentPropIndex + 1;
+refCmdData.n32Data[nCurrentPropIndex] := nDOutChanValvePress;
+nCurrentPropIndex := nCurrentPropIndex + 1;
+refCmdData.n32Data[nCurrentPropIndex] := nValveNrCool;]]></ST>
+      </Implementation>
+    </Method>
+    <Method Name="M_SetAllProps" Id="{27c3bcd1-0f35-4237-87f8-8ad4d326bb55}">
+      <Declaration><![CDATA[METHOD M_SetAllProps : ERRORID
+VAR_INPUT
+	refCmdData : REFERENCE TO  ST_CmdData;
+END_VAR
+
+VAR
+	nPneuChannel : USINT;
+END_VAR]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[M_SetAllProps := SUPER^.M_SetAllProps(refCmdData);
+
+IF M_SetAllProps > 0 THEN
+	RETURN;
+END_IF
+
+//TriggerChannel
+nCurrentPropIndex := nCurrentPropIndex + 1;
+nSpecPropIndex := nCurrentPropIndex;
+nTriggerChannel := DINT_TO_USINT(refCmdData.n32Data[nCurrentPropIndex]);
+pPulseTrainChannel := aFbIOExpanderRef[1].M_GetPulseTrainChannel(nTriggerChannel);
+IF pPulseTrainChannel = 0 THEN
+	M_SetAllProps := E_ErrorIdObjMgmt.ERRORID_InvalidTriggerChannel;
+	RETURN;	
+END_IF
+
+fbPulseTrainControl.M_SetPulseTrainChannel(pPulseTrainChannel);
+
+//Frequenz
+nCurrentPropIndex := nCurrentPropIndex + 1;
+(*IF NOT (refCmdData.n32Data[nCurrentPropIndex] >= 16 AND refCmdData.n32Data[nCurrentPropIndex] <= 1000000) THEN	
+	M_SetAllProps := E_ErrorIdObjMgmt.ERRORID_InvalidFrequency;
+	RETURN;
+END_IF
+pTripleTrigRef^.M_SetFrequency(nTriggerChannel,refCmdData.n32Data[nCurrentPropIndex]);*)
+M_SetAllProps := fbPulseTrainControl.M_SetFrequency(DINT_TO_UINT(refCmdData.n32Data[nCurrentPropIndex]));
+IF M_SetAllProps > 0 THEN
+	RETURN;
+END_IF
+
+//Plusbreite
+nCurrentPropIndex := nCurrentPropIndex + 1;
+(*IF NOT (refCmdData.n32Data[nCurrentPropIndex] >= 0 AND refCmdData.n32Data[nCurrentPropIndex] <= 65535) THEN
+	M_SetAllProps := E_ErrorIdObjMgmt.ERRORID_InvalidPulseWidth;  //Error
+	RETURN;
+END_IF
+pTripleTrigRef^.M_SetPulse(nTriggerChannel,DINT_TO_UINT(refCmdData.n32Data[nCurrentPropIndex]));*)
+M_SetAllProps := fbPulseTrainControl.M_SetPulse(DINT_TO_UINT(refCmdData.n32Data[nCurrentPropIndex]));
+IF M_SetAllProps > 0 THEN
+	RETURN;
+END_IF
+
+//PneuChannel Druck
+nCurrentPropIndex := nCurrentPropIndex + 1;
+nPneuChannel := DINT_TO_USINT(refCmdData.n32Data[nCurrentPropIndex]);
+IF NOT (nPneuChannel >= 0 AND nPneuChannel <= cNoOfPneuChannels) THEN
+	M_SetAllProps := E_ErrorIdObjMgmt.ERRORID_InvalidPneuChannel;
+	RETURN;	
+END_IF
+pPneuChannelPress := ADR(aFbPneuChannel[nPneuChannel]);
+
+//digitaler Ausgang Kopfbasisplatine Druckventil am Kopf
+nCurrentPropIndex := nCurrentPropIndex + 1;
+nDOutChanValvePress := DINT_TO_USINT(refCmdData.n32Data[nCurrentPropIndex]);	//Digitaler Ausgangskanal MzHead Druckventil
+IF NOT (nDOutChanValvePress >= 0 AND nDOutChanValvePress <= 7) THEN
+	M_SetAllProps := E_ErrorIdObjMgmt.ERRORID_InvalidMzDOutChannel;
+	RETURN;	
+END_IF
+
+//Ventilnummer in FBox für Druckluftkühlung
+nCurrentPropIndex := nCurrentPropIndex + 1;
+nValveNrCool := DINT_TO_USINT(refCmdData.n32Data[nCurrentPropIndex]);
+IF NOT (nValveNrCool >= 0 AND nValveNrCool <= cNoOfValves) THEN
+	M_SetAllProps := E_ErrorIdObjMgmt.ERRORID_InvalidValveNumber;
+	RETURN;	
+END_IF
+
+nNoOfProps := nCurrentPropIndex + 1;]]></ST>
+      </Implementation>
+    </Method>
+    <Method Name="M_SetSingleProp" Id="{7b5002e3-3c84-47f8-8e76-dd20d84d9878}">
+      <Declaration><![CDATA[METHOD M_SetSingleProp : ERRORID
+VAR_INPUT
+	refCmdData : REFERENCE TO  ST_CmdData;
+END_VAR]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[IF nSpecPropIndex = refCmdData.aHeader[1] THEN
+	IF refCmdData.n32Data[0] >= 1 AND refCmdData.n32Data[0] <= 3 THEN
+		nTriggerChannel := DINT_TO_USINT(refCmdData.n32Data[0]);
+		pPulseTrainChannel := aFbIOExpanderRef[1].M_GetPulseTrainChannel(nTriggerChannel);
+		IF pPulseTrainChannel > 0 THEN
+			fbPulseTrainControl.M_Stop();
+			fbPulseTrainControl.M_SetPulseTrainChannel(pPulseTrainChannel);		
+		END_IF
+	ELSE
+		M_SetSingleProp := E_ErrorIdObjMgmt.ERRORID_InvalidTriggerChannel;
+		RETURN;
+	END_IF
+ELSIF (nSpecPropIndex + 1) = refCmdData.aHeader[1] THEN	//Frequenz
+	M_SetSingleProp := fbPulseTrainControl.M_SetFrequency(DINT_TO_UINT(refCmdData.n32Data[0]));
+ELSIF (nSpecPropIndex + 2) = refCmdData.aHeader[1] THEN //Pulsbreite
+	IF NOT (refCmdData.n32Data[0] >= 0 AND refCmdData.n32Data[0] < 65535) THEN
+		M_SetSingleProp := E_ErrorIdObjMgmt.ERRORID_InvalidPulseWidth;
+		RETURN;
+	END_IF
+	M_SetSingleProp := fbPulseTrainControl.M_SetPulse(DINT_TO_UINT(refCmdData.n32Data[0]));
+ELSE
+	M_SetSingleProp := SUPER^.M_SetSingleProp(refCmdData);
+END_IF]]></ST>
+      </Implementation>
+    </Method>
+    <Method Name="M_StartUniDispense" Id="{e5a27c4b-3970-41cf-9699-e24c2a2dc201}">
+      <Declaration><![CDATA[METHOD M_StartUniDispense : ERRORID
+VAR_INPUT
+	nParam1 : DINT; //Drops
+	nParam2 : DINT; //nicht benutzt
+END_VAR
+
+VAR_OUTPUT
+	bIsContinous : BOOL;
+END_VAR
+
+VAR
+	stActionData : ST_ActionData;
+END_VAR
+]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[IF nParam1 = 0 THEN //DauerDispensen
+	bIsContinous := TRUE;
+	stActionData.aParams[1] := 0; //Continous
+ELSE
+	stActionData.aParams[1] := nParam1; //Drops
+END_IF
+
+stActionData.eAction := E_Action.ACTION_DispenseDrops;
+stActionData.aParams[2] := 1; //On
+M_StartUniDispense := M_ExeAction(stActionData);]]></ST>
+      </Implementation>
+    </Method>
+    <Method Name="M_StopUniDispense" Id="{1b5909e9-0a66-4821-831a-df0ddc86beb9}">
+      <Declaration><![CDATA[METHOD M_StopUniDispense : ERRORID
+VAR_INPUT
+END_VAR
+]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[M_CancelAction(E_Action.ACTION_DispenseDrops);]]></ST>
+      </Implementation>
+    </Method>
+    <LineIds Name="FB_VermesDisp">
+      <LineId Id="3" Count="0" />
+      <LineId Id="15" Count="0" />
+      <LineId Id="245" Count="12" />
+      <LineId Id="26" Count="0" />
+      <LineId Id="39" Count="16" />
+      <LineId Id="258" Count="1" />
+      <LineId Id="59" Count="0" />
+      <LineId Id="260" Count="0" />
+      <LineId Id="60" Count="3" />
+      <LineId Id="114" Count="1" />
+      <LineId Id="117" Count="0" />
+      <LineId Id="64" Count="0" />
+      <LineId Id="179" Count="2" />
+      <LineId Id="177" Count="0" />
+      <LineId Id="65" Count="0" />
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="FB_VermesDisp.A_Dispense">
+      <LineId Id="2" Count="8" />
+      <LineId Id="21" Count="0" />
+      <LineId Id="24" Count="0" />
+      <LineId Id="22" Count="0" />
+      <LineId Id="14" Count="1" />
+      <LineId Id="23" Count="0" />
+      <LineId Id="16" Count="0" />
+      <LineId Id="18" Count="0" />
+      <LineId Id="1" Count="0" />
+    </LineIds>
+    <LineIds Name="FB_VermesDisp.A_Reset">
+      <LineId Id="2" Count="6" />
+      <LineId Id="22" Count="2" />
+      <LineId Id="13" Count="0" />
+      <LineId Id="18" Count="3" />
+      <LineId Id="1" Count="0" />
+    </LineIds>
+    <LineIds Name="FB_VermesDisp.A_Stop">
+      <LineId Id="2" Count="1" />
+      <LineId Id="19" Count="1" />
+      <LineId Id="6" Count="0" />
+      <LineId Id="11" Count="7" />
+      <LineId Id="1" Count="0" />
+    </LineIds>
+    <LineIds Name="FB_VermesDisp.FB_init">
+      <LineId Id="7" Count="1" />
+    </LineIds>
+    <LineIds Name="FB_VermesDisp.M_AddChild">
+      <LineId Id="20" Count="0" />
+      <LineId Id="12" Count="0" />
+      <LineId Id="5" Count="0" />
+    </LineIds>
+    <LineIds Name="FB_VermesDisp.M_CancelAction">
+      <LineId Id="3" Count="0" />
+      <LineId Id="22" Count="2" />
+      <LineId Id="7" Count="0" />
+      <LineId Id="25" Count="0" />
+      <LineId Id="12" Count="5" />
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="FB_VermesDisp.M_CheckAction">
+      <LineId Id="27" Count="0" />
+      <LineId Id="30" Count="0" />
+      <LineId Id="33" Count="0" />
+      <LineId Id="35" Count="0" />
+      <LineId Id="28" Count="0" />
+      <LineId Id="31" Count="0" />
+      <LineId Id="29" Count="0" />
+    </LineIds>
+    <LineIds Name="FB_VermesDisp.M_CheckProcDataType">
+      <LineId Id="3" Count="1" />
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="FB_VermesDisp.M_ClearAllProps">
+      <LineId Id="10" Count="0" />
+      <LineId Id="6" Count="0" />
+    </LineIds>
+    <LineIds Name="FB_VermesDisp.M_ExeAction">
+      <LineId Id="141" Count="60" />
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="FB_VermesDisp.M_GetAllProps">
+      <LineId Id="3" Count="4" />
+      <LineId Id="46" Count="2" />
+      <LineId Id="45" Count="0" />
+      <LineId Id="59" Count="0" />
+      <LineId Id="50" Count="0" />
+      <LineId Id="55" Count="3" />
+      <LineId Id="35" Count="0" />
+      <LineId Id="60" Count="0" />
+      <LineId Id="36" Count="2" />
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="FB_VermesDisp.M_SetAllProps">
+      <LineId Id="66" Count="5" />
+      <LineId Id="76" Count="2" />
+      <LineId Id="196" Count="0" />
+      <LineId Id="176" Count="1" />
+      <LineId Id="179" Count="0" />
+      <LineId Id="178" Count="0" />
+      <LineId Id="175" Count="0" />
+      <LineId Id="180" Count="2" />
+      <LineId Id="85" Count="5" />
+      <LineId Id="183" Count="0" />
+      <LineId Id="91" Count="0" />
+      <LineId Id="187" Count="1" />
+      <LineId Id="184" Count="0" />
+      <LineId Id="92" Count="6" />
+      <LineId Id="195" Count="0" />
+      <LineId Id="189" Count="0" />
+      <LineId Id="192" Count="2" />
+      <LineId Id="100" Count="0" />
+      <LineId Id="109" Count="2" />
+      <LineId Id="204" Count="3" />
+      <LineId Id="116" Count="0" />
+      <LineId Id="208" Count="0" />
+      <LineId Id="117" Count="6" />
+      <LineId Id="143" Count="2" />
+      <LineId Id="164" Count="1" />
+      <LineId Id="167" Count="1" />
+      <LineId Id="161" Count="1" />
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="FB_VermesDisp.M_SetSingleProp">
+      <LineId Id="3" Count="0" />
+      <LineId Id="44" Count="0" />
+      <LineId Id="54" Count="5" />
+      <LineId Id="41" Count="2" />
+      <LineId Id="4" Count="0" />
+      <LineId Id="52" Count="0" />
+      <LineId Id="6" Count="0" />
+      <LineId Id="12" Count="3" />
+      <LineId Id="53" Count="0" />
+      <LineId Id="16" Count="0" />
+      <LineId Id="32" Count="1" />
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="FB_VermesDisp.M_StartUniDispense">
+      <LineId Id="11" Count="0" />
+      <LineId Id="14" Count="0" />
+      <LineId Id="22" Count="0" />
+      <LineId Id="12" Count="0" />
+      <LineId Id="15" Count="0" />
+      <LineId Id="13" Count="0" />
+      <LineId Id="27" Count="1" />
+      <LineId Id="26" Count="0" />
+      <LineId Id="29" Count="0" />
+    </LineIds>
+    <LineIds Name="FB_VermesDisp.M_StopUniDispense">
+      <LineId Id="5" Count="0" />
+    </LineIds>
+  </POU>
+</TcPlcObject>

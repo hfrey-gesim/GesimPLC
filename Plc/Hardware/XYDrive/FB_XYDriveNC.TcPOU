@@ -1,0 +1,510 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<TcPlcObject Version="1.1.0.1" ProductVersion="3.1.4024.5">
+  <POU Name="FB_XYDriveNC" Id="{118343a8-2706-423a-91a0-8b9bdd0b2126}" SpecialFunc="None">
+    <Declaration><![CDATA[FUNCTION_BLOCK FB_XYDriveNC EXTENDS FB_XYDriveBase
+VAR_INPUT
+END_VAR
+VAR_OUTPUT
+END_VAR
+VAR
+	fbMcWriteBoolParameter	: Tc2_MC2.MC_WriteBoolParameter;
+	fbMcWriteParameter		: Tc2_MC2.MC_WriteParameter;
+	fbMcReset				: Tc2_Mc2.MC_Reset;
+	fbMcPower				: Tc2_Mc2.MC_Power;
+	fbMcJog					: Tc2_MC2.MC_Jog;
+	fbMcHome				: Tc2_MC2.MC_Home;										 
+	fbMcMoveAbs				: Tc2_MC2.MC_MoveAbsolute;		
+	fbMcMoveRel				: Tc2_MC2.MC_MoveRelative;									 
+	fbMcHalt				: Tc2_MC2.MC_Halt;
+	
+	stDriveAddress			: Tc2_MC2.ST_DriveAddress;	//für CoE-Zugriff
+	fbMcReadDriveAddress	: MC_ReadDriveAddress;
+	pAxisRefMaster	: POINTER TO Tc2_MC2.AXIS_REF;
+END_VAR
+]]></Declaration>
+    <Implementation>
+      <ST><![CDATA[SUPER^();
+IF NOT bBusy THEN
+	IF pAxisRefMaster^.Status.Error THEN
+		bError := TRUE;
+	END_IF
+END_IF]]></ST>
+    </Implementation>
+    <Action Name="A_Jog" Id="{1d6a3e47-a2f8-43c7-8376-d06871b63100}">
+      <Implementation>
+        <ST><![CDATA[//für den Fall, dass der aktuelle Mode inkrementell ist, dann muss für Stop McHalt aufgerufen werden
+IF nStateA_Jog = 70 OR bStop THEN
+	IF fbMcJog.Mode = E_JogMode.MC_JOGMODE_INCHING THEN
+		fbMcHalt(Axis:= pAxisRefMaster^, Execute:= TRUE);
+		IF NOT fbMcHalt.Busy THEN
+			nStateA_Jog := 80;
+			IF fbMcHalt.Error THEN
+				nErrorId := UDINT_TO_UINT(fbMcHalt.ErrorID);
+				nStateA_Jog := 99;
+			END_IF
+			fbMcHalt(Axis:= pAxisRefMaster^, Execute:= FALSE);
+		END_IF
+	END_IF
+	fbMcJog(Axis:= pAxisRefMaster^, JogForward := FALSE, JogBackwards := FALSE);
+ELSE
+	fbMcJog(Axis:= pAxisRefMaster^, JogForward := bJogForward, JogBackwards := bJogBackward);	
+END_IF
+
+CASE nStateA_Jog OF
+	0:
+		bBusy := TRUE;
+		IF bJogInching THEN
+			nStateA_Jog := 1;
+		ELSE
+			tmrJog(IN:= TRUE, PT:= T#500MS);
+			nStateA_Jog := 2;
+		END_IF
+		
+	2:	//Timer abfragen
+		tmrJog();
+		IF tmrJog.Q THEN
+			fbMcJog(Axis:= pAxisRefMaster^, JogForward:= FALSE, JogBackwards:= FALSE);
+		END_IF
+END_CASE
+
+IF NOT (fbMcJog.Busy OR fbMcHalt.Busy) THEN
+	fbMcJog(Axis:= pAxisRefMaster^, JogForward:= FALSE, JogBackwards:= FALSE);
+	tmrJog(IN:=FALSE);
+	IF fbMcJog.Error THEN
+		nStateA_Jog := 99;
+	ELSE
+		IF nStateA_Jog = 70 THEN
+			IF NOT (bJogForward OR bJogBackward) THEN
+				nStateA_Jog := 80;
+			ELSE
+				nStateA_Jog := 0;
+			END_IF
+		ELSE
+			nStateA_Jog := 80;	
+		END_IF
+	END_IF
+END_IF]]></ST>
+      </Implementation>
+    </Action>
+    <Action Name="A_MoveAbs" Id="{137d8d44-1ca6-4a1d-b3c4-366400ecc616}">
+      <Implementation>
+        <ST><![CDATA[IF nStateMoveAbs = 0 THEN
+		bBusy := TRUE;
+		IF bStop THEN
+			nStateMoveAbs := 70;
+		ELSE
+			fbMcMoveAbs(Axis:= pAxisRefMaster^, Execute:= TRUE);
+			IF NOT fbMcMoveAbs.Busy THEN
+				IF fbMcMoveAbs.Error THEN
+					nErrorId := UDINT_TO_UINT(fbMcMoveAbs.ErrorID);
+					nStateMoveAbs := 99;
+				ELSE
+					nStateMoveAbs := 80;
+				END_IF
+				fbMcMoveAbs(Axis:= pAxisRefMaster^, Execute:= FALSE);
+			END_IF	
+		END_IF
+END_IF	
+
+IF nStateMoveAbs = 70 THEN
+	fbMcHalt(Axis:= pAxisRefMaster^, Execute:= TRUE);
+	IF NOT fbMcHalt.Busy THEN
+		nStateMoveAbs := 71;
+		IF fbMcHalt.Error THEN
+			nErrorId := UDINT_TO_UINT(fbMcHalt.ErrorID);
+			nStateMoveAbs := 99;
+		END_IF
+		fbMcHalt(Axis:= pAxisRefMaster^, Execute:= FALSE);
+	END_IF
+ELSIF nStateMoveAbs = 71 THEN	//MoveBaustein zu Ende führen
+	IF fbMcMoveAbs.Busy THEN
+		fbMcMoveAbs(Axis:= pAxisRefMaster^);
+	ELSE
+		fbMcMoveAbs(Axis:= pAxisRefMaster^, Execute:= FALSE);
+		nStateMoveAbs := 80;
+	END_IF
+END_IF
+
+
+]]></ST>
+      </Implementation>
+    </Action>
+    <Action Name="A_MoveRel" Id="{a26e0a32-4f7e-4ae6-a8e7-ec45a8b0764e}">
+      <Implementation>
+        <ST><![CDATA[IF nStateMoveRel = 0 THEN
+	bBusy := TRUE;
+	IF bStop THEN
+		nStateMoveRel := 70;
+	ELSE
+		fbMcMoveRel(Axis:= pAxisRefMaster^, Execute:= TRUE);
+		IF NOT fbMcMoveRel.Busy THEN
+			IF fbMcMoveRel.Error THEN
+				nErrorId := UDINT_TO_UINT(fbMcMoveRel.ErrorID);
+				nStateMoveRel := 99;
+			ELSE
+				nStateMoveRel := 80;	
+			END_IF
+			fbMcMoveRel(Axis:= pAxisRefMaster^, Execute:= FALSE);
+		END_IF		
+	END_IF
+END_IF
+
+IF nStateMoveRel = 70 THEN
+	fbMcHalt(Axis:= pAxisRefMaster^, Execute:= TRUE);
+	IF NOT fbMcHalt.Busy THEN
+		nStateMoveRel := 71;
+		IF fbMcHalt.Error THEN
+			nErrorId := UDINT_TO_UINT(fbMcHalt.ErrorID);
+			nStateMoveRel := 99;
+		END_IF
+		fbMcHalt(Axis:= pAxisRefMaster^, Execute:= FALSE);
+	END_IF
+ELSIF nStateMoveRel = 71 THEN
+	IF fbMcMoveRel.Busy THEN
+		fbMcMoveRel(Axis:= pAxisRefMaster^);
+	ELSE
+		fbMcMoveRel(Axis:= pAxisRefMaster^, Execute:= FALSE);
+		nStateMoveRel := 80;
+	END_IF
+END_IF]]></ST>
+      </Implementation>
+    </Action>
+    <Action Name="A_Reset" Id="{f2b58ae6-57fb-4f1e-a562-7b7ce8a21d45}">
+      <Implementation>
+        <ST><![CDATA[CASE nStateA_Reset OF
+	0:	
+		bBusy := TRUE;
+		IF pAxisRefMaster^.Status.Error THEN
+			IF pAxisRefMaster^.Status.ErrorID = 16#4550 THEN //Schleppabstand
+				nStateA_Reset := 1;
+			ELSE
+				nStateA_Reset := 2;
+			END_IF
+		ELSE
+			nStateA_Reset := 3;
+		END_IF
+	
+	1:	//Reset Calibration
+		fbMcHome(Axis:= pAxisRefMaster^, Execute:= TRUE, HomingMode:= Tc2_MC2.MC_HomingMode.MC_ResetCalibration);
+		IF NOT fbMcHome.Busy THEN
+			fbMcHome(Axis:= pAxisRefMaster^, Execute:= FALSE);
+			nStateA_Reset := 2;
+		END_IF
+	
+	2:	//Reset Achse
+		fbMcReset(Axis:= pAxisRefMaster^, Execute:= TRUE);
+		IF NOT fbMcReset.Busy THEN
+			fbMcReset(Axis:= pAxisRefMaster^, Execute:= FALSE);
+			nStateA_Reset := 3;
+		END_IF
+		
+	3:	//Checken, ob Achse fehlerfrei
+		IF pAxisRefMaster^.Status.Error THEN
+			nStateA_Reset := 99;
+		ELSE
+			//Motion-Bausteine zurücksetzen
+			fbMcMoveAbs(Axis:= pAxisRefMaster^, Execute:= FALSE);
+			fbMcMoveRel(Axis:= pAxisRefMaster^, Execute:= FALSE);
+			fbMcHalt(Axis:= pAxisRefMaster^, Execute:= FALSE);
+			nStateA_Reset := 80;
+			nStateA_Error := 0;
+			bError := FALSE;
+		END_IF
+END_CASE]]></ST>
+      </Implementation>
+    </Action>
+    <Method Name="FB_init" Id="{2b8b1cb0-597c-4fab-81fb-ea06a34fd968}">
+      <Declaration><![CDATA[METHOD FB_init : BOOL
+VAR_INPUT
+	bInitRetains 	: BOOL; // if TRUE, the retain variables are initialized (warm start / cold start)
+	bInCopyCode 	: BOOL;  // if TRUE, the instance afterwards gets moved into the copy code (online change)
+	eXYOrientation	: E_XYOrientation;
+END_VAR
+]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[nStateWriteLimitNegative := 1;
+nStateWriteLimitPositive := 1;
+nStateWriteNCIFastSpeed := 1;
+bWriteAxisParameter := TRUE;]]></ST>
+      </Implementation>
+    </Method>
+    <Method Name="M_Jog" Id="{e417542e-1405-45f2-a982-65297cb6c707}">
+      <Declaration><![CDATA[METHOD M_Jog : ERRORID
+VAR_INPUT
+	bForward	: BOOL;
+	bBackward	: BOOL;
+	bInching	: BOOL;
+	rDistance	: REAL;
+	rSpeed		: REAL;		
+END_VAR
+]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[bJogForward := bForward;
+bJogBackward := bBackward;
+fbMcJog.Position := rDistance / 1000.0;
+fbMcJog.Velocity := rSpeed / 1000.0;
+
+//Ein Richtungswechsel bzw. Modewechsel sollte immer erst einen Stop ausführen, falls Jog noch aktiv ist.
+IF bJog THEN
+	IF bForward <> bJogForward OR bBackward <> bJogBackward OR bInching <> bJogInching THEN
+		//Stoppen und falls kein Stop angefordert, dann neu mit neuen Paramtern ausführen
+		//für diesen Fall müssen die Parameter zwischengespeichert werden?
+		nStateA_Jog := 70;
+		A_Jog();
+	ELSE
+		//continuierliches Joggen:
+		//Timer zurücksetzen und nStateA_Jog auf "0" setzen
+		//inkrementelles Joggen:
+		//das letzte Increment sollte erst abgearbeitet sein
+		IF bInching THEN
+			fbMcJog.Mode := Tc2_MC2.E_JogMode.MC_JOGMODE_INCHING;
+		ELSE
+			fbMcJog.Mode := Tc2_MC2.E_JogMode.MC_JOGMODE_CONTINOUS;
+		END_IF		
+		tmrJog(IN:=FALSE);
+		nStateA_Jog := 0;
+		A_Jog();
+	END_IF
+ELSE
+	IF bBusy THEN
+		M_Jog := E_ErrorIdCmd.ERRORID_AxisStillBusy;
+	ELSE
+		bJog := TRUE;
+		IF bInching THEN
+			fbMcJog.Mode := Tc2_MC2.E_JogMode.MC_JOGMODE_INCHING;
+			bJogInching := TRUE;
+		ELSE
+			fbMcJog.Mode := Tc2_MC2.E_JogMode.MC_JOGMODE_CONTINOUS;
+			bJogInching := FALSE;
+		END_IF		
+		A_Jog();
+	END_IF
+END_IF]]></ST>
+      </Implementation>
+    </Method>
+    <Method Name="M_MoveAbs" Id="{013fca13-c8cb-4f43-a845-3e994a9547ab}">
+      <Declaration><![CDATA[METHOD M_MoveAbs : ERRORID
+VAR_INPUT
+	rPosition 		: REAL;
+	rSpeed			: REAL;
+	rAcceleration 	: REAL;
+	rDeceleration 	: REAL;
+END_VAR]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[IF bBusy THEN
+	M_MoveAbs := E_ErrorIdCmd.ERRORID_AxisStillBusy;
+ELSE
+	fbMcMoveAbs.Position := rPosition / 1000.0;
+	
+	IF rSpeed < 0 OR rSpeed > rMaxSpeed THEN
+		fbMcMoveAbs.Velocity := rMaxSpeed / 1000.0;	
+	ELSE
+		fbMcMoveAbs.Velocity := rSpeed / 1000.0;
+	END_IF
+	
+	IF rAcceleration > 0 THEN
+		fbMcMoveAbs.Acceleration := rAcceleration / 1000.0;
+	END_IF
+	
+	IF rDeceleration > 0 THEN
+		fbMcMoveAbs.Deceleration := rDeceleration / 1000.0;
+	END_IF
+	bMoveAbs := TRUE;
+	A_MoveAbs();
+END_IF]]></ST>
+      </Implementation>
+    </Method>
+    <Method Name="M_MoveRel" Id="{573a30fd-3eac-42fd-ba43-a1d89e8c1cf5}">
+      <Declaration><![CDATA[METHOD M_MoveRel : ERRORID
+VAR_INPUT
+	rDistance		: REAL;
+	rSpeed			: REAL;
+	rAcceleration 	: REAL;
+	rDeceleration 	: REAL;	
+END_VAR
+]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[IF bBusy THEN
+	M_MoveRel := E_ErrorIdCmd.ERRORID_AxisStillBusy;
+ELSE
+	fbMcMoveRel.Distance := rDistance / 1000.0;
+	
+	IF rSpeed < 0 THEN
+		fbMcMoveRel.Velocity := rMaxSpeed / 1000.0;	
+	ELSE
+		fbMcMoveRel.Velocity := rSpeed / 1000.0;
+	END_IF
+	
+	IF rAcceleration > 0 THEN
+		fbMcMoveRel.Acceleration := rAcceleration / 1000.0;
+	END_IF
+	
+	IF rDeceleration > 0 THEN
+		fbMcMoveRel.Deceleration := rDeceleration / 1000.0;
+	END_IF
+	bMoveRel := TRUE;
+	A_MoveRel();
+END_IF]]></ST>
+      </Implementation>
+    </Method>
+    <Method Name="M_PowerOff" Id="{b90e03be-29fc-460a-a720-7b263dec921a}">
+      <Declaration><![CDATA[METHOD M_PowerOff : ERRORID
+VAR_INPUT
+END_VAR
+]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[fbMcPower(Axis:= pAxisRefMaster^, Enable:= FALSE, Enable_Positive:= TRUE, Enable_Negative:= TRUE, Override:= 100);]]></ST>
+      </Implementation>
+    </Method>
+    <Method Name="M_PowerOn" Id="{5103696e-286f-4df3-aefc-d7c28af11185}">
+      <Declaration><![CDATA[METHOD M_PowerOn : ERRORID
+VAR_INPUT
+END_VAR
+]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[IF pAxisRefMaster^.Status.Homed THEN
+	fbMcPower(Axis:= pAxisRefMaster^, Enable:= TRUE, Enable_Positive:= TRUE, Enable_Negative:= TRUE, Override:= 100 );
+	IF pAxisRefMaster^.Status.Error THEN
+		nErrorId := UDINT_TO_UINT(pAxisRefMaster^.Status.ErrorID);
+		bError := TRUE;
+	END_IF
+END_IF]]></ST>
+      </Implementation>
+    </Method>
+    <Property Name="P_bCoupled" Id="{f01a3a2e-4b8f-4d91-8de3-5124c2fd561c}">
+      <Declaration><![CDATA[PROPERTY P_bCoupled : BOOL]]></Declaration>
+      <Get Name="Get" Id="{05523a75-93e5-4245-a5bd-fbff3c9957c1}">
+        <Declaration><![CDATA[VAR
+END_VAR
+]]></Declaration>
+        <Implementation>
+          <ST><![CDATA[//Wird nur zur Kopplung YY bei 2-Ebenen verwendet
+P_bCoupled := pAxisRefMaster^.Status.Coupled;]]></ST>
+        </Implementation>
+      </Get>
+    </Property>
+    <Property Name="P_bIsMoving" Id="{781acb2e-ca13-4d5e-826f-75a69b3a754c}">
+      <Declaration><![CDATA[PROPERTY P_bIsMoving : BOOL]]></Declaration>
+      <Get Name="Get" Id="{c665060c-fcbc-44a2-85c5-6862823cb5a9}">
+        <Declaration><![CDATA[VAR
+END_VAR
+]]></Declaration>
+        <Implementation>
+          <ST><![CDATA[pAxisRefMaster^.ReadStatus();
+P_bIsMoving :=  pAxisRefMaster^.Status.Moving;]]></ST>
+        </Implementation>
+      </Get>
+    </Property>
+    <Property Name="P_pAxisRef" Id="{bfa287e7-02d8-498f-b5e9-a36d9c942b35}">
+      <Declaration><![CDATA[PROPERTY P_pAxisRef : POINTER TO AXIS_REF]]></Declaration>
+      <Get Name="Get" Id="{2a16e7b7-c0e6-4fa1-9607-1e1c62be23ed}">
+        <Declaration><![CDATA[VAR
+END_VAR
+]]></Declaration>
+        <Implementation>
+          <ST><![CDATA[P_pAxisRef := pAxisRefMaster;]]></ST>
+        </Implementation>
+      </Get>
+    </Property>
+    <LineIds Name="FB_XYDriveNC">
+      <LineId Id="9" Count="0" />
+      <LineId Id="30" Count="1" />
+      <LineId Id="33" Count="1" />
+      <LineId Id="32" Count="0" />
+    </LineIds>
+    <LineIds Name="FB_XYDriveNC.A_Jog">
+      <LineId Id="170" Count="50" />
+      <LineId Id="1" Count="0" />
+    </LineIds>
+    <LineIds Name="FB_XYDriveNC.A_MoveAbs">
+      <LineId Id="40" Count="0" />
+      <LineId Id="88" Count="0" />
+      <LineId Id="42" Count="2" />
+      <LineId Id="60" Count="9" />
+      <LineId Id="46" Count="0" />
+      <LineId Id="17" Count="0" />
+      <LineId Id="32" Count="1" />
+      <LineId Id="73" Count="7" />
+      <LineId Id="72" Count="0" />
+      <LineId Id="81" Count="2" />
+      <LineId Id="85" Count="2" />
+      <LineId Id="84" Count="0" />
+      <LineId Id="71" Count="0" />
+      <LineId Id="15" Count="1" />
+      <LineId Id="1" Count="0" />
+    </LineIds>
+    <LineIds Name="FB_XYDriveNC.A_MoveRel">
+      <LineId Id="2" Count="1" />
+      <LineId Id="14" Count="1" />
+      <LineId Id="17" Count="0" />
+      <LineId Id="19" Count="8" />
+      <LineId Id="18" Count="0" />
+      <LineId Id="16" Count="0" />
+      <LineId Id="1" Count="0" />
+      <LineId Id="29" Count="0" />
+      <LineId Id="28" Count="0" />
+      <LineId Id="34" Count="7" />
+      <LineId Id="32" Count="0" />
+      <LineId Id="30" Count="0" />
+      <LineId Id="42" Count="1" />
+      <LineId Id="45" Count="2" />
+      <LineId Id="44" Count="0" />
+      <LineId Id="31" Count="0" />
+    </LineIds>
+    <LineIds Name="FB_XYDriveNC.A_Reset">
+      <LineId Id="2" Count="34" />
+      <LineId Id="40" Count="0" />
+      <LineId Id="37" Count="2" />
+      <LineId Id="1" Count="0" />
+    </LineIds>
+    <LineIds Name="FB_XYDriveNC.FB_init">
+      <LineId Id="3" Count="2" />
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="FB_XYDriveNC.M_Jog">
+      <LineId Id="3" Count="3" />
+      <LineId Id="11" Count="12" />
+      <LineId Id="44" Count="3" />
+      <LineId Id="43" Count="0" />
+      <LineId Id="24" Count="7" />
+      <LineId Id="53" Count="0" />
+      <LineId Id="49" Count="1" />
+      <LineId Id="54" Count="0" />
+      <LineId Id="51" Count="1" />
+      <LineId Id="55" Count="0" />
+      <LineId Id="48" Count="0" />
+      <LineId Id="33" Count="1" />
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="FB_XYDriveNC.M_MoveAbs">
+      <LineId Id="87" Count="19" />
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="FB_XYDriveNC.M_MoveRel">
+      <LineId Id="64" Count="19" />
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="FB_XYDriveNC.M_PowerOff">
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="FB_XYDriveNC.M_PowerOn">
+      <LineId Id="3" Count="0" />
+      <LineId Id="9" Count="0" />
+      <LineId Id="12" Count="0" />
+      <LineId Id="10" Count="1" />
+      <LineId Id="4" Count="0" />
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="FB_XYDriveNC.P_bCoupled.Get">
+      <LineId Id="3" Count="0" />
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="FB_XYDriveNC.P_bIsMoving.Get">
+      <LineId Id="3" Count="0" />
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="FB_XYDriveNC.P_pAxisRef.Get">
+      <LineId Id="2" Count="0" />
+    </LineIds>
+  </POU>
+</TcPlcObject>

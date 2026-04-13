@@ -1,0 +1,196 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<TcPlcObject Version="1.1.0.1" ProductVersion="3.1.0.25">
+  <POU Name="FB_HwRefReactHeater" Id="{5abe53b3-6214-4d33-9df7-cbf8b6449d94}">
+    <Declaration><![CDATA[FUNCTION_BLOCK FB_HwRefReactHeater EXTENDS FB_CanNodeBase
+VAR_INPUT
+END_VAR
+VAR_OUTPUT
+END_VAR
+VAR
+	//Eingänge
+	nTempActual 	AT %I* : UINT;	//aktuelle Temperatur in 1/100tel °C 
+	bTempCutoff 	AT %I* : BOOL;	//Übertemperaturabschaltung wurde aktiviert
+	bVialDetected	AT %I* : BOOL;
+	//Ausgänge
+	nPidKp 			AT %Q* : UINT; 	//PID-Reglerparameter KP
+	nPidKi 			AT %Q* : UINT;	//PID-Reglerparameter KI
+	nPidKd 			AT %Q* : UINT;	//PID-Reglerparameter KD
+	nPidTa 			AT %Q* : USINT;	//PID-Reglerparameter TA
+	bHeatingOn		AT %Q* : BOOL;	//Heizer EIN
+	nTempSetpoint	AT %Q* : USINT;	//Solltemperatur in °C (ohne Kommastellen)
+	bResetVialDetect AT %Q* : BOOL;	//VialDetection zurücksetzen
+END_VAR]]></Declaration>
+    <Implementation>
+      <ST><![CDATA[IF bNodeEnabled THEN
+	SUPER^();
+END_IF]]></ST>
+    </Implementation>
+    <Property Name="P_bHeatingOn" Id="{02ad8a62-217c-4a79-9dc6-11eb3f6b642e}">
+      <Declaration><![CDATA[PROPERTY P_bHeatingOn : BOOL]]></Declaration>
+      <Set Name="Set" Id="{0c138e36-c1a7-44f6-81ff-325fd48772e6}">
+        <Declaration><![CDATA[VAR
+END_VAR
+]]></Declaration>
+        <Implementation>
+          <ST><![CDATA[bHeatingOn := P_bHeatingOn;]]></ST>
+        </Implementation>
+      </Set>
+      <Get Name="Get" Id="{818e5d5b-db25-4cbd-83c8-6e8123bcaa09}">
+        <Declaration><![CDATA[VAR
+END_VAR
+]]></Declaration>
+        <Implementation>
+          <ST><![CDATA[P_bHeatingOn := bHeatingOn;]]></ST>
+        </Implementation>
+      </Get>
+    </Property>
+    <Property Name="P_nTempActual" Id="{0f24e4e6-11ea-4524-ba63-8f5835318432}">
+      <Declaration><![CDATA[PROPERTY P_nTempActual : UINT]]></Declaration>
+      <Get Name="Get" Id="{dbbfd260-b905-4d06-aca9-330784a9f0a1}">
+        <Declaration><![CDATA[VAR
+END_VAR
+]]></Declaration>
+        <Implementation>
+          <ST><![CDATA[P_nTempActual := nTempActual;]]></ST>
+        </Implementation>
+      </Get>
+    </Property>
+    <Property Name="P_nPidKi" Id="{6a72c61d-eb3a-4897-9270-acfeb136317c}">
+      <Declaration><![CDATA[PROPERTY P_nPidKi : UINT]]></Declaration>
+      <Set Name="Set" Id="{4cdf4e88-9447-43b6-9da7-97ec75670a09}">
+        <Declaration><![CDATA[VAR
+END_VAR
+]]></Declaration>
+        <Implementation>
+          <ST><![CDATA[nPidKi := P_nPidKi;]]></ST>
+        </Implementation>
+      </Set>
+      <Get Name="Get" Id="{cfad722f-bd78-4fb2-960c-09acb8da5e02}">
+        <Declaration><![CDATA[VAR
+END_VAR
+]]></Declaration>
+        <Implementation>
+          <ST><![CDATA[P_nPidKi := nPidKi;]]></ST>
+        </Implementation>
+      </Get>
+    </Property>
+    <Property Name="P_nTempSetpoint" Id="{7ab31499-8a9d-4999-9de1-df2f92413df2}">
+      <Declaration><![CDATA[PROPERTY P_nTempSetpoint : USINT]]></Declaration>
+      <Set Name="Set" Id="{6c00b3d5-dbbb-4e27-9b7f-7f06a0eca952}">
+        <Declaration><![CDATA[VAR
+END_VAR
+]]></Declaration>
+        <Implementation>
+          <ST><![CDATA[nTempSetpoint := P_nTempSetpoint;]]></ST>
+        </Implementation>
+      </Set>
+      <Get Name="Get" Id="{8273363c-7450-451b-bd78-2af4241a0a24}">
+        <Declaration><![CDATA[VAR
+END_VAR
+]]></Declaration>
+        <Implementation>
+          <ST><![CDATA[P_nTempSetpoint := nTempSetpoint;]]></ST>
+        </Implementation>
+      </Get>
+    </Property>
+    <Property Name="P_nPidKd" Id="{95261042-5ca6-43d1-8eaf-a50e3abae3b9}">
+      <Declaration><![CDATA[PROPERTY P_nPidKd : UINT]]></Declaration>
+      <Get Name="Get" Id="{545aa0e0-6b59-4980-8ac7-876cffee93bb}">
+        <Declaration><![CDATA[VAR
+END_VAR
+]]></Declaration>
+        <Implementation>
+          <ST><![CDATA[P_nPidKd := nPidKd;]]></ST>
+        </Implementation>
+      </Get>
+      <Set Name="Set" Id="{7ed0762e-c99d-4df2-a01d-0baedbda3ae5}">
+        <Declaration><![CDATA[VAR
+END_VAR
+]]></Declaration>
+        <Implementation>
+          <ST><![CDATA[nPidKd := P_nPidKd;]]></ST>
+        </Implementation>
+      </Set>
+    </Property>
+    <Property Name="P_bResetVialDetect" Id="{b849d57f-97f0-433f-921f-c4e47d98e54f}">
+      <Declaration><![CDATA[PROPERTY P_bResetVialDetect : BOOL]]></Declaration>
+      <Set Name="Set" Id="{c7431377-78d8-4a0e-bd4b-447dca3c5ad6}">
+        <Declaration><![CDATA[VAR
+END_VAR
+]]></Declaration>
+        <Implementation>
+          <ST><![CDATA[bResetVialDetect := P_bResetVialDetect;]]></ST>
+        </Implementation>
+      </Set>
+      <Get Name="Get" Id="{d9d55842-6c99-4746-a5b5-55b43c0d7cc1}">
+        <Declaration><![CDATA[VAR
+END_VAR
+]]></Declaration>
+        <Implementation>
+          <ST><![CDATA[P_bResetVialDetect := bResetVialDetect;]]></ST>
+        </Implementation>
+      </Get>
+    </Property>
+    <Property Name="P_nPidTa" Id="{c694ae83-4776-43f8-a7b9-ddc08d1571ba}">
+      <Declaration><![CDATA[PROPERTY P_nPidTa : USINT]]></Declaration>
+      <Get Name="Get" Id="{7c213878-7c29-484c-af55-cc8718c8e652}">
+        <Declaration><![CDATA[VAR
+END_VAR
+]]></Declaration>
+        <Implementation>
+          <ST><![CDATA[P_nPidTa := nPidTa;]]></ST>
+        </Implementation>
+      </Get>
+      <Set Name="Set" Id="{890df8d9-42e2-4851-8de1-bd5ac1b8f1a0}">
+        <Declaration><![CDATA[VAR
+END_VAR
+]]></Declaration>
+        <Implementation>
+          <ST><![CDATA[nPidTa := P_nPidTa;]]></ST>
+        </Implementation>
+      </Set>
+    </Property>
+    <Property Name="P_bTempCutoff" Id="{d9c1e38f-4977-49e4-addb-fa8b32805073}">
+      <Declaration><![CDATA[PROPERTY P_bTempCutoff : BOOL]]></Declaration>
+      <Get Name="Get" Id="{5f7db9fc-7ea1-4169-9dd3-03a9ee478b1f}">
+        <Declaration><![CDATA[VAR
+END_VAR
+]]></Declaration>
+        <Implementation>
+          <ST><![CDATA[P_bTempCutoff := bTempCutoff;]]></ST>
+        </Implementation>
+      </Get>
+    </Property>
+    <Property Name="P_nPidKp" Id="{e3e215fb-5bd7-4c53-852e-3de57c46d95a}">
+      <Declaration><![CDATA[PROPERTY P_nPidKp : UINT]]></Declaration>
+      <Get Name="Get" Id="{60a1ec41-622b-4aa6-97fe-c1772dd1c399}">
+        <Declaration><![CDATA[VAR
+END_VAR
+]]></Declaration>
+        <Implementation>
+          <ST><![CDATA[P_nPidKp := nPidKp;]]></ST>
+        </Implementation>
+      </Get>
+      <Set Name="Set" Id="{f922e583-2971-43b3-9566-a59278498722}">
+        <Declaration><![CDATA[VAR
+END_VAR
+]]></Declaration>
+        <Implementation>
+          <ST><![CDATA[nPidKp := P_nPidKp;]]></ST>
+        </Implementation>
+      </Set>
+    </Property>
+    <Property Name="P_bVialDetected" Id="{fd7077fd-5e36-40f5-b713-a05700c2be82}">
+      <Declaration><![CDATA[PROPERTY P_bVialDetected : BOOL]]></Declaration>
+      <Get Name="Get" Id="{8dc1b370-f910-4775-a923-c77ab9f8d10b}">
+        <Declaration><![CDATA[VAR
+END_VAR
+]]></Declaration>
+        <Implementation>
+          <ST><![CDATA[P_bVialDetected := bVialDetected;]]></ST>
+        </Implementation>
+      </Get>
+    </Property>
+    <ObjectProperties />
+  </POU>
+</TcPlcObject>

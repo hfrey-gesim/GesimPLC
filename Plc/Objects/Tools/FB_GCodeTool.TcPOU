@@ -1,0 +1,135 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<TcPlcObject Version="1.1.0.1" ProductVersion="3.1.4024.9">
+  <POU Name="FB_GCodeTool" Id="{c75034e7-4234-4670-b0af-42a8f7aa99d4}" SpecialFunc="None">
+    <Declaration><![CDATA[FUNCTION_BLOCK FB_GCodeTool EXTENDS FB_MzTool
+VAR_INPUT
+END_VAR
+VAR_OUTPUT
+END_VAR
+VAR
+	nGCodeToolNr : USINT;
+END_VAR]]></Declaration>
+    <Implementation>
+      <ST><![CDATA[SUPER^();	//FB_MzTool aufrufen]]></ST>
+    </Implementation>
+    <Method Name="M_CheckGCodeStart" Id="{3f37db1e-b851-472c-b204-51f43e64851d}">
+      <Declaration><![CDATA[METHOD M_CheckGCodeStart : ERRORID
+VAR_INPUT
+END_VAR
+]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[//Wird derzeit von den Tool überschrieben, die Extruder sind und gelockt werden müssen.]]></ST>
+      </Implementation>
+    </Method>
+    <Method Name="M_GetAllProps" Id="{4539080a-72d4-4352-bdd7-c7e8557154d6}">
+      <Declaration><![CDATA[METHOD M_GetAllProps : ERRORID
+VAR_INPUT
+	refCmdData : REFERENCE TO  ST_CmdData;
+END_VAR
+]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[SUPER^.M_GetAllProps(refCmdData);
+nCurrentPropIndex := nCurrentPropIndex + 1;
+refCmdData.n32Data[nCurrentPropIndex] := nGCodeToolNr;
+]]></ST>
+      </Implementation>
+    </Method>
+    <Method Name="M_SetAllProps" Id="{1a22e44e-fd1e-42a0-a6db-60829e335169}">
+      <Declaration><![CDATA[METHOD M_SetAllProps : ERRORID
+VAR_INPUT
+	refCmdData : REFERENCE TO  ST_CmdData;
+END_VAR
+]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[M_SetAllProps := SUPER^.M_SetAllProps(refCmdData);
+
+IF M_SetAllProps > 0 THEN
+	RETURN;
+END_IF
+
+nCurrentPropIndex := nCurrentPropIndex + 1;
+nSpecPropIndex := nCurrentPropIndex;
+nGCodeToolNr := DINT_TO_USINT(refCmdData.n32Data[nCurrentPropIndex]);
+nNoOfProps := nCurrentPropIndex + 1;
+
+eObjectGroup := eObjectGroup OR E_ObjectGroup.OBJECTGROUP_GCodeTool;]]></ST>
+      </Implementation>
+    </Method>
+    <Method Name="M_SetPrintParams" Id="{0f43d903-a594-446c-864c-b193be8f1ac6}">
+      <Declaration><![CDATA[METHOD M_SetPrintParams : ST_MethResult
+VAR_INPUT
+	eType 		: E_PrintParamType;
+	nNumerator	: USINT;
+	nValue		: DINT;
+END_VAR
+]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[]]></ST>
+      </Implementation>
+    </Method>
+    <Method Name="M_StartUniDispense" Id="{8a621b59-82c0-4dc2-8cff-ca3062cf9646}">
+      <Declaration><![CDATA[METHOD M_StartUniDispense : ERRORID
+VAR_INPUT
+	nParam1 : DINT;
+	nParam2 : DINT;
+END_VAR
+
+VAR_OUTPUT
+	bIsContinous : BOOL;
+END_VAR
+]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[M_StartUniDispense := E_ErrorIdGCode.ERRORID_ToolIsNoUniDispenser;]]></ST>
+      </Implementation>
+    </Method>
+    <Method Name="M_StopUniDispense" Id="{54aab880-5772-4aea-b02c-5f6a7f7b9cb7}">
+      <Declaration><![CDATA[METHOD M_StopUniDispense : ERRORID
+VAR_INPUT
+END_VAR
+]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[]]></ST>
+      </Implementation>
+    </Method>
+    <Property Name="P_nGCodeToolNr" Id="{7a8407f9-50c9-41e9-b365-6801dac01bf6}">
+      <Declaration><![CDATA[PROPERTY P_nGCodeToolNr : USINT]]></Declaration>
+      <Get Name="Get" Id="{6020b870-7c2b-4146-826a-d9856fc3e614}">
+        <Declaration><![CDATA[VAR
+END_VAR
+]]></Declaration>
+        <Implementation>
+          <ST><![CDATA[P_nGCodeToolNr := nGCodeToolNr;]]></ST>
+        </Implementation>
+      </Get>
+    </Property>
+    <LineIds Name="FB_GCodeTool">
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="FB_GCodeTool.M_CheckGCodeStart">
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="FB_GCodeTool.M_GetAllProps">
+      <LineId Id="4" Count="0" />
+      <LineId Id="6" Count="1" />
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="FB_GCodeTool.M_SetAllProps">
+      <LineId Id="3" Count="5" />
+      <LineId Id="10" Count="2" />
+      <LineId Id="17" Count="1" />
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="FB_GCodeTool.M_SetPrintParams">
+      <LineId Id="5" Count="0" />
+    </LineIds>
+    <LineIds Name="FB_GCodeTool.M_StartUniDispense">
+      <LineId Id="11" Count="0" />
+    </LineIds>
+    <LineIds Name="FB_GCodeTool.M_StopUniDispense">
+      <LineId Id="5" Count="0" />
+    </LineIds>
+    <LineIds Name="FB_GCodeTool.P_nGCodeToolNr.Get">
+      <LineId Id="2" Count="0" />
+    </LineIds>
+  </POU>
+</TcPlcObject>

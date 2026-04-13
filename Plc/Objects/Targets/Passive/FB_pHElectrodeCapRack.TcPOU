@@ -1,0 +1,205 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<TcPlcObject Version="1.1.0.1" ProductVersion="3.1.4022.18">
+  <POU Name="FB_pHElectrodeCapRack" Id="{ed707514-9d56-4042-ba82-696304f3c426}" SpecialFunc="None">
+    <Declaration><![CDATA[FUNCTION_BLOCK FB_pHElectrodeCapRack EXTENDS FB_Rack
+
+VAR
+	stHandingOffset : ST_3DPoint;
+END_VAR
+]]></Declaration>
+    <Implementation>
+      <ST><![CDATA[]]></ST>
+    </Implementation>
+    <Method Name="FB_init" Id="{ffc08207-b430-4c4b-936a-42d0f81c8b3c}">
+      <Declaration><![CDATA[METHOD FB_init : BOOL
+VAR_INPUT
+	bInitRetains : BOOL; // if TRUE, the retain variables are initialized (warm start / cold start)
+	bInCopyCode : BOOL;  // if TRUE, the instance afterwards gets moved into the copy code (online change)
+END_VAR
+]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[eObjectType := E_ObjectType.OBJECTTYPE_pHElectrodeCapRack;
+eObjectGroup := E_ObjectGroup.OBJECTGROUP_Target OR E_ObjectGroup.OBJECTGROUP_Rack;]]></ST>
+      </Implementation>
+    </Method>
+    <Method Name="M_AddChild" Id="{db8084cb-9e3d-4de5-b2bb-93fedf12e006}">
+      <Declaration><![CDATA[METHOD M_AddChild : ERRORID
+VAR_INPUT
+	pObject : POINTER TO FB_Object;
+	nSlotNr	: UINT;
+	nIndex 	: INT;
+END_VAR
+]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[//Kann folgende Objekte aufnehmen:
+//Point, Needles
+IF pObject > 0 THEN
+	IF pObject^.P_eObjectType = E_ObjectType.OBJECTTYPE_Point THEN
+		M_AddChild := SUPER^.M_AddChild(pObject,nSlotNr,nIndex);
+	ELSIF pObject^.P_eObjectType = E_ObjectType.OBJECTTYPE_pHElectrodeCap THEN
+		//darf nur in ein Slot
+		IF nSlotNr > 0 THEN
+			M_AddChild := SUPER^.M_AddChild(pObject,nSlotNr,nIndex);
+		ELSE
+			M_AddChild := E_ErrorIdObjMgmt.ERRORID_InvalidSlotNumber;	
+		END_IF
+	ELSE
+		M_AddChild := E_ErrorIdObjMgmt.ERRORID_InvalidParentObject;
+	END_IF
+ELSE
+	M_AddChild := E_ErrorIdObjMgmt.ERRORID_InvalidParentObject;
+END_IF]]></ST>
+      </Implementation>
+    </Method>
+    <Method Name="M_CheckAction" Id="{0ad36ab9-8129-4baf-8341-e442819f2c96}">
+      <Declaration><![CDATA[METHOD M_CheckAction : ERRORID
+VAR_INPUT
+	refActionData 	: REFERENCE TO ST_ActionData;
+	pCorrelObject	: POINTER TO FB_Object;
+END_VAR
+
+VAR
+	pSlot 			: POINTER TO FB_PieceSlot;
+END_VAR]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[IF refActionData.eAction = E_Action.ACTION_ExchangePiece THEN
+	pSlot := super^.M_GetSlot(DINT_TO_UINT(refActionData.aParams[1]));
+	IF pSlot = 0 THEN
+		M_CheckAction := E_ErrorIdCmd.ERRORID_InvalidTargetSlot;
+	ELSE
+		IF refActionData.aParams[2] = 0 THEN //Drop - es darf kein Stamp im Slot sein
+			IF pSlot^.P_pPiece > 0 THEN
+				M_CheckAction := E_ErrorIdCmd.ERRORID_PieceAlreadyInSlot;	
+			END_IF
+		ELSIF refActionData.aParams[2] = 1 THEN //Take - es muss ein Stemple im Slot
+			IF pSlot^.P_pPiece = 0 THEN
+				M_CheckAction := E_ErrorIdCmd.ERRORID_NoPieceInSlot;	
+			END_IF
+		ELSE
+			M_CheckAction := E_ErrorIdCmd.ERRORID_InvalidCtrl;		
+		END_IF		
+	END_IF
+ELSE
+	M_CheckAction := SUPER^.M_CheckAction(refActionData, pCorrelObject);
+END_IF]]></ST>
+      </Implementation>
+    </Method>
+    <Method Name="M_GetAllProps" Id="{6caef766-49e2-4d95-8771-6acc5ff962c2}">
+      <Declaration><![CDATA[METHOD M_GetAllProps : ERRORID
+VAR_INPUT
+	refCmdData : REFERENCE TO  ST_CmdData;
+END_VAR
+
+VAR
+END_VAR]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[SUPER^.M_GetAllProps(refCmdData);
+
+//WasteOffsets
+nCurrentPropIndex := nCurrentPropIndex + 1;
+refCmdData.n32Data[nCurrentPropIndex] := REAL_TO_DINT(stHandingOffset.X);
+nCurrentPropIndex := nCurrentPropIndex + 1;
+refCmdData.n32Data[nCurrentPropIndex] := REAL_TO_DINT(stHandingOffset.Y);
+nCurrentPropIndex := nCurrentPropIndex + 1;
+refCmdData.n32Data[nCurrentPropIndex] := REAL_TO_DINT(stHandingOffset.Z);]]></ST>
+      </Implementation>
+    </Method>
+    <Method Name="M_SetAllProps" Id="{fcc3202a-a273-4bd7-9d58-62211f127cb2}">
+      <Declaration><![CDATA[METHOD M_SetAllProps : ERRORID
+VAR_INPUT
+	refCmdData : REFERENCE TO  ST_CmdData;
+END_VAR
+
+VAR
+END_VAR
+]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[M_SetAllProps := SUPER^.M_SetAllProps(refCmdData);
+
+IF M_SetAllProps > 0 THEN
+	RETURN;
+END_IF
+
+//WasteOffsets
+nCurrentPropIndex := nCurrentPropIndex + 1;
+nSpecPropIndex := nCurrentPropIndex;
+stHandingOffset.X := DINT_TO_REAL(refCmdData.n32Data[nCurrentPropIndex]);
+nCurrentPropIndex := nCurrentPropIndex + 1;
+stHandingOffset.Y := DINT_TO_REAL(refCmdData.n32Data[nCurrentPropIndex]);
+nCurrentPropIndex := nCurrentPropIndex + 1;
+stHandingOffset.Z := DINT_TO_REAL(refCmdData.n32Data[nCurrentPropIndex]);
+nNoOfProps := nCurrentPropIndex + 1;]]></ST>
+      </Implementation>
+    </Method>
+    <Method Name="M_SetSingleProp" Id="{843c9740-76c4-4051-8133-7179894fb980}">
+      <Declaration><![CDATA[METHOD M_SetSingleProp : ERRORID
+VAR_INPUT
+	refCmdData : REFERENCE TO  ST_CmdData;
+END_VAR
+]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[IF nSpecPropIndex = refCmdData.aHeader[1] THEN
+	stHandingOffset.X := DINT_TO_REAL(refCmdData.n32Data[0]);
+ELSIF (nSpecPropIndex + 1) = refCmdData.aHeader[1] THEN
+	stHandingOffset.Y := DINT_TO_REAL(refCmdData.n32Data[0]);
+ELSIF (nSpecPropIndex + 2) = refCmdData.aHeader[1] THEN
+	stHandingOffset.Z := DINT_TO_REAL(refCmdData.n32Data[0]);
+ELSE
+	M_SetSingleProp := SUPER^.M_SetSingleProp(refCmdData);
+END_IF]]></ST>
+      </Implementation>
+    </Method>
+    <Property Name="P_stHandingOffset" Id="{81ee96e4-ca92-49e5-aac0-cee5c76fd895}">
+      <Declaration><![CDATA[PROPERTY P_stHandingOffset : ST_3DPoint]]></Declaration>
+      <Get Name="Get" Id="{47ed8482-eb1c-443d-bce4-6c13072e54c8}">
+        <Declaration><![CDATA[VAR
+END_VAR
+]]></Declaration>
+        <Implementation>
+          <ST><![CDATA[P_stHandingOffset := stHandingOffset;]]></ST>
+        </Implementation>
+      </Get>
+    </Property>
+    <LineIds Name="FB_pHElectrodeCapRack">
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="FB_pHElectrodeCapRack.FB_init">
+      <LineId Id="7" Count="1" />
+    </LineIds>
+    <LineIds Name="FB_pHElectrodeCapRack.M_AddChild">
+      <LineId Id="19" Count="0" />
+      <LineId Id="8" Count="1" />
+      <LineId Id="21" Count="0" />
+      <LineId Id="20" Count="0" />
+      <LineId Id="22" Count="2" />
+      <LineId Id="26" Count="1" />
+      <LineId Id="25" Count="0" />
+      <LineId Id="16" Count="0" />
+      <LineId Id="18" Count="0" />
+      <LineId Id="15" Count="0" />
+      <LineId Id="11" Count="0" />
+      <LineId Id="13" Count="0" />
+      <LineId Id="12" Count="0" />
+      <LineId Id="5" Count="0" />
+    </LineIds>
+    <LineIds Name="FB_pHElectrodeCapRack.M_CheckAction">
+      <LineId Id="42" Count="18" />
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="FB_pHElectrodeCapRack.M_GetAllProps">
+      <LineId Id="3" Count="8" />
+    </LineIds>
+    <LineIds Name="FB_pHElectrodeCapRack.M_SetAllProps">
+      <LineId Id="3" Count="13" />
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="FB_pHElectrodeCapRack.M_SetSingleProp">
+      <LineId Id="3" Count="5" />
+      <LineId Id="15" Count="1" />
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="FB_pHElectrodeCapRack.P_stHandingOffset.Get">
+      <LineId Id="2" Count="0" />
+    </LineIds>
+  </POU>
+</TcPlcObject>

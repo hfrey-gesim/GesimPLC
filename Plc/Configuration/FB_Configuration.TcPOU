@@ -1,0 +1,452 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<TcPlcObject Version="1.1.0.1" ProductVersion="3.1.4020.12">
+  <POU Name="FB_Configuration" Id="{ca9f2ffe-10d7-41b9-92cd-11681196763d}" SpecialFunc="None">
+    <Declaration><![CDATA[FUNCTION_BLOCK FB_Configuration
+VAR_INPUT
+	bExecute : BOOL;
+END_VAR
+VAR_OUTPUT
+	bError : BOOL;
+	bBusy : BOOL;
+	nErrorId : ERRORID;
+	stError	: ST_Error;
+END_VAR
+VAR
+	//Diese beiden Variablen müssen hintereinander stehen !!////
+	nBytesNextRead : UINT;
+	///////////////////////////////////////////////////////////
+	bActivated : BOOL;
+	bActivate : BOOL;
+	nStateA_Activate 	: USINT;
+	pMultiZRef	: POINTER TO FB_MultiZRef;
+	
+	//Load/Save
+	fbFileOpen		: FB_FileOpen;
+	fbFileClose		: FB_FileClose;
+	fbFileWrite		: FB_FileWrite;
+	fbFileRead		: FB_FileRead;
+	fbFileDelete	: FB_FileDelete;
+	hFile			: UINT;
+	//Diese beiden Variablen müssen hintereinander stehen !!////
+	nBytesWrite		: UINT;
+	stPropData		: ST_CmdData;
+	///////////////////////////////////////////////////////////
+	
+	nStateA_LoadSaveDel : USINT;
+	
+	nCheckObjPropsObjId	: UINT;
+	nCheckObjPropsObjIdStart: UINT;
+	nCheckObjCount : UINT;
+	timer : TON;
+	pObject : POINTER TO FB_Object;
+	iter	: FB_ObjCollectIteratorDeep;
+END_VAR
+VAR CONSTANT
+	sConfigPath	: STRING := '\Hard Disk\TwinCAT\3.1\Boot\Standard.cfg';
+END_VAR
+VAR PERSISTENT
+	bConfigSaved : BOOL;
+END_VAR]]></Declaration>
+    <Implementation>
+      <ST><![CDATA[]]></ST>
+    </Implementation>
+    <Action Name="A_Delete" Id="{195c0799-dc6b-4d4d-95d0-7d9e8972d71e}">
+      <Implementation>
+        <ST><![CDATA[IF bExecute THEN
+	bBusy := TRUE;
+	bConfigSaved := FALSE;
+	fbSettings.M_WritePersData();
+	fbFileDelete(sPathName:= sConfigPath, bExecute:= TRUE);
+	IF NOT fbFileDelete.bBusy THEN
+		IF fbFileDelete.bError THEN
+			bError := TRUE;
+		END_IF
+		fbFileDelete(bExecute:= FALSE);
+		bBusy := FALSE;
+	END_IF
+ELSE
+	bError := FALSE;	
+END_IF
+]]></ST>
+      </Implementation>
+    </Action>
+    <Action Name="A_Activate" Id="{59cd751e-61fe-4547-9a11-ac29670fb7c1}">
+      <Implementation>
+        <ST><![CDATA[
+IF bExecute THEN
+	//**************************Begin CheckObjects**********************************
+	IF nStateA_Activate = 0 THEN
+		bActivated := FALSE;
+		//Es ist mindestens ein Head und eine Workplate zum aktivieren erforderlich
+		IF fbObjectDirectory.nCntMZHead = 0 THEN
+			stError.ErrorId := E_ErrorIdObjMgmt.ERRORID_NoHeadCreated;
+			bError := TRUE;
+			RETURN;
+		END_IF
+		
+		IF fbObjectDirectory.nCntWorkplate = 0 THEN
+			stError.ErrorId := E_ErrorIdObjMgmt.ERRORID_NoWorkplateCreated;
+			bError := TRUE;
+			RETURN;
+		END_IF
+		
+		bBusy := TRUE;
+		
+		nCheckObjPropsObjIdStart := 1;
+		nStateA_Activate := 1;
+		fbObjectDirectory.P_pDeviceCollection^.M_GetIterator(iter);
+	END_IF
+	
+	IF nStateA_Activate = 1 THEN
+		//Es werden max. 100 Objekte in einem Zyklus gecheckt
+		//Achtung, hier besteht die Gefahr, dass die ObjectIDs nicht in der Reihenfolge sind
+		nCheckObjCount := 0;
+		WHILE iter.pNode > 0 AND_THEN iter.pNode^.P_pObject > 0 DO
+			nCheckObjCount := nCheckObjCount + 1;
+			pObject := iter.pNode^.P_pObject;
+			stError.ObjectId := pObject^.P_nObjectID;
+			stError.ErrorId := pObject^.M_CheckProps();
+			IF stError.ErrorId > 0 THEN
+				nStateA_Activate := 99;
+				EXIT;
+			ELSE
+				IF nCheckObjCount = 100 THEN
+					RETURN;
+				ELSE
+					nStateA_Activate := 20;
+				END_IF
+			END_IF
+			iter.M_Increment();
+		END_WHILE
+	END_IF
+	//***************************End CheckObjects***********************************
+	//***************************Begin ResetMzBase**********************************
+	IF nStateA_Activate = 10 THEN
+		fbMultiZRefList.M_SetCurrentToHead();
+		REPEAT
+			pMultiZRef := fbMultiZRefList.M_Get();
+			IF pMultiZRef > 0 THEN
+				pMultiZRef^.M_Reset();
+			END_IF
+		UNTIL pMultiZRef = 0
+		END_REPEAT
+		nStateA_Activate := 11;
+	END_IF
+	
+	IF nStateA_Activate = 11 THEN
+		nStateA_Activate := 20;
+		fbMultiZRefList.M_SetCurrentToHead();
+		REPEAT
+			pMultiZRef := fbMultiZRefList.M_Get();
+			IF pMultiZRef > 0 THEN
+				IF pMultiZRef^.bBusy THEN
+					nStateA_Activate := 11;	
+				END_IF
+				IF pMultiZRef^.bError THEN
+					nStateA_Activate := 99;
+				END_IF
+			END_IF
+		UNTIL pMultiZRef = 0
+		END_REPEAT
+	END_IF
+	//****************************End ResetMzBase***********************************
+	//**************************Begin Set MzConfig***********************************
+	IF nStateA_Activate = 20 THEN
+		fbMultiZRefList.M_SetCurrentToHead();
+		REPEAT
+			pMultiZRef := fbMultiZRefList.M_Get();
+			IF pMultiZRef > 0 THEN
+				pMultiZRef^.M_SetConfig();
+			END_IF
+		UNTIL pMultiZRef = 0
+		END_REPEAT
+		nStateA_Activate := 21;	
+	ELSIF nStateA_Activate = 21 THEN
+		nStateA_Activate := 80;
+		fbMultiZRefList.M_SetCurrentToHead();
+		REPEAT
+			pMultiZRef := fbMultiZRefList.M_Get();
+			IF pMultiZRef > 0 THEN
+				IF pMultiZRef^.bBusy THEN
+					nStateA_Activate := 21;
+				END_IF
+				IF pMultiZRef^.bError THEN
+					stError := pMultiZRef^.P_stError;
+					stError.POU := E_POU.POU_FB_Configuration;
+					stError.POUAction := E_POUACT.POUACT_A_Activate;
+					nStateA_Activate := 99;
+				END_IF
+			END_IF
+		UNTIL pMultiZRef = 0
+		END_REPEAT
+	END_IF
+	//***************************End Set MzConfig************************************
+	
+	
+	//Nur zum debuggen
+	IF nStateA_Activate = 30 THEN
+		timer(IN:= TRUE,PT:=T#10S);
+		IF timer.Q THEN
+			timer(IN:= FALSE);
+			nStateA_Activate := 80;
+		END_IF
+	END_IF
+	
+	IF nStateA_Activate = 80 THEN
+		bBusy := FALSE;
+		bActivated := TRUE;
+	ELSIF nStateA_Activate = 99 THEN
+		bError := TRUE;
+		bBusy := FALSE;
+	END_IF
+ELSE
+	nStateA_Activate := 0;
+	bError := FALSE;
+END_IF]]></ST>
+      </Implementation>
+    </Action>
+    <Action Name="A_Save" Id="{64173372-adc9-48b3-a1cd-84ad1190d3f1}">
+      <Implementation>
+        <ST><![CDATA[IF bExecute THEN
+	IF nStateA_LoadSaveDel = 0 THEN //File "Standard.cfg" zum schreiben öffnen
+		bBusy := TRUE;
+		hFile := 0;
+		fbFileOpen(sPathName:= sConfigPath, nMode:= FOPEN_MODEWRITE OR FOPEN_MODEBINARY, bExecute:= TRUE);
+		IF NOT fbFileOpen.bBusy THEN
+			IF fbFileOpen.bError THEN
+				nErrorId := UDINT_TO_UINT(fbFileOpen.nErrId);
+				nStateA_LoadSaveDel := 99;
+			ELSE
+				hFile := fbFileOpen.hFile;
+				fbObjectDirectory.P_pObjectCollection^.M_GetIterator(iter);
+				nStateA_LoadSaveDel := 2;
+			END_IF
+			fbFileOpen(bExecute:= FALSE);
+		END_IF
+	END_IF
+	
+	IF nStateA_LoadSaveDel = 2 THEN
+		//Alle Objekte durchlaufen -> M_GetAllProps
+		IF NOT fbFileWrite.bBusy AND iter.pNode > 0 AND_THEN iter.pNode^.P_pObject > 0 THEN
+			pObject := iter.pNode^.P_pObject;
+			MEMSET(ADR(stPropData),0,SIZEOF(stPropData));
+			pObject^.M_GetAllProps(refCmdData:= stPropData);
+			nBytesWrite := 2 + 8 + pObject^.P_nNoOfProps * 4;
+			iter.M_Increment();
+		END_IF
+		//File wird im binary-format geschieben
+		//Aufbau des Files:
+		//Objekte
+		//nBytesWrite(2Byte) ; ObjectHeader: Header[0]ObjectId(2Byte) ; Header[1]ObjectType(2Byte) ; Header[2]n.a(2Byte) ; Header[3]n.a(2Byte) ; Data[0](4Btye) ; usw
+		fbFileWrite(hFile:= hFile, pWriteBuff:= ADR(nBytesWrite), cbWriteLen:= nBytesWrite, bExecute:= TRUE);
+		IF NOT fbFileWrite.bBusy THEN
+			IF fbFileWrite.bError THEN
+				nErrorId := UDINT_TO_UINT(fbFileWrite.nErrId);
+				nStateA_LoadSaveDel := 99;				
+			ELSE
+				fbFileWrite(bExecute:= FALSE);
+				IF iter.pNode = 0 THEN
+					nStateA_LoadSaveDel := 3;
+				END_IF
+			END_IF
+		END_IF
+	END_IF
+	
+	IF nStateA_LoadSaveDel = 3 OR nStateA_LoadSaveDel = 99 THEN
+		IF hFile > 0 THEN
+			fbFileClose(hFile:= hFile, bExecute:= TRUE);
+			IF NOT fbFileClose.bBusy THEN
+				IF fbFileClose.bError THEN
+					nErrorId := UDINT_TO_UINT(fbFileClose.nErrId);
+					bError := TRUE;
+					nStateA_LoadSaveDel := 99;				
+				ELSE
+					bConfigSaved := TRUE;
+					fbSettings.M_WritePersData();
+					nStateA_LoadSaveDel := 80;
+				END_IF
+				fbFileClose(hFile:= hFile, bExecute:= FALSE);
+				bBusy := FALSE;
+			END_IF
+		ELSE
+			bBusy := FALSE;
+		END_IF
+		IF NOT bBusy AND nStateA_LoadSaveDel = 99 THEN
+			bError := TRUE;
+		END_IF
+	END_IF
+ELSE
+	nStateA_LoadSaveDel := 0;
+	bError := FALSE;
+END_IF]]></ST>
+      </Implementation>
+    </Action>
+    <Action Name="A_Load" Id="{69b8b2c7-1d80-41e9-8b5f-12b4a3877549}">
+      <Implementation>
+        <ST><![CDATA[IF bExecute THEN
+	IF nStateA_LoadSaveDel = 0 THEN //File "Standard.cfg" zum Lesen öffnen
+		bBusy := TRUE;
+		hFile := 0;
+		fbFileOpen(sPathName:= sConfigPath, nMode:= FOPEN_MODEREAD OR FOPEN_MODEBINARY, bExecute:= TRUE);
+		IF NOT fbFileOpen.bBusy THEN
+			IF fbFileOpen.bError THEN
+				nErrorId := UDINT_TO_UINT(fbFileOpen.nErrId);
+				nStateA_LoadSaveDel := 99;
+			ELSE
+				hFile := fbFileOpen.hFile;
+				nStateA_LoadSaveDel := 1;
+			END_IF
+			fbFileOpen(bExecute:= FALSE);
+		END_IF
+	END_IF
+	
+	IF nStateA_LoadSaveDel = 1 THEN //Anzahl der zu lesenden Bytes für den ersten Datensatz lesen
+		fbFileRead(hFile:= hFile, pReadBuff:= ADR(nBytesNextRead), cbReadLen:= SIZEOF(nBytesNextRead), bExecute:= TRUE);
+		IF NOT fbFileRead.bBusy THEN
+			IF fbFileRead.bError THEN
+				nErrorId := UDINT_TO_UINT(fbFileRead.nErrId);
+				nStateA_LoadSaveDel := 99;
+			ELSE
+				nStateA_LoadSaveDel := 2;
+				MEMSET(ADR(stPropData),0,SIZEOF(stPropData));
+			END_IF
+			fbFileRead(bExecute:= FALSE);
+		END_IF
+	END_IF
+	
+	IF nStateA_LoadSaveDel = 2 THEN
+		//solange Datensätze einlesen bis EOF kommt
+		//es werden 2Bytes mehr gelesen (nBytes des nächsten Datensatzes
+		fbFileRead(hFile:= hFile, pReadBuff:= ADR(stPropData), cbReadLen:= nBytesNextRead, bExecute:= TRUE);
+		IF NOT fbFileRead.bBusy THEN
+			IF fbFileRead.bError THEN
+				nErrorId := UDINT_TO_UINT(fbFileRead.nErrId);
+				nStateA_LoadSaveDel := 99;
+			ELSE
+				//nBytesNextRead für nächsen Datensatz ermitteln
+				MEMCPY(ADR(nBytesNextRead),ADR(stPropData) + nBytesNextRead - 2, 2);
+				IF fbObjectDirectory.M_CreateObject(-1, stPropData) > 0 THEN
+					nStateA_LoadSaveDel := 99;
+				END_IF
+				IF nBytesNextRead = 0 OR fbFileRead.bEOF THEN
+					nStateA_LoadSaveDel := 3;
+				END_IF
+			END_IF
+			fbFileRead(bExecute:= FALSE);
+			MEMSET(ADR(stPropData),0,SIZEOF(stPropData));
+		END_IF
+	END_IF
+	
+	IF nStateA_LoadSaveDel = 3 OR nStateA_LoadSaveDel = 99 THEN
+		IF hFile > 0 THEN
+			fbFileClose(hFile:= hFile, bExecute:= TRUE);
+			IF NOT fbFileClose.bBusy THEN
+				IF fbFileClose.bError THEN
+					nErrorId := UDINT_TO_UINT(fbFileClose.nErrId);
+					bError := TRUE;
+					nStateA_LoadSaveDel := 99;				
+				ELSE
+					nStateA_LoadSaveDel := 80;
+				END_IF
+				fbFileClose(hFile:= hFile, bExecute:= FALSE);
+				bBusy := FALSE;
+			END_IF
+		ELSE
+			bBusy := FALSE;
+		END_IF
+		IF NOT bBusy AND nStateA_LoadSaveDel = 99 THEN
+			bError := TRUE;
+		END_IF
+	END_IF
+ELSE
+	nStateA_LoadSaveDel := 0;
+	bError := FALSE;
+END_IF]]></ST>
+      </Implementation>
+    </Action>
+    <Method Name="M_Deactivate" Id="{9effb527-2f4c-4261-9344-f0786c84cb53}">
+      <Declaration><![CDATA[METHOD M_Deactivate
+VAR_INPUT
+END_VAR
+]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[bActivated := FALSE;]]></ST>
+      </Implementation>
+    </Method>
+    <Property Name="P_bActivated" Id="{b354e767-4611-4b4e-9ba3-4867d0e1371b}">
+      <Declaration><![CDATA[PROPERTY P_bActivated : BOOL]]></Declaration>
+      <Get Name="Get" Id="{124d0723-549b-4738-9528-17845bc67846}">
+        <Declaration><![CDATA[VAR
+END_VAR
+]]></Declaration>
+        <Implementation>
+          <ST><![CDATA[P_bActivated := bActivated;]]></ST>
+        </Implementation>
+      </Get>
+    </Property>
+    <Property Name="P_bConfigSaved" Id="{bef1a103-3211-403b-adbd-0c86d2583c76}">
+      <Declaration><![CDATA[PROPERTY P_bConfigSaved : BOOL]]></Declaration>
+      <Get Name="Get" Id="{e412785f-da5b-4c29-83d5-ac33c2f7cfdc}">
+        <Declaration><![CDATA[VAR
+END_VAR
+]]></Declaration>
+        <Implementation>
+          <ST><![CDATA[P_bConfigSaved := bConfigSaved;]]></ST>
+        </Implementation>
+      </Get>
+    </Property>
+    <LineIds Name="FB_Configuration">
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="FB_Configuration.A_Delete">
+      <LineId Id="2" Count="14" />
+      <LineId Id="1" Count="0" />
+    </LineIds>
+    <LineIds Name="FB_Configuration.A_Activate">
+      <LineId Id="2" Count="25" />
+      <LineId Id="133" Count="0" />
+      <LineId Id="28" Count="0" />
+      <LineId Id="134" Count="0" />
+      <LineId Id="137" Count="5" />
+      <LineId Id="146" Count="1" />
+      <LineId Id="145" Count="0" />
+      <LineId Id="148" Count="0" />
+      <LineId Id="150" Count="1" />
+      <LineId Id="149" Count="0" />
+      <LineId Id="143" Count="0" />
+      <LineId Id="135" Count="1" />
+      <LineId Id="29" Count="0" />
+      <LineId Id="47" Count="72" />
+      <LineId Id="1" Count="0" />
+      <LineId Id="121" Count="10" />
+    </LineIds>
+    <LineIds Name="FB_Configuration.A_Save">
+      <LineId Id="2" Count="9" />
+      <LineId Id="89" Count="0" />
+      <LineId Id="12" Count="5" />
+      <LineId Id="32" Count="3" />
+      <LineId Id="87" Count="0" />
+      <LineId Id="37" Count="1" />
+      <LineId Id="88" Count="0" />
+      <LineId Id="39" Count="3" />
+      <LineId Id="44" Count="41" />
+      <LineId Id="1" Count="0" />
+    </LineIds>
+    <LineIds Name="FB_Configuration.A_Load">
+      <LineId Id="2" Count="9" />
+      <LineId Id="81" Count="0" />
+      <LineId Id="13" Count="6" />
+      <LineId Id="21" Count="59" />
+      <LineId Id="1" Count="0" />
+    </LineIds>
+    <LineIds Name="FB_Configuration.M_Deactivate">
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="FB_Configuration.P_bActivated.Get">
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="FB_Configuration.P_bConfigSaved.Get">
+      <LineId Id="2" Count="0" />
+    </LineIds>
+  </POU>
+</TcPlcObject>

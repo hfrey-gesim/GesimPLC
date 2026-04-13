@@ -1,0 +1,15 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<TcPlcObject Version="1.1.0.1" ProductVersion="3.1.0.25">
+  <DUT Name="E_ArrayOrder" Id="{3e8ad601-f223-482a-b74f-4325821be8a2}">
+    <Declaration><![CDATA[TYPE E_ArrayOrder :
+(
+	RowWiseSaw,
+	RowWiseMeander,
+	ColWiseSaw,
+	ColWiseMeander
+)USINT;
+END_TYPE
+]]></Declaration>
+    <ObjectProperties />
+  </DUT>
+</TcPlcObject>

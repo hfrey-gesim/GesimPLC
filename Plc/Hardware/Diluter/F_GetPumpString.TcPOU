@@ -1,0 +1,259 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<TcPlcObject Version="1.1.0.1" ProductVersion="3.1.4024.5">
+  <POU Name="F_GetPumpString" Id="{701e839b-3bf8-49d1-aaad-86a6da748bc9}" SpecialFunc="None">
+    <Declaration><![CDATA[FUNCTION F_GetPumpString : STRING[100]
+VAR_INPUT
+	nChannel		: USINT;
+	eMode			: E_DilPumpMode;
+	sValvePump		: STRING[2];	//Ventilstellung Pumpen
+	sValveReload	: STRING[2];	//Ventilstellung Nachladen
+	nSpeedPump		: DINT;		//Gechwindigkeit Pumpen in Halbsteps/s
+	nSpeedReload	: DINT;		//Gechwindigkeit Nachladen in Halbsteps/s
+	nTotalSteps		: UDINT;	//Gesamtanzahl in Microsteps
+	nCurPlungerPos	: UINT;		
+	bEndless		: BOOL;		//Die Microsteps werden ignortiert und es wird endloss gepumpt
+	bFirstReload	: BOOL;		//Es wird immer erst in die Ausgangsposition gefahren, damit am Anfang kein Teilhub entsteht.
+END_VAR
+VAR
+	nPosition		: UDINT;		//zwischengespeicherte Position
+	nFullStrokes	: UDINT;		//ganze Hübe
+	nFirstPartSteps	: UDINT;		//Steps erster Teilhub
+	nLastPartSteps	: UDINT;		//Steps letzter Teilhub
+	sString			: STRING[100];	//Sendestring
+	sTopSpeedPump		: STRING(7);//Topspeed als String
+	sTopSpeedReload		: STRING(7);//Topspeed als String
+	sFirstPartStepsP	: STRING(7);//FirstPartSteps als String mit Bezeichner P (relative Positionierung Saugen)
+	sFirstPartStepsD	: STRING(7);//FirstPartSteps als String mit Bezeichner D (relative Positionierung Pumpen)
+	sLastPartStepsP		: STRING(7);//FirstPartSteps als String mit Bezeichner P (relative Positionierung Saugen)
+	sLastPartStepsD		: STRING(7);//FirstPartSteps als String mit Bezeichner D (relative Positionierung Pumpen)
+	sFullStrokes		: STRING(5);//volle Hübe als String mit Bezeichner G (Schleifenende)	
+END_VAR
+
+VAR_OUTPUT
+	nPlungerMoves	: UINT;
+END_VAR
+]]></Declaration>
+    <Implementation>
+      <ST><![CDATA[IF bFirstReload THEN
+	//in diesem Fall muss die aktuelle Plungerpos überschrieben werden auf den Wert der ReloadPos
+	IF eMode = E_DilPumpMode.MODE_Suck THEN
+		IF nCurPlungerPos = 0 THEN //Fahrt zu ReloadPos nicht notwendig.
+			bFirstReload := FALSE;
+		ELSE
+			nCurPlungerPos := 0;
+		END_IF
+	ELSE
+		IF nCurPlungerPos = 24000 THEN //Fahrt zu ReloadPos nicht notwendig.
+			bFirstReload := FALSE;
+		ELSE
+			nCurPlungerPos := 24000;	
+		END_IF
+	END_IF
+END_IF
+
+//Bezugsposition errechnen
+IF eMode = E_DilPumpMode.MODE_Suck THEN	//Saugen
+	nPosition := UINT_TO_UDINT(24000 - nCurPlungerPos);
+ELSIF eMode = E_DilPumpMode.MODE_Press THEN	//Pumpen
+	nPosition := UINT_TO_UDINT(nCurPlungerPos);
+END_IF
+
+//Hübe und Teilhübe berechnen
+IF nCurPlungerPos > 0 AND nCurPlungerPos < 24000 THEN	//Kolben ist weder oben noch unten
+	IF bEndless THEN
+		nFirstPartSteps := nPosition;
+	ELSIF nTotalSteps <= nPosition THEN
+		nFirstPartSteps := nTotalSteps;
+		nFullStrokes := 0;
+		nLastPartSteps := 0; 
+	ELSE
+		nFirstPartSteps := nPosition;
+		nLastPartSteps := (nTotalSteps - nFirstPartSteps) MOD 24000;
+		nFullStrokes := (nTotalSteps - nLastPartSteps) / 24000;
+	END_IF
+ELSE	//Kolben ist oben oder unten
+	IF NOT bEndless THEN
+		IF nTotalSteps < 24000 THEN
+			nFirstPartSteps := nTotalSteps;
+			nFullStrokes := 0;
+			nLastPartSteps := 0; 
+		ELSE
+			nFirstPartSteps := 0;
+			nLastPartSteps := nTotalSteps MOD 24000;
+			nFullStrokes := (nTotalSteps - nLastPartSteps) / 24000; 
+		END_IF		
+	END_IF	
+END_IF
+
+//Teilstrings vorbereiten
+sString := CONCAT(USINT_TO_STRING(nChannel),'v400');				//Diluternummer, Startgeschwindigkeit
+sTopSpeedPump := CONCAT('V', DINT_TO_STRING(nSpeedPump));			//TopSpeed Pumpen in in String mit Bezeichner umwandeln
+sTopSpeedReload := CONCAT('V', DINT_TO_STRING(nSpeedReload));			//TopSpeed Nachladen in in String mit Bezeichner umwandeln
+sFirstPartStepsP := CONCAT('P', UDINT_TO_STRING(nFirstPartSteps));	//FirstPartSteps in String mit Bezeichner umwandeln
+sFirstPartStepsD := CONCAT('D', UDINT_TO_STRING(nFirstPartSteps));	//FirstPartSteps in String mit Bezeichner umwandeln
+sLastPartStepsP := CONCAT('P', UDINT_TO_STRING(nLastPartSteps));		//LastPartSteps in String mit Bezeichner umwandeln
+sLastPartStepsD := CONCAT('D', UDINT_TO_STRING(nLastPartSteps));		//LastPartSteps in String mit Bezeichner umwandeln
+sFullStrokes := CONCAT('G', UDINT_TO_STRING(nFullStrokes));			//FullStrokes in String mit Bezeichner umwandeln			
+nPosition := UINT_TO_UDINT(nCurPlungerPos);
+//############## M O D E :  S A U G E N ##############################################################################################
+IF eMode = E_DilPumpMode.MODE_Suck THEN	//Saugen
+	
+	IF bFirstReload THEN //in ReloadPos (oben) fahren
+		sString := CONCAT(sString, sTopSpeedReload);	//Topspeed >Nachladen<
+		sString := CONCAT(sString, sValveReload);		//Ventilstellung >Nachladen<
+		sString := CONCAT(sString, 'A0');
+	END_IF
+	
+	IF nFirstPartSteps > 0 THEN
+		//Wenn Position = 24000 dann um nFirstPartSteps nach oben fahren
+		IF nPosition = 24000 THEN	//Nachladen
+			sString := CONCAT(sString, sTopSpeedReload);	//Topspeed >Nachladen<
+			sString := CONCAT(sString, sValveReload);		//Ventilstellung >Nachladen<
+			sString := CONCAT(sString, sFirstPartStepsD);	//Move nach oben um >nLastFirstSteps<
+			nPosition := 24000 - nFirstPartSteps;
+			nPlungerMoves := nPlungerMoves + 1;						
+		END_IF
+		//um nFirstPartSteps nach unten fahren
+		sString := CONCAT(sString, sTopSpeedPump);		//Topspeed >Pumpen<
+		sString := CONCAT(sString, sValvePump);			//Ventilstellung >Pumpen<
+		sString := CONCAT(sString, sFirstPartStepsP);	//FirstPartSteps
+		nPlungerMoves := nPlungerMoves + 1;
+		//Neue imaginäre Position setzen
+		nPosition := nPosition + nFirstPartSteps;
+	END_IF
+	
+	IF nFullStrokes > 0 OR bEndless THEN
+		//Wenn Position = 24000 dann nach Top fahren
+		IF nPosition = 24000 THEN
+			sString := CONCAT(sString, sTopSpeedReload);	//Topspeed >Nachladen<
+			sString := CONCAT(sString, sValveReload);		//Ventilstellung >Nachladen<
+			sString := CONCAT(sString, 'A0');	//Move nach TOP
+			nPlungerMoves := nPlungerMoves + 1;
+			nPosition := 0;
+		END_IF
+		//1* Saugen
+		sString := CONCAT(sString, sTopSpeedPump);		//Topspeed >Pumpen<
+		sString := CONCAT(sString, sValvePump);			//Ventilstellung >Pumpen<
+		sString := CONCAT(sString, 'A24000');		//Move nach >Unten<
+		nPlungerMoves := nPlungerMoves + UDINT_TO_UINT(nFullStrokes);
+		//Wenn nFullStrokes > 1 dann Schleife mit Nachladen/Saugen
+		IF nFullStrokes > 1 OR bEndless THEN
+			sString := CONCAT(sString,'g');									//Schleifenkopf
+			//Nachladen
+			sString := CONCAT(sString, sTopSpeedReload);					//Topspeed >Nachladen<
+			sString := CONCAT(sString, sValveReload);						//Ventilstellung >Nachladen<
+			sString := CONCAT(sString, 'A0');								//Move nach >Oben<
+			//Saugen
+			sString := CONCAT(sString, sTopSpeedPump);						//Topspeed >Pumpen<
+			sString := CONCAT(sString, sValvePump);							//Ventilstellung >Pumpen<
+			sString := CONCAT(sString, 'A24000');							//Move nach >Unten<
+			sString := CONCAT(sString,'G');									//Schleifenfuß Bezeichner
+			IF bEndless THEN
+				sString := CONCAT(sString,'0');								//Schleifenfuss - unendliche Anzahl Durchläufe
+			ELSE
+				sString := CONCAT(sString,UDINT_TO_STRING(nFullStrokes -1));//Schleifenfuss - Anzahle Durchläufe minus 1
+			END_IF
+			
+		END_IF					
+		//neue imaginäre Position setzen
+		nPosition := 24000;
+	END_IF
+	
+	IF nLastPartSteps > 0 THEN
+		//Wenn Position = 24000 dann um nLastPartSteps nach oben fahren
+		IF nPosition = 24000 THEN
+			sString := CONCAT(sString, sTopSpeedReload);		//Topspeed >Nachladen<
+			sString := CONCAT(sString, sValveReload);			//Ventilstellung >Nachladen<
+			sString := CONCAT(sString,sLastPartStepsD);			//Move nach oben um >nLastFirstSteps<
+		END_IF
+		//Saugen
+		sString := CONCAT(sString, sTopSpeedPump);				//Topspeed Pumpen
+		sString := CONCAT(sString, sValvePump);					//Ventilstellung "Pumpen"
+		sString := CONCAT(sString, sLastPartStepsP);			//FirstPartSteps
+		//um  nLastPartSteps nach unten fahren	
+	END_IF
+	
+	
+//############## M O D E :  P U M P E N ##############################################################################################			
+ELSIF eMode = E_DilPumpMode.MODE_Press THEN	//Pumpen
+	
+	IF bFirstReload THEN //in ReloadPos (unten) fahren
+		sString := CONCAT(sString, sTopSpeedReload);	//Topspeed >Nachladen<
+		sString := CONCAT(sString, sValveReload);		//Ventilstellung >Nachladen<
+		sString := CONCAT(sString, 'A24000');
+	END_IF
+	
+	IF nFirstPartSteps > 0 THEN
+		//Wenn Position = 0 dann um nFirstPartSteps nach unten fahren
+		IF nPosition = 0 THEN
+			sString := CONCAT(sString, sTopSpeedReload);	//Topspeed >Nachladen<
+			sString := CONCAT(sString, sValveReload);		//Ventilstellung >Nachladen<
+			sString := CONCAT(sString,sFirstPartStepsP);	//Move nach unten um >nLastFirstSteps<
+			nPosition := nFirstPartSteps;						
+		END_IF
+		//um nFirstPartSteps nach oben fahren
+		sString := CONCAT(sString, sTopSpeedPump);		//Topspeed >Pumpen<
+		sString := CONCAT(sString, sValvePump);			//Ventilstellung >Pumpen<
+		sString := CONCAT(sString, sFirstPartStepsD);	//FirstPartSteps
+		//Neue imaginäre Position setzen
+		nPosition := nPosition - nFirstPartSteps;
+	END_IF
+	
+	IF nFullStrokes > 0 OR bEndless THEN
+		//Wenn Position = 0 dann nach Bottom fahren
+		IF nPosition = 0 THEN
+			sString := CONCAT(sString, sTopSpeedReload);	//Topspeed >Nachladen<
+			sString := CONCAT(sString, sValveReload);		//Ventilstellung >Nachladen<
+			sString := CONCAT(sString, 'A24000');			//Move nach Bottom
+			nPosition := 24000;
+		END_IF
+		//1* Pumpen
+		sString := CONCAT(sString, sTopSpeedPump);			//Topspeed >Pumpen<
+		sString := CONCAT(sString, sValvePump);				//Ventilstellung >Pumpen<
+		sString := CONCAT(sString, 'A0');					//Move nach >Oben<
+		//Wenn nFullStrokes > 1 dann Schleife mit Nachladen/Saugen
+		IF nFullStrokes > 1 OR bEndless THEN
+			sString := CONCAT(sString,'g');									//Schleifenkopf
+			//Nachladen
+			sString := CONCAT(sString, sTopSpeedReload);					//Topspeed >Nachladen<
+			sString := CONCAT(sString, sValveReload);						//Ventilstellung >Nachladen<
+			sString := CONCAT(sString, 'A24000');							//Move nach >Unten<
+			//Saugen
+			sString := CONCAT(sString, sTopSpeedPump);						//Topspeed >Pumpen<
+			sString := CONCAT(sString, sValvePump);							//Ventilstellung >Pumpen<
+			sString := CONCAT(sString, 'A0');								//Move nach >Oben<
+			sString := CONCAT(sString,'G');									//Schleifenfuß Bezeichner
+			IF bEndless THEN
+				sString := CONCAT(sString,'0');								//Schleifenfuss - unendliche Anzahl Durchläufe
+			ELSE
+				sString := CONCAT(sString,UDINT_TO_STRING(nFullStrokes -1));//Schleifenfuss - Anzahle Durchläufe minus 1	
+			END_IF
+			
+		END_IF					
+		//neue imaginäre Position setzen
+		nPosition := 0;
+	END_IF
+	
+	IF nLastPartSteps > 0 THEN
+		//Wenn Position = 0 dann um nLastPartSteps nach unten fahren
+		IF nPosition = 0 THEN
+			sString := CONCAT(sString, sTopSpeedReload);		//Topspeed >Nachladen<
+			sString := CONCAT(sString, sValveReload);			//Ventilstellung >Nachladen<
+			sString := CONCAT(sString,sLastPartStepsP);			//Move nach unten um >nLastFirstSteps<
+		END_IF
+		//Pumpen
+		sString := CONCAT(sString, sTopSpeedPump);				//Topspeed >Pumpen<
+		sString := CONCAT(sString, sValvePump);					//Ventilstellung >Pumpen<
+		sString := CONCAT(sString, sLastPartStepsD);			//FirstPartSteps
+	END_IF
+END_IF
+
+F_GetPumpString := sString;
+]]></ST>
+    </Implementation>
+    <LineIds Name="F_GetPumpString">
+      <LineId Id="265" Count="214" />
+      <LineId Id="2" Count="0" />
+    </LineIds>
+  </POU>
+</TcPlcObject>

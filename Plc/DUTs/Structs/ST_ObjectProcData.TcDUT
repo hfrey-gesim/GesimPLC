@@ -1,0 +1,13 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<TcPlcObject Version="1.1.0.1" ProductVersion="3.1.0.25">
+  <DUT Name="ST_ObjectProcData" Id="{a92ccb1f-6481-4809-a492-3dfa02c78794}">
+    <Declaration><![CDATA[TYPE ST_ObjectProcData :
+STRUCT
+	nObjId		: DINT;
+	n32Data		: ARRAY[0..13] OF DINT;
+END_STRUCT
+END_TYPE
+]]></Declaration>
+    <ObjectProperties />
+  </DUT>
+</TcPlcObject>

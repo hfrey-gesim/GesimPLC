@@ -1,0 +1,600 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<TcPlcObject Version="1.1.0.1" ProductVersion="3.1.4024.4">
+  <POU Name="FB_MtpHolder" Id="{0f4f4599-1799-4a66-9127-8f6f579ff1de}" SpecialFunc="None">
+    <Declaration><![CDATA[FUNCTION_BLOCK FB_MtpHolder EXTENDS FB_ActiveTarget IMPLEMENTS I_SlotTarget
+
+VAR
+	fbSlotList			: FB_SlotList;
+	pSlot				: POINTER TO FB_Slot;
+	nNumberOfSlots		: UINT;
+	nFirstSlotPropIndex	: UINT;	//erster Index für Slots (benötigt in M_SetSingleProps)
+	nLastSlotPropIndex	: UINT;	//letzte Index für Slots (benötigt in M_SetSingleProps)
+
+	//Hardware-Verküpfung
+	pHeaterRef			: POINTER TO FB_HwRef4ChHeater;
+	
+	//Prozessdaten
+	nTempActual			: UINT;
+
+	//Spec-Properties
+	nHeaterChannel		: USINT;
+	
+	//****************************************Aktionvariablen****************************************************
+	
+	//Action: "Heating"
+	nTempSetpoint		: USINT;	//Bei Mtp-Holder bzw. SubstHolder in ganzen °C
+	bHeaterOn			: BOOL;
+	
+	//Action: "EdgeLight"
+	bEdgeLigthOn		: BOOL;
+	
+END_VAR
+]]></Declaration>
+    <Implementation>
+      <ST><![CDATA[IF pHeaterRef = 0 THEN
+	RETURN;
+END_IF
+IF bInitFB THEN
+	bInitFB := FALSE;
+	stError.ObjectId := nObjectID;
+	stError.HardwareGrp := E_HardwareGrp.Nothing;
+	stError.POU := E_POU.POU_FB_MtpHolder;
+END_IF
+
+CASE eCurrentState OF
+	E_MachineState.MACHINESTATE_Active:
+		CASE eCurrentAction OF
+			E_Action.ACTION_Heating:
+				pHeaterRef^.P_nTempSetpoint := nTempSetpoint;
+				pHeaterRef^.P_bHeatingOn := bHeaterOn;
+				//Hier muss noch eine Abfrage erfolgen, ob Heizer ON
+				//dazu braucht es ein PDO vom Heizer
+				bBusy := FALSE;
+				eCurrentAction := E_Action.ACTION_Nothing;
+				eCurrentState:= E_MachineState.MACHINESTATE_Idle;			
+			E_Action.ACTION_SwitchLight:
+				pHeaterRef^.P_bEdgeLightOn := bEdgeLigthOn;
+				//Hier muss noch eine Abfrage erfolgen, ob Heizer ON
+				//dazu braucht es ein PDO vom Heizer
+				bBusy := FALSE;
+				eCurrentAction := E_Action.ACTION_Nothing;
+				eCurrentState:= E_MachineState.MACHINESTATE_Idle;			
+		END_CASE
+END_CASE
+
+//Prozessdaten aktualisieren
+stProcessData.nObjId := nObjectID;
+stProcessData.n32Data[0] := BOOL_TO_DINT(bIsInit);
+stProcessData.n32Data[1] := eCurrentState;
+stProcessData.n32Data[2] := stError.ErrorId;
+nTempActual := pHeaterRef^.P_nTempActual;
+stProcessData.n32Data[3] := BOOL_TO_DINT(pHeaterRef^.P_bHeatingOn);
+stProcessData.n32Data[4] := nTempActual;
+aObjProcData[nNotifyId] := stProcessData;]]></ST>
+    </Implementation>
+    <Method Name="FB_init" Id="{0648b111-f88a-41ae-ac30-63649cc1f9c3}">
+      <Declaration><![CDATA[METHOD FB_init : BOOL
+VAR_INPUT
+	bInitRetains : BOOL; // if TRUE, the retain variables are initialized (warm start / cold start)
+	bInCopyCode : BOOL;  // if TRUE, the instance afterwards gets moved into the copy code (online change)
+END_VAR
+]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[eObjectType := E_ObjectType.OBJECTTYPE_MtpHolder;
+eObjectGroup := E_ObjectGroup.OBJECTGROUP_Target OR E_ObjectGroup.OBJECTGROUP_Device;]]></ST>
+      </Implementation>
+    </Method>
+    <Method Name="M_AddChild" Id="{806d5e2f-f468-419f-9111-89acecb8d498}">
+      <Declaration><![CDATA[METHOD M_AddChild : ERRORID
+VAR_INPUT
+	pObject : POINTER TO FB_Object;
+	nSlotNr	: UINT;
+	nIndex 	: INT;	
+END_VAR
+
+VAR
+	pSlot : POINTER TO FB_Slot;
+END_VAR]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[//In den abgeleiteten Tool-FBs wird überprüft, ob das entsprechende Objekt als Child tauglich ist
+IF pObject > 0 THEN
+	IF nSlotNr > 0 THEN
+		pSlot := fbSlotList.M_GetAtNr(nSlotNr);
+		IF pSlot > 0 THEN
+			IF pSlot^.P_pChild = 0 THEN
+				//Object darf selber noch an keinem Parent hängen
+				IF pObject^.P_pParentObject = 0 THEN
+					pSlot^.P_pChild := pObject;
+					pObject^.P_pObjCollectNode := pObjCollectNode^.nodes.M_AddNewNode(pObject,nIndex);
+					pObject^.M_UpdateParent();
+				ELSE
+					M_AddChild := E_ErrorIdObjMgmt.ERRORID_ObjectAlreadyOnAnotherParent;
+				END_IF
+			ELSE //Slot bereits belegt
+				M_AddChild := E_ErrorIdObjMgmt.ERRORID_SlotIsAlreadyOccupied;
+			END_IF		
+		ELSE
+			M_AddChild := E_ErrorIdObjMgmt.ERRORID_InvalidSlotNumber;			
+		END_IF	
+	ELSE
+		M_AddChild := SUPER^.M_AddChild(pObject,nSlotNr,nIndex);
+	END_IF
+ELSE
+	M_AddChild := E_ErrorIdObjMgmt.ERRORID_InvalidParentObject;
+END_IF]]></ST>
+      </Implementation>
+    </Method>
+    <Method Name="M_CheckAction" Id="{14800fc4-e28c-41e0-8161-62e7b877b55f}">
+      <Declaration><![CDATA[METHOD M_CheckAction : ERRORID
+VAR_INPUT
+	refActionData 	: REFERENCE TO ST_ActionData;
+	pCorrelObject	: POINTER TO FB_Object;
+END_VAR
+]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[IF NOT refActionData.eAction = E_Action.ACTION_MoveToTarget THEN
+	M_CheckAction := E_ErrorIdCmd.ERRORID_InvalidAction;	
+END_IF]]></ST>
+      </Implementation>
+    </Method>
+    <Method Name="M_CheckProcDataType" Id="{d613d978-f69c-411d-bce0-de681390012f}">
+      <Declaration><![CDATA[METHOD M_CheckProcDataType : BOOL
+VAR_INPUT
+	eProcDataType : E_ProcDataType;
+END_VAR
+]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[IF eProcDataType = E_ProcDataType.PROCDATATYPE_Temp1 THEN
+	M_CheckProcDataType := TRUE;
+END_IF]]></ST>
+      </Implementation>
+    </Method>
+    <Method Name="M_ClearAllProps" Id="{6168b368-4f90-4d8d-b102-05c8560bde10}">
+      <Declaration><![CDATA[METHOD M_ClearAllProps
+VAR_INPUT
+	bIgnoreParent : BOOL; //Es wird das gesamte OD gelöscht. -> Zeiger auf Parent nicht mehr gültig!
+END_VAR
+]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[fbSlotList.M_Reset();
+SUPER^.M_ClearAllProps(bIgnoreParent);]]></ST>
+      </Implementation>
+    </Method>
+    <Method Name="M_ExeAction" Id="{19ebe6ae-7149-4c26-abfd-240b65a4a92c}">
+      <Declaration><![CDATA[METHOD M_ExeAction : ERRORID
+VAR_INPUT
+	refActionData	: REFERENCE TO ST_ActionData;	
+END_VAR
+]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[IF pHeaterRef = 0 THEN
+	//M_ExeAction := E_ErrorIdObjMgmt.ERRORID_IsNoDevice;
+	RETURN;
+END_IF
+CASE refActionData.eAction OF
+	E_Action.ACTION_Init:
+		IF pHeaterRef^.P_bNodeEnabled = 0 THEN
+			bIsInit := FALSE;
+			stError.Cmd := E_Action.ACTION_Init;
+			stError.ErrorId := E_ErrorIdCan.ERRORID_NodeNotFound;
+			stError.ObjectId := nObjectID;
+			fbErrorList.M_Add(stError);
+		ELSE
+			bIsInit := TRUE;
+		END_IF
+
+	E_Action.ACTION_Heating:	//Heizung ON/OFF
+		nTempSetpoint := DINT_TO_USINT(refActionData.aParams[1]/10);
+		bHeaterOn := DINT_TO_BOOL(refActionData.aParams[2]);
+		IF nTempSetpoint > 170 THEN
+			M_ExeAction := E_ErrorIdCmd.ERRORID_InvalidHeatingTemp;
+		END_IF		
+		eCurrentAction := E_Action.ACTION_Heating;
+		eCurrentState:= E_MachineState.MACHINESTATE_Active;
+		bBusy := TRUE;
+		
+	E_Action.ACTION_SwitchLight:	//Seitenlicht ON/OFF
+		bEdgeligthOn := DINT_TO_BOOL(refActionData.aParams[1]);
+		eCurrentAction := E_Action.ACTION_SwitchLight;
+		eCurrentState:= E_MachineState.MACHINESTATE_Active;
+		bBusy := TRUE;
+	ELSE
+		M_ExeAction := E_ErrorIdCmd.ERRORID_InvalidAction;	
+END_CASE
+]]></ST>
+      </Implementation>
+    </Method>
+    <Method Name="M_GetAbsPos" Id="{e0dfd825-01a3-4f02-9629-840d99c7ff05}">
+      <Declaration><![CDATA[METHOD M_GetAbsPos : ST_3DPoint
+VAR_INPUT
+	pChildPos	: POINTER TO ST_3DPoint;
+	eTargetRef 	: E_TargetRef;
+	nParam1		: UINT;
+ 	nParam2		: UINT;
+	nParam3		: USINT;
+	nZLevel		: USINT;
+END_VAR
+VAR_OUTPUT
+	nErrorId 	: ERRORID;
+	lrAngle		: LREAL;
+END_VAR
+VAR
+	stLocPos : ST_3DPoint;
+	pSlot : POINTER TO FB_Slot;
+END_VAR
+]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[IF eTargetRef = E_TargetRef.TARGETREF_Slot THEN
+	//Slotnummer checken
+	pSlot := M_GetSlot(nParam1);
+	IF pSlot > 0 THEN
+		stLocPos := F_Add3DPoints(pSlot^.P_stRelPos,stRelPos);
+		stLocPos.Z := stLocPos.Z + stDimension.Height;
+		//kann es mal sein, dass hier das ParentTarget = 0 ist?
+		//ja -> bei der Workplate
+		IF pChildPos > 0 THEN
+			stLocPos := F_Add3DPoints(stLocPos,pChildPos^);
+		END_IF
+		IF pParentTarget > 0 THEN
+			IF pParentSlot > 0 THEN
+				M_GetAbsPos := pParentTarget^.M_GetAbsPos(pChildPos := ADR(stLocPos), eTargetRef:= E_TargetRef.TARGETREF_Slot,
+															nParam1:= pParentSlot^.P_nNr,
+															nParam2:= 0, nParam3:= 0,nZLevel:= 0, lrAngle=> lrAngle,
+															nErrorId=> nErrorId);		
+			ELSE
+				M_GetAbsPos := pParentTarget^.M_GetAbsPos(pChildPos := ADR(stLocPos), eTargetRef:= E_TargetRef.TARGETREF_LeftBottom,
+																nParam1:= 0,
+																nParam2:= 0, nParam3:= 0,nZLevel:= 0,
+																lrAngle => lrAngle, nErrorId=> nErrorId);
+			END_IF
+		ELSE
+			M_GetAbsPos := stLocPos;
+		END_IF		
+	ELSE
+		nErrorId := E_ErrorIdCmd.ERRORID_InvalidTargetSlot;
+	END_IF
+	
+ELSE
+	M_GetAbsPos := SUPER^.M_GetAbsPos(pChildPos := pChildPos, eTargetRef:= eTargetRef,
+													nParam1:= nParam1,
+													nParam2:= nParam2, nParam3:= nParam3, nZLevel:= nZLevel,
+													lrAngle => lrAngle, nErrorId=> nErrorId);	
+END_IF]]></ST>
+      </Implementation>
+    </Method>
+    <Method Name="M_GetActionBusy" Id="{46c7cb2a-2df6-46bf-b97e-7bce7e49dc2a}">
+      <Declaration><![CDATA[METHOD M_GetActionBusy : BOOL
+VAR_INPUT
+	eAction : E_Action;
+END_VAR
+]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[IF eAction = eCurrentAction THEN
+	M_GetActionBusy := TRUE;
+END_IF]]></ST>
+      </Implementation>
+    </Method>
+    <Method Name="M_GetAllProps" Id="{fae815fb-0c6a-4387-8539-4ef530818e94}">
+      <Declaration><![CDATA[METHOD M_GetAllProps : ERRORID
+VAR_INPUT
+	refCmdData : REFERENCE TO  ST_CmdData;
+END_VAR
+
+VAR
+	i : UINT;
+	pSlot		: POINTER TO FB_Slot;
+END_VAR
+
+]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[SUPER^.M_GetAllProps(refCmdData);
+
+nCurrentPropIndex := nCurrentPropIndex + 1;
+
+refCmdData.n32Data[nCurrentPropIndex] := fbSlotList.P_nCount;
+
+fbSlotList.M_SetCurrentToHead();
+
+FOR i := 1 TO fbSlotList.P_nCount BY 1 DO
+	pSlot := fbSlotList.M_GetNext();
+	IF pSlot > 0 THEN
+		nCurrentPropIndex := nCurrentPropIndex + 1;
+		refCmdData.n32Data[nCurrentPropIndex] := pSlot^.P_nNr;
+		nCurrentPropIndex := nCurrentPropIndex + 1;
+		refCmdData.n32Data[nCurrentPropIndex] := REAL_TO_DINT(pSlot^.P_rRelPosX);
+		nCurrentPropIndex := nCurrentPropIndex + 1;
+		refCmdData.n32Data[nCurrentPropIndex] := REAL_TO_DINT(pSlot^.P_rRelPosY);
+		nCurrentPropIndex := nCurrentPropIndex + 1;
+		refCmdData.n32Data[nCurrentPropIndex] := REAL_TO_DINT(pSlot^.P_rRelPosZ);
+	END_IF		
+END_FOR	
+
+nCurrentPropIndex := nCurrentPropIndex + 1;
+refCmdData.n32Data[nCurrentPropIndex] := nHeaterChannel;
+IF pHeaterRef > 0 THEN
+	nCurrentPropIndex := nCurrentPropIndex + 1;
+	refCmdData.n32Data[nCurrentPropIndex] := pHeaterRef^.P_nPidKp;
+	nCurrentPropIndex := nCurrentPropIndex + 1;
+	refCmdData.n32Data[nCurrentPropIndex] := pHeaterRef^.P_nPidKi;
+	nCurrentPropIndex := nCurrentPropIndex + 1;
+	refCmdData.n32Data[nCurrentPropIndex] := pHeaterRef^.P_nPidKd;
+	nCurrentPropIndex := nCurrentPropIndex + 1;
+	refCmdData.n32Data[nCurrentPropIndex] := pHeaterRef^.P_nPidTa;
+ELSE
+	nCurrentPropIndex := nCurrentPropIndex + 1;
+	refCmdData.n32Data[nCurrentPropIndex] := 0;
+	nCurrentPropIndex := nCurrentPropIndex + 1;
+	refCmdData.n32Data[nCurrentPropIndex] := 0;
+	nCurrentPropIndex := nCurrentPropIndex + 1;
+	refCmdData.n32Data[nCurrentPropIndex] := 0;
+	nCurrentPropIndex := nCurrentPropIndex + 1;
+	refCmdData.n32Data[nCurrentPropIndex] := 0;
+END_IF]]></ST>
+      </Implementation>
+    </Method>
+    <Method Name="M_GetProcData" Id="{0edc5076-faba-412e-8182-230b4cf9e9ae}">
+      <Declaration><![CDATA[METHOD M_GetProcData : DINT
+VAR_INPUT
+	eProcDataType : E_ProcDataType;
+END_VAR
+]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[IF eProcDataType = E_ProcDataType.PROCDATATYPE_Temp1 THEN
+	M_GetProcData := nTempActual;
+END_IF]]></ST>
+      </Implementation>
+    </Method>
+    <Method Name="M_GetSlot" Id="{62623fe4-71eb-49e3-b5aa-fb0ed5e04043}">
+      <Declaration><![CDATA[METHOD M_GetSlot : POINTER TO FB_Slot
+VAR_INPUT
+	nSlotNr : UINT;
+END_VAR
+]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[M_GetSlot := fbSlotList.M_GetAtNr(nSlotNr);]]></ST>
+      </Implementation>
+    </Method>
+    <Method Name="M_GetSlotFromChild" Id="{b2666cc6-b5af-45ab-8bdf-58e9ead8199e}">
+      <Declaration><![CDATA[METHOD M_GetSlotFromChild : POINTER TO FB_Slot
+VAR_INPUT
+	pObject : POINTER TO FB_Object;
+END_VAR
+
+VAR
+	pSlot : POINTER TO FB_Slot;
+END_VAR
+]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[//Die SlotList iterieren und vergleichen ob Objekte übereinstimmen
+fbSlotList.M_SetCurrentToHead();
+REPEAT
+	pSlot := fbSlotList.M_GetNext();
+	IF pSlot > 0 THEN
+		IF pSlot^.P_pChild = pObject THEN
+			M_GetSlotFromChild := pSlot;
+			EXIT;
+		END_IF
+	END_IF
+UNTIL pSlot = 0
+END_REPEAT]]></ST>
+      </Implementation>
+    </Method>
+    <Method Name="M_SetAllProps" Id="{a3990861-f6e9-4f82-b5fa-6f7298513537}">
+      <Declaration><![CDATA[METHOD M_SetAllProps : ERRORID
+VAR_INPUT
+	refCmdData : REFERENCE TO  ST_CmdData;
+END_VAR
+
+VAR
+	i : UINT;
+	pSlot 		: POINTER TO FB_Slot;
+END_VAR
+]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[M_SetAllProps := SUPER^.M_SetAllProps(refCmdData);
+
+IF M_SetAllProps > 0 THEN
+	RETURN;
+END_IF
+
+//Slots parametrieren
+nCurrentPropIndex := nCurrentPropIndex + 1;
+nFirstSlotPropIndex := nCurrentPropIndex;
+nNumberOfSlots := DINT_TO_UINT(refCmdData.n32Data[nCurrentPropIndex]);
+
+//Falls SlotList noch nicht existiert, dann neue erstellen
+IF fbSlotList.P_nCount = 0 THEN
+	FOR i:= 1 TO nNumberOfSlots BY 1 DO
+		pSlot := __NEW(FB_Slot(pOwner := THIS));
+		fbSlotList.M_Add(pSlot);
+		nCurrentPropIndex := nCurrentPropIndex + 1;
+		pSlot^.P_nNr := DINT_TO_USINT(refCmdData.n32Data[nCurrentPropIndex]);
+		nCurrentPropIndex := nCurrentPropIndex + 1;
+		pSlot^.P_rRelPosX := DINT_TO_REAL(refCmdData.n32Data[nCurrentPropIndex]);
+		nCurrentPropIndex := nCurrentPropIndex + 1;
+		pSlot^.P_rRelPosY := DINT_TO_REAL(refCmdData.n32Data[nCurrentPropIndex]);
+		nCurrentPropIndex := nCurrentPropIndex + 1;
+		pSlot^.P_rRelPosZ := DINT_TO_REAL(refCmdData.n32Data[nCurrentPropIndex]);
+	END_FOR
+ELSE
+	IF nNumberOfSlots <> fbSlotList.P_nCount THEN	//Anzahl der Slots dürfen sich nicht ändern
+		M_SetAllProps := E_ErrorIdObjMgmt.ERRORID_ChangeNoOfSlotsNotAllowed;
+		RETURN;		
+	END_IF
+
+	FOR i:= 1 TO nNumberOfSlots BY 1 DO
+		nCurrentPropIndex := nCurrentPropIndex + 1;
+		pSlot := fbSlotList.M_GetAtNr(DINT_TO_USINT(refCmdData.n32Data[nCurrentPropIndex]));
+		IF pSlot > 0 THEN
+			nCurrentPropIndex := nCurrentPropIndex + 1;
+			pSlot^.P_rRelPosX := DINT_TO_REAL(refCmdData.n32Data[nCurrentPropIndex]);
+			nCurrentPropIndex := nCurrentPropIndex + 1;
+			pSlot^.P_rRelPosY := DINT_TO_REAL(refCmdData.n32Data[nCurrentPropIndex]);
+			nCurrentPropIndex := nCurrentPropIndex + 1;
+			pSlot^.P_rRelPosZ := DINT_TO_REAL(refCmdData.n32Data[nCurrentPropIndex]);
+		ELSE
+			M_SetAllProps := 222;
+			RETURN;
+		END_IF	
+	END_FOR
+END_IF
+nLastSlotPropIndex := nCurrentPropIndex;
+nNoOfProps := nCurrentPropIndex + 1;
+
+nCurrentPropIndex := nCurrentPropIndex + 1;
+nSpecPropIndex := nCurrentPropIndex;
+{IF defined (variable:afbMtpHeatRef)}
+IF refCmdData.n32Data[nCurrentPropIndex] > 0 AND refCmdData.n32Data[nCurrentPropIndex] <= cNoOfMtpHeaters THEN
+		nHeaterChannel := DINT_TO_USINT(refCmdData.n32Data[nCurrentPropIndex]);
+		pHeaterRef := ADR(afbMtpHeatRef[nHeaterChannel]);
+		nCurrentPropIndex := nCurrentPropIndex + 1;
+		pHeaterRef^.P_nPidKp := DINT_TO_UINT(refCmdData.n32Data[nCurrentPropIndex]);
+		nCurrentPropIndex := nCurrentPropIndex + 1;
+		pHeaterRef^.P_nPidKi := DINT_TO_UINT(refCmdData.n32Data[nCurrentPropIndex]);
+		nCurrentPropIndex := nCurrentPropIndex + 1;
+		pHeaterRef^.P_nPidKd := DINT_TO_UINT(refCmdData.n32Data[nCurrentPropIndex]);
+		nCurrentPropIndex := nCurrentPropIndex + 1;
+		pHeaterRef^.P_nPidTa := DINT_TO_USINT(refCmdData.n32Data[nCurrentPropIndex]);
+ELSIF refCmdData.n32Data[nCurrentPropIndex] = 0 THEN
+	nCurrentPropIndex := nCurrentPropIndex + 4;
+	nHeaterChannel := 0;
+	pHeaterRef := 0;
+ELSE
+	M_SetAllProps := E_ErrorIdObjMgmt.ERRORID_InvalidHeaterChannel;
+END_IF
+{ELSE}
+IF refCmdData.n32Data[nCurrentPropIndex] > 0 THEN
+	M_SetAllProps := E_ErrorIdObjMgmt.ERRORID_InvalidHardwareRef;
+	RETURN;
+END_IF
+{END_IF}
+nNoOfProps := nCurrentPropIndex + 1;]]></ST>
+      </Implementation>
+    </Method>
+    <Method Name="M_Stop" Id="{b306b5f4-c417-4776-a631-3f331c8b61e8}">
+      <Declaration><![CDATA[METHOD M_Stop : ERRORID
+VAR_INPUT
+END_VAR
+]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[]]></ST>
+      </Implementation>
+    </Method>
+    <Property Name="P_bStopAllOnError" Id="{d0103521-b6ec-46ac-ba8c-49de0230bb82}">
+      <Declaration><![CDATA[PROPERTY P_bStopAllOnError : BOOL]]></Declaration>
+      <Get Name="Get" Id="{86ac0f7f-2cc6-4ba5-b5d4-9e327d5a329b}">
+        <Declaration><![CDATA[VAR
+END_VAR
+]]></Declaration>
+        <Implementation>
+          <ST><![CDATA[]]></ST>
+        </Implementation>
+      </Get>
+    </Property>
+    <Property Name="P_eCurrentState" Id="{9309f633-a210-43b7-86e9-61f45a6b9269}">
+      <Declaration><![CDATA[PROPERTY P_eCurrentState : E_MachineState]]></Declaration>
+      <Get Name="Get" Id="{51f9e142-b668-41b8-88c1-f46fa2bf85a4}">
+        <Declaration><![CDATA[VAR
+END_VAR
+]]></Declaration>
+        <Implementation>
+          <ST><![CDATA[]]></ST>
+        </Implementation>
+      </Get>
+      <Set Name="Set" Id="{1093f1dd-6619-406e-882f-1cd4840cbdd4}">
+        <Declaration><![CDATA[VAR
+END_VAR
+]]></Declaration>
+        <Implementation>
+          <ST><![CDATA[]]></ST>
+        </Implementation>
+      </Set>
+    </Property>
+    <LineIds Name="FB_MtpHolder">
+      <LineId Id="3" Count="38" />
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="FB_MtpHolder.FB_init">
+      <LineId Id="7" Count="1" />
+    </LineIds>
+    <LineIds Name="FB_MtpHolder.M_AddChild">
+      <LineId Id="8" Count="0" />
+      <LineId Id="42" Count="1" />
+      <LineId Id="47" Count="8" />
+      <LineId Id="57" Count="2" />
+      <LineId Id="61" Count="3" />
+      <LineId Id="45" Count="1" />
+      <LineId Id="44" Count="0" />
+      <LineId Id="16" Count="0" />
+      <LineId Id="14" Count="0" />
+      <LineId Id="10" Count="0" />
+      <LineId Id="7" Count="0" />
+    </LineIds>
+    <LineIds Name="FB_MtpHolder.M_CheckAction">
+      <LineId Id="8" Count="2" />
+    </LineIds>
+    <LineIds Name="FB_MtpHolder.M_CheckProcDataType">
+      <LineId Id="3" Count="1" />
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="FB_MtpHolder.M_ClearAllProps">
+      <LineId Id="3" Count="0" />
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="FB_MtpHolder.M_ExeAction">
+      <LineId Id="3" Count="33" />
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="FB_MtpHolder.M_GetAbsPos">
+      <LineId Id="3" Count="34" />
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="FB_MtpHolder.M_GetActionBusy">
+      <LineId Id="3" Count="1" />
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="FB_MtpHolder.M_GetAllProps">
+      <LineId Id="37" Count="7" />
+      <LineId Id="62" Count="12" />
+      <LineId Id="4" Count="20" />
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="FB_MtpHolder.M_GetProcData">
+      <LineId Id="3" Count="1" />
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="FB_MtpHolder.M_GetSlot">
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="FB_MtpHolder.M_GetSlotFromChild">
+      <LineId Id="11" Count="10" />
+      <LineId Id="6" Count="0" />
+    </LineIds>
+    <LineIds Name="FB_MtpHolder.M_SetAllProps">
+      <LineId Id="3" Count="3" />
+      <LineId Id="41" Count="4" />
+      <LineId Id="49" Count="4" />
+      <LineId Id="58" Count="0" />
+      <LineId Id="61" Count="8" />
+      <LineId Id="75" Count="8" />
+      <LineId Id="100" Count="11" />
+      <LineId Id="113" Count="2" />
+      <LineId Id="46" Count="1" />
+      <LineId Id="9" Count="21" />
+      <LineId Id="32" Count="4" />
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="FB_MtpHolder.M_Stop">
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="FB_MtpHolder.P_bStopAllOnError.Get">
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="FB_MtpHolder.P_eCurrentState.Get">
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="FB_MtpHolder.P_eCurrentState.Set">
+      <LineId Id="2" Count="0" />
+    </LineIds>
+  </POU>
+</TcPlcObject>

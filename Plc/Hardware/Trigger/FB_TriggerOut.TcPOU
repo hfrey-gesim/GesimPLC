@@ -1,0 +1,133 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<TcPlcObject Version="1.1.0.1">
+  <POU Name="FB_TriggerOut" Id="{da8785d0-fe1e-44c2-af97-bcb1fd311e11}" SpecialFunc="None">
+    <Declaration><![CDATA[FUNCTION_BLOCK FB_TriggerOut
+VAR_INPUT
+END_VAR
+VAR_OUTPUT
+END_VAR
+VAR
+	//Start DS Änderung Plasmapen nur für 2372
+	bPowerPlasma AT %Q*  	: BOOL;
+	timer1					: TON;
+	timer2					: TON;
+	nState					: USINT := 0;
+	// Ende
+	bSafety AT %I* 	: BOOL;
+	aOut AT %Q* 	: ARRAY[1..3] OF BOOL;
+	aCycle			: ARRAY[1..3] OF USINT;
+	i				: USINT;
+END_VAR
+]]></Declaration>
+    <Implementation>
+      <ST><![CDATA[//Wenn spätestens nach 2 Zyklen kein Ein mehr kommmt, dann ausschalten
+FOR i:= 1 TO 3 BY 1 DO
+	aCycle[i] := SHR(aCycle[i],1);
+	aOut[i] := aCycle[i].0 AND bSafety;
+END_FOR
+
+//DS Änderung Plasmapen nur für 2372
+timer1(PT:=T#5S);
+timer2(PT:=T#2S);
+
+CASE nState OF
+	0:
+	bPowerPlasma := TRUE;
+	timer1(IN:=FALSE);
+	timer2(IN:=FALSE);
+	
+	1:
+	timer1(IN:=TRUE);
+	IF timer1.Q THEN
+		nState := 2;
+	END_IF
+	
+	2:
+	timer2(IN:=TRUE);
+	bPowerPlasma := FALSE;
+	IF timer2.Q THEN
+		
+		nState:=0;
+		
+	END_IF
+	
+END_CASE]]></ST>
+    </Implementation>
+    <Method Name="FB_init" Id="{cf80badc-95f7-4566-b688-9f9f665132e2}">
+      <Declaration><![CDATA[METHOD FB_init : BOOL
+VAR_INPUT
+	bInitRetains : BOOL; // if TRUE, the retain variables are initialized (warm start / cold start)
+	bInCopyCode : BOOL;  // if TRUE, the instance afterwards gets moved into the copy code (online change)
+END_VAR
+]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[IF NOT (F_GetMappingStatus(ADR(bSafety),SIZEOF(bSafety)) = EPlcMappingStatus.MS_Partial) THEN
+	bSafety := TRUE;
+END_IF
+
+]]></ST>
+      </Implementation>
+    </Method>
+    <Method Name="M_GetState" Id="{305e8b63-53cf-4b86-bcb3-6758795c0d5a}">
+      <Declaration><![CDATA[METHOD M_GetState : BOOL
+VAR_INPUT
+	nChannel : USINT;
+END_VAR
+]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[IF nChannel >= 1 AND nChannel <= 3 THEN
+	M_GetState := aOut[nChannel];
+END_IF]]></ST>
+      </Implementation>
+    </Method>
+    <Method Name="M_Off" Id="{1fd56c91-216d-4cec-b89f-9fb052b53f4d}">
+      <Declaration><![CDATA[METHOD M_Off
+VAR_INPUT
+	nChannel : USINT;
+END_VAR]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[IF nChannel >= 1 AND nChannel <= 3 THEN
+	aCycle[nChannel] := 0;
+	aOut[nChannel] := FALSE;
+END_IF
+
+	//DS Änderung Plasmapen nur für 2372
+	nState:=1;]]></ST>
+      </Implementation>
+    </Method>
+    <Method Name="M_On" Id="{d896b94e-7c80-466f-87bd-679c2fb1284c}">
+      <Declaration><![CDATA[METHOD M_On
+VAR_INPUT
+	nChannel : USINT;
+END_VAR]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[IF nChannel >= 1 AND nChannel <= 3 THEN
+	aCycle[nChannel] := 3;
+END_IF
+
+	//DS Änderung Plasmapen nur für 2372
+	nState:=0;]]></ST>
+      </Implementation>
+    </Method>
+    <LineIds Name="FB_TriggerOut">
+      <LineId Id="95" Count="30" />
+      <LineId Id="65" Count="0" />
+    </LineIds>
+    <LineIds Name="FB_TriggerOut.FB_init">
+      <LineId Id="15" Count="3" />
+      <LineId Id="9" Count="0" />
+    </LineIds>
+    <LineIds Name="FB_TriggerOut.M_GetState">
+      <LineId Id="5" Count="0" />
+      <LineId Id="7" Count="1" />
+    </LineIds>
+    <LineIds Name="FB_TriggerOut.M_Off">
+      <LineId Id="37" Count="5" />
+      <LineId Id="29" Count="0" />
+    </LineIds>
+    <LineIds Name="FB_TriggerOut.M_On">
+      <LineId Id="33" Count="4" />
+      <LineId Id="29" Count="0" />
+    </LineIds>
+  </POU>
+</TcPlcObject>

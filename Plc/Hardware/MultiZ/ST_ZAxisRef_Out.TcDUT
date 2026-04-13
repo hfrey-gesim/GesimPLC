@@ -1,0 +1,21 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<TcPlcObject Version="1.1.0.1" ProductVersion="3.1.4020.6">
+  <DUT Name="ST_ZAxisRef_Out" Id="{e56533b8-8481-4550-8233-c20543ad9114}">
+    <Declaration><![CDATA[TYPE ST_ZAxisRef_Out :
+STRUCT
+	nCtrl			AT %Q* : USINT;	//PDO
+	nMode			AT %Q* : USINT;	//PDO
+	nTrgtPos		AT %Q* : DINT;	//PDO
+	nVelo			AT %Q* : DINT;	//PDO
+	nToolCtrl		AT %Q* : BYTE;	//PDO
+	nForceThrshld	: UINT;			//SDO
+	nForcePos		: DINT;			//SDO
+	nForceVelo		: UINT;			//SDO
+	bTipEjectExist	: BOOL;			//SDO
+	
+	nToolEnable		: USINT;		//Sdo
+END_STRUCT
+END_TYPE
+]]></Declaration>
+  </DUT>
+</TcPlcObject>

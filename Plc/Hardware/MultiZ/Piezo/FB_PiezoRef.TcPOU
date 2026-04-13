@@ -1,0 +1,275 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<TcPlcObject Version="1.1.0.1" ProductVersion="3.1.4022.7">
+  <POU Name="FB_PiezoRef" Id="{cae73e5a-88e8-4eb3-b02e-1f17c6ea426e}" SpecialFunc="None">
+    <Declaration><![CDATA[FUNCTION_BLOCK FB_PiezoRef
+VAR_INPUT
+END_VAR
+VAR
+	nPeriod			: UINT;
+	nPulse			: UINT;
+	nDrops			: UINT;
+	nVoltage		: UINT;
+	nHoldVoltage	: UINT;
+	nPrePeakTime	: UINT;
+	nZSensorID  	: DINT;
+	eDispenserMode 	: E_DispenserMode;
+	bSynchronize	: BOOL;
+END_VAR
+
+VAR_OUTPUT
+	pMultiZRef 	: POINTER TO FB_MultiZRef;
+	nChannel 	: USINT;
+	pToolCtrl	: POINTER TO BYTE;
+	pToolState	: POINTER TO BYTE;
+END_VAR]]></Declaration>
+    <Implementation>
+      <ST><![CDATA[]]></ST>
+    </Implementation>
+    <Method Name="FB_init" Id="{d6f21ba1-bca4-4f63-9b82-9afb56469ea5}">
+      <Declaration><![CDATA[METHOD FB_init : BOOL
+VAR_INPUT
+	bInitRetains 	: BOOL; // if TRUE, the retain variables are initialized (warm start / cold start)
+	bInCopyCode 	: BOOL;  // if TRUE, the instance afterwards gets moved into the copy code (online change)
+	pMultiZRef 		: POINTER TO FB_MultiZRef;
+END_VAR
+
+VAR
+	nFirstAdress : PVOID;
+	nSelfAdress : PVOID;		
+END_VAR]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[THIS^.pMultiZRef := pMultiZRef;
+nFirstAdress := ADR(pMultiZRef^.aFbPiezoRef);
+nSelfAdress := THIS;
+{IF hasvalue (RegisterSize, '32')}
+nChannel := UDINT_TO_USINT((nSelfAdress - nFirstAdress)/SIZEOF(THIS^) + 1);
+{ELSE}
+nChannel := ULINT_TO_USINT((nSelfAdress - nFirstAdress)/SIZEOF(THIS^) + 1);
+{END_IF}
+pToolCtrl := ADR(pMultiZRef^.aFbZAxisRef[nChannel].stOutput.nToolCtrl);
+pToolState := ADR(pMultiZRef^.aFbZAxisRef[nChannel].stInput.nToolState);]]></ST>
+      </Implementation>
+    </Method>
+    <Property Name="P_bSynchronize" Id="{1f3c3a8e-16e3-4b87-885b-88aac0b03b5d}">
+      <Declaration><![CDATA[PROPERTY P_bSynchronize : BOOL]]></Declaration>
+      <Get Name="Get" Id="{116e1404-844c-4735-8cb1-b6cf03df2421}">
+        <Declaration><![CDATA[VAR
+END_VAR
+]]></Declaration>
+        <Implementation>
+          <ST><![CDATA[P_bSynchronize := bSynchronize;]]></ST>
+        </Implementation>
+      </Get>
+      <Set Name="Set" Id="{978d3714-a316-4d3b-a13d-8b3fc58d62e4}">
+        <Declaration><![CDATA[VAR
+END_VAR
+]]></Declaration>
+        <Implementation>
+          <ST><![CDATA[bSynchronize := P_bSynchronize;]]></ST>
+        </Implementation>
+      </Set>
+    </Property>
+    <Property Name="P_eDispenserMode" Id="{ab6ca4c0-6b2a-43b1-8d4c-9e6e4d113277}">
+      <Declaration><![CDATA[PROPERTY P_eDispenserMode : E_DispenserMode]]></Declaration>
+      <Get Name="Get" Id="{1f235094-ee47-4b82-9897-cd8310bee53b}">
+        <Declaration><![CDATA[VAR
+END_VAR
+]]></Declaration>
+        <Implementation>
+          <ST><![CDATA[P_eDispenserMode := eDispenserMode;]]></ST>
+        </Implementation>
+      </Get>
+      <Set Name="Set" Id="{2833194f-7392-4b17-ba4d-f933eb3fb01d}">
+        <Declaration><![CDATA[VAR
+END_VAR
+]]></Declaration>
+        <Implementation>
+          <ST><![CDATA[eDispenserMode := P_eDispenserMode;]]></ST>
+        </Implementation>
+      </Set>
+    </Property>
+    <Property Name="P_nDrops" Id="{a78a95e3-d010-438d-bf12-0ce6963c91a8}">
+      <Declaration><![CDATA[PROPERTY P_nDrops : UINT]]></Declaration>
+      <Get Name="Get" Id="{29001c35-52ce-41e7-af4c-5d473d06ef71}">
+        <Declaration><![CDATA[VAR
+END_VAR
+]]></Declaration>
+        <Implementation>
+          <ST><![CDATA[P_nDrops := nDrops;]]></ST>
+        </Implementation>
+      </Get>
+      <Set Name="Set" Id="{29cc70a3-32aa-4743-bd8e-c9e66c4620b1}">
+        <Declaration><![CDATA[VAR
+END_VAR
+]]></Declaration>
+        <Implementation>
+          <ST><![CDATA[nDrops := P_nDrops;]]></ST>
+        </Implementation>
+      </Set>
+    </Property>
+    <Property Name="P_nHoldVoltage" Id="{d031d2d7-b56e-4414-944d-afd63c4d23b9}">
+      <Declaration><![CDATA[PROPERTY P_nHoldVoltage : UINT]]></Declaration>
+      <Get Name="Get" Id="{d3ee5103-1e1d-442b-a57f-1d551faab67b}">
+        <Declaration><![CDATA[VAR
+END_VAR
+]]></Declaration>
+        <Implementation>
+          <ST><![CDATA[P_nHoldVoltage := nHoldVoltage;]]></ST>
+        </Implementation>
+      </Get>
+      <Set Name="Set" Id="{fe3b1535-7112-41b7-b492-94a39f3dfc41}">
+        <Declaration><![CDATA[VAR
+END_VAR
+]]></Declaration>
+        <Implementation>
+          <ST><![CDATA[nHoldVoltage := P_nHoldVoltage;]]></ST>
+        </Implementation>
+      </Set>
+    </Property>
+    <Property Name="P_nPeriod" Id="{b8808c3e-18a1-4872-a178-c5794657366f}">
+      <Declaration><![CDATA[PROPERTY P_nPeriod : UINT]]></Declaration>
+      <Get Name="Get" Id="{49e1c881-234a-41b7-b3a1-20125c24d64c}">
+        <Declaration><![CDATA[VAR
+END_VAR
+]]></Declaration>
+        <Implementation>
+          <ST><![CDATA[P_nPeriod := nPeriod;]]></ST>
+        </Implementation>
+      </Get>
+      <Set Name="Set" Id="{25228ed4-91f7-4b60-b686-795976577285}">
+        <Declaration><![CDATA[VAR
+END_VAR
+]]></Declaration>
+        <Implementation>
+          <ST><![CDATA[nPeriod := P_nPeriod;]]></ST>
+        </Implementation>
+      </Set>
+    </Property>
+    <Property Name="P_nPrePeakTime" Id="{3d69e3ee-60e3-4077-b6a9-b51febf71d0e}">
+      <Declaration><![CDATA[PROPERTY P_nPrePeakTime : UINT]]></Declaration>
+      <Get Name="Get" Id="{76d80cde-67f7-4c3d-80f1-9b780d635227}">
+        <Declaration><![CDATA[VAR
+END_VAR
+]]></Declaration>
+        <Implementation>
+          <ST><![CDATA[P_nPrePeakTime := nPrePeakTime;]]></ST>
+        </Implementation>
+      </Get>
+      <Set Name="Set" Id="{6553d6d1-9d49-4d66-903b-4af7a2de2bec}">
+        <Declaration><![CDATA[VAR
+END_VAR
+]]></Declaration>
+        <Implementation>
+          <ST><![CDATA[nPrePeakTime := P_nPrePeakTime;]]></ST>
+        </Implementation>
+      </Set>
+    </Property>
+    <Property Name="P_nPulse" Id="{5abaa849-11e8-4225-b37b-2d5ec78144bd}">
+      <Declaration><![CDATA[PROPERTY P_nPulse : UINT]]></Declaration>
+      <Get Name="Get" Id="{6431d55c-b7e9-4b94-be79-c4382534b4fa}">
+        <Declaration><![CDATA[VAR
+END_VAR
+]]></Declaration>
+        <Implementation>
+          <ST><![CDATA[P_nPulse := nPulse;]]></ST>
+        </Implementation>
+      </Get>
+      <Set Name="Set" Id="{0c1fb712-3260-4fa5-8a7c-69f5c2d84b01}">
+        <Declaration><![CDATA[VAR
+END_VAR
+]]></Declaration>
+        <Implementation>
+          <ST><![CDATA[nPulse := P_nPulse;]]></ST>
+        </Implementation>
+      </Set>
+    </Property>
+    <Property Name="P_nVoltage" Id="{d0a99fc7-4215-42b8-86d8-9ef10a8d55da}">
+      <Declaration><![CDATA[PROPERTY P_nVoltage : UINT]]></Declaration>
+      <Get Name="Get" Id="{2013d0c1-fee2-4b16-8538-4510c934693b}">
+        <Declaration><![CDATA[VAR
+END_VAR
+]]></Declaration>
+        <Implementation>
+          <ST><![CDATA[P_nVoltage := nVoltage;]]></ST>
+        </Implementation>
+      </Get>
+      <Set Name="Set" Id="{2cc4ebba-2240-4c6a-943a-647764099a45}">
+        <Declaration><![CDATA[VAR
+END_VAR
+]]></Declaration>
+        <Implementation>
+          <ST><![CDATA[ nVoltage := P_nVoltage;]]></ST>
+        </Implementation>
+      </Set>
+    </Property>
+    <Property Name="P_nZSensorID" Id="{3817216e-7c96-4735-9e59-6e0236327dab}">
+      <Declaration><![CDATA[PROPERTY P_nZSensorID : DINT]]></Declaration>
+      <Get Name="Get" Id="{c45d2aa5-9e70-491d-8655-b9b150f7dfa7}">
+        <Declaration><![CDATA[VAR
+END_VAR
+]]></Declaration>
+        <Implementation>
+          <ST><![CDATA[P_nZSensorID := nZSensorID;]]></ST>
+        </Implementation>
+      </Get>
+    </Property>
+    <LineIds Name="FB_PiezoRef">
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="FB_PiezoRef.FB_init">
+      <LineId Id="19" Count="8" />
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="FB_PiezoRef.P_bSynchronize.Get">
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="FB_PiezoRef.P_bSynchronize.Set">
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="FB_PiezoRef.P_eDispenserMode.Get">
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="FB_PiezoRef.P_eDispenserMode.Set">
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="FB_PiezoRef.P_nDrops.Get">
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="FB_PiezoRef.P_nDrops.Set">
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="FB_PiezoRef.P_nHoldVoltage.Get">
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="FB_PiezoRef.P_nHoldVoltage.Set">
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="FB_PiezoRef.P_nPeriod.Get">
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="FB_PiezoRef.P_nPeriod.Set">
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="FB_PiezoRef.P_nPrePeakTime.Get">
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="FB_PiezoRef.P_nPrePeakTime.Set">
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="FB_PiezoRef.P_nPulse.Get">
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="FB_PiezoRef.P_nPulse.Set">
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="FB_PiezoRef.P_nVoltage.Get">
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="FB_PiezoRef.P_nVoltage.Set">
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="FB_PiezoRef.P_nZSensorID.Get">
+      <LineId Id="2" Count="0" />
+    </LineIds>
+  </POU>
+</TcPlcObject>

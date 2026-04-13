@@ -1,0 +1,137 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<TcPlcObject Version="1.1.0.1" ProductVersion="3.1.4022.10">
+  <POU Name="FB_CondiStepResult" Id="{72836e5d-189d-419c-a7fd-efb986e596ad}" SpecialFunc="None">
+    <Declaration><![CDATA[{attribute 'enable_dynamic_creation'}
+FUNCTION_BLOCK FB_CondiStepResult EXTENDS FB_CondiBase
+VAR_INPUT
+END_VAR
+VAR_OUTPUT
+END_VAR
+VAR
+	pStep 			: POINTER TO ST_Step;
+	eCompareOperator: E_CompOperator;
+	nCompareValue 	: DINT;
+END_VAR]]></Declaration>
+    <Implementation>
+      <ST><![CDATA[]]></ST>
+    </Implementation>
+    <Property Name="P_eCompareOperator" Id="{01e4eb2e-4ebd-49f8-9c96-36348f2f11fd}">
+      <Declaration><![CDATA[PROPERTY P_eCompareOperator : E_CompOperator]]></Declaration>
+      <Get Name="Get" Id="{b5554202-0145-4935-9c7c-93a41057725b}">
+        <Declaration><![CDATA[VAR
+END_VAR
+]]></Declaration>
+        <Implementation>
+          <ST><![CDATA[P_eCompareOperator := eCompareOperator;]]></ST>
+        </Implementation>
+      </Get>
+      <Set Name="Set" Id="{d2e1a7df-8439-483c-8fbf-2bce565c94e2}">
+        <Declaration><![CDATA[VAR
+END_VAR
+]]></Declaration>
+        <Implementation>
+          <ST><![CDATA[eCompareOperator := P_eCompareOperator;]]></ST>
+        </Implementation>
+      </Set>
+    </Property>
+    <Property Name="P_nCompareValue" Id="{492692de-1d2c-47a5-a0ad-fbad52f74397}">
+      <Declaration><![CDATA[PROPERTY P_nCompareValue : DINT]]></Declaration>
+      <Set Name="Set" Id="{6edb6f2c-b153-4c19-a139-8498ada3aca2}">
+        <Declaration><![CDATA[VAR
+END_VAR
+]]></Declaration>
+        <Implementation>
+          <ST><![CDATA[nCompareValue := P_nCompareValue;]]></ST>
+        </Implementation>
+      </Set>
+    </Property>
+    <Property Name="P_pStep" Id="{7131c9bb-5ac9-4915-a879-4b11ba685acc}">
+      <Declaration><![CDATA[PROPERTY P_pStep : POINTER TO ST_Step]]></Declaration>
+      <Set Name="Set" Id="{10c0986e-60cf-4405-9699-b992f9151ebd}">
+        <Declaration><![CDATA[VAR
+END_VAR
+]]></Declaration>
+        <Implementation>
+          <ST><![CDATA[pStep := P_pStep;]]></ST>
+        </Implementation>
+      </Set>
+    </Property>
+    <Method Name="M_Check" Id="{8c010451-2980-4e58-ba1a-1ba29afe414b}">
+      <Declaration><![CDATA[METHOD M_Check : BYTE
+VAR_INPUT
+	nPreResult : BYTE;
+END_VAR
+
+VAR
+	bCancel : BOOL := TRUE;
+END_VAR]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[IF pStep^.bActionResultIsValid  AND (pStep^.eState = E_StepState.STEPSTATUS_Ready) THEN
+	IF eCondiOperator = E_LogicOperator.LOGIC_OP_AND THEN
+		//nPreResult.0 := nPreResult.0 AND TRUE;
+	ELSIF eCondiOperator = E_LogicOperator.LOGIC_OP_OR THEN
+		nPreResult.0 := TRUE;
+	END_IF
+	
+	IF nPreResult.0 THEN
+		CASE eCompareOperator OF
+			E_CompOperator.COMP_OP_GT:	//>
+				IF pStep^.nActionResult > nCompareValue THEN
+					bCancel := FALSE;
+				END_IF
+			E_CompOperator.COMP_OP_LT:	//<
+				IF pStep^.nActionResult < nCompareValue THEN
+					bCancel := FALSE;
+				END_IF
+			E_CompOperator.COMP_OP_GE:	//>=
+				IF pStep^.nActionResult >= nCompareValue THEN
+					bCancel := FALSE;
+				END_IF
+			E_CompOperator.COMP_OP_LE:	//<=
+				IF pStep^.nActionResult <= nCompareValue THEN
+					bCancel := FALSE;
+				END_IF
+			E_CompOperator.COMP_OP_EQ:	//=
+				IF pStep^.nActionResult = nCompareValue THEN
+					bCancel := FALSE;
+				END_IF
+		END_CASE
+		
+		IF eCondiOperator = E_LogicOperator.LOGIC_OP_AND THEN
+			nPreResult.1 := nPreResult.1 OR bCancel;
+		ELSIF eCondiOperator = E_LogicOperator.LOGIC_OP_OR THEN
+			IF NOT bCancel THEN
+				nPreResult.1 := FALSE;
+			END_IF
+		END_IF
+		
+		IF pNextCondi > 0 THEN
+			M_Check := pNextCondi^.M_Check(nPreResult);
+		ELSE
+			M_Check  := nPreResult;
+		END_IF		
+	END_IF
+END_IF]]></ST>
+      </Implementation>
+    </Method>
+    <LineIds Name="FB_CondiStepResult">
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="FB_CondiStepResult.P_eCompareOperator.Get">
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="FB_CondiStepResult.P_eCompareOperator.Set">
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="FB_CondiStepResult.P_nCompareValue.Set">
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="FB_CondiStepResult.P_pStep.Set">
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="FB_CondiStepResult.M_Check">
+      <LineId Id="211" Count="44" />
+      <LineId Id="2" Count="0" />
+    </LineIds>
+  </POU>
+</TcPlcObject>

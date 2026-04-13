@@ -1,0 +1,281 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<TcPlcObject Version="1.1.0.1" ProductVersion="3.1.4020.12">
+  <POU Name="FB_OM_Config" Id="{13324866-91bb-4b1a-9632-ffce285e2634}" SpecialFunc="None">
+    <Declaration><![CDATA[FUNCTION_BLOCK FB_OM_Config
+VAR_INPUT
+END_VAR
+VAR_OUTPUT
+	eCurrentState : E_MachineState := E_MachineState.MACHINESTATE_Idle;
+END_VAR
+VAR
+	bFirstCycle				: BOOL := TRUE;
+	stError					: ST_Error;
+	bError					: BOOL;
+	bBusy					: BOOL;
+	
+	//ConfigActions
+	nStateA_ConfigAction	: USINT;
+	bActivate				: BOOL;
+	nActivateCnt1			: USINT; //allg Zählvariable
+	
+	bSaveCurrConfig			: BOOL;
+	bLoadConfig				: BOOL;
+	bDeleteConfig			: BOOL;
+	
+	nStateA_CheckObjProps	: USINT;
+	iter					: FB_ObjCollectIteratorDeep;
+	pObject					: POINTER TO FB_Object;
+	nCheckObjCounter		: USINT;
+	
+	nStateA_Reset			: USINT;
+	i						: UINT;
+	bSetupDefaultObjOk		: BOOL;
+	timer					: TON;
+	
+	bWriteXYAxisPara		: BOOL;
+	nStateA_WriteXYAxisPara	: USINT;
+	
+	bSimError				: BOOL;
+END_VAR
+]]></Declaration>
+    <Implementation>
+      <ST><![CDATA[IF bFirstCycle THEN
+	bFirstCycle := FALSE;
+	bLoadConfig := fbConfiguration.P_bConfigSaved;
+	eCurrentState := E_MachineState.MACHINESTATE_Active;	
+END_IF
+
+IF eCurrentState = E_MachineState.MACHINESTATE_Active THEN
+	IF bLoadConfig THEN
+		fbConfiguration.A_Load(bExecute:= TRUE);
+		IF NOT fbConfiguration.bBusy THEN
+			IF fbConfiguration.bError THEN
+				bError := TRUE;
+				fbErrorList.M_Add(stError);
+			ELSE
+				bActivate := TRUE;
+			END_IF
+			fbConfiguration.A_Load(bExecute:= FALSE);
+			bLoadConfig := FALSE;
+			//bei erfolg Konfiguration laden
+		END_IF
+	ELSIF bDeleteConfig THEN
+		fbConfiguration.A_Delete(bExecute:= TRUE);
+		IF NOT fbConfiguration.bBusy THEN
+			IF fbConfiguration.bError THEN
+				bError := TRUE;
+				fbErrorList.M_Add(stError);
+			END_IF
+			fbConfiguration.A_Delete(bExecute:= FALSE);
+			bDeleteConfig := FALSE;
+		END_IF
+	ELSIF bActivate THEN	//Konfiguration aktivieren
+		fbConfiguration.A_Activate(bExecute:= TRUE);
+		IF NOT fbConfiguration.bBusy THEN
+			IF fbConfiguration.bError THEN
+				bError := TRUE;
+				fbErrorList.M_Add(fbConfiguration.stError);
+			END_IF
+			fbConfiguration.A_Activate(bExecute:= FALSE);
+			bActivate := FALSE;
+		END_IF
+	ELSIF bSaveCurrConfig THEN
+		fbConfiguration.A_Save(bExecute:= TRUE);
+		IF NOT fbConfiguration.bBusy THEN
+			IF fbConfiguration.bError THEN
+				bError := TRUE;
+				fbErrorList.M_Add(stError);
+			END_IF
+			fbConfiguration.A_Save(bExecute:= FALSE);
+			bSaveCurrConfig := FALSE;
+		END_IF
+	END_IF
+
+	IF NOT (bActivate OR bSaveCurrConfig OR bLoadConfig OR bDeleteConfig) THEN
+		IF bError THEN
+			eCurrentState := E_MachineState.MACHINESTATE_Error;
+		ELSE
+			eCurrentState := E_MachineState.MACHINESTATE_Idle;
+		END_IF
+	END_IF
+	
+ELSIF eCurrentState = E_MachineState.MACHINESTATE_Reset THEN
+	A_Reset();
+	IF nStateA_Reset = 80 THEN
+		nStateA_Reset := 0;
+		bError := FALSE;
+		eCurrentState := E_MachineState.MACHINESTATE_Idle;
+	ELSIF nStateA_Reset = 99 THEN
+		nStateA_Reset := 0;
+		eCurrentState := E_MachineState.MACHINESTATE_Error;
+	END_IF
+ELSIF eCurrentState = E_MachineState.MACHINESTATE_Idle THEN
+	//Auf Fehler der Hardware reagieren
+	IF PerformHardware.bError THEN
+		eCurrentState := E_MachineState.MACHINESTATE_Error;
+	END_IF
+END_IF
+
+IF bSimError THEN
+	eCurrentState := E_MachineState.MACHINESTATE_Error;
+END_IF]]></ST>
+    </Implementation>
+    <Method Name="M_Delete" Id="{6ab821d4-d9c0-4ba0-b1bc-ae3d2e77db61}">
+      <Declaration><![CDATA[METHOD M_Delete : ERRORID
+VAR_INPUT
+END_VAR
+]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[IF eCurrentState = E_MachineState.MACHINESTATE_Idle THEN
+	bDeleteConfig := TRUE;
+	eCurrentState := E_MachineState.MACHINESTATE_Active;
+END_IF]]></ST>
+      </Implementation>
+    </Method>
+    <Method Name="M_Activate" Id="{6ec696c5-e2eb-4087-90b6-079772f2791b}">
+      <Declaration><![CDATA[METHOD M_Activate : ERRORID
+VAR_INPUT
+END_VAR
+]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[IF eCurrentState = E_MachineState.MACHINESTATE_Idle THEN
+	bActivate := TRUE;
+	eCurrentState := E_MachineState.MACHINESTATE_Active;
+ELSE
+	M_Activate := E_ErrorIdCmd.ERRORID_InvalidState;
+END_IF]]></ST>
+      </Implementation>
+    </Method>
+    <Method Name="M_ResetError" Id="{8f9c9332-5f48-4251-bd01-133545991371}">
+      <Declaration><![CDATA[METHOD M_ResetError
+VAR_INPUT
+END_VAR
+]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[IF eCurrentState = E_MachineState.MACHINESTATE_Error THEN
+	eCurrentState := E_MachineState.MACHINESTATE_Reset;
+	bError := FALSE;
+END_IF]]></ST>
+      </Implementation>
+    </Method>
+    <Method Name="M_Save" Id="{a15da87b-9ca7-4863-bbb7-5177b1c55f85}">
+      <Declaration><![CDATA[METHOD M_Save : ERRORID
+VAR_INPUT
+END_VAR
+]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[IF eCurrentState = E_MachineState.MACHINESTATE_Idle THEN
+	bSaveCurrConfig := TRUE;
+	eCurrentState := E_MachineState.MACHINESTATE_Active;
+ELSE
+	M_Save := E_ErrorIdCmd.ERRORID_InvalidState;
+END_IF]]></ST>
+      </Implementation>
+    </Method>
+    <Action Name="A_Reset" Id="{be0b7177-997a-4af4-bd21-a1c5e13406f4}">
+      <Implementation>
+        <ST><![CDATA[//In Config gehen die Objekte selber nicht in Error, da an diesen keine Actions ausgeführt werden
+//Es kann also nur die Hardware in Error gehen, folglich braucht auch nur dieses zurückgesetzt werden
+IF nStateA_Reset = 0 THEN
+	IF PerformHardware.bError THEN
+		PerformHardware.A_ResetError();
+		timer(IN:= TRUE, PT:=T#20S);
+		IF timer.Q THEN
+			timer(IN:= FALSE);
+			nStateA_Reset := 99;
+		END_IF
+	ELSE
+		timer(IN:= FALSE);
+		nStateA_Reset := 80;
+	END_IF	
+END_IF]]></ST>
+      </Implementation>
+    </Action>
+    <Action Name="A_CheckObjProps" Id="{fdef220d-830e-41e0-938c-3c6061f2fe0f}">
+      <Implementation>
+        <ST><![CDATA[IF nStateA_CheckObjProps = 0 THEN
+	nCheckObjCounter := 0;
+	fbObjectDirectory.P_pDeviceCollection^.M_GetIterator(iter);
+	nStateA_CheckObjProps := 1;
+END_IF
+
+WHILE iter.pNode > 0 AND_THEN iter.pNode^.P_pObject > 0 DO
+	pObject := iter.pNode^.P_pObject;
+	nCheckObjCounter := nCheckObjCounter + 1;
+	stError.ObjectId := pObject^.P_nObjectID;
+	stError.ErrorId := pObject^.M_CheckProps();
+	IF stError.ErrorId > 0 THEN
+		nStateA_CheckObjProps := 99;
+		RETURN;
+	END_IF
+	iter.M_Increment();
+	IF nCheckObjCounter = 100 THEN
+		nCheckObjCounter := 0;
+		RETURN;
+	END_IF
+END_WHILE
+
+nStateA_CheckObjProps := 80;]]></ST>
+      </Implementation>
+    </Action>
+    <LineIds Name="FB_OM_Config">
+      <LineId Id="149" Count="0" />
+      <LineId Id="154" Count="0" />
+      <LineId Id="157" Count="0" />
+      <LineId Id="156" Count="0" />
+      <LineId Id="155" Count="0" />
+      <LineId Id="150" Count="0" />
+      <LineId Id="3" Count="0" />
+      <LineId Id="15" Count="68" />
+      <LineId Id="85" Count="2" />
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="FB_OM_Config.M_Delete">
+      <LineId Id="3" Count="2" />
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="FB_OM_Config.M_Activate">
+      <LineId Id="3" Count="4" />
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="FB_OM_Config.M_ResetError">
+      <LineId Id="3" Count="2" />
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="FB_OM_Config.M_Save">
+      <LineId Id="3" Count="4" />
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="FB_OM_Config.A_Reset">
+      <LineId Id="2" Count="1" />
+      <LineId Id="73" Count="0" />
+      <LineId Id="78" Count="1" />
+      <LineId Id="84" Count="1" />
+      <LineId Id="89" Count="0" />
+      <LineId Id="86" Count="1" />
+      <LineId Id="80" Count="0" />
+      <LineId Id="82" Count="0" />
+      <LineId Id="81" Count="0" />
+      <LineId Id="76" Count="1" />
+    </LineIds>
+    <LineIds Name="FB_OM_Config.A_CheckObjProps">
+      <LineId Id="2" Count="0" />
+      <LineId Id="20" Count="0" />
+      <LineId Id="3" Count="1" />
+      <LineId Id="21" Count="1" />
+      <LineId Id="27" Count="0" />
+      <LineId Id="36" Count="0" />
+      <LineId Id="38" Count="0" />
+      <LineId Id="29" Count="2" />
+      <LineId Id="33" Count="1" />
+      <LineId Id="43" Count="0" />
+      <LineId Id="39" Count="1" />
+      <LineId Id="42" Count="0" />
+      <LineId Id="41" Count="0" />
+      <LineId Id="25" Count="0" />
+      <LineId Id="23" Count="0" />
+      <LineId Id="44" Count="0" />
+      <LineId Id="1" Count="0" />
+    </LineIds>
+  </POU>
+</TcPlcObject>

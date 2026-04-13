@@ -1,0 +1,258 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<TcPlcObject Version="1.1.0.1" ProductVersion="3.1.4024.11">
+  <POU Name="FB_OM_Manu" Id="{89708ab6-e8e5-4111-a18a-f54dd8be3b68}" SpecialFunc="None">
+    <Declaration><![CDATA[FUNCTION_BLOCK FB_OM_Manu
+
+VAR_OUTPUT
+	eCurrentState : E_MachineState := E_MachineState.MACHINESTATE_Idle;
+END_VAR
+
+VAR
+	i : UINT;
+	stError : ST_Error;
+	nStateA_Reset : USINT;
+	timeout : TON;
+END_VAR
+]]></Declaration>
+    <Implementation>
+      <ST><![CDATA[CASE eCurrentState OF
+	E_MachineState.MACHINESTATE_Idle:
+		A_FillPCV();
+		//Auf Fehler der Hardware reagieren und eventuelle CustomUnitType2 reagieren
+		IF PerformHardware.bError OR fbObjectDirectory.M_CustomUnitType2_Error() THEN
+			eCurrentState := E_MachineState.MACHINESTATE_Error;
+		END_IF
+		
+	E_MachineState.MACHINESTATE_Active:
+		A_FillPCV();
+		eCurrentState := ActionDispacher.eCurrentState;
+		IF fbObjectDirectory.M_CustomUnitType2_Error() THEN
+			ActionDispacher.M_StopAll();
+			eCurrentState := E_MachineState.MACHINESTATE_Error;
+		END_IF
+	E_MachineState.MACHINESTATE_Cancel:
+		ActionDispacher.M_StopAll();
+		eCurrentState := ActionDispacher.eCurrentState;
+	E_MachineState.MACHINESTATE_Canceled:
+		eCurrentState := ActionDispacher.eCurrentState;
+	E_MachineState.MACHINESTATE_Reset:
+		A_Reset();
+	E_MachineState.MACHINESTATE_Error:
+		//Do nothing
+END_CASE]]></ST>
+    </Implementation>
+    <Action Name="A_FillPCV" Id="{8505d864-39f6-405d-a471-79f4e9f3bb8e}">
+      <Implementation>
+        <ST><![CDATA[IF (fbObjectDirectory.nCntPiezoPip > 0) OR (fbObjectDirectory.nCntSolenoidPip > 0) THEN
+	fbPCV.M_Fill();
+	IF fbPCV.bError THEN
+		stError.HardwareGrp := E_HardwareGrp.PCV;
+		stError.HardwareNr := 1;
+		stError.MachineMode := E_MachineMode.MACHINEMODE_Manu;
+		stError.POU := 1;
+		stError.POUAction := E_POUACT.POUACT_UNDEFIEND;
+		stError.ErrorId := fbPCV.nErrorId;
+		fbErrorList.A_Add(putValue := stError);
+		ActionDispacher.M_StopAll();
+		eCurrentState := E_MachineState.MACHINESTATE_Error;
+		RETURN;
+	END_IF
+END_IF]]></ST>
+      </Implementation>
+    </Action>
+    <Action Name="A_Reset" Id="{40b3e9bd-3828-486e-bcb1-f007eb0ddfdc}">
+      <Implementation>
+        <ST><![CDATA[IF nStateA_Reset = 0 THEN
+	//ActionDispacher zurücksetzen (Hier werden auch die Devices zurückgesetzt)
+	ActionDispacher.M_Reset();
+	//Hardware zurücksetzen
+	PerformHardware.A_ResetError();
+	//PCV zurücksetzen
+	fbPCV.M_Reset();
+	timeout(IN:= FALSE);
+	nStateA_Reset := 1;
+ELSIF nStateA_Reset = 1 THEN
+	nStateA_Reset := 2;
+	timeout(IN:= TRUE, PT:=T#20S);
+	//Warten, bis alles zurückgesetzt
+	IF ActionDispacher.eCurrentState <> E_MachineState.MACHINESTATE_Idle THEN
+		nStateA_Reset := 1; 		
+	END_IF
+	IF PerformHardware.bError THEN
+		PerformHardware.A_ResetError();
+		nStateA_Reset := 1;
+	END_IF
+	IF timeout.Q THEN
+		eCurrentState := E_MachineState.MACHINESTATE_Error;
+		nStateA_Reset := 0;
+	END_IF
+ELSIF nStateA_Reset = 2 THEN
+	//Reset CustomUnitType2 (kann möglicherweise noch in Error stehen, weil evtl. ActionDispacher nicht in Error war)
+	//Dadurch werden Objekte diesen Typs nicht durch den AD zurückgesetzt.
+	fbObjectDirectory.M_ResetCustomUnitType2();
+	
+	//Checken, ob MzBase komplett resettet wurde -> Aktivierung der Konfiguration erforderlich
+	FOR i:= 1 TO cMaxMzHeads BY 1 DO
+		IF aFbMultiZRef[i].P_bMzBaseRestarted THEN
+			fbConfiguration.M_Deactivate();
+		END_IF
+	END_FOR
+	
+	IF fbConfiguration.P_bActivated THEN
+		eCurrentState := E_MachineState.MACHINESTATE_Idle;
+		nStateA_Reset := 0;
+	ELSE
+		nStateA_Reset := 3;
+	END_IF
+ELSIF nStateA_Reset = 3 THEN //Konfiguration wieder aktivieren
+	fbConfiguration.A_Activate(bExecute:= TRUE);
+	IF NOT fbConfiguration.bBusy THEN
+		IF fbConfiguration.bError THEN
+			eCurrentState := E_MachineState.MACHINESTATE_Error;
+			fbErrorList.M_Add(stError);
+		ELSE
+			eCurrentState := E_MachineState.MACHINESTATE_Idle;
+		END_IF
+		nStateA_Reset := 0;
+		fbConfiguration.A_Activate(bExecute:= FALSE);
+	END_IF
+END_IF]]></ST>
+      </Implementation>
+    </Action>
+    <Method Name="M_Cancel" Id="{a2fbfa7d-1ba6-4960-a9a9-08c377500a95}">
+      <Declaration><![CDATA[METHOD M_Cancel : ERRORID
+VAR_INPUT
+END_VAR
+VAR
+END_VAR]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[IF eCurrentState = E_MachineState.MACHINESTATE_Active THEN	//auf Cancel-Kommando braucht nur im Actice-State reagiert werden
+	ActionDispacher.M_StopAll();
+END_IF]]></ST>
+      </Implementation>
+    </Method>
+    <Method Name="M_ContinueAction" Id="{3faf4ad9-8f71-463d-9df3-491e2b67a91f}">
+      <Declaration><![CDATA[METHOD M_ContinueAction : ERRORID
+VAR_INPUT
+	nActionId	: UINT;
+END_VAR
+]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[IF ActionDispacher.eCurrentState = E_MachineState.MACHINESTATE_Active THEN
+	M_ContinueAction := ActionDispacher.M_ContinueAction(nActionId);
+END_IF]]></ST>
+      </Implementation>
+    </Method>
+    <Method Name="M_ExeAction" Id="{6ceb7ddb-6294-4eba-b642-e543cb445b63}">
+      <Declaration><![CDATA[METHOD M_ExeAction : ERRORID
+VAR_INPUT
+	refActionData	: REFERENCE TO ST_ActionData;
+END_VAR
+
+VAR_OUTPUT
+	nActionId		: UINT;
+END_VAR
+
+VAR
+	nErrorId		: ERRORID;
+END_VAR]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[//Manuelle Kommandos nur in "Idle" und "Active" möglich
+IF NOT ((eCurrentState = E_MachineState.MACHINESTATE_Idle) OR (eCurrentState = E_MachineState.MACHINESTATE_Active) ) THEN
+	M_ExeAction := E_ErrorIdCmd.ERRORID_InvalidState;
+	RETURN;
+ELSE
+	nErrorId := ActionDispacher.M_ExeAction(refActionData:= refActionData, bExtern:= TRUE, nActionId=> nActionId);
+	IF nErrorId > 0 THEN
+		M_ExeAction := nErrorId;
+		RETURN;
+	ELSE
+		eCurrentState := E_MachineState.MACHINESTATE_Active;
+	END_IF
+END_IF
+]]></ST>
+      </Implementation>
+    </Method>
+    <Method Name="M_PauseAction" Id="{78866de6-bdcd-4d29-98fd-ba46fab00976}">
+      <Declaration><![CDATA[METHOD M_PauseAction : ERRORID
+VAR_INPUT
+	nActionId	: UINT;
+END_VAR
+]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[IF ActionDispacher.eCurrentState = E_MachineState.MACHINESTATE_Active THEN
+	M_PauseAction := ActionDispacher.M_PauseAction(nActionId);
+END_IF]]></ST>
+      </Implementation>
+    </Method>
+    <Method Name="M_ResetError" Id="{b0bd873d-6c11-4dd0-863c-c98cd0349fb7}">
+      <Declaration><![CDATA[METHOD M_ResetError
+VAR_INPUT
+END_VAR
+]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[IF eCurrentState = E_MachineState.MACHINESTATE_Error THEN
+	eCurrentState := E_MachineState.MACHINESTATE_Reset;
+END_IF]]></ST>
+      </Implementation>
+    </Method>
+    <Method Name="M_StopAction" Id="{1f9de22f-57e6-4fbe-99bd-63145586c258}">
+      <Declaration><![CDATA[METHOD M_StopAction : ERRORID
+VAR_INPUT
+	nActionId	: UINT;
+END_VAR
+]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[IF ActionDispacher.eCurrentState = E_MachineState.MACHINESTATE_Active THEN
+	M_StopAction := ActionDispacher.M_StopAction(nActionId);
+END_IF]]></ST>
+      </Implementation>
+    </Method>
+    <LineIds Name="FB_OM_Manu">
+      <LineId Id="34" Count="6" />
+      <LineId Id="84" Count="0" />
+      <LineId Id="41" Count="2" />
+      <LineId Id="86" Count="0" />
+      <LineId Id="89" Count="0" />
+      <LineId Id="87" Count="1" />
+      <LineId Id="44" Count="7" />
+      <LineId Id="85" Count="0" />
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="FB_OM_Manu.A_FillPCV">
+      <LineId Id="16" Count="13" />
+      <LineId Id="1" Count="0" />
+    </LineIds>
+    <LineIds Name="FB_OM_Manu.A_Reset">
+      <LineId Id="52" Count="24" />
+      <LineId Id="107" Count="0" />
+      <LineId Id="110" Count="2" />
+      <LineId Id="77" Count="24" />
+      <LineId Id="1" Count="0" />
+    </LineIds>
+    <LineIds Name="FB_OM_Manu.M_Cancel">
+      <LineId Id="9" Count="1" />
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="FB_OM_Manu.M_ContinueAction">
+      <LineId Id="9" Count="1" />
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="FB_OM_Manu.M_ExeAction">
+      <LineId Id="27" Count="12" />
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="FB_OM_Manu.M_PauseAction">
+      <LineId Id="9" Count="1" />
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="FB_OM_Manu.M_ResetError">
+      <LineId Id="3" Count="1" />
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="FB_OM_Manu.M_StopAction">
+      <LineId Id="9" Count="1" />
+      <LineId Id="2" Count="0" />
+    </LineIds>
+  </POU>
+</TcPlcObject>

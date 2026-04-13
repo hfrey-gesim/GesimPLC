@@ -1,0 +1,13 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<TcPlcObject Version="1.1.0.1" ProductVersion="3.1.4024.11">
+  <DUT Name="E_LockState" Id="{e8deea0b-ea53-47ce-955b-2f3cd9b56598}">
+    <Declaration><![CDATA[TYPE E_LockState :
+(
+	UNDEFINIED,
+	Unlocked,
+	Locked
+)USINT;
+END_TYPE
+]]></Declaration>
+  </DUT>
+</TcPlcObject>

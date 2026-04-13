@@ -1,0 +1,116 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<TcPlcObject Version="1.1.0.1" ProductVersion="3.1.4024.11">
+  <POU Name="FB_HWECtrl_EL70xx_Power" Id="{1cbc4bd4-6d5c-4662-9970-e9d54b804e9b}" SpecialFunc="None">
+    <Declaration><![CDATA[FUNCTION_BLOCK FB_HWECtrl_EL70xx_Power
+VAR_INPUT
+	bExecute	: BOOL;
+	bEnable		: BOOL;
+END_VAR
+VAR_OUTPUT
+	bBusy 		: BOOL;
+	bError 		: BOOL;
+	nErrorId 	: ERRORID;		
+END_VAR
+VAR_IN_OUT
+	pHwRef : POINTER TO FB_HwRefEL70xxDrive; 
+END_VAR
+VAR
+	nState 	: USINT;
+	timer	: TON;
+END_VAR
+]]></Declaration>
+    <Implementation>
+      <ST><![CDATA[IF bExecute THEN
+	IF nState = 0 THEN
+		IF bEnable THEN
+			IF pHwRef^.P_bHardwareEnable THEN
+				nState := 1;
+			ELSE
+				nErrorId := E_ErrorIdHwGeneral.ERRORID_HardwareNotEnabled;
+				bError := TRUE;
+				nState := 99;
+				RETURN;
+			END_IF
+		ELSE
+			nState := 2;
+		END_IF
+	END_IF
+
+	IF nState = 1 THEN //Enable
+		IF pHwRef^.STM_Status.Error OR pHwRef^.POS_Status.Error THEN
+			bBusy := TRUE;
+			pHwRef^.STM_Control.Reset := TRUE;
+		ELSIF pHwRef^.STM_Status.Ready THEN
+			pHwRef^.STM_Control.ReduceTorque := TRUE;
+			pHwRef^.STM_Control.Reset := FALSE;
+			bBusy := FALSE;
+			RETURN;
+		ELSIF pHwRef^.STM_Status.ReadyToEnable THEN
+			bBusy := TRUE;
+			pHwRef^.STM_Control.Reset := FALSE;
+			pHwRef^.STM_Control.Enable := TRUE;
+		END_IF
+		timer(IN:= TRUE, PT:= T#5000MS);
+		IF timer.Q AND bBusy THEN
+			timer(IN:= FALSE);
+			nErrorId := E_ErrorIdHwGeneral.ERRORID_Timeout;
+			bBusy := FALSE;
+			bError := TRUE;
+			nState := 99;
+		END_IF
+	ELSIF nState = 2 THEN //Disable
+		pHwRef^.STM_Control.Enable := FALSE;
+		bBusy := FALSE;
+	END_IF
+ELSE
+	timer(IN:= FALSE);
+	bBusy := FALSE;
+	bError := FALSE;
+	bEnable := FALSE;
+	nState := 0;	
+END_IF]]></ST>
+    </Implementation>
+    <LineIds Name="FB_HWECtrl_EL70xx_Power">
+      <LineId Id="18" Count="0" />
+      <LineId Id="145" Count="0" />
+      <LineId Id="150" Count="0" />
+      <LineId Id="183" Count="1" />
+      <LineId Id="186" Count="0" />
+      <LineId Id="188" Count="0" />
+      <LineId Id="190" Count="0" />
+      <LineId Id="187" Count="0" />
+      <LineId Id="189" Count="0" />
+      <LineId Id="185" Count="0" />
+      <LineId Id="154" Count="0" />
+      <LineId Id="156" Count="0" />
+      <LineId Id="153" Count="0" />
+      <LineId Id="151" Count="0" />
+      <LineId Id="146" Count="0" />
+      <LineId Id="30" Count="0" />
+      <LineId Id="42" Count="0" />
+      <LineId Id="109" Count="0" />
+      <LineId Id="67" Count="1" />
+      <LineId Id="66" Count="0" />
+      <LineId Id="124" Count="0" />
+      <LineId Id="107" Count="0" />
+      <LineId Id="111" Count="0" />
+      <LineId Id="65" Count="0" />
+      <LineId Id="110" Count="0" />
+      <LineId Id="45" Count="0" />
+      <LineId Id="33" Count="1" />
+      <LineId Id="72" Count="1" />
+      <LineId Id="77" Count="0" />
+      <LineId Id="176" Count="1" />
+      <LineId Id="108" Count="0" />
+      <LineId Id="78" Count="0" />
+      <LineId Id="76" Count="0" />
+      <LineId Id="142" Count="2" />
+      <LineId Id="32" Count="0" />
+      <LineId Id="22" Count="0" />
+      <LineId Id="123" Count="0" />
+      <LineId Id="26" Count="1" />
+      <LineId Id="158" Count="0" />
+      <LineId Id="24" Count="1" />
+    </LineIds>
+  </POU>
+</TcPlcObject>

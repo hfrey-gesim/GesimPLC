@@ -1,0 +1,20 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<TcPlcObject Version="1.1.0.1" ProductVersion="3.1.0.25">
+  <Itf Name="I_UsingDryPad" Id="{0b888d4c-ad43-4c54-a878-510c0d86512c}">
+    <Declaration><![CDATA[INTERFACE I_UsingDryPad
+]]></Declaration>
+    <Property Name="P_tDryTime" Id="{22d9448a-9d0f-4cfd-be8a-2a9480015ba7}">
+      <Declaration><![CDATA[PROPERTY P_tDryTime : TIME]]></Declaration>
+      <Get Name="Get" Id="{906b009d-731c-479a-85f3-43152caa687e}">
+        <Declaration><![CDATA[]]></Declaration>
+      </Get>
+    </Property>
+    <Property Name="P_nDrypadArea" Id="{3d229c90-9841-43cb-b63c-720f22d4d822}">
+      <Declaration><![CDATA[PROPERTY P_nDrypadArea : USINT]]></Declaration>
+      <Get Name="Get" Id="{813fa459-7f1b-4d0d-ac64-700a0f1a462a}">
+        <Declaration><![CDATA[]]></Declaration>
+      </Get>
+    </Property>
+    <ObjectProperties />
+  </Itf>
+</TcPlcObject>

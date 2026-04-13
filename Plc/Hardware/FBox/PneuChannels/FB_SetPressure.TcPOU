@@ -1,0 +1,112 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<TcPlcObject Version="1.1.0.1" ProductVersion="3.1.4022.12">
+  <POU Name="FB_SetPressure" Id="{ed943007-6444-4083-b7cb-c89d60ba2cfb}" SpecialFunc="None">
+    <Declaration><![CDATA[FUNCTION_BLOCK FB_SetPressure
+VAR_INPUT
+	bExecute 		: BOOL;
+	nValue			: INT;
+	bAwait			: BOOL;	//Baustein bleibt solange busy, bis sich Solldruck in Toleranzfester eingestellt hat.
+	tTimeout		: TIME;
+	nTolerancePlus	: INT;
+	nToleranceMinus	: INT;
+END_VAR
+VAR_OUTPUT
+	bBusy : BOOL;
+	bError : BOOL;
+	nErrorId : ERRORID;		
+END_VAR
+VAR_IN_OUT
+	pPneuChannelRef : POINTER TO FB_PneuChannelRef;
+END_VAR
+VAR
+	nState : USINT;
+	timer : TON;
+END_VAR
+]]></Declaration>
+    <Implementation>
+      <ST><![CDATA[IF bExecute THEN
+	IF pPneuChannelRef = 0 THEN
+		bBusy := FALSE;
+		bError := TRUE;
+		nErrorId := E_ErrorIdObjMgmt.ERRORID_InvalidHardwareRef;
+		nState := 99;
+		RETURN;
+	END_IF
+	
+	IF nState = 0 THEN
+		nErrorId := pPneuChannelRef^.M_SetPressure(nValue);
+		IF nErrorId > 0 THEN
+			bError := TRUE;
+			RETURN;
+		END_IF
+		
+		IF NOT bAwait THEN
+			RETURN;
+		END_IF
+		nState := 1;
+	END_IF
+	
+	IF nState = 1 THEN
+		bBusy := TRUE;
+		//falls Druck schon im Tolerenzbereich liegt, dann kann der FB sofort beendet werden
+		IF pPneuChannelRef^.M_GetPressOk(nSetPressure:= nValue, nTolerancePlus:= nTolerancePlus, nToleranceMinus:= nToleranceMinus) THEN
+			bBusy := FALSE;
+			nState := 2;
+			RETURN;
+		END_IF
+		
+		//Timer für Timout starten
+		timer(IN:= TRUE, PT:= tTimeout);
+		IF timer.Q THEN
+			bBusy := FALSE;
+			bError := TRUE;
+			nErrorId := E_ErrorIdCmd.ERRORID_PressTimeOut;
+			nState := 99;
+			RETURN;
+		END_IF
+	END_IF
+	
+ELSE
+	nState := 0;
+	bBusy := FALSE;
+	bError := FALSE;
+	nErrorId := 0;
+	timer(IN:=FALSE);
+END_IF
+
+]]></ST>
+    </Implementation>
+    <LineIds Name="FB_SetPressure">
+      <LineId Id="23" Count="0" />
+      <LineId Id="37" Count="3" />
+      <LineId Id="117" Count="0" />
+      <LineId Id="41" Count="0" />
+      <LineId Id="35" Count="0" />
+      <LineId Id="59" Count="0" />
+      <LineId Id="102" Count="0" />
+      <LineId Id="105" Count="1" />
+      <LineId Id="108" Count="2" />
+      <LineId Id="116" Count="0" />
+      <LineId Id="112" Count="0" />
+      <LineId Id="114" Count="1" />
+      <LineId Id="103" Count="1" />
+      <LineId Id="66" Count="0" />
+      <LineId Id="99" Count="0" />
+      <LineId Id="128" Count="0" />
+      <LineId Id="123" Count="2" />
+      <LineId Id="139" Count="0" />
+      <LineId Id="126" Count="1" />
+      <LineId Id="118" Count="0" />
+      <LineId Id="129" Count="5" />
+      <LineId Id="138" Count="0" />
+      <LineId Id="135" Count="1" />
+      <LineId Id="119" Count="0" />
+      <LineId Id="137" Count="0" />
+      <LineId Id="26" Count="0" />
+      <LineId Id="29" Count="4" />
+      <LineId Id="27" Count="0" />
+      <LineId Id="24" Count="0" />
+      <LineId Id="20" Count="0" />
+    </LineIds>
+  </POU>
+</TcPlcObject>

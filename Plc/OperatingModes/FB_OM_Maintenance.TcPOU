@@ -1,0 +1,516 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<TcPlcObject Version="1.1.0.1" ProductVersion="3.1.4024.12">
+  <POU Name="FB_OM_Maintenance" Id="{983fde2a-6f82-4a90-bb14-ea7f98276732}" SpecialFunc="None">
+    <Declaration><![CDATA[FUNCTION_BLOCK FB_OM_Maintenance
+VAR_INPUT
+END_VAR
+VAR_OUTPUT
+	eCurrentState : E_MachineState := E_MachineState.MACHINESTATE_Idle;
+END_VAR
+VAR
+	bError					: BOOL;
+	stError					: ST_Error;
+	nErrorId				: ERRORID;
+	bDeviceFirmwUpdate		: BOOL;
+	nStateAction			: UINT;
+	pFbCanNode				: POINTER TO FB_CanNodeBase;
+
+	bSetupXYAxis			: BOOL;
+	pSetupDrive				: POINTER TO FB_XYDriveBase;
+	bSetupZAxis				: BOOL;
+	pFbZAxis				: POINTER TO FB_ZAxisRef;
+	pFbMultiZ				: POINTER TO FB_MultiZRef;
+	fbZmHome				: FB_ZM_Home;
+	
+	nStateA_Reset 			: USINT;
+	
+	//ResetPlc
+	bResetPlc				: BOOL;
+	nStateA_ResetPlc 		: USINT;
+	fbPLC_Reset				: PLC_Reset;
+	
+	timeout : TON;
+	
+	i : USINT;
+	
+END_VAR]]></Declaration>
+    <Implementation>
+      <ST><![CDATA[IF bResetPlc THEN
+	A_ResetPlc();
+	RETURN;	//andere Actions werden nicht mehr ausgeführt!
+END_IF
+
+IF eCurrentState = E_MachineState.MACHINESTATE_Active THEN
+	
+	IF bDeviceFirmwUpdate THEN	//FirmwareUpdate Can-Nodes
+		A_DeviceFirmwUpdate();
+	ELSIF bSetupXYAxis THEN	//Achsen einrichten (Referenzpunkt usw. bestimmen)
+		A_SetupXYAxis();
+	ELSIF bSetupZAxis THEN	//Achsen einrichten (Referenzpunkt usw. bestimmen)
+		A_SetupZAxis();
+	ELSE
+		eCurrentState := ActionDispacher.eCurrentState;	
+	END_IF
+	
+	IF nStateAction >= 80 THEN
+		IF nStateAction >= 99 THEN
+			bError := TRUE;
+			fbErrorList.M_Add(stError);
+		END_IF
+		bDeviceFirmwUpdate := FALSE;
+		bSetupXYAxis := FALSE;
+		bSetupZAxis := FALSE;
+		nStateAction := 0;
+	END_IF
+
+	IF bError THEN
+		eCurrentState := E_MachineState.MACHINESTATE_Error;
+		RETURN;
+	END_IF
+	
+	IF NOT (bDeviceFirmwUpdate OR bSetupXYAxis OR bSetupZAxis) THEN
+		eCurrentState := E_MachineState.MACHINESTATE_Idle;
+	END_IF
+	
+ELSIF eCurrentState = E_MachineState.MACHINESTATE_Reset THEN
+	A_Reset();
+END_IF]]></ST>
+    </Implementation>
+    <Action Name="A_DeviceFirmwUpdate" Id="{4aaa0551-871f-44ee-90be-3080c57f3992}">
+      <Implementation>
+        <ST><![CDATA[CASE nStateAction OF
+	0:
+		FirmwUpdate.pFbCanNode := pFbCanNode;
+		FirmwUpdate.bExecute := TRUE;
+		nStateAction := 1;
+	
+	1:
+		IF NOT FirmwUpdate.bBusy THEN
+			IF FirmwUpdate.bError THEN
+				stError.ErrorId := FirmwUpdate.nErrorId;
+				nStateAction := 99;
+			ELSE
+				nStateAction := 80;
+			END_IF
+			FirmwUpdate.bExecute := FALSE;
+		END_IF
+END_CASE]]></ST>
+      </Implementation>
+    </Action>
+    <Action Name="A_Reset" Id="{f904836d-b333-4ccb-be5c-158097d6e24c}">
+      <Implementation>
+        <ST><![CDATA[IF nStateA_Reset = 0 THEN
+	//ActionDispacher zurücksetzen (Hier werden auch die Devices zurückgesetzt
+	ActionDispacher.M_Reset();
+	//Hardware zurücksetzen
+	PerformHardware.A_ResetError();
+	//PCV zurücksetzen
+	fbPCV.M_Reset();
+	timeout(IN:= FALSE);
+	nStateA_Reset := 1;
+ELSIF nStateA_Reset = 1 THEN
+	nStateA_Reset := 2;
+	timeout(IN:= TRUE, PT:=T#20S);
+	//Warten, bis alles zurückgesetzt
+	IF ActionDispacher.eCurrentState <> E_MachineState.MACHINESTATE_Idle THEN
+		nStateA_Reset := 1; 		
+	END_IF
+	IF PerformHardware.bError THEN
+		PerformHardware.A_ResetError();
+		nStateA_Reset := 1;
+	END_IF
+	IF timeout.Q THEN
+		eCurrentState := E_MachineState.MACHINESTATE_Error;
+		nStateA_Reset := 0;
+	END_IF
+ELSIF nStateA_Reset = 2 THEN
+	bError := FALSE;
+	eCurrentState := E_MachineState.MACHINESTATE_Idle;
+	nStateA_Reset := 0;
+END_IF]]></ST>
+      </Implementation>
+    </Action>
+    <Action Name="A_ResetPlc" Id="{79737a78-1d02-4714-b1c9-5afb16d7f366}">
+      <Implementation>
+        <ST><![CDATA[CASE nStateA_ResetPlc OF
+	0:	//Alle MzHeads resetten
+		FOR i:= 1 TO cMaxMzHeads BY 1 DO
+			aFbMultiZRef[i].M_ResetApp();
+		END_FOR
+		nStateA_ResetPlc := 1;
+		
+	1:	//warten, bis mind 1 NodeState <> 0
+		FOR i:= 1 TO cMaxMzHeads BY 1 DO
+			IF aFbMultiZRef[i].P_nNodeState <> 0 THEN
+				nStateA_ResetPlc := 2;	
+			END_IF
+		END_FOR
+	
+	2:	//warten bis sich alle MzHeads wieder melden (Timeout)
+		timeout(IN:=TRUE, PT:=T#6S);
+		nStateA_ResetPlc := 3;
+		FOR i:= 1 TO cMaxMzHeads BY 1 DO
+			IF aFbMultiZRef[i].P_nNodeState <> 0 THEN
+				nStateA_ResetPlc := 2;	
+			END_IF
+		END_FOR
+		IF timeout.Q THEN
+			nStateA_ResetPlc := 3;
+		END_IF
+	
+	3:	//Plc resetten
+		fbPLC_Reset(PORT:= 851, RESET:= TRUE);
+END_CASE]]></ST>
+      </Implementation>
+    </Action>
+    <Action Name="A_SetupXYAxis" Id="{8d21c555-608e-4f9e-928e-306b59d1d0dc}">
+      <Implementation>
+        <ST><![CDATA[CASE nStateAction OF
+	0:	
+		stError.ErrorId :=  pSetupDrive^.M_Setup();
+		IF stError.ErrorId > 0 THEN
+			nStateAction := 99;
+		ELSE
+			MEMSET(ADR(stInterResponse),0,SIZEOF(stInterResponse));
+			nStateAction := 1;
+		END_IF
+	
+	1:	//Warten, bis Axis auf UserResponse wartet	
+		IF pSetupDrive^.P_bError THEN
+			stError.ErrorId := pSetupDrive^.P_nErrorId;
+			nStateAction := 99;
+		ELSE
+			IF pSetupDrive^.P_bSetupWaitForResp THEN
+				MEMSET(ADR(stInterResponse),0,SIZEOF(stInterResponse));
+				stInteractRequest.eInteractMessageType := E_InteractMessageType.INTERACTMES_StartTeaching;	//Interaction Request absenden
+				nStateAction := 2;
+			ELSE
+				//auf Cancel reagieren
+				IF stInterResponse.eInteractMessageType = E_InteractMessageType.INTERACTMES_Cancel THEN
+					nStateAction := 70;	
+				END_IF
+			END_IF
+		END_IF
+		
+	2:	//auf Response von PC warten
+		IF stInterResponse.eInteractMessageType = E_InteractMessageType.INTERACTMES_TeachingFinished THEN
+			MEMSET(ADR(stInteractRequest),0,SIZEOF(stInteractRequest));
+			pSetupDrive^.M_ContinueSetup();
+			nStateAction := 3;
+		ELSIF stInterResponse.eInteractMessageType = E_InteractMessageType.INTERACTMES_Cancel THEN
+			nStateAction := 70;
+		END_IF
+	3:
+		IF NOT pSetupDrive^.P_bBusy THEN
+			fbSettings.M_WritePersData();
+			nStateAction := 80;
+		END_IF
+		
+	70:	//Abbrechen
+		pSetupDrive^.M_Stop();
+		MEMSET(ADR(stInteractRequest),0,SIZEOF(stInteractRequest));
+		nStateAction := 80;
+		
+END_CASE]]></ST>
+      </Implementation>
+    </Action>
+    <Action Name="A_SetupZAxis" Id="{47dc2c81-30cb-4193-85e7-fbd3a67db116}">
+      <Implementation>
+        <ST><![CDATA[IF nStateAction = 0 THEN
+	fbZmHome(bExecute:= TRUE, pFbZAxisRef:= pFbZAxis, bMoveToHome:= FALSE);
+	IF NOT fbZmHome.bBusy THEN
+		IF fbZmHome.bError THEN
+			nStateAction := 99;
+		ELSE
+			MEMSET(ADR(stInterResponse),0,SIZEOF(stInterResponse));
+			stInteractRequest.eInteractMessageType := E_InteractMessageType.INTERACTMES_StartTeaching;	
+			nStateAction := 1;
+		END_IF
+		fbZmHome(bExecute:= FALSE);
+	END_IF
+ELSIF nStateAction = 1 THEN //auf Response von PC warten
+	IF stInterResponse.eInteractMessageType = E_InteractMessageType.INTERACTMES_TeachingFinished THEN
+		MEMSET(ADR(stInteractRequest),0,SIZEOF(stInteractRequest));
+		pFbZAxis^.P_rRefPos := DINT_TO_REAL(stInterResponse.nArg1);
+		fbSettings.M_WritePersData();
+		nStateAction := 80;
+	ELSIF stInterResponse.eInteractMessageType = E_InteractMessageType.INTERACTMES_Cancel THEN
+		MEMSET(ADR(stInteractRequest),0,SIZEOF(stInteractRequest));
+		nStateAction := 80;
+	END_IF
+ELSIF nStateAction = 70 THEN
+	nStateAction := 80;	
+END_IF]]></ST>
+      </Implementation>
+    </Action>
+    <Method Name="M_Cancel" Id="{7b282fa1-fcbe-4d4d-b13d-f18a0ce358f5}">
+      <Declaration><![CDATA[METHOD M_Cancel : ERRORID
+VAR_INPUT
+END_VAR
+VAR
+END_VAR]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[IF eCurrentState = E_MachineState.MACHINESTATE_Active THEN	//auf Cancel-Kommando braucht nur im Actice-State reagiert werden
+	IF bSetupXYAxis OR bSetupZAxis THEN
+		nStateAction := 70;
+	END_IF
+END_IF]]></ST>
+      </Implementation>
+    </Method>
+    <Method Name="M_DeviceFirmwUpdate" Id="{8c1e63ae-bf0a-4057-a032-862f3f017bdf}">
+      <Declaration><![CDATA[METHOD M_DeviceFirmwUpdate : ERRORID
+VAR_INPUT
+	nCanNodeId	: USINT;
+END_VAR]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[IF eCurrentState = E_MachineState.MACHINESTATE_Idle OR eCurrentState = E_MachineState.MACHINESTATE_Error THEN
+	//Folgende CAN-Knoten (Gesim) können upgedatet werden
+	//MultiZ, ReactorHeater, MtpHeater, SubstHeater, BottleRack, IOPortExpander
+	pFbCanNode := 0;
+	CASE nCanNodeId OF
+		5:	//ReactorHeater1
+			{IF defined(variable:aFbReactHeatRef)}
+			pFbCanNode := ADR(aFbReactHeatRef[1]);
+			{END_IF}
+		6:	//ReactorHeater2
+			{IF defined(variable:aFbReactHeatRef)}
+			IF cNoOfReactHeaters > 1 THEN
+				pFbCanNode := ADR(aFbReactHeatRef[1]) + SIZEOF(aFbReactHeatRef[1]);
+			END_IF
+			{END_IF}
+		8:	//MultiZ1
+			{IF defined(variable:aFbMultiZRef)}
+			pFbCanNode := ADR(aFbMultiZRef[1]);
+			{END_IF}
+		9:	//MultiZ2
+			{IF defined(variable:aFbMultiZRef)}
+			IF cMaxMzHeads > 1 THEN
+				pFbCanNode := ADR(aFbMultiZRef[1]) + SIZEOF(aFbMultiZRef[1]);	
+			END_IF
+			{END_IF}
+		10:	//MtpHeater1
+			{IF defined(variable:aFbMtpHeatRef)}
+			pFbCanNode := ADR(aFbMtpHeatRef[1]);
+			{END_IF}
+		11:	//MtpHeater2
+			{IF defined(variable:aFbMtpHeatRef)}
+			IF cNoOfMtpHeaters > 1 THEN
+				pFbCanNode := ADR(aFbMtpHeatRef[1]) + SIZEOF(aFbMtpHeatRef[1]);
+			END_IF
+			{END_IF}
+		12:	//SubstHeater1
+			{IF defined(variable:aFbSubstHeatRef)}
+			pFbCanNode := ADR(aFbSubstHeatRef[1]);
+			{END_IF}
+		13:	//SubstHeater2
+			{IF defined(variable:aFbSubstHeatRef)}
+			IF cNoOfSubstHeaters > 1 THEN
+				pFbCanNode := ADR(aFbSubstHeatRef[1]) + SIZEOF(aFbSubstHeatRef[1]);
+			END_IF
+			{END_IF}
+		14:	//TripleTrigger1
+			{IF defined(variable:aFbTripleTriggerRef)}
+			pFbCanNode := ADR(aFbTripleTriggerRef[1]);
+			{END_IF}		
+		16:	//IOExpander1
+			{IF defined(variable:aFbIOExpanderRef)}
+			pFbCanNode := ADR(aFbIOExpanderRef[1]);
+			{END_IF}		
+		17:	//IOExpander2
+			{IF defined(variable:aFbIOExpanderRef)}
+			IF cNoOfIOExpanders > 1 THEN
+				pFbCanNode := ADR(aFbIOExpanderRef[1]) + SIZEOF(aFbIOExpanderRef[1]);
+			END_IF
+			{END_IF}		
+		20:	//BottleRack1
+			{IF defined(variable:aFbBottleRackRef)}
+			pFbCanNode := ADR(aFbBottleRackRef[1]);
+			{END_IF}			
+		24:	//PowderStation1
+			{IF defined(variable:aFbPowderStatRef)}
+			pFbCanNode := ADR(aFbPowderStatRef[1]);
+			{END_IF}
+		25:	//MultiPurpIO
+			{IF defined(variable:aFbHwRefMultiPurpIO)}
+			pFbCanNode := ADR(aFbHwRefMultiPurpIO[1]);
+			{END_IF}		
+	END_CASE
+
+	bDeviceFirmwUpdate := TRUE;
+	eCurrentState := E_MachineState.MACHINESTATE_Active;
+ELSE
+	M_DeviceFirmwUpdate := E_ErrorIdCmd.ERRORID_InvalidState; 
+END_IF]]></ST>
+      </Implementation>
+    </Method>
+    <Method Name="M_ResetError" Id="{15fc6b94-b789-41c3-92b8-f292b3847028}">
+      <Declaration><![CDATA[METHOD M_ResetError
+VAR_INPUT
+END_VAR
+]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[IF eCurrentState = E_MachineState.MACHINESTATE_Error THEN 
+	eCurrentState := E_MachineState.MACHINESTATE_Reset;
+END_IF]]></ST>
+      </Implementation>
+    </Method>
+    <Method Name="M_ResetPlc" Id="{24885b49-7d2a-4df5-9fa6-aead83a3c878}">
+      <Declaration><![CDATA[METHOD M_ResetPlc : ERRORID
+VAR_INPUT
+END_VAR
+]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[bResetPlc := TRUE;]]></ST>
+      </Implementation>
+    </Method>
+    <Method Name="M_SetState" Id="{a3271065-9987-456c-a820-950fc5116baf}">
+      <Declaration><![CDATA[METHOD M_SetState
+VAR_INPUT
+	eState : E_MachineState;
+END_VAR
+]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[eCurrentState := eState;]]></ST>
+      </Implementation>
+    </Method>
+    <Method Name="M_SetupAxis" Id="{57b24dd4-0311-4808-9bb2-dbfb9b08495a}">
+      <Declaration><![CDATA[METHOD M_SetupAxis : ERRORID
+VAR_INPUT
+	refCmdData : REFERENCE TO ST_CmdData;
+END_VAR
+
+VAR
+	stHardwareId : ST_HardwareId;
+END_VAR]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[IF eCurrentState <> E_MachineState.MACHINESTATE_Idle THEN
+	M_SetupAxis := E_ErrorIdCmd.ERRORID_InvalidState;
+	RETURN;
+END_IF
+
+IF NOT (pFbSafety^.eCurrentState = E_SafetyState.Locked) THEN
+	M_SetupAxis := E_ErrorIdCmd.ERRORID_InterlockNotLocked;
+	RETURN;	
+END_IF
+
+MEMCPY(ADR(stHardwareId),ADR(refCmdData.n32Data[0]),3);
+
+IF stHardwareId.eGroup = E_HardwareGrp.AxisX OR stHardwareId.eGroup = E_HardwareGrp.AxisY THEN
+	pSetupDrive := fbXYDriveList.M_GetByHwId(stHardwareId);
+	IF pSetupDrive > 0 THEN
+		pSetupDrive^.M_SetProperties(refCmdData);
+		bSetupXYAxis := TRUE;	
+	ELSE
+		M_SetupAxis := E_ErrorIdCmd.ERRORID_InvalidHwItem;
+	END_IF
+
+ELSIF stHardwareId.eGroup = E_HardwareGrp.AxisZ THEN
+	IF stHardwareId.nItem > 0 AND stHardwareId.nItem <= 7 THEN
+		//Parent?
+		IF stHardwareId.nParentItem > 0 AND stHardwareId.nParentItem <= cMaxMzHeads THEN
+			pFbMultiZ := ADR(aFbMultiZRef[stHardwareId.nParentItem]);
+			IF pFbMultiZ^.aFbZAxisRef[stHardwareId.nItem].stInput.nStatus.7 THEN
+				pFbZAxis := ADR(pFbMultiZ^.aFbZAxisRef[stHardwareId.nItem]);
+				pFbZAxis^.P_bInvertInitDir := DINT_TO_BOOL(refCmdData.n32Data[5]);
+				bSetupZAxis := TRUE;
+			ELSE
+				M_SetupAxis := E_ErrorIdMultiZ.ERRORID_NoZAxis;	
+			END_IF
+		ELSE
+			M_SetupAxis := E_ErrorIdCmd.ERRORID_InvalidHwItem;
+		END_IF
+	ELSE
+		M_SetupAxis := E_ErrorIdCmd.ERRORID_InvalidHwItem;
+	END_IF
+ELSE
+	M_SetupAxis := E_ErrorIdCmd.ERRORID_InvalidHwGroup;
+END_IF
+
+IF M_SetupAxis = 0 THEN
+	eCurrentState := E_MachineState.MACHINESTATE_Active;	
+END_IF
+
+]]></ST>
+      </Implementation>
+    </Method>
+    <LineIds Name="FB_OM_Maintenance">
+      <LineId Id="189" Count="38" />
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="FB_OM_Maintenance.A_DeviceFirmwUpdate">
+      <LineId Id="2" Count="15" />
+      <LineId Id="1" Count="0" />
+    </LineIds>
+    <LineIds Name="FB_OM_Maintenance.A_Reset">
+      <LineId Id="30" Count="27" />
+      <LineId Id="1" Count="0" />
+    </LineIds>
+    <LineIds Name="FB_OM_Maintenance.A_ResetPlc">
+      <LineId Id="7" Count="0" />
+      <LineId Id="13" Count="0" />
+      <LineId Id="22" Count="1" />
+      <LineId Id="27" Count="0" />
+      <LineId Id="42" Count="2" />
+      <LineId Id="50" Count="4" />
+      <LineId Id="12" Count="0" />
+      <LineId Id="25" Count="1" />
+      <LineId Id="30" Count="0" />
+      <LineId Id="32" Count="0" />
+      <LineId Id="36" Count="1" />
+      <LineId Id="33" Count="1" />
+      <LineId Id="39" Count="2" />
+      <LineId Id="10" Count="0" />
+      <LineId Id="21" Count="0" />
+      <LineId Id="8" Count="0" />
+      <LineId Id="1" Count="0" />
+    </LineIds>
+    <LineIds Name="FB_OM_Maintenance.A_SetupXYAxis">
+      <LineId Id="2" Count="5" />
+      <LineId Id="42" Count="0" />
+      <LineId Id="8" Count="3" />
+      <LineId Id="43" Count="1" />
+      <LineId Id="46" Count="1" />
+      <LineId Id="49" Count="9" />
+      <LineId Id="45" Count="0" />
+      <LineId Id="17" Count="18" />
+      <LineId Id="59" Count="0" />
+      <LineId Id="1" Count="0" />
+    </LineIds>
+    <LineIds Name="FB_OM_Maintenance.A_SetupZAxis">
+      <LineId Id="2" Count="23" />
+      <LineId Id="1" Count="0" />
+    </LineIds>
+    <LineIds Name="FB_OM_Maintenance.M_Cancel">
+      <LineId Id="3" Count="3" />
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="FB_OM_Maintenance.M_DeviceFirmwUpdate">
+      <LineId Id="83" Count="67" />
+      <LineId Id="161" Count="0" />
+      <LineId Id="151" Count="0" />
+      <LineId Id="162" Count="0" />
+      <LineId Id="152" Count="5" />
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="FB_OM_Maintenance.M_ResetError">
+      <LineId Id="3" Count="1" />
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="FB_OM_Maintenance.M_ResetPlc">
+      <LineId Id="5" Count="0" />
+    </LineIds>
+    <LineIds Name="FB_OM_Maintenance.M_SetState">
+      <LineId Id="5" Count="0" />
+    </LineIds>
+    <LineIds Name="FB_OM_Maintenance.M_SetupAxis">
+      <LineId Id="3" Count="11" />
+      <LineId Id="60" Count="2" />
+      <LineId Id="66" Count="0" />
+      <LineId Id="64" Count="1" />
+      <LineId Id="63" Count="0" />
+      <LineId Id="15" Count="0" />
+      <LineId Id="26" Count="26" />
+      <LineId Id="2" Count="0" />
+    </LineIds>
+  </POU>
+</TcPlcObject>

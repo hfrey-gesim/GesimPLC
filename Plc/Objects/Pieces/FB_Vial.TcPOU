@@ -1,0 +1,200 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<TcPlcObject Version="1.1.0.1" ProductVersion="3.1.4022.18">
+  <POU Name="FB_Vial" Id="{e56e79ad-755c-47a3-9f91-0926d60671f2}" SpecialFunc="None">
+    <Declaration><![CDATA[{attribute 'enable_dynamic_creation'}
+FUNCTION_BLOCK FB_Vial EXTENDS FB_UsingPiece
+VAR
+	pSeptum: POINTER TO FB_PieceBase;
+	nTopLevel: DINT;
+	nBottomLevel: DINT;
+END_VAR
+]]></Declaration>
+    <Implementation>
+      <ST><![CDATA[]]></ST>
+    </Implementation>
+    <Method Name="FB_init" Id="{dc97a6db-7594-483c-b952-6a1eda0dd441}">
+      <Declaration><![CDATA[{attribute 'object_name' := 'FB_init'}
+METHOD FB_init : BOOL
+VAR_INPUT
+	/// if TRUE, the retain variables are initialized (warm start / cold start)
+	bInitRetains: BOOL;
+	/// if TRUE, the instance afterwards gets moved into the copy code (online change)
+	bInCopyCode: BOOL;
+END_VAR
+]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[bUsingPiece := TRUE;
+eObjectType := E_ObjectType.OBJECTTYPE_Vial;
+eObjectGroup := E_ObjectGroup.OBJECTGROUP_Piece;]]></ST>
+      </Implementation>
+    </Method>
+    <Method Name="M_ClearAllProps" Id="{c636e6b6-e625-46af-8128-b85da5c4536b}">
+      <Declaration><![CDATA[{attribute 'object_name' := 'M_ClearAllProps'}
+METHOD M_ClearAllProps
+
+VAR_INPUT
+	bIgnoreParent : BOOL; //Es wird das gesamte OD gelöscht. -> Zeiger auf Parent nicht mehr gültig!
+END_VAR
+]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[pSeptum := 0;
+SUPER^.M_ClearAllProps(bIgnoreParent);]]></ST>
+      </Implementation>
+    </Method>
+    <Method Name="M_GetAllProps" Id="{bd305124-dda6-430d-9680-0b6957e4a5b4}">
+      <Declaration><![CDATA[{attribute 'object_name' := 'M_GetAllProps'}
+METHOD M_GetAllProps : ERRORID
+VAR_INPUT
+	refCmdData: REFERENCE TO ST_CmdData;
+END_VAR
+]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[SUPER^.M_GetAllProps(refCmdData);
+nCurrentPropIndex := nCurrentPropIndex + 1;
+refCmdData.n32Data[nCurrentPropIndex] := nTopLevel;
+nCurrentPropIndex := nCurrentPropIndex + 1;
+refCmdData.n32Data[nCurrentPropIndex] := nBottomLevel; ]]></ST>
+      </Implementation>
+    </Method>
+    <Method Name="M_SetAllProps" Id="{c71150f0-c274-4f3f-91c1-0e607b552a52}">
+      <Declaration><![CDATA[{attribute 'object_name' := 'M_SetAllProps'}
+METHOD M_SetAllProps : ERRORID
+VAR_INPUT
+	refCmdData: REFERENCE TO ST_CmdData;
+END_VAR
+]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[M_SetAllProps := SUPER^.M_SetAllProps(refCmdData);
+
+IF M_SetAllProps > 0 THEN
+	RETURN;
+END_IF
+nCurrentPropIndex := nCurrentPropIndex + 1;
+nTopLevel := refCmdData.n32Data[nCurrentPropIndex];
+nCurrentPropIndex := nCurrentPropIndex + 1;
+nBottomLevel := refCmdData.n32Data[nCurrentPropIndex];
+nNoOfProps := nCurrentPropIndex + 1;]]></ST>
+      </Implementation>
+    </Method>
+    <Method Name="M_SetSingleProp" Id="{18146b88-1129-4fba-a15a-877c50f6527c}">
+      <Declaration><![CDATA[METHOD M_SetSingleProp : ERRORID
+VAR_INPUT
+	refCmdData : REFERENCE TO  ST_CmdData;
+END_VAR
+]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[IF refCmdData.aHeader[1] < 13 THEN	//Property-Nr
+	M_SetSingleProp := SUPER^.M_SetSingleProp(refCmdData);
+ELSE
+	IF refCmdData.aHeader[1] = 13 THEN
+		//bIsOpen := DINT_TO_BOOL(refCmdData.n32Data[0]);
+		;
+	ELSIF refCmdData.aHeader[1] = 14 THEN
+		nTopLevel := refCmdData.n32Data[0];
+	ELSIF refCmdData.aHeader[1] = 15 THEN
+		nBottomLevel := refCmdData.n32Data[0];
+	ELSE
+		M_SetSingleProp := E_ErrorIdCmd.ERRORID_InvalidProperty;
+	END_IF
+END_IF]]></ST>
+      </Implementation>
+    </Method>
+    <Property Name="P_nBottomLevel" Id="{88f66479-b16d-4d9d-b7aa-98a765631393}">
+      <Declaration><![CDATA[PROPERTY P_nBottomLevel : DINT
+]]></Declaration>
+      <Get Name="Get" Id="{a17ff1e0-ac5c-471e-964b-4f318d191cc1}">
+        <Declaration><![CDATA[]]></Declaration>
+        <Implementation>
+          <ST><![CDATA[P_nBottomLevel := nBottomLevel;]]></ST>
+        </Implementation>
+      </Get>
+    </Property>
+    <Property Name="P_nTopLevel" Id="{d9e11507-9e94-4c4a-80a7-10f28a2e8391}">
+      <Declaration><![CDATA[PROPERTY P_nTopLevel : DINT
+]]></Declaration>
+      <Get Name="Get" Id="{6a87a6aa-64e2-4c59-8dad-81cb2256513d}">
+        <Declaration><![CDATA[]]></Declaration>
+        <Implementation>
+          <ST><![CDATA[P_nTopLevel := nTopLevel;]]></ST>
+        </Implementation>
+      </Get>
+    </Property>
+    <Property Name="P_pLatestChild" Id="{79b2169c-f70b-48d7-907d-f5ddb16ed16a}">
+      <Declaration><![CDATA[PROPERTY P_pLatestChild : POINTER TO FB_PieceBase
+]]></Declaration>
+      <Get Name="Get" Id="{e61f3d0b-589d-48e7-91d2-f9e9d5dff586}">
+        <Declaration><![CDATA[]]></Declaration>
+        <Implementation>
+          <ST><![CDATA[IF pSeptum > 0 THEN
+	P_pLatestChild := pSeptum;	
+ELSE
+	P_pLatestChild := THIS;
+END_IF
+]]></ST>
+        </Implementation>
+      </Get>
+    </Property>
+    <Property Name="P_pSeptum" Id="{ccb33d7d-d1ba-438d-9119-e6a1d89acb62}">
+      <Declaration><![CDATA[PROPERTY P_pSeptum : POINTER TO FB_PieceBase
+]]></Declaration>
+      <Get Name="Get" Id="{a3eb10f1-de5c-4142-902a-38389423bfda}">
+        <Declaration><![CDATA[]]></Declaration>
+        <Implementation>
+          <ST><![CDATA[P_pSeptum := pSeptum;]]></ST>
+        </Implementation>
+      </Get>
+      <Set Name="Set" Id="{22135a4d-04af-4944-ab0c-fe0ecf876106}">
+        <Declaration><![CDATA[]]></Declaration>
+        <Implementation>
+          <ST><![CDATA[pSeptum := P_pSeptum;]]></ST>
+        </Implementation>
+      </Set>
+    </Property>
+    <LineIds Name="FB_Vial">
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="FB_Vial.FB_init">
+      <LineId Id="2" Count="0" />
+      <LineId Id="11" Count="1" />
+    </LineIds>
+    <LineIds Name="FB_Vial.M_ClearAllProps">
+      <LineId Id="3" Count="0" />
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="FB_Vial.M_GetAllProps">
+      <LineId Id="3" Count="1" />
+      <LineId Id="11" Count="0" />
+      <LineId Id="5" Count="0" />
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="FB_Vial.M_SetAllProps">
+      <LineId Id="3" Count="3" />
+      <LineId Id="17" Count="0" />
+      <LineId Id="7" Count="0" />
+      <LineId Id="18" Count="0" />
+      <LineId Id="9" Count="0" />
+      <LineId Id="19" Count="0" />
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="FB_Vial.M_SetSingleProp">
+      <LineId Id="3" Count="12" />
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="FB_Vial.P_nBottomLevel.Get">
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="FB_Vial.P_nTopLevel.Get">
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="FB_Vial.P_pLatestChild.Get">
+      <LineId Id="3" Count="4" />
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="FB_Vial.P_pSeptum.Get">
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="FB_Vial.P_pSeptum.Set">
+      <LineId Id="2" Count="0" />
+    </LineIds>
+  </POU>
+</TcPlcObject>

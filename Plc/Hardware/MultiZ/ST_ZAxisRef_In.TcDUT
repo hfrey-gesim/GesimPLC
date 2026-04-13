@@ -1,0 +1,15 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<TcPlcObject Version="1.1.0.1" ProductVersion="3.1.0.25">
+  <DUT Name="ST_ZAxisRef_In" Id="{967091d3-39b8-4aeb-a854-0902c9cddb91}">
+    <Declaration><![CDATA[TYPE ST_ZAxisRef_In :
+STRUCT
+	nStatus		AT %I* : USINT;
+	nCurrentPos AT %I* : DINT;
+	nToolState	AT %I* : USINT;
+	nError		AT %I* : USINT;
+END_STRUCT
+END_TYPE
+]]></Declaration>
+    <ObjectProperties />
+  </DUT>
+</TcPlcObject>

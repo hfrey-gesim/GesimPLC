@@ -1,0 +1,97 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<TcPlcObject Version="1.1.0.1" ProductVersion="3.1.4022.12">
+  <POU Name="FB_SafetyPseudo" Id="{79c1888d-719b-4736-adcd-b8d953d16a61}" SpecialFunc="None">
+    <Declaration><![CDATA[FUNCTION_BLOCK FB_SafetyPseudo EXTENDS FB_SafetyBase
+VAR
+	bInput 	AT %I* : BOOL;
+	bOutput AT %Q* : BOOL;
+	nState : USINT;
+	pXYDrive : POINTER TO FB_XYDriveBase;
+END_VAR
+VAR_OUTPUT
+	
+END_VAR]]></Declaration>
+    <Implementation>
+      <ST><![CDATA[//Überwachung der Verriegelung ohne TwinSafe (derzeit nur in RPD IWS in Benutzung)
+//Wenn Verriegelung durch Schlüssel oder mit Gewalt geöffnet wird, dann müssen die Antriebe
+//gestoppt werden -> QuickStop -> PowerOFF
+//QuickStop nur wenn Motion aktiv
+
+CASE nState OF
+	0:	//Überwachung im verriegelten Zustand
+		IF NOT bInput THEN
+			eCurrentState := E_SafetyState.Unlocked;
+			fbXYDriveList.M_SetCurrentToHead();
+			REPEAT
+				pXYDrive := fbXYDriveList.M_Get();
+				IF pXYDrive > 0 THEN
+					pXYDrive^.M_Stop();
+				END_IF
+			UNTIL pXYDrive = 0
+			END_REPEAT			
+			nState := 1;
+		END_IF
+	1:
+		fbXYDriveList.M_SetCurrentToHead();
+		REPEAT
+			pXYDrive := fbXYDriveList.M_Get();
+			IF pXYDrive > 0 THEN
+				pXYDrive^.M_PowerOff();
+			END_IF
+		UNTIL pXYDrive = 0
+		END_REPEAT			
+	
+	10:	//Verriegeln
+		//Unter welchen Bedingungen darf verrieglt werden?
+		IF bInput THEN
+			eCurrentState := E_SafetyState.Locked;
+			nState := 0;
+			fbXYDriveList.M_SetCurrentToHead();
+			REPEAT
+				pXYDrive := fbXYDriveList.M_Get();
+				IF pXYDrive > 0 THEN
+					IF pXYDrive^.P_bHomed AND NOT pXYDrive^.P_bError THEN
+						pXYDrive^.M_PowerOn();
+					END_IF
+ 				END_IF
+			UNTIL pXYDrive = 0
+			END_REPEAT			
+		END_IF
+	
+	20: //Entriegelt
+END_CASE
+
+]]></ST>
+    </Implementation>
+    <Method Name="FB_init" Id="{a34f43ee-ffec-41c8-a8dc-ed95319ffac5}">
+      <Declaration><![CDATA[METHOD FB_init : BOOL
+VAR_INPUT
+	bInitRetains : BOOL; // if TRUE, the retain variables are initialized (warm start / cold start)
+	bInCopyCode : BOOL;  // if TRUE, the instance afterwards gets moved into the copy code (online change)
+END_VAR
+]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[eCurrentState := E_SafetyState.Locked;]]></ST>
+      </Implementation>
+    </Method>
+    <LineIds Name="FB_SafetyPseudo">
+      <LineId Id="3" Count="8" />
+      <LineId Id="56" Count="4" />
+      <LineId Id="64" Count="1" />
+      <LineId Id="55" Count="0" />
+      <LineId Id="16" Count="1" />
+      <LineId Id="19" Count="0" />
+      <LineId Id="68" Count="7" />
+      <LineId Id="25" Count="5" />
+      <LineId Id="77" Count="4" />
+      <LineId Id="86" Count="1" />
+      <LineId Id="85" Count="0" />
+      <LineId Id="83" Count="1" />
+      <LineId Id="39" Count="4" />
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="FB_SafetyPseudo.FB_init">
+      <LineId Id="7" Count="0" />
+    </LineIds>
+  </POU>
+</TcPlcObject>

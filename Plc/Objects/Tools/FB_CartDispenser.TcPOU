@@ -1,0 +1,998 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<TcPlcObject Version="1.1.0.1" ProductVersion="3.1.4024.9">
+  <POU Name="FB_CartDispenser" Id="{851dfa01-ee87-4b91-bc81-57855644f15f}" SpecialFunc="None">
+    <Declaration><![CDATA[FUNCTION_BLOCK FB_CartDispenser EXTENDS FB_GCodeTool IMPLEMENTS I_Dispenser
+
+VAR_OUTPUT
+END_VAR
+VAR
+	
+	//Specproperties
+	pPneuChannelPress	: POINTER TO FB_PneuChannelRef;
+	pPneuChannelVac		: POINTER TO FB_PneuChannelRef;
+	
+	nDOutChanValvePress	: USINT;	//Digitaler Ausgangskanal MzHead Druckventil
+	
+	//****************************************Aktionsvariablen****************************************************
+
+	//Action: "SetPressure"
+	bSetPress			: BOOL;
+	fbSetPress			: FB_SetPressure;
+
+	//Action: "SetVacuum"
+	bSetVacuum			: BOOL;
+	fbSetVacuum			: FB_SetPressure;
+
+	//Action: "SwitchPressure"
+	bSwitchPress		: BOOL;			
+	nStateA_SwitchPress	: USINT;		//State von A_SwitchPress()
+	eSwitchPressCtrl	: E_PressCtrl;
+	tPressTime			: TIME;			//nach dieser Zeit Ventil automatisch wieder zu
+	timerPress			: TON;			//Timer für Öffnungszeit Druckventil
+	bPressIsOn			: BOOL;
+	
+	//Action: "Expose"
+	bExpose				: BOOL;
+	nStateA_Expose		: USINT;
+	pExposure			: POINTER TO FB_Exposure;
+	
+END_VAR]]></Declaration>
+    <Implementation>
+      <ST><![CDATA[IF eCurrentState = E_MachineState.MACHINESTATE_Active THEN
+	
+	IF bSetPress THEN
+		fbSetPress(pPneuChannelRef:= pPneuChannelPress);
+		IF NOT fbSetPress.bBusy THEN
+			IF fbSetPress.bError THEN
+				bError := TRUE;
+				stError.ErrorId := fbSetPress.nErrorId;
+				stError.POU := E_POU.POU_FB_CartDispenser;
+				fbErrorList.M_Add(stError);
+			END_IF
+			bSetPress := FALSE;
+			fbSetPress(pPneuChannelRef:= pPneuChannelPress, bExecute:= FALSE);
+			M_RemoveListEntry(nSearchValue:= E_Action.ACTION_SetPressure);
+		END_IF
+	END_IF	
+
+	IF bSetVacuum THEN
+		fbSetVacuum(pPneuChannelRef:= pPneuChannelVac);
+		IF NOT fbSetVacuum.bBusy THEN
+			IF fbSetVacuum.bError THEN
+				bError := TRUE;
+				stError.ErrorId := fbSetVacuum.nErrorId;
+				stError.POU := E_POU.POU_FB_CartDispenser;
+				fbErrorList.M_Add(stError);
+			END_IF
+			bSetVacuum := FALSE;
+			fbSetVacuum(pPneuChannelRef:= pPneuChannelVac, bExecute:= FALSE);
+			M_RemoveListEntry(nSearchValue:= E_Action.ACTION_SetVacuum);
+		END_IF
+	END_IF	
+	
+	IF bSwitchPress THEN	//Kartuschendruck einstellen und Ein-bzw. Aus schalten 
+		A_SwitchPress();
+		IF nStateA_SwitchPress >= 80 THEN
+			IF nStateA_SwitchPress >= 99 THEN
+				bError := TRUE;
+			END_IF
+			bSwitchPress := FALSE;
+			nStateA_SwitchPress := 0;
+			M_RemoveListEntry(nSearchValue:= E_Action.ACTION_SwitchPressure);
+		END_IF
+	END_IF
+	
+	IF bExpose THEN
+		A_Expose();
+		IF nStateA_Expose >= 80 THEN
+			IF nStateA_Expose >= 99 THEN
+				bError := TRUE;
+			END_IF
+			bExpose := FALSE;
+			nStateA_Expose := 0;
+			M_RemoveListEntry(nSearchValue:= E_Action.ACTION_Expose);
+		END_IF
+	END_IF
+END_IF
+
+SUPER^();	//FB_MzTool aufrufen
+
+IF pPneuChannelPress > 0 THEN
+	stProcessData.n32Data[7] := pPneuChannelPress^.P_nCurrentPressure;
+END_IF
+
+IF pPneuChannelVac > 0 THEN
+	stProcessData.n32Data[8] := pPneuChannelVac^.P_nCurrentPressure;
+END_IF
+
+IF pFbMultiZ > 0 THEN
+	IF nDOutChanValvePress > 0 AND nDOutChanValvePress < 8 THEN
+		bPressIsOn := pFbMultiZ^.aDigiOut[nDOutChanValvePress];
+		stProcessData.n32Data[9] := BOOL_TO_DINT(bPressIsOn);
+	END_IF
+END_IF
+
+aObjProcData[nNotifyId] := stProcessData;]]></ST>
+    </Implementation>
+    <Action Name="A_Expose" Id="{8feb36f8-e856-4e11-a9b5-d832ac3b7d1e}">
+      <Implementation>
+        <ST><![CDATA[IF nStateA_Expose = 70 THEN
+	pExposure^.M_CancelAction(ACTION_Expose);
+	nStateA_Expose := 71;
+END_IF
+
+IF NOT pExposure^.M_GetActionBusy(E_Action.ACTION_Expose) THEN
+	nStateA_Expose := 80;
+END_IF]]></ST>
+      </Implementation>
+    </Action>
+    <Action Name="A_Reset" Id="{d18bd03e-d98d-410a-a30e-9b8e85fadcc6}">
+      <Implementation>
+        <ST><![CDATA[//Ist noch eine Aktion aktiv?
+IF nStateA_ResetSpec = 0 THEN 
+	IF bSetPress THEN
+		bSetPress := FALSE;
+		fbSetPress(bExecute:= FALSE, pPneuChannelRef:= pPneuChannelPress);
+	END_IF
+
+	IF bSetVacuum THEN
+		bSetVacuum := FALSE;
+		fbSetVacuum(bExecute:= FALSE, pPneuChannelRef:= pPneuChannelVac);
+	END_IF
+	
+	IF bSwitchPress THEN 
+		bSwitchPress := FALSE;
+		nStateA_SwitchPress := 0;
+	END_IF
+	nStateA_ResetSpec := 80;		
+END_IF
+
+SUPER^.A_Reset();]]></ST>
+      </Implementation>
+    </Action>
+    <Action Name="A_Stop" Id="{c30de7eb-9f07-47a1-ac5a-415cdc5b48c2}">
+      <Implementation>
+        <ST><![CDATA[IF nStateA_Stop = 0 THEN
+	
+	IF bSetPress THEN
+		fbSetPress(bExecute:= FALSE, pPneuChannelRef:= pPneuChannelPress);
+	END_IF
+
+	IF bSetVacuum THEN
+		fbSetVacuum(bExecute:= FALSE, pPneuChannelRef:= pPneuChannelVac);
+	END_IF
+	
+	IF bSwitchPress AND nStateA_SwitchPress < 70 THEN
+		nStateA_SwitchPress := 70;
+	END_IF
+	
+	IF bExpose AND nStateA_Expose < 70 THEN
+		nStateA_Expose := 70;
+	END_IF
+	
+	nStateA_Stop := 1;
+END_IF
+
+SUPER^.A_Stop();]]></ST>
+      </Implementation>
+    </Action>
+    <Action Name="A_SwitchPress" Id="{b65bbb84-6348-4450-a292-ecabc3c5282e}">
+      <Implementation>
+        <ST><![CDATA[CASE nStateA_SwitchPress OF
+	0:	//Ventil Einschalten
+		IF eSwitchPressCtrl = E_PressCtrl.PRESSCTRL_PressOn THEN
+			pFbMultiZ^.M_SetDigiOut(nChannel:= nDOutChanValvePress, bValue:= TRUE);
+		END_IF
+	
+		//Timer starten
+		IF tPressTime = T#0S THEN
+			nStateA_SwitchPress := 80;
+			RETURN;	
+		END_IF
+		
+		timerPress(IN:= FALSE);
+		timerPress(IN:= TRUE, PT:= tPressTime);
+		nStateA_SwitchPress := 1;
+		
+	1:	//Warten bis Zeitabgelaufen
+		timerPress();
+		IF timerPress.Q THEN
+			timerPress(IN:= FALSE);
+			pFbMultiZ^.M_SetDigiOut(nChannel:= nDOutChanValvePress, bValue:= FALSE);
+			nStateA_SwitchPress := 80;
+		END_IF
+		
+	70:	//Abbrechen
+		timerPress(IN:= FALSE);
+		pFbMultiZ^.M_SetDigiOut(nChannel:= nDOutChanValvePress, bValue:= FALSE);
+		nStateA_SwitchPress := 80;
+END_CASE
+
+//Errorhandling
+(*IF nStateA_SwitchPress = 99 THEN
+	stError.POU := E_POU.POU_FB_CartridgeDisp;
+	stError.Cmd := E_Action.ACTION_SwitchPressure;
+	stError.POUAction := E_POUACT.POUACT_A_SwitchPress;
+	fbErrorList.M_Add(stError);
+END_IF*)]]></ST>
+      </Implementation>
+    </Action>
+    <Method Name="FB_init" Id="{47316f65-b1fd-4c0c-99d7-f438dc4385fb}">
+      <Declaration><![CDATA[METHOD FB_init : BOOL
+VAR_INPUT
+	bInitRetains : BOOL; // if TRUE, the retain variables are initialized (warm start / cold start)
+	bInCopyCode : BOOL;  // if TRUE, the instance afterwards gets moved into the copy code (online change)
+END_VAR
+]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[eObjectType := E_ObjectType.OBJECTTYPE_CartDispenser;
+eObjectGroup := E_ObjectGroup.OBJECTGROUP_MzTool OR E_ObjectGroup.OBJECTGROUP_Device;]]></ST>
+      </Implementation>
+    </Method>
+    <Method Name="M_AddChild" Id="{06a6ecd3-c489-4abc-b6df-7cf9fd1db8c8}">
+      <Declaration><![CDATA[METHOD M_AddChild : ERRORID
+VAR_INPUT
+	pObject : POINTER TO FB_Object;
+	nSlotNr	: UINT;
+	nIndex : INT;
+END_VAR
+]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[IF pObject > 0 THEN
+	IF pObject^.P_eObjectType = E_ObjectType.OBJECTTYPE_Nozzle THEN
+		M_AddChild := SUPER^.M_AddChild(pObject,nSlotNr,nIndex);
+	ELSE
+		M_AddChild := E_ErrorIdObjMgmt.ERRORID_InvalidParentObject;
+	END_IF
+ELSE
+	M_AddChild := E_ErrorIdObjMgmt.ERRORID_InvalidParentObject;
+END_IF]]></ST>
+      </Implementation>
+    </Method>
+    <Method Name="M_CancelAction" Id="{9fc37ec9-6205-4bcc-8dcd-4d4aec7ee49c}">
+      <Declaration><![CDATA[METHOD M_CancelAction
+VAR_INPUT
+	eAction : E_Action;
+END_VAR
+]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[CASE eAction OF
+	E_Action.ACTION_SetPressure:
+		IF bSetPress THEN
+			fbSetPress(bExecute:= FALSE, pPneuChannelRef:= pPneuChannelPress);
+		END_IF
+	
+	E_Action.ACTION_SetVacuum:
+		IF bSetVacuum THEN
+			fbSetVacuum(bExecute:= FALSE, pPneuChannelRef:= pPneuChannelVac);
+		END_IF
+	
+	E_Action.ACTION_SwitchPressure:
+		IF bSwitchPress AND nStateA_SwitchPress < 70 THEN
+			nStateA_SwitchPress := 70;
+		END_IF
+
+	E_Action.ACTION_Expose:
+		IF bExpose AND nStateA_Expose < 70 THEN
+			nStateA_Expose := 70;
+		END_IF
+ELSE
+	SUPER^.M_CancelAction(eAction);
+END_CASE]]></ST>
+      </Implementation>
+    </Method>
+    <Method Name="M_CheckAction" Id="{61957b8a-ce80-4dac-a9cc-d338fc7ddddd}">
+      <Declaration><![CDATA[METHOD M_CheckAction : ERRORID
+VAR_INPUT
+	refActionData : REFERENCE TO ST_ActionData;
+	pCorrelObject	: POINTER TO FB_Object;
+END_VAR
+]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[CASE refActionData.eAction OF
+	E_Action.ACTION_CleanTip,
+	E_Action.ACTION_MeasureTool,
+	E_Action.ACTION_SwitchPressure, //BasicAction für ActionOnArray
+	E_Action.ACTION_TeachTarget:
+		RETURN;
+ELSE
+	M_CheckAction := SUPER^.M_CheckAction(refActionData, pCorrelObject);
+END_CASE]]></ST>
+      </Implementation>
+    </Method>
+    <Method Name="M_CheckProcDataType" Id="{d4e3d697-0292-46ef-95c1-19318990d098}">
+      <Declaration><![CDATA[METHOD M_CheckProcDataType : BOOL
+VAR_INPUT
+	eProcDataType : E_ProcDataType;
+END_VAR
+]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[IF eProcDataType = E_ProcDataType.PROCDATATYPE_Temp1 OR eProcDataType = E_ProcDataType.PROCDATATYPE_Press1 THEN
+	M_CheckProcDataType := TRUE;
+END_IF]]></ST>
+      </Implementation>
+    </Method>
+    <Method Name="M_CheckProps" Id="{f7ec0194-8902-40d9-a5f8-73460ea82389}">
+      <Declaration><![CDATA[METHOD M_CheckProps : ERRORID
+VAR_INPUT
+END_VAR
+
+VAR
+	iterator : FB_ObjCollectIterator;
+	pHybridDispenser : POINTER TO FB_HybridDispenser;
+END_VAR]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[M_CheckProps := SUPER^.M_CheckProps();
+//Checken, ob an Holder ein Exposure hängt
+pExposure := 0;
+pObjCollectNode^.P_pOwnerColl^.M_GetIterator(iterator);
+WHILE iterator.pNode > 0 DO
+	IF iterator.pNode^.P_pObject^.P_eObjectType = E_ObjectType.OBJECTTYPE_Exposure THEN
+		pExposure := iterator.pNode^.P_pObject;
+		EXIT;
+	END_IF
+	iterator.M_Increment();
+END_WHILE
+
+//Nozzle muss zwingend dran wenn:
+//Parent ist ein CartridgeHolder
+//Parent ist ein HybridDispenser und hängt am MasterSlot
+IF pPiece = 0 THEN
+	IF pParentMzTool^.P_eObjectType = E_ObjectType.OBJECTTYPE_CartHolder THEN
+		M_CheckProps := E_ErrorIdObjMgmt.ERRORID_NoNozzleOnTool;
+	ELSIF pParentMzTool^.P_eObjectType = E_ObjectType.OBJECTTYPE_HybridDispenser THEN
+		pHybridDispenser := pParentMzTool;
+		IF pHybridDispenser^.M_ToolIsOnMasterSlot(THIS) THEN
+			M_CheckProps := E_ErrorIdObjMgmt.ERRORID_NoNozzleOnTool;
+		END_IF
+	END_IF	
+END_IF
+]]></ST>
+      </Implementation>
+    </Method>
+    <Method Name="M_ClearAllProps" Id="{8204dc9e-8633-4b6a-9992-88fe22061b25}">
+      <Declaration><![CDATA[METHOD M_ClearAllProps
+VAR_INPUT
+	bIgnoreParent : BOOL; //Es wird das gesamte OD gelöscht. -> Zeiger auf Parent nicht mehr gültig!
+END_VAR
+]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[pExposure := 0;
+pPneuChannelPress := 0;
+pPneuChannelVac := 0;
+SUPER^.M_ClearAllProps(bIgnoreParent);]]></ST>
+      </Implementation>
+    </Method>
+    <Method Name="M_DispenserPrepare" Id="{71cfed20-d60c-4eb4-9433-3f39d91669d0}">
+      <Declaration><![CDATA[METHOD M_DispenserPrepare : ERRORID
+VAR_INPUT
+END_VAR
+]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[]]></ST>
+      </Implementation>
+    </Method>
+    <Method Name="M_DispenserStart" Id="{8ba15233-b58c-4002-bfa5-2c61e313350b}">
+      <Declaration><![CDATA[METHOD M_DispenserStart : ERRORID
+VAR_INPUT
+END_VAR
+]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[IF NOT (eCurrentState = E_MachineState.MACHINESTATE_Idle OR
+	eCurrentState = E_MachineState.MACHINESTATE_Active OR
+	eCurrentState = E_MachineState.MACHINESTATE_Ready) THEN
+	M_DispenserStart := E_ErrorIdCmd.ERRORID_InvalidState;
+	RETURN;
+END_IF
+
+IF bSwitchPress THEN //ist eventuell durch direkte Action "SwitchPress" mit Time aktiv
+	tPressTime := T#0S;
+	nStateA_SwitchPress := 0;
+ELSE
+	pFbMultiZ^.M_SetDigiOut(nChannel:= nDOutChanValvePress, bValue:= TRUE);
+END_IF]]></ST>
+      </Implementation>
+    </Method>
+    <Method Name="M_DispenserStop" Id="{b8074fc4-d89c-459d-8c25-63e1be71f838}">
+      <Declaration><![CDATA[METHOD M_DispenserStop : ERRORID
+VAR_INPUT
+END_VAR
+]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[IF bSwitchPress THEN
+	nStateA_SwitchPress := 80;
+ELSE
+	pFbMultiZ^.M_SetDigiOut(nChannel:= nDOutChanValvePress, bValue:= FALSE);
+END_IF]]></ST>
+      </Implementation>
+    </Method>
+    <Method Name="M_ExeAction" Id="{2c39fbac-9449-4af8-96bc-c8d0ddf5151a}">
+      <Declaration><![CDATA[METHOD M_ExeAction : ERRORID
+VAR_INPUT
+	refActionData : REFERENCE TO ST_ActionData;	
+END_VAR]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[IF NOT (eCurrentState = E_MachineState.MACHINESTATE_Idle OR
+	eCurrentState = E_MachineState.MACHINESTATE_Active OR
+	eCurrentState = E_MachineState.MACHINESTATE_Ready) THEN
+	M_ExeAction := E_ErrorIdCmd.ERRORID_InvalidState;
+	RETURN;
+END_IF
+
+CASE refActionData.eAction OF
+		
+	E_Action.ACTION_SetPressure:
+		fbSetPress(bExecute:= FALSE, pPneuChannelRef:= pPneuChannelPress); //eventueller Fehler wird auch zurückgesetzt
+		fbSetPress.bAwait := DINT_TO_BOOL(refActionData.aParams[1]);
+		fbSetPress.nValue := DINT_TO_INT(refActionData.aParams[2]);
+		fbSetPress.nTolerancePlus := DINT_TO_INT(refActionData.aParams[3]);
+		fbSetPress.nToleranceMinus := DINT_TO_INT(refActionData.aParams[4]);
+		fbSetPress.tTimeout := DINT_TO_TIME(refActionData.aParams[5]);
+		
+		fbSetPress(bExecute:= TRUE,	pPneuChannelRef:= pPneuChannelPress,nErrorId=> M_ExeAction);
+		IF fbSetPress.bError THEN
+			RETURN;
+		END_IF
+		
+		IF NOT bSetPress AND fbSetPress.bBusy THEN
+			bSetPress := TRUE;
+			fbList.A_AddHeadValue(hList := hList, putValue := E_Action.ACTION_SetPressure);
+		ELSE
+			RETURN;	
+		END_IF
+
+	E_Action.ACTION_SetVacuum:
+		fbSetVacuum(bExecute:= FALSE, pPneuChannelRef:= pPneuChannelVac); //eventueller Fehler wird auch zurückgesetzt
+		fbSetVacuum.bAwait := DINT_TO_BOOL(refActionData.aParams[1]);
+		fbSetVacuum.nValue := DINT_TO_INT(refActionData.aParams[2]);
+		fbSetVacuum.nTolerancePlus := DINT_TO_INT(refActionData.aParams[3]);
+		fbSetVacuum.nToleranceMinus := DINT_TO_INT(refActionData.aParams[4]);
+		fbSetVacuum.tTimeout := DINT_TO_TIME(refActionData.aParams[5]);
+		
+		fbSetVacuum(bExecute:= TRUE, pPneuChannelRef:= pPneuChannelVac,nErrorId=> M_ExeAction);
+		IF fbSetVacuum.bError THEN
+			RETURN;
+		END_IF
+		
+		IF NOT bSetVacuum AND fbSetVacuum.bBusy THEN
+			bSetVacuum := TRUE;
+			fbList.A_AddHeadValue(hList := hList, putValue := E_Action.ACTION_SetVacuum);
+		ELSE
+			RETURN;	
+		END_IF
+		
+	E_Action.ACTION_SwitchPressure:
+			eSwitchPressCtrl := DINT_TO_USINT(refActionData.aParams[1]);
+			IF (eSwitchPressCtrl = E_PressCtrl.PRESSCTRL_PressOn) OR (eSwitchPressCtrl = E_PressCtrl.PRESSCTRL_Off) THEN
+				tPressTime := DINT_TO_TIME(refActionData.aParams[2]);
+				//Wenn Aktion aktiv kann es sein das die Zeit noch läuft oder der Druck an ist
+				IF bSwitchPress THEN	//Aktion ist aktiv
+					IF eSwitchPressCtrl = E_PressCtrl.PRESSCTRL_PressOn THEN
+						//Statemachine zurücksetzen
+						nStateA_SwitchPress := 0;		
+					ELSE
+						pFbMultiZ^.M_SetDigiOut(nChannel:= nDOutChanValvePress, bValue:= FALSE);
+						nStateA_SwitchPress := 80;
+					END_IF
+				ELSE	//Aktion ist nicht aktiv
+					IF eSwitchPressCtrl = E_PressCtrl.PRESSCTRL_PressOn THEN
+						bSwitchPress := TRUE;
+						fbList.A_AddHeadValue(hList := hList, putValue := E_Action.ACTION_SwitchPressure);
+					ELSE
+						pFbMultiZ^.M_SetDigiOut(nChannel:= nDOutChanValvePress, bValue:= FALSE);
+						RETURN;
+					END_IF
+				END_IF
+			ELSE
+				M_ExeAction := E_ErrorIdCmd.ERRORID_InvalidCtrl;
+				RETURN;
+			END_IF
+	
+	E_Action.ACTION_Expose:
+		//Die Action kann nur über einen Exposer, der als Child an diesem Tool hängt ausgeführt werden
+		IF pExposure > 0 THEN
+			M_ExeAction := pExposure^.M_ExeAction(refActionData);
+			IF M_ExeAction > 0 THEN
+				RETURN;
+			ELSE
+				IF NOT bExpose THEN
+					fbList.A_AddHeadValue(hList := hList, putValue := E_Action.ACTION_Expose);	
+				END_IF
+				bExpose := TRUE;
+			END_IF
+		ELSE
+			M_ExeAction := E_ErrorIdCmd.ERRORID_NoExposureConfigured;
+			RETURN;
+		END_IF
+		
+	E_Action.ACTION_BasicDispense:
+		IF refActionData.aParams[1] = 0 THEN
+			M_ExeAction := M_DispenserStop();
+		ELSE
+			M_ExeAction := M_DispenserStart();	
+		END_IF
+		IF M_ExeAction > 0 THEN
+			RETURN;
+		END_IF
+	ELSE
+		M_ExeAction := SUPER^.M_ExeAction(refActionData);
+		RETURN;
+END_CASE
+
+bBusy := TRUE;
+eCurrentState := E_MachineState.MACHINESTATE_Active;]]></ST>
+      </Implementation>
+    </Method>
+    <Method Name="M_GetAllProps" Id="{bbd0b82f-61fd-4d30-bf51-e1e5cb820b73}">
+      <Declaration><![CDATA[METHOD M_GetAllProps : ERRORID
+VAR_INPUT
+	refCmdData : REFERENCE TO  ST_CmdData;
+END_VAR
+]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[//Basisproperties lesen
+SUPER^.M_GetAllProps(refCmdData);
+//Specialproperties lesen
+nCurrentPropIndex := nCurrentPropIndex + 1; 
+IF pPneuChannelPress > 0 THEN
+	refCmdData.n32Data[nCurrentPropIndex] := pPneuChannelPress^.nChannel;
+ELSE
+	refCmdData.n32Data[nCurrentPropIndex] := 0;
+END_IF
+
+nCurrentPropIndex := nCurrentPropIndex + 1;
+IF pPneuChannelVac > 0 THEN
+	refCmdData.n32Data[nCurrentPropIndex] := pPneuChannelVac^.nChannel;
+ELSE
+	refCmdData.n32Data[nCurrentPropIndex] := 0;
+END_IF
+
+nCurrentPropIndex := nCurrentPropIndex + 1; 
+refCmdData.n32Data[nCurrentPropIndex] := nDOutChanValvePress; //Digitaler Ausgangskanal MzHead Druckventil
+nCurrentPropIndex := nCurrentPropIndex + 1; 
+refCmdData.n32Data[nCurrentPropIndex] := BOOL_TO_DINT(bIsMESTool);]]></ST>
+      </Implementation>
+    </Method>
+    <Method Name="M_GetProcData" Id="{43a23dfe-c94c-4c65-9f40-36967c4d1987}">
+      <Declaration><![CDATA[METHOD M_GetProcData : DINT
+VAR_INPUT
+	eProcDataType : E_ProcDataType;
+END_VAR
+]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[IF eProcDataType = E_ProcDataType.PROCDATATYPE_Press1 THEN
+	M_GetProcData := stProcessData.n32Data[7];
+END_IF]]></ST>
+      </Implementation>
+    </Method>
+    <Method Name="M_SetAllProps" Id="{b2dc5508-d15b-46ce-bc27-617f16ed166f}">
+      <Declaration><![CDATA[METHOD M_SetAllProps : ERRORID
+VAR_INPUT
+	refCmdData : REFERENCE TO  ST_CmdData;
+END_VAR
+
+VAR
+	nPneuChannel : USINT;
+END_VAR]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[M_SetAllProps := SUPER^.M_SetAllProps(refCmdData);
+
+IF M_SetAllProps > 0 THEN
+	RETURN;
+END_IF
+
+//PneuChannel Druck
+nCurrentPropIndex := nCurrentPropIndex + 1;
+nSpecPropIndex := nCurrentPropIndex;
+nPneuChannel := DINT_TO_USINT(refCmdData.n32Data[nCurrentPropIndex]);	//PneuChannel Druck
+IF NOT (nPneuChannel > 0 AND nPneuChannel <= cNoOfPneuChannels) THEN
+	M_SetAllProps := E_ErrorIdObjMgmt.ERRORID_InvalidPneuChannel;
+	RETURN;	
+END_IF
+pPneuChannelPress := ADR(aFbPneuChannel[nPneuChannel]);
+
+//PneuChannel Vakuum
+//Für Vakuum kann der PneuChannel auch auf "0" festgelegt werden. (kein Haltevakkum)
+nCurrentPropIndex := nCurrentPropIndex + 1;
+nPneuChannel := DINT_TO_USINT(refCmdData.n32Data[nCurrentPropIndex]);		
+IF nPneuChannel > 0 AND nPneuChannel <= cNoOfPneuChannels THEN
+	pPneuChannelVac := ADR(aFbPneuChannel[nPneuChannel]);
+ELSIF nPneuChannel = 0 THEN
+	pPneuChannelVac := 0;
+ELSE
+	M_SetAllProps := E_ErrorIdObjMgmt.ERRORID_InvalidPneuChannel;
+	RETURN;	
+END_IF
+
+//Digitale Ausgänge auf MzHead müssen zwischen 1 und 7 liegen
+nCurrentPropIndex := nCurrentPropIndex + 1;
+nDOutChanValvePress := DINT_TO_USINT(refCmdData.n32Data[nCurrentPropIndex]);	//Digitaler Ausgangskanal MzHead Druckventil
+IF NOT(nDOutChanValvePress > 0 AND nDOutChanValvePress <= 7) THEN
+	M_SetAllProps := E_ErrorIdObjMgmt.ERRORID_InvalidMzDOutChannel;
+	RETURN;
+END_IF
+
+nCurrentPropIndex := nCurrentPropIndex + 1;
+bIsMESTool := DINT_TO_BOOL(refCmdData.n32Data[nCurrentPropIndex]);
+nNoOfProps := nCurrentPropIndex + 1;]]></ST>
+      </Implementation>
+    </Method>
+    <Method Name="M_SetPrintParams" Id="{c91bb142-bfd4-4832-9ca8-ca74841076a6}">
+      <Declaration><![CDATA[METHOD M_SetPrintParams : ST_MethResult
+VAR_INPUT
+	eType 		: E_PrintParamType;
+	nNumerator	: USINT;
+	nValue		: DINT;
+END_VAR
+
+VAR
+	stActionData : ST_ActionData;
+END_VAR
+
+VAR_STAT
+	bExecuted : BOOL;
+END_VAR]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[IF eType = E_PrintParamType.Pressure THEN
+	IF nNumerator <> 1 THEN
+		M_SetPrintParams.bError := TRUE;
+		M_SetPrintParams.nErrorId := E_ErrorIdCmd.ERRORID_InvalidPrintParamNumerator;
+		RETURN;
+	END_IF
+	
+	IF nValue > 1 AND NOT pPneuChannelPress^.P_bSupplyOk THEN 
+		M_SetPrintParams.bError := TRUE;
+		M_SetPrintParams.nErrorId := E_ErrorIdCmd.ERRORID_PressureSupply;
+		RETURN;
+	END_IF
+
+	stActionData.eAction := E_Action.ACTION_SetPressure;
+	stActionData.aParams[2] := nValue; //Soll
+	
+	//Überwachung nur, wenn Druck noch nicht an
+	//Damit wird verhindert, dass es beim Gradientendruck zu Zeitverzögerungen kommt 
+	IF NOT bPressIsOn THEN
+		stActionData.aParams[1] := 1; //Fertigmeldung, wenn Druck erreicht
+		stActionData.aParams[3] := 20; //Toleranz +
+		stActionData.aParams[4] := 20; //Toleranz -
+		stActionData.aParams[5] := 20000; //Timeout
+	END_IF
+	
+	IF NOT bExecuted THEN
+		M_SetPrintParams.nErrorId := M_ExeAction(stActionData);
+		bExecuted := TRUE;
+	END_IF
+	
+	IF M_SetPrintParams.nErrorId > 0 THEN
+		M_SetPrintParams.bError := TRUE;
+	ELSIF M_GetActionBusy(E_Action.ACTION_SetPressure) THEN //ist ActionStatemachine zur Überwachung gegangen
+		M_SetPrintParams.bBusy := TRUE;
+		RETURN;
+	END_IF
+ELSE
+	M_SetPrintParams.bError := TRUE;
+	M_SetPrintParams.nErrorId := E_ErrorIdCmd.ERRORID_InvalidPrintParamType;
+END_IF
+
+bExecuted := FALSE;]]></ST>
+      </Implementation>
+    </Method>
+    <Method Name="M_SetSingleProp" Id="{d8996c13-af64-436f-8b86-4fd549d879d0}">
+      <Declaration><![CDATA[METHOD M_SetSingleProp : ERRORID
+VAR_INPUT
+	refCmdData : REFERENCE TO  ST_CmdData;
+END_VAR
+
+VAR
+	nPneuChannel : USINT;
+END_VAR]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[IF nSpecPropIndex = refCmdData.aHeader[1] THEN	//PneuChannelPressure
+	nPneuChannel := DINT_TO_USINT(refCmdData.n32Data[0]);
+	IF NOT (nPneuChannel > 0 AND nPneuChannel <= cNoOfPneuChannels) THEN
+		M_SetSingleProp := E_ErrorIdObjMgmt.ERRORID_InvalidPneuChannel;
+		RETURN;	
+	END_IF
+	pPneuChannelPress := ADR(aFbPneuChannel[nPneuChannel]);
+ELSIF nSpecPropIndex + 1 = refCmdData.aHeader[1] THEN	//PneuChannel Vacuum
+	nPneuChannel := DINT_TO_USINT(refCmdData.n32Data[0]);
+	IF NOT (nPneuChannel >= 0 AND nPneuChannel <= cNoOfPneuChannels) THEN
+		M_SetSingleProp := E_ErrorIdObjMgmt.ERRORID_InvalidPneuChannel;
+		RETURN;	
+	END_IF
+	pPneuChannelVac := ADR(aFbPneuChannel[nPneuChannel]);
+ELSIF nSpecPropIndex + 2 = refCmdData.aHeader[1] THEN	//Digitaler Ausgangskanal MzHead Druckventil
+	IF refCmdData.n32Data[0] >= 0 AND refCmdData.n32Data[0] <= cNoOfValves THEN
+		nDOutChanValvePress := DINT_TO_USINT(refCmdData.n32Data[0]);
+	ELSE
+		M_SetSingleProp := E_ErrorIdObjMgmt.ERRORID_InvalidValveNumber;
+	END_IF	
+ELSE
+	M_SetSingleProp := SUPER^.M_SetSingleProp(refCmdData);
+END_IF]]></ST>
+      </Implementation>
+    </Method>
+    <Method Name="M_SwitchPressure" Id="{367fb8c9-28dd-4c6b-a6b8-6e63c1acda06}">
+      <Declaration><![CDATA[METHOD M_SwitchPressure : ERRORID
+VAR_INPUT
+	eSwitchPressCtrl : E_PressCtrl;
+	tPressTime : TIME;
+END_VAR
+]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[//Diese Methode funktioniert ähnlich der Methode M_ExeAction, nur dass sie auf SwitchPressure spezialisiert ist
+IF NOT (eCurrentState = E_MachineState.MACHINESTATE_Idle OR
+	eCurrentState = E_MachineState.MACHINESTATE_Active OR
+	eCurrentState = E_MachineState.MACHINESTATE_Ready) THEN
+	M_SwitchPressure := E_ErrorIdCmd.ERRORID_InvalidState;
+	RETURN;
+END_IF
+
+IF (eSwitchPressCtrl = E_PressCtrl.PRESSCTRL_PressOn) OR (eSwitchPressCtrl = E_PressCtrl.PRESSCTRL_Off) THEN
+	THIS^.eSwitchPressCtrl := eSwitchPressCtrl;
+	THIS^.tPressTime := tPressTime;
+	//Wenn Aktion aktiv kann es sein das die Zeit noch läuft oder der Druck an ist
+	IF bSwitchPress THEN	//Aktion ist aktiv
+		IF eSwitchPressCtrl = E_PressCtrl.PRESSCTRL_PressOn THEN
+			//Statemachine zurücksetzen
+			nStateA_SwitchPress := 0;		
+		ELSE
+			pFbMultiZ^.M_SetDigiOut(nChannel:= nDOutChanValvePress, bValue:= FALSE);
+			nStateA_SwitchPress := 80;
+		END_IF
+	ELSE	//Aktion ist nicht aktiv
+		IF eSwitchPressCtrl = E_PressCtrl.PRESSCTRL_PressOn THEN
+			bSwitchPress := TRUE;
+			fbList.A_AddHeadValue(hList := hList, putValue := E_Action.ACTION_SwitchPressure);
+		ELSE
+			pFbMultiZ^.M_SetDigiOut(nChannel:= nDOutChanValvePress, bValue:= FALSE);
+		END_IF
+	END_IF
+ELSE
+	M_SwitchPressure := E_ErrorIdCmd.ERRORID_InvalidCtrl;
+	RETURN;
+END_IF
+
+bBusy := TRUE;
+eCurrentState := E_MachineState.MACHINESTATE_Active;]]></ST>
+      </Implementation>
+    </Method>
+    <Property Name="P_bPressIsOn" Id="{853d0eaf-8d97-442a-a104-6d6042b67eed}">
+      <Declaration><![CDATA[PROPERTY P_bPressIsOn : BOOL]]></Declaration>
+      <Get Name="Get" Id="{c8afccf0-78b6-4eac-b0df-5a2177bc971c}">
+        <Declaration><![CDATA[VAR
+END_VAR
+]]></Declaration>
+        <Implementation>
+          <ST><![CDATA[P_bPressIsOn := bPressIsOn;]]></ST>
+        </Implementation>
+      </Get>
+    </Property>
+    <Property Name="P_eDispenserState" Id="{bb514a1b-5929-41f6-9c4d-55e91c933455}">
+      <Declaration><![CDATA[PROPERTY P_eDispenserState : E_DispenserState]]></Declaration>
+      <Get Name="Get" Id="{1bfaaa1b-f72e-4e63-9f2f-10dd89b7ca8a}">
+        <Declaration><![CDATA[VAR
+END_VAR
+]]></Declaration>
+        <Implementation>
+          <ST><![CDATA[IF bPressIsOn THEN
+	P_eDispenserState := E_DispenserState.Dispensing;	
+END_IF
+]]></ST>
+        </Implementation>
+      </Get>
+    </Property>
+    <Property Name="P_stCurrentXYArea" Id="{980c4a35-08a1-4e8a-9648-31ec33eb94e4}">
+      <Declaration><![CDATA[PROPERTY P_stCurrentXYArea : FB_RectAngle]]></Declaration>
+      <Get Name="Get" Id="{5f48eff0-fc53-4334-8a6d-21383a9275a2}">
+        <Declaration><![CDATA[VAR
+	stPoint : ST_3DPoint;
+	stDim	: ST_3DDimension;
+END_VAR
+]]></Declaration>
+        <Implementation>
+          <ST><![CDATA[stPoint := P_stCurrentPosPhys;
+IF pPiece > 0 THEN
+	stDim := pPiece^.P_stDimension;
+	P_stCurrentXYArea.X1 := stPoint.X - stDim.Width / 2.0;
+	P_stCurrentXYArea.X2 := stPoint.X + stDim.Width / 2.0;
+	P_stCurrentXYArea.Y1 := stPoint.Y - stDim.Width / 2.0;
+	P_stCurrentXYArea.Y2 := stPoint.Y + stDim.Width / 2.0;
+ELSE
+	P_stCurrentXYArea.X1 := stPoint.X - 1000.0;
+	P_stCurrentXYArea.X2 := stPoint.X + 1000.0;
+	P_stCurrentXYArea.Y1 := stPoint.Y - 1000.0;
+	P_stCurrentXYArea.Y2 := stPoint.Y + 1000.0;	
+END_IF]]></ST>
+        </Implementation>
+      </Get>
+    </Property>
+    <LineIds Name="FB_CartDispenser">
+      <LineId Id="3" Count="0" />
+      <LineId Id="15" Count="1" />
+      <LineId Id="289" Count="2" />
+      <LineId Id="296" Count="0" />
+      <LineId Id="301" Count="2" />
+      <LineId Id="295" Count="0" />
+      <LineId Id="300" Count="0" />
+      <LineId Id="293" Count="0" />
+      <LineId Id="299" Count="0" />
+      <LineId Id="292" Count="0" />
+      <LineId Id="26" Count="0" />
+      <LineId Id="218" Count="1" />
+      <LineId Id="304" Count="10" />
+      <LineId Id="228" Count="1" />
+      <LineId Id="27" Count="11" />
+      <LineId Id="161" Count="2" />
+      <LineId Id="166" Count="6" />
+      <LineId Id="165" Count="0" />
+      <LineId Id="164" Count="0" />
+      <LineId Id="39" Count="3" />
+      <LineId Id="280" Count="2" />
+      <LineId Id="286" Count="0" />
+      <LineId Id="283" Count="2" />
+      <LineId Id="58" Count="1" />
+      <LineId Id="110" Count="0" />
+      <LineId Id="60" Count="4" />
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="FB_CartDispenser.A_Expose">
+      <LineId Id="7" Count="1" />
+      <LineId Id="11" Count="0" />
+      <LineId Id="9" Count="1" />
+      <LineId Id="3" Count="0" />
+      <LineId Id="5" Count="1" />
+    </LineIds>
+    <LineIds Name="FB_CartDispenser.A_Reset">
+      <LineId Id="2" Count="1" />
+      <LineId Id="9" Count="3" />
+      <LineId Id="21" Count="4" />
+      <LineId Id="13" Count="7" />
+      <LineId Id="1" Count="0" />
+    </LineIds>
+    <LineIds Name="FB_CartDispenser.A_Stop">
+      <LineId Id="2" Count="4" />
+      <LineId Id="23" Count="3" />
+      <LineId Id="7" Count="4" />
+      <LineId Id="20" Count="2" />
+      <LineId Id="15" Count="3" />
+      <LineId Id="1" Count="0" />
+    </LineIds>
+    <LineIds Name="FB_CartDispenser.A_SwitchPress">
+      <LineId Id="2" Count="3" />
+      <LineId Id="8" Count="31" />
+      <LineId Id="1" Count="0" />
+    </LineIds>
+    <LineIds Name="FB_CartDispenser.FB_init">
+      <LineId Id="7" Count="1" />
+    </LineIds>
+    <LineIds Name="FB_CartDispenser.M_AddChild">
+      <LineId Id="9" Count="0" />
+      <LineId Id="16" Count="2" />
+      <LineId Id="15" Count="0" />
+      <LineId Id="11" Count="0" />
+      <LineId Id="13" Count="0" />
+      <LineId Id="12" Count="0" />
+      <LineId Id="5" Count="0" />
+    </LineIds>
+    <LineIds Name="FB_CartDispenser.M_CancelAction">
+      <LineId Id="3" Count="0" />
+      <LineId Id="8" Count="0" />
+      <LineId Id="40" Count="1" />
+      <LineId Id="11" Count="0" />
+      <LineId Id="46" Count="0" />
+      <LineId Id="32" Count="0" />
+      <LineId Id="42" Count="1" />
+      <LineId Id="35" Count="0" />
+      <LineId Id="45" Count="0" />
+      <LineId Id="12" Count="3" />
+      <LineId Id="47" Count="0" />
+      <LineId Id="22" Count="1" />
+      <LineId Id="25" Count="1" />
+      <LineId Id="16" Count="1" />
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="FB_CartDispenser.M_CheckAction">
+      <LineId Id="16" Count="0" />
+      <LineId Id="33" Count="0" />
+      <LineId Id="21" Count="0" />
+      <LineId Id="26" Count="0" />
+      <LineId Id="31" Count="0" />
+      <LineId Id="27" Count="2" />
+      <LineId Id="22" Count="0" />
+    </LineIds>
+    <LineIds Name="FB_CartDispenser.M_CheckProcDataType">
+      <LineId Id="3" Count="1" />
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="FB_CartDispenser.M_CheckProps">
+      <LineId Id="45" Count="24" />
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="FB_CartDispenser.M_ClearAllProps">
+      <LineId Id="15" Count="2" />
+      <LineId Id="6" Count="0" />
+    </LineIds>
+    <LineIds Name="FB_CartDispenser.M_DispenserPrepare">
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="FB_CartDispenser.M_DispenserStart">
+      <LineId Id="21" Count="11" />
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="FB_CartDispenser.M_DispenserStop">
+      <LineId Id="3" Count="3" />
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="FB_CartDispenser.M_ExeAction">
+      <LineId Id="496" Count="107" />
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="FB_CartDispenser.M_GetAllProps">
+      <LineId Id="3" Count="3" />
+      <LineId Id="23" Count="1" />
+      <LineId Id="30" Count="1" />
+      <LineId Id="25" Count="0" />
+      <LineId Id="34" Count="0" />
+      <LineId Id="8" Count="0" />
+      <LineId Id="26" Count="0" />
+      <LineId Id="28" Count="0" />
+      <LineId Id="32" Count="1" />
+      <LineId Id="29" Count="0" />
+      <LineId Id="35" Count="0" />
+      <LineId Id="10" Count="1" />
+      <LineId Id="18" Count="0" />
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="FB_CartDispenser.M_GetProcData">
+      <LineId Id="5" Count="1" />
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="FB_CartDispenser.M_SetAllProps">
+      <LineId Id="3" Count="38" />
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="FB_CartDispenser.M_SetPrintParams">
+      <LineId Id="64" Count="0" />
+      <LineId Id="114" Count="0" />
+      <LineId Id="118" Count="2" />
+      <LineId Id="116" Count="0" />
+      <LineId Id="113" Count="0" />
+      <LineId Id="65" Count="4" />
+      <LineId Id="121" Count="0" />
+      <LineId Id="72" Count="27" />
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="FB_CartDispenser.M_SetSingleProp">
+      <LineId Id="78" Count="0" />
+      <LineId Id="96" Count="3" />
+      <LineId Id="77" Count="0" />
+      <LineId Id="101" Count="0" />
+      <LineId Id="64" Count="0" />
+      <LineId Id="108" Count="5" />
+      <LineId Id="56" Count="0" />
+      <LineId Id="58" Count="1" />
+      <LineId Id="86" Count="0" />
+      <LineId Id="62" Count="0" />
+      <LineId Id="55" Count="0" />
+      <LineId Id="47" Count="0" />
+      <LineId Id="45" Count="0" />
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="FB_CartDispenser.M_SwitchPressure">
+      <LineId Id="3" Count="33" />
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="FB_CartDispenser.P_bPressIsOn.Get">
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="FB_CartDispenser.P_eDispenserState.Get">
+      <LineId Id="8" Count="2" />
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="FB_CartDispenser.P_stCurrentXYArea.Get">
+      <LineId Id="3" Count="11" />
+      <LineId Id="2" Count="0" />
+    </LineIds>
+  </POU>
+</TcPlcObject>

@@ -1,0 +1,1103 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<TcPlcObject Version="1.1.0.1" ProductVersion="3.1.4022.18">
+  <POU Name="FB_TriplePip" Id="{cb8be47c-660b-4149-83c2-fd5e161131e9}" SpecialFunc="None">
+    <Declaration><![CDATA[FUNCTION_BLOCK FB_TriplePip EXTENDS FB_MzTool
+VAR_INPUT
+END_VAR
+VAR_OUTPUT
+END_VAR
+VAR
+	bTipEjectorExist	: BOOL;	
+
+	//SpecProperties
+	nDiluterObjId		: UINT;
+	pDiluter			: POINTER TO FB_Diluter;
+	
+	pPneuChannelSynthGas: POINTER TO FB_PneuChannelRef;
+	pPneuChannelVac		: POINTER TO FB_PneuChannelRef;
+	
+	nValveNrSynthGas	: USINT;
+	nValveNrVacuum		: USINT;
+	nHoldVacuumVial		: INT;
+	nHoldVacuumSeptum	: INT;
+	rDockOffset			: REAL;
+	rXMoveDockFlipTube	: REAL;
+	rZMoveDockFlipTube	: REAL;
+
+	//****************************************Aktionvariablen****************************************************
+	
+	stActionDataSpec	: ST_ActionData;
+	
+	//Action: "InitSpec"
+	bInitSpec			: BOOL;
+	bInitSpecFlag		: BOOL := TRUE;
+	nStateA_InitSpec	: USINT;
+	
+	//Action: "Dispense"
+	bDispense			: BOOL;
+	nStateA_Dispense	: USINT;
+	nQuantity			: DINT;
+	nFlow				: DINT;
+	
+	//Action: "SetPressure"
+	bSetPress			: BOOL;
+	fbSetPress			: FB_SetPressure;
+
+	//Action: "SetVacuum"
+	bSetVacuum			: BOOL;
+	fbSetVacuum			: FB_SetPressure;
+	
+	//Action: "SwitchPressure"
+	bSwitchPress		: BOOL;			
+	nStateA_SwitchPress	: USINT;		//State von A_SwitchPress()
+	nSwitchPressChannel	: USINT;
+	eSwitchPressCtrl	: E_PressCtrl;
+	tPressTime			: TIME;			//nach dieser Zeit Ventil automatisch wieder zu
+	timerPress			: TON;			//Timer für Öffnungszeit Druckventil 		
+	
+END_VAR]]></Declaration>
+    <Implementation>
+      <ST><![CDATA[IF eCurrentState = E_MachineState.MACHINESTATE_Active THEN
+	IF bInitSpec THEN
+		A_InitSpec();
+		IF nStateA_InitSpec >= 80 THEN
+			IF nStateA_InitSpec >= 99 THEN
+				bError := TRUE;		
+			END_IF
+			bInitSpec := FALSE;
+			nStateA_InitSpec := 0;
+			M_RemoveListEntry(nSearchValue:= E_Action.ACTION_Init);
+		END_IF		
+	END_IF
+	
+	IF bDispense THEN
+		A_Dispense();
+		IF nStateA_Dispense >= 80 THEN
+			IF nStateA_Dispense >= 99 THEN
+				bError := TRUE;	
+			END_IF
+			bDispense := FALSE;
+			nStateA_Dispense := 0;
+			M_RemoveListEntry(nSearchValue:= E_Action.ACTION_Dispense);
+		END_IF
+	END_IF
+	
+	IF bSetPress THEN
+		fbSetPress(pPneuChannelRef:= pPneuChannelSynthGas);
+		IF NOT fbSetPress.bBusy THEN
+			IF fbSetPress.bError THEN
+				bError := TRUE;
+				stError.ErrorId := fbSetPress.nErrorId;
+				stError.POU := E_POU.POU_FB_TriplePip;
+				fbErrorList.M_Add(stError);
+			END_IF
+			bSetPress := FALSE;
+			fbSetPress(pPneuChannelRef:= pPneuChannelSynthGas, bExecute:= FALSE);
+			M_RemoveListEntry(nSearchValue:= E_Action.ACTION_SetPressure);
+		END_IF
+	END_IF	
+
+	IF bSetVacuum THEN
+		fbSetVacuum(pPneuChannelRef:= pPneuChannelVac);
+		IF NOT fbSetVacuum.bBusy THEN
+			IF fbSetVacuum.bError THEN
+				bError := TRUE;
+				stError.ErrorId := fbSetVacuum.nErrorId;
+				stError.POU := E_POU.POU_FB_TriplePip;
+				fbErrorList.M_Add(stError);
+			END_IF
+			bSetVacuum := FALSE;
+			fbSetVacuum(pPneuChannelRef:= pPneuChannelVac, bExecute:= FALSE);
+			M_RemoveListEntry(nSearchValue:= E_Action.ACTION_SetVacuum);
+		END_IF
+	END_IF	
+	
+	IF bSwitchPress THEN	//Kartuschendruck einstellen und Ein-bzw. Aus schalten 
+		A_SwitchPress();
+		IF nStateA_SwitchPress >= 80 THEN
+			IF nStateA_SwitchPress >= 99 THEN
+				bError := TRUE;
+			END_IF
+			bSwitchPress := FALSE;
+			nStateA_SwitchPress := 0;
+			M_RemoveListEntry(nSearchValue:= E_Action.ACTION_SwitchPressure);
+		END_IF
+	END_IF	
+END_IF
+
+SUPER^();	//FB_MzTool aufrufen
+
+//Prozessdaten aktualisieren
+IF pPneuChannelSynthGas > 0 THEN
+	stProcessData.n32Data[7] := pPneuChannelSynthGas^.P_nCurrentPressure;
+END_IF
+
+IF pPneuChannelVac > 0 THEN
+	stProcessData.n32Data[8] := pPneuChannelVac^.P_nCurrentPressure;
+END_IF
+
+IF nValveNrSynthGas > 0 THEN
+	IF aValves[nValveNrSynthGas].bDigiOut1 THEN
+		stProcessData.n32Data[9] := E_PressCtrl.PRESSCTRL_PressOn;
+	ELSE
+		stProcessData.n32Data[9] := E_PressCtrl.PRESSCTRL_Off;
+	END_IF
+END_IF
+
+IF nValveNrVacuum > 0 THEN
+	IF aValves[nValveNrVacuum].bDigiOut1 THEN
+		stProcessData.n32Data[10] := E_PressCtrl.PRESSCTRL_VacOn;
+	ELSE
+		stProcessData.n32Data[10] := E_PressCtrl.PRESSCTRL_Off;
+	END_IF
+END_IF
+
+aObjProcData[nNotifyId] := stProcessData;
+]]></ST>
+    </Implementation>
+    <Action Name="A_Dispense" Id="{aa6e1df8-8f94-4d39-85f2-7eb903763e5e}">
+      <Implementation>
+        <ST><![CDATA[IF pDiluter^.P_bError THEN
+	stError.ErrorId := pDiluter^.P_nErrorId;
+	stError.POUState := nStateA_Dispense;
+	nStateA_Dispense := 99;
+END_IF
+
+CASE nStateA_Dispense OF
+	0:	MEMSET(ADR(stActionDataSpec),0,SIZEOF(stActionDataSpec));
+		//stActionDataSpec.bIntern := TRUE;
+		stActionDataSpec.eAction := E_Action.ACTION_DilPump;
+		stActionDataSpec.aParams[1] := E_DilPumpMode.MODE_Press;
+		stActionDataSpec.aParams[2] := nQuantity; 
+		stActionDataSpec.aParams[3] := nFlow;
+		//stActionDataSpec.aParams[4] := 2000; //ReloadSpeed wird von DilConfig übernommen
+		//stActionDataSpec.aParams[5] := 1; //Valve-Position für Pump
+		//stActionDataSpec.aParams[6] := 2; //Valve-Position für Reload
+		
+		stError.ErrorId := pDiluter^.M_ExeAction(stActionDataSpec);
+		IF stError.ErrorId > 0 THEN
+			stError.POUState := nStateA_Dispense;
+			nStateA_Dispense := 99;
+		ELSE
+			nStateA_Dispense := 1;	
+		END_IF
+		
+	1:	//Warten bis Dispensierung fertig
+		IF NOT pDiluter^.M_GetActionBusy(E_Action.ACTION_DilPump) THEN
+			nStateA_Dispense := 80;
+		END_IF
+		
+	70:	//Abbrechen
+		MEMSET(ADR(stActionDataSpec),0,SIZEOF(stActionDataSpec));
+		//stActionDataSpec.bIntern := TRUE;
+		stActionDataSpec.eAction := E_Action.ACTION_Stop;
+		
+		pDiluter^.M_ExeAction(stActionDataSpec);
+		nStateA_Dispense := 71;
+		
+	71:	
+		IF NOT pDiluter^.P_bBusy THEN
+			nStateA_Dispense := 80;
+		END_IF
+END_CASE
+
+//Errorhandling
+IF nStateA_Dispense = 99 THEN
+	stError.Cmd := E_Action.ACTION_Dispense;
+	stError.POU := E_POU.POU_FB_TriplePip;
+	stError.POUAction := E_POUACT.POUACT_A_Dispense;
+	fbErrorList.M_Add(stError);
+END_IF]]></ST>
+      </Implementation>
+    </Action>
+    <Action Name="A_InitSpec" Id="{2b6501f1-7ae6-4669-902f-f1bbd0c473fa}">
+      <Implementation>
+        <ST><![CDATA[CASE nStateA_InitSpec OF
+	0:	//Checken ob Diluter richtg zugeordnet
+		
+		IF fbObjectDirectory.M_GetObjType(nDiluterObjId) = E_ObjectType.OBJECTTYPE_Diluter THEN
+			nStateA_InitSpec := 80;
+		ELSE
+			stError.ErrorId := E_ErrorIdObjMgmt.ERRORID_InvalidDiluterObjId;
+			nStateA_InitSpec := 99;
+		END_IF
+	
+	1:	//Checken ob notwendige Flüssigleiten vorhanden
+	
+	2:	//PCV-Level-Controlle aktivieren
+	
+END_CASE]]></ST>
+      </Implementation>
+    </Action>
+    <Action Name="A_Reset" Id="{61602a6d-84b4-4520-808f-4d67f96e2cbe}">
+      <Implementation>
+        <ST><![CDATA[//Ist noch eine Aktion aktiv?
+IF nStateA_ResetSpec = 0 THEN 
+	IF bDispense THEN
+		bDispense := FALSE;
+		nStateA_Dispense := 0;
+	END_IF
+	
+	nStateA_ResetSpec := 80;
+END_IF
+
+SUPER^.A_Reset();]]></ST>
+      </Implementation>
+    </Action>
+    <Action Name="A_Stop" Id="{1ca07f77-1ab5-4867-9d30-105030efcd08}">
+      <Implementation>
+        <ST><![CDATA[IF nStateA_Stop = 0 THEN
+
+	IF bDispense AND nStateA_Dispense < 70 THEN
+		nStateA_Dispense := 70;
+	END_IF
+	
+	IF bSetPress THEN
+		fbSetPress(bExecute:= FALSE, pPneuChannelRef:= pPneuChannelSynthGas);
+	END_IF
+
+	IF bSetVacuum THEN
+		fbSetVacuum(bExecute:= FALSE, pPneuChannelRef:= pPneuChannelVac);
+	END_IF
+		
+	
+	nStateA_Stop := 1;
+END_IF
+
+SUPER^.A_Stop();]]></ST>
+      </Implementation>
+    </Action>
+    <Action Name="A_SwitchPress" Id="{08db78f4-859b-43f4-959d-efc7b61a116e}">
+      <Implementation>
+        <ST><![CDATA[CASE nStateA_SwitchPress OF
+	0:	//Ventil Einschalten
+		IF eSwitchPressCtrl = E_PressCtrl.PRESSCTRL_PressOn OR eSwitchPressCtrl = E_PressCtrl.PRESSCTRL_VacOn THEN
+			aValves[M_GetValveNr(nSwitchPressChannel)].M_On(1);
+		END_IF
+	
+		//Timer starten
+		IF tPressTime = T#0S THEN
+			nStateA_SwitchPress := 80;
+			RETURN;	
+		END_IF
+		
+		timerPress(IN:= FALSE);
+		timerPress(IN:= TRUE, PT:= tPressTime);
+		nStateA_SwitchPress := 1;
+		
+	1:	//Warten bis Zeitabgelaufen
+		timerPress();
+		IF timerPress.Q THEN
+			timerPress(IN:= FALSE);
+			aValves[M_GetValveNr(nSwitchPressChannel)].M_Off();
+			nStateA_SwitchPress := 80;
+		END_IF
+		
+	70:	//Abbrechen
+		timerPress(IN:= FALSE);
+		aValves[M_GetValveNr(nSwitchPressChannel)].M_Off();
+		nStateA_SwitchPress := 80;
+END_CASE]]></ST>
+      </Implementation>
+    </Action>
+    <Method Name="FB_init" Id="{ccedf23e-c7cb-4896-aabd-9b037cc40020}">
+      <Declaration><![CDATA[METHOD FB_init : BOOL
+VAR_INPUT
+	bInitRetains : BOOL; // if TRUE, the retain variables are initialized (warm start / cold start)
+	bInCopyCode : BOOL;  // if TRUE, the instance afterwards gets moved into the copy code (online change)
+END_VAR
+]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[eObjectType := E_ObjectType.OBJECTTYPE_TriplePip;
+eObjectGroup := E_ObjectGroup.OBJECTGROUP_MzTool OR E_ObjectGroup.OBJECTGROUP_Device;]]></ST>
+      </Implementation>
+    </Method>
+    <Method Name="M_AddChild" Id="{9d466963-97a7-40c3-97f3-901b3da525a2}">
+      <Declaration><![CDATA[METHOD M_AddChild : ERRORID
+VAR_INPUT
+	pObject : POINTER TO FB_Object;
+	nSlotNr	: UINT;
+	nIndex 	: INT;
+END_VAR
+]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[//Kann folgende Objekt-Typen aufnehmen
+//Vial
+IF pObject > 0 THEN
+	IF pObject^.P_eObjectType = E_ObjectType.OBJECTTYPE_Vial THEN
+		M_AddChild := SUPER^.M_AddChild(pObject,nSlotNr,nIndex);
+	ELSE
+		M_AddChild := E_ErrorIdObjMgmt.ERRORID_InvalidParentObject;
+	END_IF
+ELSE
+	M_AddChild := E_ErrorIdObjMgmt.ERRORID_InvalidParentObject;
+END_IF]]></ST>
+      </Implementation>
+    </Method>
+    <Method Name="M_CancelAction" Id="{94884776-0a38-4f11-8347-7df651e7bf58}">
+      <Declaration><![CDATA[METHOD M_CancelAction
+VAR_INPUT
+	eAction : E_Action;
+END_VAR
+]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[CASE eAction OF
+	E_Action.ACTION_Dispense:
+		IF bDispense AND nStateA_Dispense < 70 THEN
+			nStateA_Dispense := 70;
+		END_IF
+		
+	E_Action.ACTION_SetPressure:
+		IF bSetPress THEN
+			fbSetPress(bExecute:= FALSE, pPneuChannelRef:= pPneuChannelSynthGas);
+		END_IF
+	
+	E_Action.ACTION_SetVacuum:
+		IF bSetVacuum THEN
+			fbSetVacuum(bExecute:= FALSE, pPneuChannelRef:= pPneuChannelVac);
+		END_IF
+		
+	E_Action.ACTION_SwitchPressure:
+		IF bSwitchPress AND nStateA_SwitchPress < 70 THEN
+			nStateA_SwitchPress := 70;
+		END_IF	
+ELSE
+	SUPER^.M_CancelAction(eAction);
+END_CASE]]></ST>
+      </Implementation>
+    </Method>
+    <Method Name="M_CheckAction" Id="{d6e8c637-c4dd-4e26-883f-bc7f8a06bdc5}">
+      <Declaration><![CDATA[METHOD M_CheckAction : ERRORID
+VAR_INPUT
+	refActionData 	: REFERENCE TO ST_ActionData;
+	pCorrelObject	: POINTER TO FB_Object;
+END_VAR
+
+VAR
+	pRack : POINTER TO FB_Rack;
+	pReactor : POINTER TO FB_Reactor;
+	pSlot : POINTER TO FB_PieceSlot;
+	pTarget : POINTER TO FB_TargetBase;
+END_VAR]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[CASE refActionData.eAction OF
+	E_Action.ACTION_ExchangePiece:
+		pTarget := fbObjectDirectory.M_GetObjPointer(refActionData.nTarget);
+		//Welches Piece soll gehandelt werden?
+		IF refActionData.aParams[2] = 0 THEN //Drop
+			IF pPiece = 0 THEN
+				M_CheckAction := E_ErrorIdCmd.ERRORID_NoPieceOnTool;
+				RETURN;	
+			END_IF
+			//TripePip kann folgende Pieces handeln
+			//Vial, Septum
+			IF pPiece^.P_eObjectType = E_ObjectType.OBJECTTYPE_Vial THEN
+				//Target muss VialRack oder Reaktor sein
+				IF pTarget^.P_eObjectType = E_ObjectType.OBJECTTYPE_VialRack THEN
+					pRack := pTarget;
+					//Slot muss frei sein
+					pSlot := pRack^.M_GetSlot(DINT_TO_UINT(refActionData.aParams[1]));
+					IF pSlot = 0 THEN
+						M_CheckAction := E_ErrorIdCmd.ERRORID_InvalidTargetSlot;
+						RETURN;
+					ELSIF pSlot^.P_pPiece > 0 THEN
+						M_CheckAction := E_ErrorIdCmd.ERRORID_PieceAlreadyInSlot;
+						RETURN;
+					END_IF
+				ELSIF pTarget^.P_eObjectType = E_ObjectType.OBJECTTYPE_Reactor THEN
+					//Slot muss frei sein
+					//Hier kann ein Vial geholt werden
+					pReactor := pTarget;
+					IF pReactor^.P_pVial > 0 THEN
+						M_CheckAction := E_ErrorIdCmd.ERRORID_PieceAlreadyInSlot;
+						RETURN;
+					END_IF
+				ELSE
+					M_CheckAction := E_ErrorIdCmd.ERRORID_UnsuitableTarget;
+					RETURN;
+				END_IF
+			ELSIF pPiece^.P_eObjectType = E_ObjectType.OBJECTTYPE_Septum THEN
+				//Target kann nur Reaktor mit Vial sein
+				//Ob ein Vial im Reaktor steht, wird in FB_Reactor.M_CheckActon() geprüft 
+				IF pTarget^.P_eObjectType <> E_ObjectType.OBJECTTYPE_Reactor THEN 
+					M_CheckAction := E_ErrorIdCmd.ERRORID_UnsuitableTarget;
+					RETURN;
+				END_IF
+			ELSE
+				M_CheckAction := E_ErrorIdCmd.ERRORID_InvalidPieceType;
+				RETURN;
+			END_IF
+		ELSE  //Take
+			//Schon ein Piece am Tool?
+			IF THIS^.pPiece > 0 THEN
+				M_CheckAction := E_ErrorIdCmd.ERRORID_PieceAlreadyOnTool;
+				RETURN;
+			END_IF
+			
+			IF pTarget^.P_eObjectType = E_ObjectType.OBJECTTYPE_Reactor THEN
+				//Hier kann ein Vial geholt werden
+				pReactor := pTarget;
+				IF pReactor^.P_pVial = 0 THEN
+					M_CheckAction := E_ErrorIdCmd.ERRORID_NoPieceInSlot;
+					RETURN;
+				ELSIF pReactor^.P_pVial^.P_pSeptum > 0 THEN
+					M_CheckAction := E_ErrorIdCmd.ERRORID_SeptumAlreadyOnVial;
+					RETURN;
+				END_IF
+			ELSIF pTarget^.P_eObjectType = E_ObjectType.OBJECTTYPE_VialRack THEN
+				//Hier kann ein Vial geholt werden
+				pRack := pTarget;
+				pSlot := pRack^.M_GetSlot(DINT_TO_UINT(refActionData.aParams[1]));
+				IF pSlot > 0 THEN
+					IF pSlot^.P_pPiece = 0 THEN
+						M_CheckAction := E_ErrorIdCmd.ERRORID_NoPieceInSlot;
+						RETURN;
+					ELSIF pSlot^.P_pPiece^.P_eObjectType <> E_ObjectType.OBJECTTYPE_Vial THEN
+						M_CheckAction := E_ErrorIdCmd.ERRORID_InvalidPieceType;
+						RETURN;
+					END_IF
+				ELSE
+					M_CheckAction := E_ErrorIdCmd.ERRORID_InvalidTargetSlot;
+					RETURN;				
+				END_IF		
+			ELSIF pTarget^.P_eObjectType = E_ObjectType.OBJECTTYPE_SeptumRack THEN
+				//Hier kann ein Septum geholt werden 
+				pRack := pTarget;
+				pSlot := pRack^.M_GetSlot(DINT_TO_UINT(refActionData.aParams[1]));
+				IF pSlot > 0 THEN
+					IF pSlot^.P_pPiece = 0 THEN
+						M_CheckAction := E_ErrorIdCmd.ERRORID_NoPieceInSlot;
+						RETURN;
+					ELSIF pSlot^.P_pPiece^.P_eObjectType <> E_ObjectType.OBJECTTYPE_Septum THEN
+						M_CheckAction := E_ErrorIdCmd.ERRORID_InvalidPieceType;
+						RETURN;
+					END_IF
+				ELSE
+					M_CheckAction := E_ErrorIdCmd.ERRORID_InvalidTargetSlot;
+					RETURN;				
+				END_IF
+			END_IF
+		END_IF
+	E_Action.ACTION_DockTool:
+		pTarget := fbObjectDirectory.M_GetObjPointer(refActionData.nTarget);
+		//TripePip kann nur an den Reaktor, geschlossenes VialRack oder FlipTubeRack andocken
+		IF pTarget^.P_eObjectType <> E_ObjectType.OBJECTTYPE_Reactor AND 
+			pTarget^.P_eObjectType <> E_ObjectType.OBJECTTYPE_VialRackClosed AND
+			pTarget^.P_eObjectType <> E_ObjectType.OBJECTTYPE_FlipTubeRack THEN
+			M_CheckAction := E_ErrorIdCmd.ERRORID_UnsuitableTarget;
+			RETURN;
+		END_IF			
+		//Piece am Tool?
+		IF THIS^.pPiece > 0 THEN
+			M_CheckAction := E_ErrorIdCmd.ERRORID_PieceAlreadyOnTool;
+			RETURN;
+		END_IF
+	E_Action.ACTION_WashTool:
+		//Washmode checken
+		IF refActionData.aParams[2] = E_WashMode.MODE_WashInside THEN
+			M_CheckAction := M_CheckBottles();
+		ELSIF refActionData.aParams[2] = E_WashMode.MODE_WashOutside THEN
+			;
+		ELSIF refActionData.aParams[2] = E_WashMode.MODE_WashInOutside THEN
+			M_CheckAction := M_CheckBottles();
+		ELSE
+			M_CheckAction := E_ErrorIdCmd.ERRORID_InvalidWashMode;	
+		END_IF
+	E_Action.ACTION_TeachTarget:
+		RETURN;
+ELSE
+	M_CheckAction := SUPER^.M_CheckAction(refActionData, pCorrelObject);
+END_CASE]]></ST>
+      </Implementation>
+    </Method>
+    <Method Name="M_CheckBottles" Id="{93d7d9eb-ef2c-49ee-aad0-dab7b33348a9}">
+      <Declaration><![CDATA[METHOD M_CheckBottles : ERRORID
+VAR_INPUT
+END_VAR
+]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[IF pDiluter > 0 THEN
+	M_CheckBottles := pDiluter^.M_CheckBottles(0);
+END_IF]]></ST>
+      </Implementation>
+    </Method>
+    <Method Name="M_CheckProps" Id="{5a041542-ed4f-4e31-bf3d-2266d0fd80d9}">
+      <Declaration><![CDATA[METHOD M_CheckProps : ERRORID
+VAR_INPUT
+END_VAR
+]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[M_CheckProps := SUPER^.M_CheckProps();
+IF M_CheckProps > 0 THEN
+	RETURN;
+END_IF
+
+//Konfigurierte Properties checken
+//zugeordneter Diuter
+IF fbObjectDirectory.M_GetObjType(nDiluterObjId) <> E_ObjectType.OBJECTTYPE_Diluter THEN
+	M_CheckProps := E_ErrorIdObjMgmt.ERRORID_InvalidDiluterObjId; //Error
+	RETURN;
+ELSE
+	pDiluter := fbObjectDirectory.M_GetObjPointer(nDiluterObjId);
+END_IF]]></ST>
+      </Implementation>
+    </Method>
+    <Method Name="M_ClearAllProps" Id="{61383715-15a4-4c91-a36d-eee32a4100f9}">
+      <Declaration><![CDATA[METHOD M_ClearAllProps
+VAR_INPUT
+	bIgnoreParent : BOOL; //Es wird das gesamte OD gelöscht. -> Zeiger auf Parent nicht mehr gültig!
+END_VAR
+]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[pPneuChannelSynthGas := 0;
+pPneuChannelVac := 0;
+SUPER^.M_ClearAllProps(bIgnoreParent);]]></ST>
+      </Implementation>
+    </Method>
+    <Method Name="M_ExeAction" Id="{3da46946-cfe1-4c58-9130-8cbbc35610ec}">
+      <Declaration><![CDATA[METHOD M_ExeAction : ERRORID
+VAR_INPUT
+	refActionData : REFERENCE TO ST_ActionData;	
+END_VAR]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[IF NOT (eCurrentState = E_MachineState.MACHINESTATE_Idle OR
+	eCurrentState = E_MachineState.MACHINESTATE_Active OR
+	eCurrentState = E_MachineState.MACHINESTATE_Ready) THEN
+	M_ExeAction := E_ErrorIdCmd.ERRORID_InvalidState;
+	RETURN;
+END_IF
+
+CASE refActionData.eAction OF
+	
+	E_Action.ACTION_Init:
+		IF NOT bInitAxis AND NOT bInitSpec THEN
+			bInitAxis := TRUE;
+			bInitSpec := TRUE;
+			fbList.A_AddHeadValue( hList := hList, putValue := E_Action.ACTION_Init);	//InitBase
+			fbList.A_AddHeadValue( hList := hList, putValue := E_Action.ACTION_Init);	//InitSpec
+			//bIsInit := FALSE;
+		ELSE
+			RETURN;
+		END_IF
+		
+	E_Action.ACTION_Dispense:
+		IF NOT bDispense THEN
+			M_ExeAction := pDiluter^.M_CheckBottles(0); //Checken, ob Bottles OK
+			IF M_ExeAction > 0 THEN
+				RETURN;
+			END_IF			
+			nQuantity := refActionData.aParams[1];
+			nFlow := refActionData.aParams[2];
+			fbList.A_AddHeadValue(hList := hList, putValue := E_Action.ACTION_Dispense);
+			bDispense := TRUE;
+		END_IF
+	
+	E_Action.ACTION_SetPressure:
+		fbSetPress(bExecute:= FALSE, pPneuChannelRef:= pPneuChannelSynthGas); //eventueller Fehler wird auch zurückgesetzt
+		fbSetPress.bAwait := DINT_TO_BOOL(refActionData.aParams[1]);
+		fbSetPress.nValue := DINT_TO_INT(refActionData.aParams[2]);
+		fbSetPress.nTolerancePlus := DINT_TO_INT(refActionData.aParams[3]);
+		fbSetPress.nToleranceMinus := DINT_TO_INT(refActionData.aParams[4]);
+		fbSetPress.tTimeout := DINT_TO_TIME(refActionData.aParams[5]);
+		
+		fbSetPress(bExecute:= TRUE,	pPneuChannelRef:= pPneuChannelSynthGas, nErrorId=> M_ExeAction);
+		IF fbSetPress.bError THEN
+			RETURN;
+		END_IF
+		
+		IF NOT bSetPress AND fbSetPress.bBusy THEN
+			bSetPress := TRUE;
+			fbList.A_AddHeadValue(hList := hList, putValue := E_Action.ACTION_SetPressure);
+		ELSE
+			RETURN;	
+		END_IF
+
+	E_Action.ACTION_SetVacuum:
+		fbSetVacuum(bExecute:= FALSE, pPneuChannelRef:= pPneuChannelVac); //eventueller Fehler wird auch zurückgesetzt
+		fbSetVacuum.bAwait := DINT_TO_BOOL(refActionData.aParams[1]);
+		fbSetVacuum.nValue := DINT_TO_INT(refActionData.aParams[2]);
+		fbSetVacuum.nTolerancePlus := DINT_TO_INT(refActionData.aParams[3]);
+		fbSetVacuum.nToleranceMinus := DINT_TO_INT(refActionData.aParams[4]);
+		fbSetVacuum.tTimeout := DINT_TO_TIME(refActionData.aParams[5]);
+		
+		fbSetVacuum(bExecute:= TRUE, pPneuChannelRef:= pPneuChannelVac, nErrorId=> M_ExeAction);
+		IF fbSetVacuum.bError THEN
+			RETURN;
+		END_IF
+		
+		IF NOT bSetVacuum AND fbSetVacuum.bBusy THEN
+			bSetVacuum := TRUE;
+			fbList.A_AddHeadValue(hList := hList, putValue := E_Action.ACTION_SetVacuum);
+		ELSE
+			RETURN;	
+		END_IF
+		
+	E_Action.ACTION_SwitchPressure:
+		//Channel checken
+		nSwitchPressChannel := DINT_TO_USINT(refActionData.aParams[1]);
+		IF M_GetValveNr(nSwitchPressChannel) = 0 THEN
+			M_ExeAction := E_ErrorIdObjMgmt.ERRORID_InvalidPneuChannel;
+			RETURN;
+		END_IF
+		eSwitchPressCtrl := DINT_TO_USINT(refActionData.aParams[2]);
+		tPressTime := DINT_TO_TIME(refActionData.aParams[3]);
+		IF bSwitchPress THEN	//Aktion ist aktiv
+			//Statemachine zurücksetzen
+		 	nStateA_SwitchPress := 0;		
+			aValves[M_GetValveNr(nSwitchPressChannel)].M_Off();
+			nStateA_SwitchPress := 80;
+		ELSE //Aktion ist nicht aktiv
+			IF eSwitchPressCtrl = E_PressCtrl.PRESSCTRL_PressOn OR eSwitchPressCtrl = E_PressCtrl.PRESSCTRL_VacOn THEN
+				bSwitchPress := TRUE;
+				fbList.A_AddHeadValue(hList := hList, putValue := E_Action.ACTION_SwitchPressure);
+			ELSE
+				aValves[M_GetValveNr(nSwitchPressChannel)].M_Off();
+			END_IF			
+		END_IF
+	ELSE
+		M_ExeAction := SUPER^.M_ExeAction(refActionData);
+		RETURN;
+END_CASE
+
+bBusy := TRUE;
+eCurrentState := E_MachineState.MACHINESTATE_Active;]]></ST>
+      </Implementation>
+    </Method>
+    <Method Name="M_GetAllProps" Id="{fd372347-94a3-4aa4-b32f-4d3128ebbe35}">
+      <Declaration><![CDATA[METHOD M_GetAllProps : ERRORID
+VAR_INPUT
+	refCmdData : REFERENCE TO  ST_CmdData;
+END_VAR
+]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[//BaseProperties lesen
+SUPER^.M_GetAllProps(refCmdData);
+//BaseProperties lesen
+nCurrentPropIndex := nCurrentPropIndex + 1;
+refCmdData.n32Data[nCurrentPropIndex] := nDiluterObjId;
+
+nCurrentPropIndex := nCurrentPropIndex + 1; 
+IF pPneuChannelSynthGas > 0 THEN
+	refCmdData.n32Data[nCurrentPropIndex] := pPneuChannelSynthGas^.nChannel;
+ELSE
+	refCmdData.n32Data[nCurrentPropIndex] := 0;
+END_IF
+
+nCurrentPropIndex := nCurrentPropIndex + 1;
+IF pPneuChannelVac > 0 THEN
+	refCmdData.n32Data[nCurrentPropIndex] := pPneuChannelVac^.nChannel;
+ELSE
+	refCmdData.n32Data[nCurrentPropIndex] := 0;
+END_IF
+
+nCurrentPropIndex := nCurrentPropIndex + 1;
+refCmdData.n32Data[nCurrentPropIndex] := nValveNrSynthGas;
+nCurrentPropIndex := nCurrentPropIndex + 1;
+refCmdData.n32Data[nCurrentPropIndex] := nValveNrVacuum;
+nCurrentPropIndex := nCurrentPropIndex + 1;
+refCmdData.n32Data[nCurrentPropIndex] := nHoldVacuumVial;
+nCurrentPropIndex := nCurrentPropIndex + 1;
+refCmdData.n32Data[nCurrentPropIndex] := nHoldVacuumSeptum;
+nCurrentPropIndex := nCurrentPropIndex + 1;
+refCmdData.n32Data[nCurrentPropIndex] := REAL_TO_DINT(rDockOffset);
+nCurrentPropIndex := nCurrentPropIndex + 1;
+refCmdData.n32Data[nCurrentPropIndex] := REAL_TO_DINT(rXMoveDockFlipTube);
+nCurrentPropIndex := nCurrentPropIndex + 1;
+refCmdData.n32Data[nCurrentPropIndex] := REAL_TO_DINT(rZMoveDockFlipTube);]]></ST>
+      </Implementation>
+    </Method>
+    <Method Name="M_GetVacuumOk" Id="{a5f45460-ec8f-4c41-8ef5-7bfffdf00f3f}">
+      <Declaration><![CDATA[METHOD M_GetVacuumOk : BOOL
+VAR_INPUT
+	nSetPressValue : INT;
+	nSetPressTolPlus : INT;
+	nSetPressTolMin : INT;
+END_VAR]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[IF pPneuChannelVac > 0 THEN
+	M_GetVacuumOk := pPneuChannelVac^.M_GetPressOk(nSetPressure:= nSetPressValue,nTolerancePlus:= nSetPressTolPlus, nToleranceMinus:= nSetPressTolMin);
+END_IF]]></ST>
+      </Implementation>
+    </Method>
+    <Method Name="M_GetValveNr" Id="{9a95a4a0-09c9-4873-9ed7-477b99ecf0aa}">
+      <Declaration><![CDATA[METHOD PRIVATE M_GetValveNr : USINT
+VAR_INPUT
+	nChannel : USINT;
+END_VAR
+]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[IF nChannel = 1 THEN
+	M_GetValveNr := nValveNrSynthGas;
+ELSIF nChannel = 2 THEN
+	M_GetValveNr := nValveNrVacuum;
+END_IF]]></ST>
+      </Implementation>
+    </Method>
+    <Method Name="M_SetAllProps" Id="{c3abc1be-5548-4d29-997c-557a384c81bd}">
+      <Declaration><![CDATA[METHOD M_SetAllProps : ERRORID
+VAR_INPUT
+	refCmdData : REFERENCE TO  ST_CmdData;
+END_VAR
+
+VAR
+	nPneuChannel : USINT;
+END_VAR
+]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[M_SetAllProps := SUPER^.M_SetAllProps(refCmdData);
+
+IF M_SetAllProps > 0 THEN
+	RETURN;
+END_IF
+
+//Diluter
+nCurrentPropIndex := nCurrentPropIndex + 1;
+nSpecPropIndex := nCurrentPropIndex;
+nDiluterObjId :=  DINT_TO_UINT(refCmdData.n32Data[nCurrentPropIndex]);
+IF fbObjectDirectory.M_GetObjType(nDiluterObjId) = E_ObjectType.OBJECTTYPE_Diluter THEN
+	pDiluter := fbObjectDirectory.M_GetObjPointer(nDiluterObjId);
+ELSE
+	M_SetAllProps := E_ErrorIdObjMgmt.ERRORID_InvalidDiluterObjId;
+	RETURN;
+END_IF
+
+//PneuChannel Synthese-Gas
+nCurrentPropIndex := nCurrentPropIndex + 1;
+nPneuChannel := DINT_TO_USINT(refCmdData.n32Data[nCurrentPropIndex]);
+IF NOT (nPneuChannel > 0 AND nPneuChannel <= cNoOfPneuChannels) THEN
+	M_SetAllProps := E_ErrorIdObjMgmt.ERRORID_InvalidPneuChannel;
+	RETURN;	
+END_IF
+pPneuChannelSynthGas := ADR(aFbPneuChannel[nPneuChannel]);
+
+//PneuChannel Vakuum
+nCurrentPropIndex := nCurrentPropIndex + 1;
+nPneuChannel := DINT_TO_USINT(refCmdData.n32Data[nCurrentPropIndex]);		
+IF NOT (nPneuChannel > 0 AND nPneuChannel <= cNoOfPneuChannels) THEN
+	M_SetAllProps := E_ErrorIdObjMgmt.ERRORID_InvalidPneuChannel;
+	RETURN;	
+END_IF
+pPneuChannelVac := ADR(aFbPneuChannel[nPneuChannel]);
+
+nCurrentPropIndex := nCurrentPropIndex + 1;
+nValveNrSynthGas := DINT_TO_USINT(refCmdData.n32Data[nCurrentPropIndex]);
+IF NOT (nValveNrSynthGas > 0 AND nValveNrSynthGas <= cNoOfValves) THEN
+	M_SetAllProps := E_ErrorIdObjMgmt.ERRORID_InvalidValveNumber;
+	RETURN;
+END_IF
+
+nCurrentPropIndex := nCurrentPropIndex + 1;
+nValveNrVacuum := DINT_TO_USINT(refCmdData.n32Data[nCurrentPropIndex]);
+IF NOT (nValveNrVacuum > 0 AND nValveNrVacuum <= cNoOfValves) THEN
+	M_SetAllProps := E_ErrorIdObjMgmt.ERRORID_InvalidValveNumber;
+	RETURN;
+END_IF
+
+nCurrentPropIndex := nCurrentPropIndex + 1;
+nHoldVacuumVial := DINT_TO_INT(refCmdData.n32Data[nCurrentPropIndex]);
+
+nCurrentPropIndex := nCurrentPropIndex + 1;
+nHoldVacuumSeptum := DINT_TO_INT(refCmdData.n32Data[nCurrentPropIndex]);
+
+nCurrentPropIndex := nCurrentPropIndex + 1;
+rDockOffset := DINT_TO_REAL(refCmdData.n32Data[nCurrentPropIndex]);
+
+nCurrentPropIndex := nCurrentPropIndex + 1;
+rXMoveDockFlipTube := DINT_TO_REAL(refCmdData.n32Data[nCurrentPropIndex]);
+
+nCurrentPropIndex := nCurrentPropIndex + 1;
+rZMoveDockFlipTube := DINT_TO_REAL(refCmdData.n32Data[nCurrentPropIndex]);
+
+nNoOfProps := nCurrentPropIndex + 1;
+]]></ST>
+      </Implementation>
+    </Method>
+    <Method Name="M_SetSingleProp" Id="{c570da9c-72cd-4460-b4ae-f67e49512b4b}">
+      <Declaration><![CDATA[METHOD M_SetSingleProp : ERRORID
+VAR_INPUT
+	refCmdData : REFERENCE TO  ST_CmdData;
+END_VAR
+
+VAR
+	nPneuChannel : USINT;
+END_VAR]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[IF nSpecPropIndex + 1 = refCmdData.aHeader[1] THEN	//PneuChannelSynthGas
+	nPneuChannel := DINT_TO_USINT(refCmdData.n32Data[0]);
+	IF NOT (nPneuChannel > 0 AND nPneuChannel <= cNoOfPneuChannels) THEN
+		M_SetSingleProp := E_ErrorIdObjMgmt.ERRORID_InvalidPneuChannel;
+		RETURN;	
+	END_IF
+	pPneuChannelSynthGas := ADR(aFbPneuChannel[nPneuChannel]);
+	
+ELSIF nSpecPropIndex + 2 = refCmdData.aHeader[1] THEN	//PneuChannelVacuum
+	nPneuChannel := DINT_TO_USINT(refCmdData.n32Data[0]);
+	IF NOT (nPneuChannel > 0 AND nPneuChannel <= cNoOfPneuChannels) THEN
+		M_SetSingleProp := E_ErrorIdObjMgmt.ERRORID_InvalidPneuChannel;
+		RETURN;	
+	END_IF
+	pPneuChannelVac := ADR(aFbPneuChannel[nPneuChannel]);
+	
+ELSIF nSpecPropIndex + 3 = refCmdData.aHeader[1] THEN	//ValveSynthGas
+	IF refCmdData.n32Data[0] >= 0 AND refCmdData.n32Data[0] <= cNoOfValves THEN
+		nValveNrSynthGas := DINT_TO_USINT(refCmdData.n32Data[0]);
+	ELSE
+		M_SetSingleProp := E_ErrorIdObjMgmt.ERRORID_InvalidValveNumber;
+	END_IF
+	
+ELSIF nSpecPropIndex + 4 = refCmdData.aHeader[1] THEN	//ValveNrVacuum
+	IF refCmdData.n32Data[0] >= 0 AND refCmdData.n32Data[0] <= cNoOfValves THEN
+		nValveNrVacuum := DINT_TO_USINT(refCmdData.n32Data[0]);
+	ELSE
+		M_SetSingleProp := E_ErrorIdObjMgmt.ERRORID_InvalidValveNumber;
+	END_IF
+	
+ELSIF nSpecPropIndex + 5 = refCmdData.aHeader[1] THEN	//HoldVacVial
+	nHoldVacuumVial := DINT_TO_INT(refCmdData.n32Data[0]);
+ELSIF nSpecPropIndex + 6 = refCmdData.aHeader[1] THEN	//HoldVacSeptum
+	nHoldVacuumSeptum := DINT_TO_INT(refCmdData.n32Data[0]);
+ELSIF nSpecPropIndex + 7 = refCmdData.aHeader[1] THEN	//DockOffset
+	rDockOffset := DINT_TO_REAL(refCmdData.n32Data[0]);
+ELSIF nSpecPropIndex + 8 = refCmdData.aHeader[1] THEN	//XMoveDockFliptube
+	rXMoveDockFlipTube := DINT_TO_REAL(refCmdData.n32Data[0]);
+ELSIF nSpecPropIndex + 9 = refCmdData.aHeader[1] THEN	//ZMoveDockFliptube
+	rZMoveDockFlipTube := DINT_TO_REAL(refCmdData.n32Data[0]);	
+ELSE
+	M_SetSingleProp := SUPER^.M_SetSingleProp(refCmdData);
+END_IF]]></ST>
+      </Implementation>
+    </Method>
+    <Property Name="P_nHoldVacSept" Id="{1925ee89-9168-4625-8d15-dcec986a094d}">
+      <Declaration><![CDATA[PROPERTY P_nHoldVacSept : INT]]></Declaration>
+      <Get Name="Get" Id="{d3b80700-c7c0-4eed-b8e3-028d0beb9ee1}">
+        <Declaration><![CDATA[VAR
+END_VAR
+]]></Declaration>
+        <Implementation>
+          <ST><![CDATA[P_nHoldVacSept := nHoldVacuumSeptum;
+]]></ST>
+        </Implementation>
+      </Get>
+    </Property>
+    <Property Name="P_nHoldVacVial" Id="{db754360-0b2e-4586-9a3c-4c3d2b949bbb}">
+      <Declaration><![CDATA[PROPERTY P_nHoldVacVial : INT]]></Declaration>
+      <Get Name="Get" Id="{afe7d522-36ad-4fc9-8934-dbbbe77a35b6}">
+        <Declaration><![CDATA[VAR
+END_VAR
+]]></Declaration>
+        <Implementation>
+          <ST><![CDATA[P_nHoldVacVial := nHoldVacuumVial;
+]]></ST>
+        </Implementation>
+      </Get>
+    </Property>
+    <Property Name="P_rDockOffset" Id="{30b68f17-7625-480e-bdd8-bc7f62eab7b5}">
+      <Declaration><![CDATA[PROPERTY P_rDockOffset : REAL]]></Declaration>
+      <Get Name="Get" Id="{aff9773b-9ad7-4c63-a260-6a232672e99e}">
+        <Declaration><![CDATA[VAR
+END_VAR
+]]></Declaration>
+        <Implementation>
+          <ST><![CDATA[P_rDockOffset := rDockOffset;]]></ST>
+        </Implementation>
+      </Get>
+    </Property>
+    <Property Name="P_rXMoveDockFliptube" Id="{45189495-93b9-43d9-93ad-082b1f9840bb}">
+      <Declaration><![CDATA[PROPERTY P_rXMoveDockFliptube : REAL]]></Declaration>
+      <Get Name="Get" Id="{387cfe48-6c29-4d84-bff6-e0399d22f11d}">
+        <Declaration><![CDATA[VAR
+END_VAR
+]]></Declaration>
+        <Implementation>
+          <ST><![CDATA[P_rXMoveDockFliptube := rXMoveDockFlipTube;]]></ST>
+        </Implementation>
+      </Get>
+    </Property>
+    <Property Name="P_rZMoveDockFliptube" Id="{7f15ff33-e2de-4998-9f57-6be8bb68cc4d}">
+      <Declaration><![CDATA[PROPERTY P_rZMoveDockFliptube : REAL]]></Declaration>
+      <Get Name="Get" Id="{60312e70-d523-473d-bc82-16e50f97e37c}">
+        <Declaration><![CDATA[VAR
+END_VAR
+]]></Declaration>
+        <Implementation>
+          <ST><![CDATA[P_rZMoveDockFliptube := rZMoveDockFlipTube;]]></ST>
+        </Implementation>
+      </Get>
+    </Property>
+    <LineIds Name="FB_TriplePip">
+      <LineId Id="3" Count="24" />
+      <LineId Id="145" Count="27" />
+      <LineId Id="38" Count="17" />
+      <LineId Id="139" Count="5" />
+      <LineId Id="62" Count="18" />
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="FB_TriplePip.A_Dispense">
+      <LineId Id="2" Count="49" />
+      <LineId Id="1" Count="0" />
+    </LineIds>
+    <LineIds Name="FB_TriplePip.A_InitSpec">
+      <LineId Id="2" Count="13" />
+      <LineId Id="1" Count="0" />
+    </LineIds>
+    <LineIds Name="FB_TriplePip.A_Reset">
+      <LineId Id="2" Count="9" />
+      <LineId Id="1" Count="0" />
+    </LineIds>
+    <LineIds Name="FB_TriplePip.A_Stop">
+      <LineId Id="2" Count="4" />
+      <LineId Id="11" Count="0" />
+      <LineId Id="13" Count="6" />
+      <LineId Id="12" Count="0" />
+      <LineId Id="7" Count="3" />
+      <LineId Id="1" Count="0" />
+    </LineIds>
+    <LineIds Name="FB_TriplePip.A_SwitchPress">
+      <LineId Id="2" Count="27" />
+      <LineId Id="1" Count="0" />
+    </LineIds>
+    <LineIds Name="FB_TriplePip.FB_init">
+      <LineId Id="7" Count="1" />
+    </LineIds>
+    <LineIds Name="FB_TriplePip.M_AddChild">
+      <LineId Id="19" Count="0" />
+      <LineId Id="8" Count="1" />
+      <LineId Id="22" Count="0" />
+      <LineId Id="17" Count="1" />
+      <LineId Id="15" Count="0" />
+      <LineId Id="11" Count="0" />
+      <LineId Id="13" Count="0" />
+      <LineId Id="12" Count="0" />
+      <LineId Id="5" Count="0" />
+    </LineIds>
+    <LineIds Name="FB_TriplePip.M_CancelAction">
+      <LineId Id="3" Count="4" />
+      <LineId Id="30" Count="0" />
+      <LineId Id="22" Count="7" />
+      <LineId Id="11" Count="0" />
+      <LineId Id="31" Count="0" />
+      <LineId Id="12" Count="5" />
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="FB_TriplePip.M_CheckAction">
+      <LineId Id="276" Count="0" />
+      <LineId Id="412" Count="0" />
+      <LineId Id="277" Count="0" />
+      <LineId Id="279" Count="96" />
+      <LineId Id="425" Count="5" />
+      <LineId Id="424" Count="0" />
+      <LineId Id="381" Count="19" />
+      <LineId Id="138" Count="0" />
+    </LineIds>
+    <LineIds Name="FB_TriplePip.M_CheckBottles">
+      <LineId Id="3" Count="1" />
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="FB_TriplePip.M_CheckProps">
+      <LineId Id="15" Count="2" />
+      <LineId Id="13" Count="1" />
+      <LineId Id="3" Count="6" />
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="FB_TriplePip.M_ClearAllProps">
+      <LineId Id="10" Count="1" />
+      <LineId Id="6" Count="0" />
+    </LineIds>
+    <LineIds Name="FB_TriplePip.M_ExeAction">
+      <LineId Id="3" Count="10" />
+      <LineId Id="15" Count="20" />
+      <LineId Id="102" Count="37" />
+      <LineId Id="63" Count="29" />
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="FB_TriplePip.M_GetAllProps">
+      <LineId Id="3" Count="4" />
+      <LineId Id="53" Count="0" />
+      <LineId Id="41" Count="11" />
+      <LineId Id="11" Count="0" />
+      <LineId Id="54" Count="0" />
+      <LineId Id="12" Count="6" />
+      <LineId Id="23" Count="1" />
+      <LineId Id="2" Count="0" />
+      <LineId Id="30" Count="0" />
+      <LineId Id="29" Count="0" />
+      <LineId Id="36" Count="0" />
+      <LineId Id="35" Count="0" />
+    </LineIds>
+    <LineIds Name="FB_TriplePip.M_GetVacuumOk">
+      <LineId Id="12" Count="0" />
+      <LineId Id="15" Count="1" />
+    </LineIds>
+    <LineIds Name="FB_TriplePip.M_GetValveNr">
+      <LineId Id="3" Count="3" />
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="FB_TriplePip.M_SetAllProps">
+      <LineId Id="3" Count="16" />
+      <LineId Id="86" Count="1" />
+      <LineId Id="89" Count="7" />
+      <LineId Id="98" Count="5" />
+      <LineId Id="32" Count="19" />
+      <LineId Id="59" Count="3" />
+      <LineId Id="68" Count="2" />
+      <LineId Id="76" Count="1" />
+      <LineId Id="75" Count="0" />
+      <LineId Id="67" Count="0" />
+      <LineId Id="54" Count="0" />
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="FB_TriplePip.M_SetSingleProp">
+      <LineId Id="78" Count="0" />
+      <LineId Id="125" Count="0" />
+      <LineId Id="130" Count="3" />
+      <LineId Id="126" Count="0" />
+      <LineId Id="129" Count="0" />
+      <LineId Id="96" Count="0" />
+      <LineId Id="134" Count="0" />
+      <LineId Id="136" Count="3" />
+      <LineId Id="135" Count="0" />
+      <LineId Id="93" Count="0" />
+      <LineId Id="64" Count="0" />
+      <LineId Id="73" Count="1" />
+      <LineId Id="85" Count="0" />
+      <LineId Id="76" Count="0" />
+      <LineId Id="65" Count="0" />
+      <LineId Id="140" Count="0" />
+      <LineId Id="56" Count="0" />
+      <LineId Id="58" Count="1" />
+      <LineId Id="86" Count="0" />
+      <LineId Id="62" Count="0" />
+      <LineId Id="101" Count="0" />
+      <LineId Id="141" Count="0" />
+      <LineId Id="103" Count="0" />
+      <LineId Id="102" Count="0" />
+      <LineId Id="104" Count="0" />
+      <LineId Id="106" Count="1" />
+      <LineId Id="105" Count="0" />
+      <LineId Id="112" Count="0" />
+      <LineId Id="111" Count="0" />
+      <LineId Id="117" Count="0" />
+      <LineId Id="116" Count="0" />
+      <LineId Id="47" Count="0" />
+      <LineId Id="45" Count="0" />
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="FB_TriplePip.P_nHoldVacSept.Get">
+      <LineId Id="3" Count="0" />
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="FB_TriplePip.P_nHoldVacVial.Get">
+      <LineId Id="3" Count="0" />
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="FB_TriplePip.P_rDockOffset.Get">
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="FB_TriplePip.P_rXMoveDockFliptube.Get">
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="FB_TriplePip.P_rZMoveDockFliptube.Get">
+      <LineId Id="2" Count="0" />
+    </LineIds>
+  </POU>
+</TcPlcObject>

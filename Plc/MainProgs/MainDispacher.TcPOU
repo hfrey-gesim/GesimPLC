@@ -1,0 +1,682 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<TcPlcObject Version="1.1.0.1" ProductVersion="3.1.4024.11">
+  <POU Name="MainDispacher" Id="{af6fdf66-b29d-4ace-a1b3-407366a7215e}" SpecialFunc="None">
+    <Declaration><![CDATA[PROGRAM MainDispacher
+VAR
+	fbConfig	: FB_OM_Config;
+	fbInit		: FB_OM_Init;
+	fbManu		: FB_OM_Manu;
+	fbAuto		: FB_OM_Auto;
+	fbSemiAuto	: FB_OM_SemiAuto;
+	fbMaintenance : FB_OM_Maintenance;
+	eForceState	: E_MachineState;
+END_VAR
+VAR_OUTPUT
+	eCurrentMode	: E_MachineMode := E_MachineMode.MACHINEMODE_Config;
+	eCurrentState	: E_MachineState;
+END_VAR
+]]></Declaration>
+    <Implementation>
+      <ST><![CDATA[CASE eCurrentMode OF
+	E_MachineMode.MACHINEMODE_Config:
+		fbConfig();
+		eCurrentState := MAX(fbConfig.eCurrentState,eForceState);
+	E_MachineMode.MACHINEMODE_Init:
+		fbInit();
+		eCurrentState := fbInit.eCurrentState;
+	E_MachineMode.MACHINEMODE_Manu:
+		fbManu();
+		eCurrentState := fbManu.eCurrentState;
+	E_MachineMode.MACHINEMODE_SemiAuto:
+		fbSemiAuto();
+		eCurrentState := fbSemiAuto.eCurrentState;
+	E_MachineMode.MACHINEMODE_Auto:
+		fbAuto();
+		eCurrentState := fbAuto.eCurrentState;
+	E_MachineMode.MACHINEMODE_Maintenance:
+		fbMaintenance();
+		eCurrentState := fbMaintenance.eCurrentState;
+END_CASE]]></ST>
+    </Implementation>
+    <Method Name="M_ActivateConfig" Id="{5a1030a8-42e7-429e-b341-4d8044782bbe}">
+      <Declaration><![CDATA[METHOD M_ActivateConfig : ERRORID
+VAR_INPUT
+END_VAR
+]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[IF eCurrentMode = E_MachineMode.MACHINEMODE_Config THEN
+	M_ActivateConfig := fbConfig.M_Activate();
+ELSE
+	M_ActivateConfig := E_ErrorIdCmd.ERRORID_WrongMode;	//Error: nicht im Config-Modus
+END_IF]]></ST>
+      </Implementation>
+    </Method>
+    <Method Name="M_ChangeMode" Id="{969303d0-dbd1-492d-95ec-daedc08410ef}">
+      <Declaration><![CDATA[METHOD M_ChangeMode : ERRORID
+VAR_INPUT
+	eMaschineMode : E_MachineMode;
+END_VAR
+]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[//Mode bereits angeforderter Mode?
+IF eCurrentMode = eMaschineMode THEN
+	RETURN;
+END_IF
+
+CASE eMaschineMode OF
+	E_MachineMode.MACHINEMODE_Config:	
+		IF eCurrentState <> E_MachineState.MACHINESTATE_Idle THEN
+			M_ChangeMode := E_ErrorIdCmd.ERRORID_ModeChangeImpossible;  //Error
+			RETURN;			
+		END_IF
+	E_MachineMode.MACHINEMODE_Init,
+	E_MachineMode.MACHINEMODE_Manu,
+	E_MachineMode.MACHINEMODE_SemiAuto,
+	E_MachineMode.MACHINEMODE_Auto:
+		IF eCurrentState <> E_MachineState.MACHINESTATE_Idle THEN
+			M_ChangeMode := E_ErrorIdCmd.ERRORID_ModeChangeImpossible;  //Error
+			RETURN;			
+		END_IF
+		IF NOT fbConfiguration.P_bActivated THEN
+			M_ChangeMode := E_ErrorIdCmd.ERRORID_ConfigNotActivated;  //Error
+			RETURN;
+		END_IF		
+	E_MachineMode.MACHINEMODE_Maintenance:
+		//In Maintenance kann immer gewechselt werden
+		//Der Rest wird in den enzelnen Aktionen abgefangen
+		//Was ist, wenn der ActionDispacher noch aktiv ist und dann einen Fehler wirft?
+		//Definitiv muss der State des ActionDispachers dann noch abgefragt werden, und dieser muss auch gestoppt werden können
+		
+		//Der State vom alte Mode wird übernommem
+		fbMaintenance.M_SetState(eCurrentState);
+
+		(*IF NOT (eCurrentState = E_MachineState.MACHINESTATE_Idle OR eCurrentState = E_MachineState.MACHINESTATE_Error) THEN
+			M_ChangeMode := E_ErrorIdCmd.ERRORID_ModeChangeImpossible;  //Error
+			RETURN;			
+		END_IF*)
+ELSE
+	M_ChangeMode := E_ErrorIdCmd.ERRORID_UnknownMode;
+	RETURN;
+END_CASE
+
+eCurrentMode := eMaschineMode;]]></ST>
+      </Implementation>
+    </Method>
+    <Method Name="M_CheckSafety" Id="{eff080b7-0d7d-4b2f-8267-13ae7c6eea3f}">
+      <Declaration><![CDATA[METHOD M_CheckSafety : ERRORID
+VAR_INPUT
+END_VAR]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[IF NOT (pFbSafety^.eCurrentState = E_SafetyState.Locked) THEN
+	M_CheckSafety := E_ErrorIdCmd.ERRORID_InterlockNotLocked;
+END_IF]]></ST>
+      </Implementation>
+    </Method>
+    <Method Name="M_CheckSafetyInit" Id="{8ecfc199-ff2c-410e-ad69-58bc0f669582}">
+      <Declaration><![CDATA[METHOD M_CheckSafetyInit : ERRORID
+VAR_INPUT
+	refData	: REFERENCE TO ARRAY[0..39] OF DINT;
+END_VAR
+
+VAR
+	i : UINT;
+	bInitStacker : BOOL;
+	bInitOther : BOOL;
+	bInitAll : BOOL;
+END_VAR
+]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[bInitAll := TRUE;
+
+FOR i := 1 TO 39 DO
+	IF refData[i] > 0 THEN
+		bInitAll := FALSE;
+		IF fbObjectDirectory.M_GetObjType(DINT_TO_UINT(refData[i])) = E_ObjectType.OBJECTTYPE_Stacker THEN
+			bInitStacker := TRUE;
+		ELSE
+			bInitOther := TRUE;
+		END_IF
+	END_IF
+END_FOR
+
+IF bInitAll THEN
+	bInitOther := TRUE;
+	IF fbObjectDirectory.nCntStacker > 0 THEN
+		bInitStacker := TRUE;
+	END_IF
+END_IF
+
+IF bInitOther THEN
+	IF NOT (pFbSafety^.eCurrentState = E_SafetyState.Locked) THEN
+		M_CheckSafetyInit := E_ErrorIdCmd.ERRORID_InterlockNotLocked;
+	END_IF	
+END_IF
+
+
+]]></ST>
+      </Implementation>
+    </Method>
+    <Method Name="M_ContinueAction" Id="{7c671fd1-9218-4c5d-a4b3-fcb903738adb}">
+      <Declaration><![CDATA[METHOD M_ContinueAction : ERRORID
+VAR_INPUT
+	nActionId	: UINT;
+END_VAR
+]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[IF eCurrentState = E_MachineState.MACHINESTATE_Error THEN
+	M_ContinueAction := E_ErrorIdCmd.ERRORID_InvalidState;
+	RETURN;
+END_IF
+
+IF eCurrentMode = E_MachineMode.MACHINEMODE_Manu THEN
+	M_ContinueAction := fbManu.M_ContinueAction(nActionId);
+ELSIF eCurrentMode = E_MachineMode.MACHINEMODE_Auto THEN
+	M_ContinueAction := fbAuto.M_ContinueAction(nActionId);
+ELSE
+	M_ContinueAction := E_ErrorIdCmd.ERRORID_WrongMode;
+END_IF]]></ST>
+      </Implementation>
+    </Method>
+    <Method Name="M_DeleteConfig" Id="{e4ad762b-1d7f-4043-b257-eb329f29006a}">
+      <Declaration><![CDATA[//Löscht die gespeicherte Konfiguration, welche nach Einschalten automatisch geladen wird
+METHOD M_DeleteConfig : ERRORID
+VAR_INPUT
+END_VAR
+]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[IF MainDispacher.eCurrentMode = E_MachineMode.MACHINEMODE_Config THEN //im Config-Modus?
+	M_DeleteConfig := fbConfig.M_Delete();
+ELSE
+	M_DeleteConfig := E_ErrorIdCmd.ERRORID_WrongMode;	//Error: nicht im Config-Modus
+END_IF]]></ST>
+      </Implementation>
+    </Method>
+    <Method Name="M_DeleteGCodeFiles" Id="{4e2675c2-2b56-44eb-ae44-1c7fde5f6ab7}">
+      <Declaration><![CDATA[METHOD M_DeleteGCodeFiles : ERRORID
+VAR_INPUT
+END_VAR
+]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[]]></ST>
+      </Implementation>
+    </Method>
+    <Method Name="M_DeviceFirmwUpdate" Id="{a9725c63-d222-4a29-b696-efd74e513206}">
+      <Declaration><![CDATA[METHOD M_DeviceFirmwUpdate : ERRORID
+VAR_INPUT
+	nCanNodeId	: USINT;
+END_VAR
+]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[M_DeviceFirmwUpdate := fbMaintenance.M_DeviceFirmwUpdate(nCanNodeId);]]></ST>
+      </Implementation>
+    </Method>
+    <Method Name="M_ExeAction" Id="{413317ee-c0bb-4266-a044-c326aaeee086}">
+      <Declaration><![CDATA[METHOD M_ExeAction : ST_Error
+VAR_INPUT
+	eAction : E_Action;
+	refData	: REFERENCE TO ARRAY[0..39] OF DINT;
+END_VAR
+
+VAR
+	stActionData		: ST_ActionData;
+	pDryPad				: POINTER TO FB_DryPad;
+	pTipCleaner			: POINTER TO FB_TipCleaner;	
+END_VAR
+
+VAR_OUTPUT
+	nActionId		: UINT;
+END_VAR]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[IF NOT fbStopButton.P_bReleased THEN
+	M_ExeAction.ErrorId := E_ErrorIdCmd.ERRORID_StopButtonNotReleased;
+	eCurrentState := E_MachineState.MACHINESTATE_Error;
+	RETURN;
+END_IF
+
+//Neu Action werden nur in "Idle" oder "Active" angenommen
+IF NOT(eCurrentState = E_MachineState.MACHINESTATE_Idle OR
+		eCurrentState = E_MachineState.MACHINESTATE_Active OR
+		eCurrentState = E_MachineState.MACHINESTATE_Running OR
+		eCurrentState = E_MachineState.MACHINESTATE_Pause) THEN
+	M_ExeAction.ErrorId := E_ErrorIdCmd.ERRORID_WrongMode;
+	RETURN;
+END_IF
+
+MEMSET(ADR(stActionData),0,SIZEOF(stActionData));
+stActionData.eAction := eAction;
+	
+CASE eAction OF
+	E_Action.ACTION_Init:
+		IF eCurrentMode <> E_MachineMode.MACHINEMODE_Init THEN
+			M_ExeAction.ErrorId := E_ErrorIdCmd.ERRORID_WrongMode;
+			RETURN;
+		END_IF
+		M_ExeAction.ErrorId := M_CheckSafetyInit(refData);
+	
+	E_Action.ACTION_Jog,E_Action.ACTION_MoveX,E_Action.ACTION_MoveY,E_Action.ACTION_MoveXY,E_Action.ACTION_MoveZ:
+		IF NOT (eCurrentMode = E_MachineMode.MACHINEMODE_Manu OR eCurrentMode = E_MachineMode.MACHINEMODE_Auto) THEN
+			M_ExeAction.ErrorId := E_ErrorIdCmd.ERRORID_WrongMode;
+			RETURN;			
+		END_IF
+		//wenn GCode aktiv, dann nur im Pause zulässig
+		IF GCode.bBusy AND_THEN GCode.eGCodeState <> E_GCodeState.GCodeState_Pause THEN
+			 RETURN;
+		END_IF
+ 		
+		M_ExeAction.ErrorId := M_CheckSafety();
+		//BasicActions, welche nur Object und die ActionParameter benötigen 
+		stActionData.nObject := DINT_TO_UINT(refData[0]);
+		MEMCPY(ADR(stActionData.aParams),ADR(refData[1]),44);
+	
+	E_Action.ACTION_InkSpin,E_Action.ACTION_InkOpClCover,E_Action.ACTION_PowdStatReload,E_Action.ACTION_PowdStatShaking,
+	E_Action.ACTION_PowdStatLeveling,E_Action.ACTION_SwitchPressure,E_Action.ACTION_PulsePressure,
+	E_Action.ACTION_SwitchPump,E_Action.ACTION_OpenClose,E_Action.ACTION_LockUnlock,E_Action.ACTION_StampAdjust,
+	E_Action.ACTION_Aspirate,E_Action.ACTION_Dispense,E_Action.ACTION_DispenseDrops,E_Action.ACTION_StrobTest,
+	E_Action.ACTION_EmptyWaste,E_Action.ACTION_Rinse,E_Action.ACTION_Eject,E_Action.ACTION_Expose,E_Action.ACTION_Swivel,
+	E_Action.ACTION_PickPutPowder,E_Action.ACTION_ReactorOpCl,E_Action.ACTION_DetectVial,E_Action.ACTION_FillLiquid,
+	E_Action.ACTION_EmptyLiquid, E_Action.ACTION_StampDemolding,E_Action.ACTION_DilMoveValve,E_Action.ACTION_DilMovePlunger,
+	E_Action.ACTION_DilPump, E_Action.ACTION_DilTransfer, E_Action.ACTION_SetVoltage, E_Action.ACTION_DilPrepare,
+	E_Action.ACTION_SetPressure,E_Action.ACTION_SetVacuum,E_Action.ACTION_SwitchVoltage,E_Action.ACTION_Extrude,
+	E_Action.ACTION_ExtrMovePlunger, E_Action.ACTION_Mix,E_Action.ACTION_MeasurepH, E_Action.ACTION_SuckOff,
+	E_Action.ACTION_BasicDispense, E_Action.ACTION_StirrCartridge, E_Action.ACTION_MoveTrayTransporter, E_Action.ACTION_TurnDrivingPin,
+	E_Action.ACTION_TurnTo, E_Action.ACTION_MoveLifter, E_Action.ACTION_LoadStacker:
+		IF NOT (eCurrentMode = E_MachineMode.MACHINEMODE_Manu OR eCurrentMode = E_MachineMode.MACHINEMODE_Auto) THEN
+			M_ExeAction.ErrorId := E_ErrorIdCmd.ERRORID_WrongMode;
+			RETURN;
+		END_IF
+		//BasicActions, welche nur Object und die ActionParameter benötigen 
+		stActionData.nObject := DINT_TO_UINT(refData[0]);
+		MEMCPY(ADR(stActionData.aParams),ADR(refData[1]),44);
+		
+	E_Action.ACTION_WashTool, E_Action.ACTION_DryToolInside:
+		IF NOT (eCurrentMode = E_MachineMode.MACHINEMODE_Manu OR eCurrentMode = E_MachineMode.MACHINEMODE_Auto) THEN
+			M_ExeAction.ErrorId := E_ErrorIdCmd.ERRORID_WrongMode;
+			RETURN;			
+		END_IF
+		M_ExeAction.ErrorId := M_CheckSafety();
+		stActionData.nObject := DINT_TO_UINT(refData[0]);
+		stActionData.nTarget := DINT_TO_UINT(refData[1]);
+		MEMCPY(ADR(stActionData.aParams),ADR(refData[2]),60);
+	
+	E_Action.ACTION_MoveToTarget, E_Action.ACTION_MeasureTool, E_Action.ACTION_OpenCloseFlipTube,
+	E_Action.ACTION_ExchangePiece,E_Action.ACTION_StampInking,E_Action.ACTION_CleanTip,E_Action.ACTION_DryPip,
+	E_Action.ACTION_DispenseTest,E_Action.ACTION_TeachTarget,E_Action.ACTION_GetPipSample,
+	E_Action.ACTION_CalibrateZSensor,E_Action.ACTION_TeachTool,E_Action.ACTION_InsertTool,E_Action.ACTION_DockTool,
+	E_Action.ACTION_TransferLiquid,E_Action.ACTION_TransferGas, E_Action.ACTION_TransferTray:
+		IF NOT (eCurrentMode = E_MachineMode.MACHINEMODE_Manu OR eCurrentMode = E_MachineMode.MACHINEMODE_Auto) THEN
+			M_ExeAction.ErrorId := E_ErrorIdCmd.ERRORID_WrongMode;
+			RETURN;			
+		END_IF
+		M_ExeAction.ErrorId := M_CheckSafety();
+		stActionData.nObject := DINT_TO_UINT(refData[0]);
+		stActionData.nTarget := DINT_TO_UINT(refData[1]);
+		MEMCPY(ADR(stActionData.aParams),ADR(refData[2]),44);
+	
+	E_Action.ACTION_Heating,E_Action.ACTION_Cooling,E_Action.ACTION_SwitchLight:
+		IF NOT (eCurrentMode = E_MachineMode.MACHINEMODE_Manu OR eCurrentMode = E_MachineMode.MACHINEMODE_Auto) THEN
+			M_ExeAction.ErrorId := E_ErrorIdCmd.ERRORID_WrongMode;
+			RETURN;			
+		END_IF
+		stActionData.nObject := DINT_TO_UINT(refData[0]);
+		MEMCPY(ADR(stActionData.aParams),ADR(refData[1]),16);
+	
+	E_Action.ACTION_Delay:
+		MEMCPY(ADR(stActionData.aParams),ADR(refData[0]),4);
+
+	E_Action.ACTION_ActionOnArray:
+		IF eCurrentMode <> E_MachineMode.MACHINEMODE_Manu THEN
+			M_ExeAction.ErrorId := E_ErrorIdCmd.ERRORID_WrongMode;
+			RETURN;			
+		END_IF
+		M_ExeAction.ErrorId := M_CheckSafety();
+		stActionData.nObject := DINT_TO_UINT(refData[0]);
+		stActionData.nTarget := DINT_TO_UINT(refData[1]);
+		MEMCPY(ADR(stActionData.aParams),ADR(refData[2]),72);
+	
+	E_Action.ACTION_ChangeCleanMat:
+		stActionData.nObject := DINT_TO_UINT(refData[0]);
+		IF fbObjectDirectory.M_GetObjType(stActionData.nObject) = E_ObjectType.OBJECTTYPE_DryPad THEN
+			pDryPad := fbObjectDirectory.M_GetObjPointer(stActionData.nObject);
+			pDryPad^.M_ChangeCleanMat();
+			RETURN;
+		ELSIF fbObjectDirectory.M_GetObjType(stActionData.nObject) = E_ObjectType.OBJECTTYPE_TipCleaner THEN
+			pTipCleaner := fbObjectDirectory.M_GetObjPointer(stActionData.nObject);
+			pTipCleaner^.M_ChangeCleanMat();
+			RETURN;
+		ELSE
+			M_ExeAction.ErrorId := E_ErrorIdCmd.ERRORID_UnsuitableObject;
+		END_IF
+	E_Action.ACTION_RunGCode:
+		IF eCurrentMode <> E_MachineMode.MACHINEMODE_Manu THEN
+			M_ExeAction.ErrorId := E_ErrorIdCmd.ERRORID_WrongMode;
+			RETURN;			
+		END_IF
+		stActionData.nTarget := DINT_TO_UINT(refData[0]);
+		MEMCPY(ADR(stActionData.aParams),ADR(refData[1]),48);
+	E_Action.ACTION_RunSequence:
+		IF eCurrentMode <> E_MachineMode.MACHINEMODE_Auto THEN
+			M_ExeAction.ErrorId := E_ErrorIdCmd.ERRORID_WrongMode;
+			RETURN;			
+		END_IF
+		MEMCPY(ADR(stActionData.aParams),ADR(refData[0]),24);
+	E_Action.ACTION_ShiftGCodeZPos:
+		MEMCPY(ADR(stActionData.aParams),ADR(refData[0]),4);
+	E_Action.ACTION_MoveAllHome:
+		IF NOT (eCurrentMode = E_MachineMode.MACHINEMODE_Manu OR eCurrentMode = E_MachineMode.MACHINEMODE_Auto) THEN
+			M_ExeAction.ErrorId := E_ErrorIdCmd.ERRORID_WrongMode;
+			RETURN;
+		ELSE
+			IF eCurrentState <> E_MachineState.MACHINESTATE_Idle THEN
+				M_ExeAction.ErrorId := E_ErrorIdCmd.ERRORID_InvalidState;
+				RETURN;
+			END_IF
+		END_IF
+	E_Action.ACTION_CoupleHeads:
+		IF eCurrentState <> E_MachineState.MACHINESTATE_Idle THEN
+			M_ExeAction.ErrorId := E_ErrorIdCmd.ERRORID_InvalidState;
+			RETURN;
+		END_IF
+		MEMCPY(ADR(stActionData.aParams),ADR(refData[0]),4);
+ELSE
+	M_ExeAction.ErrorId := E_ErrorIdCmd.ERRORID_InvalidAction;
+END_CASE
+
+IF M_ExeAction.ErrorId > 0 THEN
+	RETURN;
+END_IF
+
+CASE eCurrentMode OF
+	E_MachineMode.MACHINEMODE_Init:
+		M_ExeAction := fbInit.M_ExeAction(refData);
+	E_MachineMode.MACHINEMODE_Manu:
+		M_ExeAction.ErrorId := fbManu.M_ExeAction(refActionData:= stActionData,nActionId=> nActionId);
+	E_MachineMode.MACHINEMODE_Auto:
+		M_ExeAction.ErrorId := fbAuto.M_ExeAction(refActionData:= stActionData,nActionId=> nActionId);
+	//Hier könnte gecheckt werden, in welchem Mode eine Action ausgeführt werden kann (Pause oder so)
+	;
+END_CASE]]></ST>
+      </Implementation>
+    </Method>
+    <Method Name="M_ForceError" Id="{bc4ef509-33a3-4ba4-be12-3cfeceb80903}">
+      <Declaration><![CDATA[METHOD M_ForceError
+VAR_INPUT
+END_VAR
+]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[eCurrentState := E_MachineState.MACHINESTATE_Error;
+eForceState := E_MachineState.MACHINESTATE_Error;]]></ST>
+      </Implementation>
+    </Method>
+    <Method Name="M_PauseAction" Id="{45a2e2c5-af3d-4bd5-9341-e16d168ce8b3}">
+      <Declaration><![CDATA[METHOD M_PauseAction : ERRORID
+VAR_INPUT
+	nActionId	: UINT;
+END_VAR
+]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[IF eCurrentState = E_MachineState.MACHINESTATE_Error THEN
+	M_PauseAction := E_ErrorIdCmd.ERRORID_InvalidState;
+	RETURN;
+END_IF
+
+IF eCurrentMode = E_MachineMode.MACHINEMODE_Manu THEN
+	fbManu.M_PauseAction(nActionId);
+ELSIF eCurrentMode = E_MachineMode.MACHINEMODE_Auto THEN
+	fbAuto.M_PauseAction(nActionId);
+END_IF]]></ST>
+      </Implementation>
+    </Method>
+    <Method Name="M_ResetError" Id="{8780f1d0-ac2e-48f0-b4b1-fc187ddbec98}">
+      <Declaration><![CDATA[METHOD M_ResetError
+VAR_INPUT
+END_VAR
+]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[fbConfig.M_ResetError();
+fbInit.M_ResetError();
+fbManu.M_ResetError();
+fbSemiAuto.M_ResetError();
+fbAuto.M_ResetError();
+fbMaintenance.M_ResetError();
+//GCode.M_Reset();
+eCurrentState := E_MachineState.MACHINESTATE_Reset;]]></ST>
+      </Implementation>
+    </Method>
+    <Method Name="M_ResetPlc" Id="{263aaedf-6aba-4c28-aee5-8436d21c7dff}">
+      <Declaration><![CDATA[METHOD M_ResetPlc : ERRORID
+VAR_INPUT
+END_VAR
+]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[M_ChangeMode(E_MachineMode.MACHINEMODE_Maintenance);
+M_ResetPlc := fbMaintenance.M_ResetPlc();]]></ST>
+      </Implementation>
+    </Method>
+    <Method Name="M_SaveConfig" Id="{574fd786-f42e-4559-9345-3cf4248d6494}">
+      <Declaration><![CDATA[METHOD M_SaveConfig : ERRORID
+VAR_INPUT
+END_VAR
+]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[IF eCurrentMode = E_MachineMode.MACHINEMODE_Config THEN //im Config-Modus?
+	M_SaveConfig := fbConfig.M_Save();
+ELSE
+	M_SaveConfig := E_ErrorIdCmd.ERRORID_WrongMode;	//Error: nicht im Config-Modus
+END_IF]]></ST>
+      </Implementation>
+    </Method>
+    <Method Name="M_SetupAxis" Id="{75e3c7d3-5daf-42dc-8d09-3585ee90a06b}">
+      <Declaration><![CDATA[METHOD M_SetupAxis : ERRORID
+VAR_INPUT
+	refCmdData : REFERENCE TO ST_CmdData;
+END_VAR
+]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[IF eCurrentMode = E_MachineMode.MACHINEMODE_Maintenance THEN
+	M_SetupAxis := fbMaintenance.M_SetupAxis(refCmdData);
+ELSE
+	M_SetupAxis := E_ErrorIdCmd.ERRORID_WrongMode;
+END_IF]]></ST>
+      </Implementation>
+    </Method>
+    <Method Name="M_StopAction" Id="{582fd6c1-1755-4e0f-948a-a3239a6be9fa}">
+      <Declaration><![CDATA[METHOD M_StopAction : ERRORID
+VAR_INPUT
+	nActionId	: UINT;
+END_VAR
+]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[IF eCurrentState = E_MachineState.MACHINESTATE_Error THEN
+	M_StopAction := E_ErrorIdCmd.ERRORID_InvalidState;
+	RETURN;
+END_IF
+
+IF eCurrentMode = E_MachineMode.MACHINEMODE_Manu THEN
+	M_StopAction := fbManu.M_StopAction(nActionId);
+ELSIF eCurrentMode = E_MachineMode.MACHINEMODE_Auto THEN
+	M_StopAction := fbAuto.M_StopAction(nActionId);
+ELSE
+	M_StopAction := E_ErrorIdCmd.ERRORID_WrongMode;
+END_IF
+]]></ST>
+      </Implementation>
+    </Method>
+    <Method Name="M_StopAll" Id="{299b9665-7dd0-4792-b5a8-ce98ef3c38f1}">
+      <Declaration><![CDATA[METHOD M_StopAll
+VAR_INPUT
+END_VAR
+]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[IF eCurrentMode = E_MachineMode.MACHINEMODE_Init THEN
+	fbInit.M_Cancel();	
+ELSIF eCurrentMode = E_MachineMode.MACHINEMODE_Manu THEN
+	fbManu.M_Cancel();
+ELSIF eCurrentMode = E_MachineMode.MACHINEMODE_Auto THEN
+	fbAuto.M_Cancel();
+ELSIF eCurrentMode = E_MachineMode.MACHINEMODE_Maintenance THEN
+	fbMaintenance.M_Cancel();
+END_IF]]></ST>
+      </Implementation>
+    </Method>
+    <Property Name="P_bReadyToUnlock" Id="{99584d5d-d295-4e31-8bf6-17dfbc9442dc}">
+      <Declaration><![CDATA[PROPERTY P_bReadyToUnlock : BOOL]]></Declaration>
+      <Get Name="Get" Id="{542e69db-6b3e-4f24-8d83-099f4e41eef6}">
+        <Declaration><![CDATA[VAR
+END_VAR
+]]></Declaration>
+        <Implementation>
+          <ST><![CDATA[IF eCurrentMode = E_MachineMode.MACHINEMODE_Config THEN
+	P_bReadyToUnlock := TRUE;
+ELSE
+	IF eCurrentState = E_MachineState.MACHINESTATE_Idle OR eCurrentState = E_MachineState.MACHINESTATE_Error THEN
+		P_bReadyToUnlock := TRUE;	
+	END_IF
+END_IF]]></ST>
+        </Implementation>
+      </Get>
+    </Property>
+    <Property Name="P_eCurrentState" Id="{f72275ab-7659-4399-a20c-9c3feeac01eb}">
+      <Declaration><![CDATA[PROPERTY P_eCurrentState : E_MachineState]]></Declaration>
+      <Get Name="Get" Id="{4819c789-f5ef-4ab4-84ef-b8e460140e67}">
+        <Declaration><![CDATA[VAR
+END_VAR
+]]></Declaration>
+        <Implementation>
+          <ST><![CDATA[CASE eCurrentMode OF
+	E_MachineMode.MACHINEMODE_Config:
+		P_eCurrentState := fbConfig.eCurrentState;
+	E_MachineMode.MACHINEMODE_Init:
+		P_eCurrentState := fbInit.eCurrentState;
+	E_MachineMode.MACHINEMODE_Manu:
+		P_eCurrentState := fbManu.eCurrentState;
+	E_MachineMode.MACHINEMODE_SemiAuto:
+		P_eCurrentState := fbSemiAuto.eCurrentState;
+	E_MachineMode.MACHINEMODE_Auto:
+		P_eCurrentState := fbAuto.eCurrentState;
+	E_MachineMode.MACHINEMODE_Maintenance:
+		P_eCurrentState := fbMaintenance.eCurrentState;
+END_CASE]]></ST>
+        </Implementation>
+      </Get>
+    </Property>
+    <LineIds Name="MainDispacher">
+      <LineId Id="212" Count="8" />
+      <LineId Id="245" Count="0" />
+      <LineId Id="222" Count="4" />
+      <LineId Id="246" Count="0" />
+      <LineId Id="228" Count="2" />
+      <LineId Id="5" Count="0" />
+    </LineIds>
+    <LineIds Name="MainDispacher.M_ActivateConfig">
+      <LineId Id="5" Count="0" />
+      <LineId Id="13" Count="0" />
+      <LineId Id="6" Count="0" />
+      <LineId Id="9" Count="0" />
+      <LineId Id="7" Count="0" />
+    </LineIds>
+    <LineIds Name="MainDispacher.M_ChangeMode">
+      <LineId Id="3" Count="22" />
+      <LineId Id="40" Count="5" />
+      <LineId Id="48" Count="0" />
+      <LineId Id="46" Count="0" />
+      <LineId Id="26" Count="9" />
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="MainDispacher.M_CheckSafety">
+      <LineId Id="50" Count="1" />
+      <LineId Id="48" Count="0" />
+    </LineIds>
+    <LineIds Name="MainDispacher.M_CheckSafetyInit">
+      <LineId Id="27" Count="1" />
+      <LineId Id="15" Count="0" />
+      <LineId Id="25" Count="0" />
+      <LineId Id="29" Count="0" />
+      <LineId Id="31" Count="0" />
+      <LineId Id="33" Count="0" />
+      <LineId Id="42" Count="0" />
+      <LineId Id="44" Count="0" />
+      <LineId Id="34" Count="0" />
+      <LineId Id="30" Count="0" />
+      <LineId Id="26" Count="0" />
+      <LineId Id="36" Count="1" />
+      <LineId Id="47" Count="0" />
+      <LineId Id="45" Count="0" />
+      <LineId Id="40" Count="0" />
+      <LineId Id="46" Count="0" />
+      <LineId Id="39" Count="0" />
+      <LineId Id="35" Count="0" />
+      <LineId Id="18" Count="0" />
+      <LineId Id="50" Count="1" />
+      <LineId Id="48" Count="1" />
+      <LineId Id="10" Count="0" />
+      <LineId Id="5" Count="0" />
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="MainDispacher.M_ContinueAction">
+      <LineId Id="3" Count="10" />
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="MainDispacher.M_DeleteConfig">
+      <LineId Id="5" Count="0" />
+      <LineId Id="8" Count="0" />
+      <LineId Id="6" Count="0" />
+      <LineId Id="9" Count="0" />
+      <LineId Id="7" Count="0" />
+    </LineIds>
+    <LineIds Name="MainDispacher.M_DeleteGCodeFiles">
+      <LineId Id="5" Count="0" />
+    </LineIds>
+    <LineIds Name="MainDispacher.M_DeviceFirmwUpdate">
+      <LineId Id="5" Count="0" />
+    </LineIds>
+    <LineIds Name="MainDispacher.M_ExeAction">
+      <LineId Id="1506" Count="166" />
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="MainDispacher.M_ForceError">
+      <LineId Id="5" Count="0" />
+      <LineId Id="9" Count="0" />
+    </LineIds>
+    <LineIds Name="MainDispacher.M_PauseAction">
+      <LineId Id="3" Count="8" />
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="MainDispacher.M_ResetError">
+      <LineId Id="3" Count="6" />
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="MainDispacher.M_ResetPlc">
+      <LineId Id="5" Count="1" />
+    </LineIds>
+    <LineIds Name="MainDispacher.M_SaveConfig">
+      <LineId Id="5" Count="0" />
+      <LineId Id="8" Count="0" />
+      <LineId Id="6" Count="0" />
+      <LineId Id="9" Count="0" />
+      <LineId Id="7" Count="0" />
+    </LineIds>
+    <LineIds Name="MainDispacher.M_SetupAxis">
+      <LineId Id="5" Count="0" />
+      <LineId Id="9" Count="0" />
+      <LineId Id="7" Count="0" />
+      <LineId Id="10" Count="0" />
+      <LineId Id="8" Count="0" />
+    </LineIds>
+    <LineIds Name="MainDispacher.M_StopAction">
+      <LineId Id="3" Count="11" />
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="MainDispacher.M_StopAll">
+      <LineId Id="3" Count="7" />
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="MainDispacher.P_bReadyToUnlock.Get">
+      <LineId Id="3" Count="5" />
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="MainDispacher.P_eCurrentState.Get">
+      <LineId Id="3" Count="12" />
+      <LineId Id="2" Count="0" />
+    </LineIds>
+  </POU>
+</TcPlcObject>

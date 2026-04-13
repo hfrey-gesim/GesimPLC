@@ -1,0 +1,112 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<TcPlcObject Version="1.1.0.1" ProductVersion="3.1.4020.12">
+  <POU Name="FB_ObjCollectionNode" Id="{2bc56e7d-6c07-4680-9002-db755e53a932}" SpecialFunc="None">
+    <Declaration><![CDATA[{attribute 'enable_dynamic_creation'}
+FUNCTION_BLOCK FB_ObjCollectionNode
+VAR_INPUT
+	pPrev : POINTER TO FB_ObjCollectionNode;
+	pNext : POINTER TO FB_ObjCollectionNode;
+END_VAR
+VAR_OUTPUT
+	nodes : FB_ObjCollection(THIS);
+	pOwnerColl : POINTER TO FB_ObjCollection;
+END_VAR
+VAR
+	pObject : POINTER TO FB_Object;
+END_VAR
+]]></Declaration>
+    <Implementation>
+      <ST><![CDATA[//Ist ein einzelnes Item einer Collection
+//hat einen Vorgänger, Nachfolger, Parent(Collection), Nodes(Collection)]]></ST>
+    </Implementation>
+    <Property Name="P_pOwnerColl" Id="{3190258e-a26e-4ebb-bae9-3937e49ae072}">
+      <Declaration><![CDATA[PROPERTY P_pOwnerColl : POINTER TO FB_ObjCollection]]></Declaration>
+      <Set Name="Set" Id="{890aadd1-58b7-4028-9a09-0ebbb838109f}">
+        <Declaration><![CDATA[VAR
+END_VAR
+]]></Declaration>
+        <Implementation>
+          <ST><![CDATA[pOwnerColl := P_pOwnerColl;]]></ST>
+        </Implementation>
+      </Set>
+      <Get Name="Get" Id="{b169cfca-f17e-4a81-978a-18dd6df75813}">
+        <Declaration><![CDATA[VAR
+END_VAR
+]]></Declaration>
+        <Implementation>
+          <ST><![CDATA[P_pOwnerColl := pOwnerColl;]]></ST>
+        </Implementation>
+      </Get>
+    </Property>
+    <Property Name="P_pObject" Id="{80e466ae-88ce-4c9e-b796-bff6ff1c21a6}">
+      <Declaration><![CDATA[PROPERTY P_pObject : POINTER TO FB_Object]]></Declaration>
+      <Get Name="Get" Id="{2d2308b8-a976-4ca9-b742-8e8760b155d8}">
+        <Declaration><![CDATA[VAR
+END_VAR
+]]></Declaration>
+        <Implementation>
+          <ST><![CDATA[P_pObject := pObject;]]></ST>
+        </Implementation>
+      </Get>
+      <Set Name="Set" Id="{8d93fdd4-5a3f-46b4-8b76-242edce93df7}">
+        <Declaration><![CDATA[VAR
+END_VAR
+]]></Declaration>
+        <Implementation>
+          <ST><![CDATA[pObject := P_pObject;]]></ST>
+        </Implementation>
+      </Set>
+    </Property>
+    <Method Name="FB_init" Id="{af2586f4-5f95-4e36-b2b1-11c379b61c18}">
+      <Declaration><![CDATA[METHOD FB_init : BOOL
+VAR_INPUT
+	bInitRetains : BOOL; // if TRUE, the retain variables are initialized (warm start / cold start)
+	bInCopyCode : BOOL;  // if TRUE, the instance afterwards gets moved into the copy code (online change)
+	pOwnerColl : POINTER TO FB_ObjCollection;
+END_VAR
+]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[THIS^.pOwnerColl := pOwnerColl;]]></ST>
+      </Implementation>
+    </Method>
+    <Method Name="M_GetLevel" Id="{e8dfeabe-9490-4db1-8f7b-8a7fa471b5bb}">
+      <Declaration><![CDATA[METHOD M_GetLevel : UINT
+VAR_INPUT
+	nStartLevel : UINT;
+END_VAR]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[IF pOwnerColl^.pOwnerNode > 0 THEN
+	nStartLevel := nStartLevel + 1;
+	M_GetLevel := pOwnerColl^.pOwnerNode^.M_GetLevel(nStartLevel);
+ELSE
+	M_GetLevel := nStartLevel;
+END_IF]]></ST>
+      </Implementation>
+    </Method>
+    <LineIds Name="FB_ObjCollectionNode">
+      <LineId Id="9" Count="1" />
+    </LineIds>
+    <LineIds Name="FB_ObjCollectionNode.P_pOwnerColl.Set">
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="FB_ObjCollectionNode.P_pOwnerColl.Get">
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="FB_ObjCollectionNode.P_pObject.Get">
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="FB_ObjCollectionNode.P_pObject.Set">
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="FB_ObjCollectionNode.FB_init">
+      <LineId Id="7" Count="0" />
+    </LineIds>
+    <LineIds Name="FB_ObjCollectionNode.M_GetLevel">
+      <LineId Id="10" Count="0" />
+      <LineId Id="7" Count="0" />
+      <LineId Id="11" Count="1" />
+      <LineId Id="8" Count="0" />
+      <LineId Id="5" Count="0" />
+    </LineIds>
+  </POU>
+</TcPlcObject>

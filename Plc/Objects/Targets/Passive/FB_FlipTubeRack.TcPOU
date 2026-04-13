@@ -1,0 +1,404 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<TcPlcObject Version="1.1.0.1" ProductVersion="3.1.4022.18">
+  <POU Name="FB_FlipTubeRack" Id="{c2c72884-3dbf-4b7d-a447-a0ca028020e7}" SpecialFunc="None">
+    <Declaration><![CDATA[FUNCTION_BLOCK FB_FlipTubeRack EXTENDS FB_Rack
+
+VAR
+	stOpenStartPos : ST_3DPoint;
+	nOpenMove1DistZ : DINT;
+	nOpenMove2DistZ : DINT;
+	nOpenMove3DistY : DINT;
+	nOpenMove4DistX : DINT;
+	nOpenMove5DistZ : DINT;
+	stCloseStartPos : ST_3DPoint;
+	nCloseMove1DistX : DINT;
+	nCloseMove2DistZ : DINT;
+END_VAR
+
+]]></Declaration>
+    <Implementation>
+      <ST><![CDATA[]]></ST>
+    </Implementation>
+    <Method Name="FB_init" Id="{4ff2cfb8-7aba-4bcf-9059-10ac72601809}">
+      <Declaration><![CDATA[METHOD FB_init : BOOL
+VAR_INPUT
+	bInitRetains : BOOL; // if TRUE, the retain variables are initialized (warm start / cold start)
+	bInCopyCode : BOOL;  // if TRUE, the instance afterwards gets moved into the copy code (online change)
+END_VAR
+]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[eObjectType := E_ObjectType.OBJECTTYPE_FlipTubeRack;
+eObjectGroup := E_ObjectGroup.OBJECTGROUP_Target OR E_ObjectGroup.OBJECTGROUP_Rack;]]></ST>
+      </Implementation>
+    </Method>
+    <Method Name="M_AddChild" Id="{41111fe4-6735-4baf-9b86-0424f7aa85be}">
+      <Declaration><![CDATA[METHOD M_AddChild : ERRORID
+VAR_INPUT
+	pObject	: POINTER TO FB_Object;
+	nSlotNr	: UINT;
+	nIndex 	: INT;
+END_VAR
+]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[//Kann folgende Objekte aufnehmen:
+//Point, Fliptubes
+IF pObject > 0 THEN
+	IF pObject^.P_eObjectType = E_ObjectType.OBJECTTYPE_Point THEN
+		SUPER^.M_AddChild(pObject,nSlotNr,nIndex);
+	ELSIF pObject^.P_eObjectType = E_ObjectType.OBJECTTYPE_FlipTube THEN
+		//darf nur in ein Slot
+		IF nSlotNr > 0 THEN
+			SUPER^.M_AddChild(pObject,nSlotNr,nIndex);
+		ELSE
+			M_AddChild := E_ErrorIdObjMgmt.ERRORID_InvalidSlotNumber;	
+		END_IF
+	ELSE
+		M_AddChild := E_ErrorIdObjMgmt.ERRORID_InvalidParentObject;
+	END_IF
+ELSE
+	M_AddChild := E_ErrorIdObjMgmt.ERRORID_InvalidParentObject;
+END_IF]]></ST>
+      </Implementation>
+    </Method>
+    <Method Name="M_CheckAction" Id="{9b964fe3-18d3-4ce8-8dda-d5ddf3d48b8b}">
+      <Declaration><![CDATA[METHOD M_CheckAction : ERRORID
+VAR_INPUT
+	refActionData 	: REFERENCE TO ST_ActionData;
+	pCorrelObject	: POINTER TO FB_Object;
+END_VAR
+
+VAR
+	pSlot : POINTER TO FB_PieceSlot;
+	pFlipTube : POINTER TO FB_FlipTube;
+	pMzTool : POINTER TO FB_MzTool;
+END_VAR]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[IF refActionData.eAction = E_Action.ACTION_OpenCloseFlipTube THEN
+	pSlot := super^.M_GetSlot(DINT_TO_UINT(refActionData.aParams[1]));
+	IF pSlot = 0 THEN
+		M_CheckAction := E_ErrorIdCmd.ERRORID_InvalidTargetSlot;
+	ELSE
+		//Check, ob FlipTube in Slot
+		pFlipTube := pSlot^.P_pPiece;
+		IF pFlipTube = 0 THEN
+			M_CheckAction := E_ErrorIdCmd.ERRORID_NoPieceInSlot;
+		ELSE
+			//Wenn geöffnet werden soll, dann muss FlipTube unbedingt geschlosssen sein
+			//anders ist es beim Schließen, hier kann Schließen wiederholt werden, fall FlipTube nicht richtig geschlossen
+			IF refActionData.aParams[2] = 0 THEN //Open
+				IF pFlipTube^.P_bIsOpen THEN
+					M_CheckAction := E_ErrorIdCmd.ERRORID_FlipTubeAlreadyOpen;
+				END_IF
+			END_IF			
+		END_IF
+	END_IF
+ELSIF refActionData.eAction = E_Action.ACTION_InsertTool THEN
+	pSlot := super^.M_GetSlot(DINT_TO_UINT(refActionData.aParams[2]));
+	IF pSlot = 0 THEN
+		M_CheckAction := E_ErrorIdCmd.ERRORID_InvalidTargetSlot;
+	ELSE
+		//Check, ob FlipTube in Slot
+		pFlipTube := pSlot^.P_pPiece;
+		IF pFlipTube = 0 THEN
+			M_CheckAction := E_ErrorIdCmd.ERRORID_NoPieceInSlot;
+		ELSE
+		//Tube muss offen sein
+			IF NOT pFlipTube^.P_bIsOpen THEN
+				M_CheckAction := E_ErrorIdCmd.ERRORID_FlipTubeNotOpen;
+			END_IF
+		END_IF
+	END_IF
+ELSE
+	M_CheckAction := SUPER^.M_CheckAction(refActionData, pCorrelObject);
+END_IF]]></ST>
+      </Implementation>
+    </Method>
+    <Method Name="M_GetAllProps" Id="{0d216a7e-1832-45d9-ad1a-9c44b239b0cf}">
+      <Declaration><![CDATA[METHOD M_GetAllProps : ERRORID
+VAR_INPUT
+	refCmdData : REFERENCE TO  ST_CmdData;
+END_VAR
+
+VAR
+END_VAR]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[SUPER^.M_GetAllProps(refCmdData);
+
+nCurrentPropIndex := nCurrentPropIndex + 1;
+refCmdData.n32Data[nCurrentPropIndex] := REAL_TO_DINT(stOpenStartPos.X);
+nCurrentPropIndex := nCurrentPropIndex + 1;
+refCmdData.n32Data[nCurrentPropIndex] := REAL_TO_DINT(stOpenStartPos.Y);
+nCurrentPropIndex := nCurrentPropIndex + 1;
+refCmdData.n32Data[nCurrentPropIndex] := REAL_TO_DINT(stOpenStartPos.Z);
+nCurrentPropIndex := nCurrentPropIndex + 1;
+refCmdData.n32Data[nCurrentPropIndex] := nOpenMove1DistZ;
+nCurrentPropIndex := nCurrentPropIndex + 1;
+refCmdData.n32Data[nCurrentPropIndex] := nOpenMove2DistZ;
+nCurrentPropIndex := nCurrentPropIndex + 1;
+refCmdData.n32Data[nCurrentPropIndex] := nOpenMove3DistY;
+nCurrentPropIndex := nCurrentPropIndex + 1;
+refCmdData.n32Data[nCurrentPropIndex] := nOpenMove4DistX;
+nCurrentPropIndex := nCurrentPropIndex + 1;
+refCmdData.n32Data[nCurrentPropIndex] := nOpenMove5DistZ;
+nCurrentPropIndex := nCurrentPropIndex + 1;
+refCmdData.n32Data[nCurrentPropIndex] := REAL_TO_DINT(stCloseStartPos.X);
+nCurrentPropIndex := nCurrentPropIndex + 1;
+refCmdData.n32Data[nCurrentPropIndex] := REAL_TO_DINT(stCloseStartPos.Y);
+nCurrentPropIndex := nCurrentPropIndex + 1;
+refCmdData.n32Data[nCurrentPropIndex] := REAL_TO_DINT(stCloseStartPos.Z);
+nCurrentPropIndex := nCurrentPropIndex + 1;
+refCmdData.n32Data[nCurrentPropIndex] := nCloseMove1DistX;
+nCurrentPropIndex := nCurrentPropIndex + 1;
+refCmdData.n32Data[nCurrentPropIndex] := nCloseMove2DistZ;]]></ST>
+      </Implementation>
+    </Method>
+    <Method Name="M_SetAllProps" Id="{736b2c54-b061-4f12-a07b-3720d7ffc49a}">
+      <Declaration><![CDATA[METHOD M_SetAllProps : ERRORID
+VAR_INPUT
+	refCmdData : REFERENCE TO  ST_CmdData;
+END_VAR
+
+VAR
+END_VAR
+]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[M_SetAllProps := SUPER^.M_SetAllProps(refCmdData);
+
+IF M_SetAllProps > 0 THEN
+	RETURN;
+END_IF
+
+nCurrentPropIndex := nCurrentPropIndex + 1;
+nSpecPropIndex := nCurrentPropIndex;
+stOpenStartPos.X := DINT_TO_REAL(refCmdData.n32Data[nCurrentPropIndex]);
+nCurrentPropIndex := nCurrentPropIndex + 1;
+stOpenStartPos.Y := DINT_TO_REAL(refCmdData.n32Data[nCurrentPropIndex]);
+nCurrentPropIndex := nCurrentPropIndex + 1;
+stOpenStartPos.Z := DINT_TO_REAL(refCmdData.n32Data[nCurrentPropIndex]);
+nCurrentPropIndex := nCurrentPropIndex + 1;
+nOpenMove1DistZ := refCmdData.n32Data[nCurrentPropIndex];
+nCurrentPropIndex := nCurrentPropIndex + 1;
+nOpenMove2DistZ := refCmdData.n32Data[nCurrentPropIndex];
+nCurrentPropIndex := nCurrentPropIndex + 1;
+nOpenMove3DistY := refCmdData.n32Data[nCurrentPropIndex];
+nCurrentPropIndex := nCurrentPropIndex + 1;
+nOpenMove4DistX := refCmdData.n32Data[nCurrentPropIndex];
+nCurrentPropIndex := nCurrentPropIndex + 1;
+nOpenMove5DistZ := refCmdData.n32Data[nCurrentPropIndex];
+nCurrentPropIndex := nCurrentPropIndex + 1;
+stCloseStartPos.X := DINT_TO_REAL(refCmdData.n32Data[nCurrentPropIndex]);
+nCurrentPropIndex := nCurrentPropIndex + 1;
+stCloseStartPos.Y := DINT_TO_REAL(refCmdData.n32Data[nCurrentPropIndex]);
+nCurrentPropIndex := nCurrentPropIndex + 1;
+stCloseStartPos.Z := DINT_TO_REAL(refCmdData.n32Data[nCurrentPropIndex]);
+nCurrentPropIndex := nCurrentPropIndex + 1;
+nCloseMove1DistX := refCmdData.n32Data[nCurrentPropIndex];
+nCurrentPropIndex := nCurrentPropIndex + 1;
+nCloseMove2DistZ := refCmdData.n32Data[nCurrentPropIndex];
+nNoOfProps := nCurrentPropIndex + 1;]]></ST>
+      </Implementation>
+    </Method>
+    <Method Name="M_SetSingleProp" Id="{925fe215-2ca2-448a-ba05-f7a09f4a49e2}">
+      <Declaration><![CDATA[METHOD M_SetSingleProp : ERRORID
+VAR_INPUT
+	refCmdData : REFERENCE TO  ST_CmdData;
+END_VAR
+]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[IF nSpecPropIndex = refCmdData.aHeader[1] THEN
+	stOpenStartPos.X := DINT_TO_REAL(refCmdData.n32Data[0]);
+ELSIF (nSpecPropIndex + 1) = refCmdData.aHeader[1] THEN
+	stOpenStartPos.Y := DINT_TO_REAL(refCmdData.n32Data[0]);
+ELSIF (nSpecPropIndex + 2) = refCmdData.aHeader[1] THEN
+	stOpenStartPos.Z := DINT_TO_REAL(refCmdData.n32Data[0]);
+ELSIF (nSpecPropIndex + 3) = refCmdData.aHeader[1] THEN
+	nOpenMove1DistZ := refCmdData.n32Data[0];
+ELSIF (nSpecPropIndex + 4) = refCmdData.aHeader[1] THEN
+	nOpenMove2DistZ := refCmdData.n32Data[0];
+ELSIF (nSpecPropIndex + 5) = refCmdData.aHeader[1] THEN
+	nOpenMove3DistY := refCmdData.n32Data[0];
+ELSIF (nSpecPropIndex + 6) = refCmdData.aHeader[1] THEN
+	nOpenMove4DistX := refCmdData.n32Data[0];
+ELSIF (nSpecPropIndex + 7) = refCmdData.aHeader[1] THEN
+	nOpenMove5DistZ := refCmdData.n32Data[0];
+ELSIF (nSpecPropIndex + 8) = refCmdData.aHeader[1] THEN
+	stCloseStartPos.X := DINT_TO_REAL(refCmdData.n32Data[0]);
+ELSIF (nSpecPropIndex + 9) = refCmdData.aHeader[1] THEN
+	stCloseStartPos.Y := DINT_TO_REAL(refCmdData.n32Data[0]);
+ELSIF (nSpecPropIndex + 10) = refCmdData.aHeader[1] THEN
+	stCloseStartPos.Z := DINT_TO_REAL(refCmdData.n32Data[0]);
+ELSIF (nSpecPropIndex + 11) = refCmdData.aHeader[1] THEN
+	nCloseMove1DistX := refCmdData.n32Data[0];
+ELSIF (nSpecPropIndex + 12) = refCmdData.aHeader[1] THEN
+	nCloseMove2DistZ := refCmdData.n32Data[0];
+ELSE
+	M_SetSingleProp := SUPER^.M_SetSingleProp(refCmdData);
+END_IF]]></ST>
+      </Implementation>
+    </Method>
+    <Property Name="P_nCloseMove1DistX" Id="{cad04fa8-217e-4b7c-88bd-86ed76c4c9c5}">
+      <Declaration><![CDATA[PROPERTY P_nCloseMove1DistX : DINT]]></Declaration>
+      <Get Name="Get" Id="{66b4fe6d-431f-42f0-a559-70dc5ef58e92}">
+        <Declaration><![CDATA[VAR
+END_VAR
+]]></Declaration>
+        <Implementation>
+          <ST><![CDATA[P_nCloseMove1DistX := nCloseMove1DistX;]]></ST>
+        </Implementation>
+      </Get>
+    </Property>
+    <Property Name="P_nCloseMove2DistZ" Id="{8dffbac6-c6da-489c-9655-576a59693f66}">
+      <Declaration><![CDATA[PROPERTY P_nCloseMove2DistZ : DINT]]></Declaration>
+      <Get Name="Get" Id="{11c2a002-8002-46cf-ac9d-13ce18cac0ec}">
+        <Declaration><![CDATA[VAR
+END_VAR
+]]></Declaration>
+        <Implementation>
+          <ST><![CDATA[P_nCloseMove2DistZ := nCloseMove2DistZ;]]></ST>
+        </Implementation>
+      </Get>
+    </Property>
+    <Property Name="P_nOpenMove1DistZ" Id="{130247de-f818-4171-bf7e-5068f067beb6}">
+      <Declaration><![CDATA[PROPERTY P_nOpenMove1DistZ : DINT]]></Declaration>
+      <Get Name="Get" Id="{33219a48-d3a3-4fe8-b169-a1f2dedfdaea}">
+        <Declaration><![CDATA[VAR
+END_VAR
+]]></Declaration>
+        <Implementation>
+          <ST><![CDATA[P_nOpenMove1DistZ := nOpenMove1DistZ;]]></ST>
+        </Implementation>
+      </Get>
+    </Property>
+    <Property Name="P_nOpenMove2DistZ" Id="{b0e8d297-7fef-4dfe-911c-fc80c9fb7f4e}">
+      <Declaration><![CDATA[PROPERTY P_nOpenMove2DistZ : DINT]]></Declaration>
+      <Get Name="Get" Id="{8531d29c-2610-4a51-849c-c54bc7eb0249}">
+        <Declaration><![CDATA[VAR
+END_VAR
+]]></Declaration>
+        <Implementation>
+          <ST><![CDATA[P_nOpenMove2DistZ := nOpenMove2DistZ;]]></ST>
+        </Implementation>
+      </Get>
+    </Property>
+    <Property Name="P_nOpenMove3DistY" Id="{bb2fc323-7f23-4176-a221-79376921dc14}">
+      <Declaration><![CDATA[PROPERTY P_nOpenMove3DistY : DINT]]></Declaration>
+      <Get Name="Get" Id="{21a98c62-2888-4a36-a9de-1c5925426a26}">
+        <Declaration><![CDATA[VAR
+END_VAR
+]]></Declaration>
+        <Implementation>
+          <ST><![CDATA[P_nOpenMove3DistY := nOpenMove3DistY;]]></ST>
+        </Implementation>
+      </Get>
+    </Property>
+    <Property Name="P_nOpenMove4DistX" Id="{44cfdf38-5e46-4309-b910-c53497a9b549}">
+      <Declaration><![CDATA[PROPERTY P_nOpenMove4DistX : DINT]]></Declaration>
+      <Get Name="Get" Id="{cd01080a-4c01-4c22-b205-d33d818c382c}">
+        <Declaration><![CDATA[VAR
+END_VAR
+]]></Declaration>
+        <Implementation>
+          <ST><![CDATA[P_nOpenMove4DistX := nOpenMove4DistX;]]></ST>
+        </Implementation>
+      </Get>
+    </Property>
+    <Property Name="P_nOpenMove5DistZ" Id="{0d0a7a4a-276a-42a4-b0ad-c8ac9080f720}">
+      <Declaration><![CDATA[PROPERTY P_nOpenMove5DistZ : DINT]]></Declaration>
+      <Get Name="Get" Id="{629da89b-f658-4923-b79f-9babedad4094}">
+        <Declaration><![CDATA[VAR
+END_VAR
+]]></Declaration>
+        <Implementation>
+          <ST><![CDATA[P_nOpenMove5DistZ := nOpenMove5DistZ;]]></ST>
+        </Implementation>
+      </Get>
+    </Property>
+    <Property Name="P_stCloseStartPos" Id="{8285e3fc-6b1c-4cc4-ad13-122f01bbad9a}">
+      <Declaration><![CDATA[PROPERTY P_stCloseStartPos : ST_3DPoint]]></Declaration>
+      <Get Name="Get" Id="{3890b578-b6ec-454d-bed9-9299e330612a}">
+        <Declaration><![CDATA[VAR
+END_VAR
+]]></Declaration>
+        <Implementation>
+          <ST><![CDATA[P_stCloseStartPos := stCloseStartPos;]]></ST>
+        </Implementation>
+      </Get>
+    </Property>
+    <Property Name="P_stOpenStartPos" Id="{a7a1cef6-9d6c-498f-ba0d-bb494727235e}">
+      <Declaration><![CDATA[PROPERTY P_stOpenStartPos : ST_3DPoint]]></Declaration>
+      <Get Name="Get" Id="{d540bcdd-9290-4c3b-9c26-104db192cfa7}">
+        <Declaration><![CDATA[VAR
+END_VAR
+]]></Declaration>
+        <Implementation>
+          <ST><![CDATA[P_stOpenStartPos := stOpenStartPos;]]></ST>
+        </Implementation>
+      </Get>
+    </Property>
+    <LineIds Name="FB_FlipTubeRack">
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="FB_FlipTubeRack.FB_init">
+      <LineId Id="7" Count="1" />
+    </LineIds>
+    <LineIds Name="FB_FlipTubeRack.M_AddChild">
+      <LineId Id="19" Count="0" />
+      <LineId Id="8" Count="1" />
+      <LineId Id="21" Count="0" />
+      <LineId Id="20" Count="0" />
+      <LineId Id="22" Count="2" />
+      <LineId Id="26" Count="1" />
+      <LineId Id="25" Count="0" />
+      <LineId Id="16" Count="0" />
+      <LineId Id="18" Count="0" />
+      <LineId Id="15" Count="0" />
+      <LineId Id="11" Count="0" />
+      <LineId Id="13" Count="0" />
+      <LineId Id="12" Count="0" />
+      <LineId Id="5" Count="0" />
+    </LineIds>
+    <LineIds Name="FB_FlipTubeRack.M_CheckAction">
+      <LineId Id="3" Count="36" />
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="FB_FlipTubeRack.M_GetAllProps">
+      <LineId Id="3" Count="26" />
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="FB_FlipTubeRack.M_SetAllProps">
+      <LineId Id="3" Count="32" />
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="FB_FlipTubeRack.M_SetSingleProp">
+      <LineId Id="3" Count="27" />
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="FB_FlipTubeRack.P_nCloseMove1DistX.Get">
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="FB_FlipTubeRack.P_nCloseMove2DistZ.Get">
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="FB_FlipTubeRack.P_nOpenMove1DistZ.Get">
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="FB_FlipTubeRack.P_nOpenMove2DistZ.Get">
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="FB_FlipTubeRack.P_nOpenMove3DistY.Get">
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="FB_FlipTubeRack.P_nOpenMove4DistX.Get">
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="FB_FlipTubeRack.P_nOpenMove5DistZ.Get">
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="FB_FlipTubeRack.P_stCloseStartPos.Get">
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="FB_FlipTubeRack.P_stOpenStartPos.Get">
+      <LineId Id="2" Count="0" />
+    </LineIds>
+  </POU>
+</TcPlcObject>

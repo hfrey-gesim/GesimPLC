@@ -1,0 +1,14 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<TcPlcObject Version="1.1.0.1" ProductVersion="3.1.4024.11">
+  <DUT Name="ST_EL70xx_STM_Status" Id="{79033a02-b3d7-47e3-bc8e-682d3d3d53ec}">
+    <Declaration><![CDATA[TYPE ST_EL70xx_STM_Status :
+STRUCT
+	ReadyToEnable 	AT %I* : BIT;
+	Ready 			AT %I* : BIT;
+	Warning 		AT %I* : BIT;
+	Error  			AT %I* : BIT;
+END_STRUCT
+END_TYPE
+]]></Declaration>
+  </DUT>
+</TcPlcObject>

@@ -1,0 +1,150 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<TcPlcObject Version="1.1.0.1" ProductVersion="3.1.4020.6">
+  <POU Name="FB_S19Record" Id="{eac72dc2-722d-4db0-ba6c-c98465769762}" SpecialFunc="None">
+    <Declaration><![CDATA[FUNCTION_BLOCK FB_S19Record
+VAR_INPUT
+	pBuffer : POINTER TO ARRAY[1..4700] OF BYTE;
+	nStartIndex : UINT;
+END_VAR
+VAR_OUTPUT
+	nEndIndex 		: UINT;
+	bEndOfBuffer	: BOOL;
+	eState			: E_S19RecordState;
+END_VAR
+VAR
+	nNoOfBytes	: USINT;
+	dwStartAdress : DWORD;
+	nDataPointer : USINT;
+	aData	: ARRAY[0..21] OF BYTE;
+	
+	sHex2		: STRING[2];
+	sHex8		: STRING[8];
+	sCRCData	: STRING[45];
+	nCRC 		: BYTE;
+	i 			: USINT;
+END_VAR
+]]></Declaration>
+    <Implementation>
+      <ST><![CDATA[bEndOfBuffer := FALSE;
+nEndIndex := 0;
+eState := E_S19RecordState.Undefined;
+IF pBuffer = 0 THEN
+	RETURN;
+END_IF
+//Datensatz aus Buffer extrahieren
+//Folgende Resultate sind möglich
+//1.Zeilenumbruch ermittelt
+//2.Zeilenumbruch ermittelt und Ende vom Buffer
+//3.Ende vom Buffer aber kein Zeilenvorschub 'LF'
+nEndIndex := nStartIndex;
+REPEAT
+	nEndIndex := nEndIndex + 1;
+UNTIL (nEndIndex = 4700 OR pBuffer^[nEndIndex] = 10)	//Ende des Buffers oder Zeilenvorschub erreicht (10 = ASCII 'LF')
+END_REPEAT
+
+IF nEndIndex = 4700 THEN
+	bEndOfBuffer := TRUE;
+END_IF
+
+IF pBuffer^[nEndIndex] = 10 THEN //LF - vollständiger Datensatz ermittelt -> verifizieren
+	MEMCPY(ADR(sHex2),ADR(pBuffer^[nStartIndex]),2);	//Linetype emitteln
+	IF sHex2 = 'S3' THEN
+		//Anzahl der Bytes extrahieren (Zeichen 3+4)
+		MEMCPY(ADR(sHex2),ADR(pBuffer^[nStartIndex + 2]),2);
+		HEXSTR_TO_DATA(sHex2,ADR(nNoOfBytes),1);
+		//Checksumme bilden
+		MEMCPY(ADR(sCRCData),ADR(pBuffer^[nStartIndex + 2]),44); //Die Checksumme wird ab Zeichen 3 gebildet
+		HEXSTR_TO_DATA(sCRCData,ADR(aData),22);
+		nCRC := 0;
+		FOR i:= 0 TO nNoOfBytes - 1 BY 1 DO
+			nCRC := nCRC + aData[i];
+		END_FOR
+		nCRC := NOT nCRC;
+		//Checksumme prüfen
+		IF nCRC = aData[nNoOfBytes] THEN
+			MEMCPY(ADR(sHex8),ADR(pBuffer^[nStartIndex + 4]),8); //StartAdresse Zeichen 5-12
+			HEXSTR_TO_DATA(sHex8,ADR(aData),4);
+			dwStartAdress := SHL(BYTE_TO_DWORD(aData[0]),24);
+			dwStartAdress := dwStartAdress + SHL(BYTE_TO_DWORD(aData[1]),16);
+			dwStartAdress := dwStartAdress + SHL(BYTE_TO_DWORD(aData[2]),8);
+			dwStartAdress := dwStartAdress + aData[3];
+			nDataPointer := 0;
+			eState := E_S19RecordState.Valid;
+		ELSE
+			eState := E_S19RecordState.CRC_Error;
+		END_IF
+	ELSIF sHex2 = 'S7' THEN
+		eState := E_S19RecordState.BlockEnd;
+	ELSE
+		eState := E_S19RecordState.Line_Error;
+	END_IF
+ELSE
+	eState := E_S19RecordState.NotComplete;
+END_IF]]></ST>
+    </Implementation>
+    <Property Name="P_nNoOfDataBytes" Id="{1573102b-7641-44dc-9a8a-7a4e18772ac1}">
+      <Declaration><![CDATA[PROPERTY P_nNoOfDataBytes : USINT]]></Declaration>
+      <Get Name="Get" Id="{b16a6a60-08c1-47d9-9444-201d96420057}">
+        <Declaration><![CDATA[VAR
+END_VAR
+]]></Declaration>
+        <Implementation>
+          <ST><![CDATA[//Reine Anzahl der Datanbytes (ohne Adresse usw)
+P_nNoOfDataBytes := nNoOfBytes - 5;]]></ST>
+        </Implementation>
+      </Get>
+    </Property>
+    <Method Name="M_Clear" Id="{9f9819fa-3862-4766-97d2-76e4b2cac2d4}">
+      <Declaration><![CDATA[METHOD M_Clear
+VAR_INPUT
+END_VAR
+]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[bEndOfBuffer := FALSE;
+nEndIndex := 0;
+eState := E_S19RecordState.Undefined;
+nNoOfBytes := 0;
+dwStartAdress := 0;
+nDataPointer := 0;]]></ST>
+      </Implementation>
+    </Method>
+    <Method Name="M_GetDataByte" Id="{acc8ecb3-fb1c-457e-91f4-2361777f0ae8}">
+      <Declaration><![CDATA[METHOD M_GetDataByte : BYTE
+VAR_INPUT
+END_VAR
+VAR_OUTPUT
+END_VAR
+VAR
+	sHex2	: STRING[2];
+	nByte	: BYTE;
+END_VAR
+]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[//Die Datenbytes beginne ab Zeichen 13
+//es können maximal 16 Datenbytes sein
+IF pBuffer > 0 THEN
+	MEMCPY(ADR(sHex2),ADR(pBuffer^[nStartIndex + 12 + (nDataPointer * 2)]),2);
+	HEXSTR_TO_DATA(sHex2,ADR(nByte),1);
+	nDataPointer := nDataPointer + 1;
+	M_GetDataByte := nByte;
+END_IF
+]]></ST>
+      </Implementation>
+    </Method>
+    <Property Name="P_dwAdress" Id="{ee9262c2-61cc-4ba6-a3b0-eb162b16b01a}">
+      <Declaration><![CDATA[PROPERTY P_dwAdress : DWORD]]></Declaration>
+      <Get Name="Get" Id="{14d18ebd-dad8-4fba-8eed-ec407730f2c7}">
+        <Declaration><![CDATA[VAR
+END_VAR
+]]></Declaration>
+        <Implementation>
+          <ST><![CDATA[IF nDataPointer <= (nNoOfBytes - 6) THEN
+	P_dwAdress := dwStartAdress + nDataPointer;
+END_IF
+
+]]></ST>
+        </Implementation>
+      </Get>
+    </Property>
+  </POU>
+</TcPlcObject>

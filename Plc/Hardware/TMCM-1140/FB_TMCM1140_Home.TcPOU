@@ -1,0 +1,237 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<TcPlcObject Version="1.1.0.1" ProductVersion="3.1.4024.11">
+  <POU Name="FB_TMCM1140_Home" Id="{59590c01-bf8c-45b7-b54f-93e38fd147c4}" SpecialFunc="None">
+    <Declaration><![CDATA[FUNCTION_BLOCK FB_TMCM1140_Home
+VAR_INPUT
+	bExecute	: BOOL;
+	bStop		: BOOL;
+END_VAR
+VAR_OUTPUT
+	bBusy 		: BOOL;
+	bError 		: BOOL;
+	nErrorId 	: ERRORID;	
+END_VAR
+VAR_IN_OUT
+	pHwRef : POINTER TO FB_HwRefTMCM1140;
+END_VAR
+VAR
+	nState 			: USINT;
+	nStateNext 		: USINT;
+	bDigiout0 		: BOOL;
+	bDigiout1 		: BOOL;
+	fbSdoWrite 		: FB_SDO_WRITE;
+	eCurrentHomingState : E_CoDS402HomingState;
+END_VAR
+]]></Declaration>
+    <Implementation>
+      <ST><![CDATA[IF bExecute THEN
+	CASE nState OF
+		0:	//Set Fast homing speed
+			bBusy := TRUE;
+			fbSdoWrite.nIndex := 16#6099;
+			fbSdoWrite.nSubIndex := 1;
+			fbSdoWrite.nDataLength := 4;
+			fbSdoWrite.nData := pHwRef^.M_RealToInternSpeed(pHwRef^.P_nFastHomingSpeed);
+			nState := 40;
+			nStateNext := 1;
+			
+		1:	//Set Slow homing speed
+			fbSdoWrite.nIndex := 16#6099;
+			fbSdoWrite.nSubIndex := 2;
+			fbSdoWrite.nDataLength := 4;
+			fbSdoWrite.nData := pHwRef^.M_RealToInternSpeed(pHwRef^.P_nSlowHomingSpeed);
+			nState := 40;
+			nStateNext := 2;			
+
+		2:	//Set homing methode
+			fbSdoWrite.nIndex := 16#6098;
+			fbSdoWrite.nSubIndex := 0;
+			fbSdoWrite.nDataLength := 1;
+			fbSdoWrite.nData := pHwRef^.P_eHomingMethode;
+			nState := 40;
+			nStateNext := 3;
+			
+		3: 	//Write home offset
+			fbSdoWrite.nIndex := 16#607C;
+			fbSdoWrite.nSubIndex := 0;
+			fbSdoWrite.nDataLength := 4;
+			fbSdoWrite.nData := pHwRef^.M_RealToInternPos(pHwRef^.P_nRefPos);
+			nState := 40;
+			nStateNext := 4;
+			
+		4:	//Write profile speed
+			fbSdoWrite.nIndex := 16#6081;
+			fbSdoWrite.nSubIndex := 0;
+			fbSdoWrite.nDataLength := 4;
+			fbSdoWrite.nData := pHwRef^.M_RealToInternSpeed(pHwRef^.P_nMaxSpeed);
+			nState := 40;
+			nStateNext := 5;
+
+		5:	//Set Mode of operation to "6" (Homing)
+			pHwRef^.nMode := 6; //Homing
+			nState := 6;
+			
+		6:	//Start homing
+			pHwRef^.nControlword := 31;
+			nState := 7;
+			
+		7:	//Wait for State "Homing in process
+			IF pHwRef^.M_GetDS402State() = E_CoDS402States.DS402STATE_OperationEnabled THEN
+				IF bStop THEN
+					pHwRef^.nControlword := 15;
+					nState := 80;
+				ELSE
+					eCurrentHomingState := pHwRef^.M_GetHomingState();
+					CASE eCurrentHomingState OF
+						E_CoDS402HomingState.HomingAttainedButNotReached,
+						E_CoDS402HomingState.HomingError,
+						E_CoDS402HomingState.HomingInteruptedOrNotReached:
+							nErrorId := E_ErrorIdDS402.ERRORID_HomingInterruptedOrNotReached;
+							nState := 99;
+						E_CoDS402HomingState.HomingSuccess:
+							pHwRef^.nControlword := 15;
+							pHwRef^.nMode := 1;	//PP mode
+							pHwRef^.M_SetTargetPos(pHwRef^.P_nHomePos, FALSE);
+							pHwRef^.P_bIsHomed := TRUE;
+							nState := 8;
+					END_CASE
+				END_IF
+			ELSE
+				nErrorId := 43434;
+				nState := 99;
+			END_IF
+			
+		8:	//Move to HomePos
+			pHwRef^.nControlword := 31;
+			nState := 9;
+			
+		9:	//Wait for setpoint acknowledge
+			IF pHwRef^.nStatusword.12 THEN
+				pHwRef^.nControlword := 15;
+				nState := 10;
+			END_IF
+			
+		10:	//Wait for target reached
+			IF pHwRef^.M_GetDS402State() = E_CoDS402States.DS402STATE_OperationEnabled THEN
+				//Das HALT-Bit von von der TMCM1140 nicht unterstützt.
+				//Man kann den Mode auf "0" setzen und dann sollter der Motor auch anhalten
+				IF bStop THEN
+					IF bStop THEN
+						pHwRef^.nMode := 0;
+						nState := 80;
+					END_IF
+				ELSE
+					IF pHwRef^.nStatusword.10 THEN
+						nState := 80;
+					END_IF
+				END_IF
+			ELSE
+				nErrorId := E_ErrorIdDS402.ERRORID_OperationNotEnabled;
+				nState := 99;
+			END_IF
+			
+	END_CASE
+	
+	//Sdo senden
+	IF nState = 40 THEN
+		fbSdoWrite(sADSNetID:= pHwRef^.P_sAdsNetId, nPortNr:= pHwRef^.P_nAdsPort, bExecute:= TRUE);
+		IF NOT fbSdoWrite.bBusy THEN
+			IF fbSdoWrite.bError THEN
+				nErrorId := fbSdoWrite.nAdsErrorId;
+				nState := 99;
+			ELSE
+				nState := nStateNext;
+			END_IF
+			fbSdoWrite(bExecute:= FALSE);
+		END_IF		
+	END_IF
+	
+	IF nState >= 80 THEN
+		bBusy := FALSE;
+		IF nState = 99 THEN
+			bError := TRUE;
+		END_IF
+	END_IF
+
+ELSE
+	bBusy 	:= FALSE;
+	bError 	:= FALSE;
+	bStop 	:= FALSE;
+	nState 	:= 0;
+END_IF]]></ST>
+    </Implementation>
+    <LineIds Name="FB_TMCM1140_Home">
+      <LineId Id="51" Count="0" />
+      <LineId Id="143" Count="1" />
+      <LineId Id="518" Count="0" />
+      <LineId Id="148" Count="0" />
+      <LineId Id="173" Count="5" />
+      <LineId Id="180" Count="0" />
+      <LineId Id="182" Count="4" />
+      <LineId Id="179" Count="0" />
+      <LineId Id="187" Count="1" />
+      <LineId Id="190" Count="5" />
+      <LineId Id="246" Count="1" />
+      <LineId Id="250" Count="4" />
+      <LineId Id="249" Count="0" />
+      <LineId Id="273" Count="1" />
+      <LineId Id="276" Count="5" />
+      <LineId Id="198" Count="0" />
+      <LineId Id="197" Count="0" />
+      <LineId Id="199" Count="0" />
+      <LineId Id="203" Count="0" />
+      <LineId Id="231" Count="1" />
+      <LineId Id="204" Count="0" />
+      <LineId Id="234" Count="1" />
+      <LineId Id="205" Count="0" />
+      <LineId Id="209" Count="0" />
+      <LineId Id="299" Count="1" />
+      <LineId Id="316" Count="0" />
+      <LineId Id="302" Count="0" />
+      <LineId Id="561" Count="0" />
+      <LineId Id="304" Count="3" />
+      <LineId Id="539" Count="0" />
+      <LineId Id="308" Count="3" />
+      <LineId Id="403" Count="0" />
+      <LineId Id="420" Count="0" />
+      <LineId Id="314" Count="1" />
+      <LineId Id="301" Count="0" />
+      <LineId Id="219" Count="1" />
+      <LineId Id="372" Count="0" />
+      <LineId Id="218" Count="0" />
+      <LineId Id="237" Count="1" />
+      <LineId Id="241" Count="1" />
+      <LineId Id="255" Count="1" />
+      <LineId Id="258" Count="1" />
+      <LineId Id="265" Count="0" />
+      <LineId Id="260" Count="0" />
+      <LineId Id="266" Count="0" />
+      <LineId Id="261" Count="1" />
+      <LineId Id="329" Count="1" />
+      <LineId Id="317" Count="0" />
+      <LineId Id="325" Count="3" />
+      <LineId Id="320" Count="0" />
+      <LineId Id="322" Count="2" />
+      <LineId Id="319" Count="0" />
+      <LineId Id="268" Count="0" />
+      <LineId Id="375" Count="1" />
+      <LineId Id="264" Count="0" />
+      <LineId Id="146" Count="0" />
+      <LineId Id="145" Count="0" />
+      <LineId Id="112" Count="0" />
+      <LineId Id="151" Count="9" />
+      <LineId Id="496" Count="0" />
+      <LineId Id="162" Count="2" />
+      <LineId Id="377" Count="0" />
+      <LineId Id="384" Count="3" />
+      <LineId Id="382" Count="0" />
+      <LineId Id="80" Count="0" />
+      <LineId Id="57" Count="0" />
+      <LineId Id="60" Count="0" />
+      <LineId Id="59" Count="0" />
+      <LineId Id="298" Count="0" />
+      <LineId Id="61" Count="0" />
+      <LineId Id="55" Count="0" />
+    </LineIds>
+  </POU>
+</TcPlcObject>

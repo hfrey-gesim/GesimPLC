@@ -1,0 +1,129 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<TcPlcObject Version="1.1.0.1" ProductVersion="3.1.4024.6">
+  <POU Name="FB_SimpleFIFO_PVOID" Id="{dd25e9b3-33f1-42b0-881e-646053e3c0c8}" SpecialFunc="None">
+    <Declaration><![CDATA[FUNCTION_BLOCK FB_SimpleFIFO_PVOID
+VAR_INPUT
+END_VAR
+VAR_OUTPUT
+END_VAR
+VAR
+	aPool 	: ARRAY[0..15] OF PVOID;
+	nList 	: ULINT; //aus diesen 64bit werden jeweils 4bit für einen Eintrag benötigt
+	nCount 	: USINT;
+END_VAR
+]]></Declaration>
+    <Implementation>
+      <ST><![CDATA[//Dieser FB bietet eine schnelle und schlanke FIFO mit maximal 16 Einträgen an.
+]]></ST>
+    </Implementation>
+    <Method Name="M_Add" Id="{1b613430-2bfc-4a9b-ad97-6ea82d0b4c17}">
+      <Declaration><![CDATA[METHOD M_Add : BOOL
+VAR_INPUT
+	pValue : PVOID;
+END_VAR
+
+VAR
+	i : USINT;
+	nFreeIndex : USINT := 255;
+	bAlreadyRegistered : BOOL;
+END_VAR]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[IF pValue = 0 THEN
+	RETURN;
+END_IF
+//Ein bereits registrierten Eintrag nicht nochmal eingetragen.
+//--> Das komplette Array durchlaufen den Index merken, wo was frei ist.
+FOR i := 0 TO 15 BY 1 DO
+	IF aPool[i] = 0 AND nFreeIndex = 255 THEN
+		nFreeIndex := i;
+	ELSIF aPool[i] = pValue THEN //Eintrag bereits vorhanden -> alles abbrechen
+		RETURN;
+	END_IF
+END_FOR
+
+IF nFreeIndex < 255 THEN
+	//Liste um ein Nibble nach links schieben
+	nList := SHL(nList,4);
+	nList := nList OR nFreeIndex;
+	nCount := nCount + 1;
+	aPool[nFreeIndex] := pValue;
+	M_Add := TRUE;
+END_IF]]></ST>
+      </Implementation>
+    </Method>
+    <Method Name="M_GetHead" Id="{cc7e0a27-81e5-43d6-b532-484d864b2381}">
+      <Declaration><![CDATA[METHOD M_GetHead : PVOID
+VAR_INPUT
+END_VAR
+
+VAR
+	nIndex : USINT;
+END_VAR
+]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[IF nCount > 0 THEN
+	nIndex := ULINT_TO_USINT(SHR(nList, (nCount-1)*4));
+	M_GetHead := aPool[nIndex];
+END_IF]]></ST>
+      </Implementation>
+    </Method>
+    <Method Name="M_Remove" Id="{06924a25-25e8-489a-9956-ab2c409667a6}">
+      <Declaration><![CDATA[METHOD M_Remove : BOOL
+VAR_INPUT
+	pValue : PVOID;
+END_VAR
+
+VAR
+	i : USINT;
+	j : USINT;
+	nTemp : ULINT;
+	nShifts : USINT;
+	nFillNibble : ULINT;
+END_VAR]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[IF pValue = 0 THEN
+	RETURN;
+END_IF
+FOR i := 0 TO 15 BY 1 DO
+	IF aPool[i] = pValue THEN
+		//nach Nibble suchen, welches den Index enthält (aber immer innerhalb der nCount-Grenzen	
+		//solange nach rechts verschieben, bis LSN (lowest significat nibble) = i ist
+		//danach wieder nach links verschieben, aber eins weniger
+		FOR j := 0 TO nCount - 1 BY 1 DO
+			nTemp := SHR(nList,((j)*4));
+			IF (nTemp AND 16#F) = i THEN
+				nTemp := SHR(nTemp,4);
+				nTemp := SHL(nTemp,j*4);
+				nShifts := (16-j)*4;
+				nList := nList AND nFillNibble;
+				nList := nList OR nTemp;
+				aPool[i] := 0;
+				nCount := nCount - 1;
+				M_Remove := TRUE;
+				RETURN;
+			END_IF
+			nFillNibble := SHL(nFillNibble,4);
+			nFillNibble := nFillNibble OR 16#F;
+		END_FOR
+	END_IF
+END_FOR]]></ST>
+      </Implementation>
+    </Method>
+    <LineIds Name="FB_SimpleFIFO_PVOID">
+      <LineId Id="3" Count="0" />
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="FB_SimpleFIFO_PVOID.M_Add">
+      <LineId Id="3" Count="19" />
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="FB_SimpleFIFO_PVOID.M_GetHead">
+      <LineId Id="3" Count="2" />
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="FB_SimpleFIFO_PVOID.M_Remove">
+      <LineId Id="3" Count="24" />
+      <LineId Id="2" Count="0" />
+    </LineIds>
+  </POU>
+</TcPlcObject>

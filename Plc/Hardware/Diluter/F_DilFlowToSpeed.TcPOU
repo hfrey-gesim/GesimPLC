@@ -1,0 +1,22 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<TcPlcObject Version="1.1.0.1" ProductVersion="3.1.0.25">
+  <POU Name="F_DilFlowToSpeed" Id="{a7b2c806-b45d-4440-ab80-4830adb7b995}">
+    <Declaration><![CDATA[FUNCTION F_DilFlowToSpeed : DINT
+VAR_INPUT
+	nFlow : DINT; //Flow in 10tel µl/sec
+	nSyringeSize : DINT; //Spritzengröße in µl
+END_VAR
+VAR
+	rFlow : REAL;
+	rSyringe : REAL;
+END_VAR
+]]></Declaration>
+    <Implementation>
+      <ST><![CDATA[rFlow := DINT_TO_REAL(nFlow);
+rSyringe := DINT_TO_REAL(nSyringeSize);
+//Speed wird in Halbsteps/sec angegeben -> 1 voller Hub entspricht 6000 Halbsteps
+F_DilFlowToSpeed := REAL_TO_DINT(rFlow * 6000.0 / rSyringe / 10.0);]]></ST>
+    </Implementation>
+    <ObjectProperties />
+  </POU>
+</TcPlcObject>

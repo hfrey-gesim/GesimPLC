@@ -1,0 +1,74 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<TcPlcObject Version="1.1.0.1" ProductVersion="3.1.4022.10">
+  <GVL Name="GVL_MultiZObjects" Id="{e4e15916-1fa8-4a90-955c-cd282bf3fcf7}">
+    <Declaration><![CDATA[VAR_GLOBAL CONSTANT
+	cForceThrshld 				: ST_CANopenObject:= (nIndex:= 16#2006, nLength:= 2);
+	cForcePos 					: ST_CANopenObject:= (nIndex:= 16#2007, nLength:= 4);
+	cForceVelo 					: ST_CANopenObject:= (nIndex:= 16#2008, nLength:= 2);
+	cCurrentPos 				: ST_CANopenObject:= (nIndex:= 16#2009, nLength:= 4);
+	cGPInputMode 				: ST_CANopenObject:= (nIndex:= 16#2100, nLength:= 1);
+	cAnaInTrigg 				: ST_CANopenObject:= (nIndex:= 16#2101, nLength:= 1);
+	cAnaInLimit					: ST_CANopenObject:= (nIndex:= 16#2102, nLength:= 2);
+	cAnaInDelta					: ST_CANopenObject:= (nIndex:= 16#2003, nLength:= 2);
+	cPwmEnable 					: ST_CANopenObject:= (nIndex:= 16#2200, nLength:= 1);
+	cPwmValue 					: ST_CANopenObject:= (nIndex:= 16#2201, nLength:= 2);
+	cAnaOutEnable 				: ST_CANopenObject:= (nIndex:= 16#2200, nLength:= 2);
+	cAnaOutValue				: ST_CANopenObject:= (nIndex:= 16#2201, nLength:= 2);
+	cHardVersion 				: ST_CANopenObject:= (nIndex:= 16#1009, nLength:= 15);
+	cSoftVersion 				: ST_CANopenObject:= (nIndex:= 16#100A, nLength:= 15);
+	cTMCVersion 				: ST_CANopenObject:= (nIndex:= 16#2010, nLength:= 4);
+	cZSensOffset 				: ST_CANopenObject:= (nIndex:= 16#2424, nLength:= 4);
+	cToolEnable 				: ST_CANopenObject:= (nIndex:= 16#2400, nLength:= 1);
+	cToolType 					: ST_CANopenObject:= (nIndex:= 16#2401, nLength:= 1);
+	cHeaterExist 				: ST_CANopenObject:= (nIndex:= 16#2402, nLength:= 1);
+	cTempSetPoint 				: ST_CANopenObject:= (nIndex:= 16#2410, nLength:= 2);
+	cTempSetPoint2 				: ST_CANopenObject:= (nIndex:= 16#2412, nLength:= 2);
+	cTempSetPoint3 				: ST_CANopenObject:= (nIndex:= 16#2414, nLength:= 2);
+	cHeatingOn 					: ST_CANopenObject:= (nIndex:= 16#2404, nLength:= 1);
+	cPiezoPeriod 				: ST_CANopenObject:= (nIndex:= 16#2420, nLength:= 2);
+	cPiezoPulse 				: ST_CANopenObject:= (nIndex:= 16#2421, nLength:= 2);
+	cPiezoDrops 				: ST_CANopenObject:= (nIndex:= 16#2422, nLength:= 2);
+	cPiezoVoltage 				: ST_CANopenObject:= (nIndex:= 16#2423, nLength:= 2);
+	cPiezoHoldVoltage 			: ST_CANopenObject:= (nIndex:= 16#2426, nLength:= 2);
+	cPiezoPrePeakTime 			: ST_CANopenObject:= (nIndex:= 16#2425, nLength:= 2);
+	cPiezoStrobTest				: ST_CANopenObject:= (nIndex:= 16#2300, nSubIndex:= 1, nLength:= 1);
+	cPiezoCamDelay 				: ST_CANopenObject:= (nIndex:= 16#2300, nSubIndex:= 2, nLength:= 2);
+	cPiezoStrobDelay			: ST_CANopenObject:= (nIndex:= 16#2300, nSubIndex:= 3, nLength:= 2);
+	cPiezoStrobDelay2			: ST_CANopenObject:= (nIndex:= 16#2300, nSubIndex:= 4, nLength:= 2);
+	cTriggerVersion				: ST_CANopenObject:= (nIndex:= 16#2300, nSubIndex:= 5, nLength:= 1);
+	cPiezoStrobDroplistActive	: ST_CANopenObject:= (nIndex:= 16#2301, nSubIndex:= 1, nLength:= 1);
+	cPiezoStrobDroplist1_4		: ST_CANopenObject:= (nIndex:= 16#2301, nSubIndex:= 2, nLength:= 4);
+	cPiezoStrobDroplist5_8		: ST_CANopenObject:= (nIndex:= 16#2301, nSubIndex:= 3, nLength:= 4);
+	cPiezoStrobDroplist9_12		: ST_CANopenObject:= (nIndex:= 16#2301, nSubIndex:= 4, nLength:= 4);
+	cPiezoStrobDroplist13_16	: ST_CANopenObject:= (nIndex:= 16#2301, nSubIndex:= 5, nLength:= 4);
+	cRefPos						: ST_CANopenObject:= (nIndex:= 16#2011, nLength:= 4);
+	cExtruderFeed				: ST_CANopenObject:= (nIndex:= 16#2430, nLength:= 2);
+	cExtruderCompressFeed		: ST_CANopenObject:= (nIndex:= 16#2431, nLength:= 2);
+	cExtruderRelaxFeed			: ST_CANopenObject:= (nIndex:= 16#2432, nLength:= 2);
+	cExtruderDistance			: ST_CANopenObject:= (nIndex:= 16#2433, nLength:= 2);
+	cExtruderCompressDistance	: ST_CANopenObject:= (nIndex:= 16#2434, nLength:= 2);
+	cExtruderRelaxDistance		: ST_CANopenObject:= (nIndex:= 16#2435, nLength:= 2);
+	cExtruderUnlockOffset		: ST_CANopenObject:= (nIndex:= 16#2437, nLength:= 4);
+	cToolVersion				: ST_CANopenObject:= (nIndex:= 16#2406, nLength:= 1);
+	
+	
+	cConfigFix					: ST_CANopenObject:= (nIndex:= 16#24FF, nSubIndex:= 1, nLength:= 1);
+	cConfigCRC					: ST_CANopenObject:= (nIndex:= 16#24FF, nSubIndex:= 2, nLength:= 2);
+	cuCPCtrl					: ST_CANopenObject:= (nIndex:= 16#2500, nSubIndex:= 1, nLength:= 1);
+	cuCPMode					: ST_CANopenObject:= (nIndex:= 16#2500, nSubIndex:= 2, nLength:= 1);
+	cuCPAngleSetpoint			: ST_CANopenObject:= (nIndex:= 16#2500, nSubIndex:= 3, nLength:= 2);
+	cuCPSpinSpeed				: ST_CANopenObject:= (nIndex:= 16#2500, nSubIndex:= 6, nLength:= 4);
+	cuCPLock					: ST_CANopenObject:= (nIndex:= 16#2500, nSubIndex:= 7, nLength:= 1);
+	cuCPUnlockOffset			: ST_CANopenObject:= (nIndex:= 16#2500, nSubIndex:= 8, nLength:= 4);
+	cuCPLight					: ST_CANopenObject:= (nIndex:= 16#2500, nSubIndex:= 9, nLength:= 1);
+	
+	cGlobError					: ST_CANopenObject:= (nIndex:= 16#5FFF, nSubIndex:= 8, nLength:= 1);
+	cLastErrorState				: ST_CANopenObject:= (nIndex:= 16#5FFE, nSubIndex:= 0, nLength:= 4);
+	
+	cUpdateRequest				: ST_CANopenObject:= (nIndex:= 16#4000, nSubIndex:= 8, nLength:= 1);
+	
+	
+	
+END_VAR]]></Declaration>
+  </GVL>
+</TcPlcObject>

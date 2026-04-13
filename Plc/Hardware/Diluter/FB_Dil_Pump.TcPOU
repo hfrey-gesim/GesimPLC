@@ -1,0 +1,215 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<TcPlcObject Version="1.1.0.1" ProductVersion="3.1.4024.9">
+  <POU Name="FB_Dil_Pump" Id="{68d4be26-b09c-4350-98a9-e8a651c605ea}" SpecialFunc="None">
+    <Declaration><![CDATA[FUNCTION_BLOCK FB_Dil_Pump
+VAR_INPUT
+	eMode			: E_DilPumpMode;
+	nValvePosPump	: SINT;		//Ventilstellung Pumpen
+	nValvePosReload	: SINT;		//Ventilstellung Nachladen
+	nSpeedPump		: DINT;		//Gechwindigkeit Pumpen in Halbsteps/s
+	nSpeedReload	: DINT;		//Gechwindigkeit Nachladen in Halbsteps/s
+	nTotalSteps		: UDINT;	//Gesamtanzahl in Microsteps
+	bEndless		: BOOL;		//Dauerpumpen (nTotalSteps wird ignoriert)
+	bFirstReload	: BOOL;		//Es wird zuerst nachgeladen
+	bExecute		: BOOL;	
+END_VAR
+VAR_OUTPUT
+	bBusy		: BOOL;
+	bError		: BOOL;
+	nErrorId	: ERRORID;
+END_VAR
+VAR
+	nState				: USINT;
+	bStatus				: BOOL;	
+	nFullStrokes		: UDINT;		//ganze Hübe
+	nFirstPartSteps		: UDINT;		//Steps erster Teilhub
+	nLastPartSteps		: UDINT;		//Steps letzter Teilhub
+	nPosition			: UDINT;		//zwischengespeicherte Position
+	sString				: STRING[100];	//Sendestring
+	sValvePosPump		: STRING[2];
+	sValvePosReload		: STRING[2];
+	
+	fbGetValvePos		: FB_Dil_GetValvePos;
+	fbGetPlungerPos		: FB_Dil_GetPlungerPos;
+	
+	nPlungerMoves		: UINT;
+	
+	bPlungerNotWithinRange : BOOL;	//tritt manchmal auf, wenn Diluter durch Terminate gestoppt wird
+	
+END_VAR
+
+VAR_IN_OUT
+	DilSendCmd 	: FB_Dil_SendCmd;
+	pDilRef		: POINTER TO FB_HwRefDiluter;
+END_VAR]]></Declaration>
+    <Implementation>
+      <ST><![CDATA[IF pDilRef = 0 THEN
+	bError := TRUE;
+	RETURN;
+END_IF
+
+IF bExecute THEN
+	IF nState = 0 THEN //aktuelle Position ermitteln
+		sValvePosPump := F_GetValveCode(nValvePosPump, nValvePosReload ,pDilRef^.eValveType);
+		IF sValvePosPump = '' THEN
+			bError := TRUE;
+			nErrorId := E_ErrorIdDiluter.ERRORID_InvalidValveParam;
+			RETURN;
+		END_IF
+		sValvePosReload := F_GetValveCode(nValvePosReload, nValvePosPump ,pDilRef^.eValveType);
+		IF sValvePosReload = '' THEN
+			bError := TRUE;
+			nErrorId := E_ErrorIdDiluter.ERRORID_InvalidValveParam;
+			RETURN;
+		END_IF
+	
+		bBusy := TRUE;
+		fbGetPlungerPos(bExecute:= TRUE, DilSendCmd:= DilSendCmd, pDilRef:= pDilRef);
+		IF NOT fbGetPlungerPos.bBusy THEN
+			IF fbGetPlungerPos.bError THEN
+				bBusy := FALSE;
+				bError := TRUE;
+				nErrorId := fbGetPlungerPos.nErrorId;
+			ELSE
+				//PlungerPos steht in "pDilRef"
+				//für den Fall, dass Plunger > 24000 ist (kann durch Terminate zu ungünstigem Zeitpunkt enstehen)
+				IF pDilRef^.nActPlungerPos < 0 THEN
+					bPlungerNotWithinRange := TRUE;
+					nState := 2;
+					sString := CONCAT(USINT_TO_STRING(pDilRef^.nChannel),'A0R');
+				ELSIF pDilRef^.nActPlungerPos > 24000 THEN
+					bPlungerNotWithinRange := TRUE;
+					sString := CONCAT(USINT_TO_STRING(pDilRef^.nChannel),'A24000R');
+					nState := 2;
+				ELSE
+					nState := 1;	
+				END_IF
+				
+			END_IF
+			fbGetPlungerPos(bExecute:= FALSE, DilSendCmd:= DilSendCmd, pDilRef:= pDilRef);
+		END_IF
+	END_IF
+	
+	IF nState = 1 THEN //Sende-String berechnen und Execute'R' anhängen
+		sValvePosPump := F_GetValveCode(nValvePosPump, nValvePosReload, pDilRef^.eValveType);
+		sValvePosReload := F_GetValveCode(nValvePosReload, nValvePosPump, pDilRef^.eValveType);
+		sString := CONCAT(F_GetPumpString(nChannel:= pDilRef^.nChannel, eMode:= eMode, sValvePump:= sValvePosPump, 
+							sValveReload:= sValvePosReload, nSpeedPump:= nSpeedPump, nSpeedReload:= nSpeedReload, nTotalSteps:= nTotalSteps,
+							pDilRef^.nActPlungerPos,nPlungerMoves=>nPlungerMoves, bEndless:= bEndless, bFirstReload:= bFirstReload),'R');
+		nState := 2;
+	END_IF
+	
+	IF nState = 2 THEN //String senden
+		DilSendCmd(bExecute:= TRUE, bExpectReply:= TRUE, sSendData:= sString);
+		IF NOT DilSendCmd.bBusy THEN
+			IF DilSendCmd.bError THEN
+				bBusy := FALSE;
+				bError := TRUE;
+				nErrorId := DilSendCmd.nErrorId;
+			END_IF
+			DilSendCmd(bExecute:= FALSE);
+			nState := 3;
+		END_IF
+	ELSIF nState = 3 THEN //Valve-Pos abfragen bis Status fertig meldet
+		fbGetValvePos(pDilRef:= pDilRef, bExecute:= TRUE, DilSendCmd:= DilSendCmd);
+		IF NOT fbGetValvePos.bBusy THEN
+			IF fbGetValvePos.bError THEN
+				bBusy := FALSE;
+				bError := TRUE;
+				nErrorId := fbGetValvePos.nErrorId;
+			ELSE
+				IF fbGetValvePos.bStatus THEN
+					IF bPlungerNotWithinRange THEN
+						bPlungerNotWithinRange := FALSE;
+						nState := 0;
+					ELSE
+						nState := 4;	
+					END_IF
+				END_IF
+			END_IF
+			fbGetValvePos(bExecute:= FALSE, DilSendCmd:= DilSendCmd, pDilRef:= pDilRef);
+		END_IF
+	ELSIF nState = 4 THEN //Plunger-Pos ermitteln
+		fbGetPlungerPos(bExecute:= TRUE, DilSendCmd:= DilSendCmd, pDilRef:= pDilRef);
+		IF NOT fbGetPlungerPos.bBusy THEN
+			IF fbGetPlungerPos.bError THEN
+				bError := TRUE;
+				nErrorId := fbGetPlungerPos.nErrorId;
+			END_IF
+			fbGetPlungerPos(bExecute:= FALSE, DilSendCmd:= DilSendCmd, pDilRef:= pDilRef);
+			bBusy := FALSE;
+		END_IF
+	END_IF
+ELSE
+	IF bBusy THEN
+		IF fbGetPlungerPos.bBusy THEN	//FB noch zu Ende führen
+			fbGetPlungerPos(bExecute:= TRUE, DilSendCmd:= DilSendCmd, pDilRef:= pDilRef);
+			IF NOT fbGetPlungerPos.bBusy THEN
+				IF fbGetPlungerPos.bError THEN
+					bError := TRUE;
+					nErrorId := fbGetPlungerPos.nErrorId;
+				END_IF
+				fbGetPlungerPos(bExecute:= FALSE, DilSendCmd:= DilSendCmd, pDilRef:= pDilRef);
+				bBusy := FALSE;
+				nState := 0;
+			END_IF
+		ELSIF fbGetValvePos.bBusy THEN	//FB noch zu Ende führen
+			fbGetValvePos(bExecute:= TRUE,	DilSendCmd:= DilSendCmd, pDilRef:= pDilRef);
+			IF NOT fbGetValvePos.bBusy THEN
+				IF fbGetValvePos.bError THEN
+					bBusy := FALSE;
+					bError := TRUE;
+					nErrorId := fbGetValvePos.nErrorId;
+				END_IF
+				fbGetValvePos(bExecute:= FALSE, DilSendCmd:= DilSendCmd, pDilRef:= pDilRef);
+				bBusy := FALSE;
+				nState := 0;
+			END_IF			
+		ELSIF DilSendCmd.bBusy THEN	//FB noch zu Ende führen
+			DilSendCmd();
+			IF NOT DilSendCmd.bBusy THEN
+				IF DilSendCmd.bError THEN
+					bError := TRUE;
+					nErrorId := DilSendCmd.nErrorId;
+				END_IF
+				DilSendCmd(bExecute:= FALSE);
+				bBusy := FALSE;
+				nState := 0;
+			END_IF
+		ELSE
+			bBusy := FALSE;
+			nState := 0;
+		END_IF
+	ELSE
+		nState := 0;
+		bBusy := FALSE;
+		bError := FALSE;
+		bEndless := FALSE;
+		bFirstReload := FALSE;
+		nErrorId := 0;		
+	END_IF
+END_IF]]></ST>
+    </Implementation>
+    <LineIds Name="FB_Dil_Pump">
+      <LineId Id="216" Count="28" />
+      <LineId Id="385" Count="1" />
+      <LineId Id="400" Count="0" />
+      <LineId Id="399" Count="0" />
+      <LineId Id="393" Count="0" />
+      <LineId Id="395" Count="0" />
+      <LineId Id="401" Count="1" />
+      <LineId Id="396" Count="2" />
+      <LineId Id="394" Count="0" />
+      <LineId Id="245" Count="15" />
+      <LineId Id="262" Count="0" />
+      <LineId Id="264" Count="17" />
+      <LineId Id="403" Count="0" />
+      <LineId Id="408" Count="0" />
+      <LineId Id="404" Count="0" />
+      <LineId Id="406" Count="1" />
+      <LineId Id="405" Count="0" />
+      <LineId Id="283" Count="62" />
+      <LineId Id="2" Count="0" />
+    </LineIds>
+  </POU>
+</TcPlcObject>

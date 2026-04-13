@@ -1,0 +1,304 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<TcPlcObject Version="1.1.0.1" ProductVersion="3.1.4024.6">
+  <POU Name="FB_Dil_SendCmd" Id="{9b29c6a8-9eca-4b54-980b-26f342962527}" SpecialFunc="None">
+    <Declaration><![CDATA[FUNCTION_BLOCK FB_Dil_SendCmd
+VAR_INPUT
+	bExecute		: BOOL;	
+	bExpectReply	: BOOL; //Antwort vom Diluter wird erwartet
+	sSendData		: STRING(100); //CommandString ohne CheckSum und Steuerzeichen	
+END_VAR
+VAR_OUTPUT
+	bBusy			: BOOL;
+	bError			: BOOL;
+	nErrorId		: ERRORID; 	//RS232-Fehler oder vom Diluter zurückgegebener Fehler
+	bStatus			: BOOL;		//Statusbit in Diluterantwort(True = device is ready for new commands)
+	sReceiveData	: STRING;	//Datenstring bei zurückgegebenen Daten
+	bDataIsNumeric	: BOOL; 	//True, wenn "sReceiveData" nur aus Zahlen besteht	
+END_VAR
+VAR_IN_OUT
+	
+END_VAR
+VAR
+	nState			: USINT;
+	fbSendData		: Tc2_SerialCom.SendData;
+	fbReceiveByte	: Tc2_SerialCom.ReceiveByte;
+	fbReceiveData	: Tc2_SerialCom.ReceiveData;
+	SerialPort		: REFERENCE TO FB_SerialComPort_Base;
+	
+	nPrefix			: BYTE := 2; //STX
+	nSuffix			: BYTE := 3; //ETX
+	timer1			: TON; 	//Timeout
+	bFlag			: BOOL := TRUE;
+	
+	sSendString		: STRING(100); //temporärer Sendestring, welcher bis bis zur Checksumme exitstiert(danach in ByteArray)
+	aSendData		: ARRAY[1..100] OF BYTE; //ByteArray, welches den kompletten SendeString incl. CheckSum aufnimmt
+	aReceiveData	: ARRAY[0..30] OF BYTE; //ByteArray, welcher den EmpfangsString enthält (zwischen bzw. incl. STX und ETX)
+	nLenData		: USINT; //komplette Länge der Sende-oder Empfamgsdaten
+	nLenDatablock	: USINT; //Länge der empfangenen Datablocks (Positionen oder ausgelesene Parameter usw)
+	nCheckSum		: BYTE; //Checksumme
+	sChar			: STRING(2);
+	i				: USINT;	
+END_VAR]]></Declaration>
+    <Implementation>
+      <ST><![CDATA[IF bExecute THEN
+	IF nState = 0 THEN
+		IF NOT __ISVALIDREF(SerialPort) THEN
+			bError := TRUE;
+			RETURN;
+		END_IF
+		//Am Serial Port zu Senden registrieren
+		//Die Registrierung sollte, wenn alles richtig programmiert wurde, immer klappen!
+		IF NOT SerialPort.M_Register(THIS) THEN
+			bError := TRUE;
+			RETURN;
+		ELSE
+			nState := 1	;
+		END_IF
+		bBusy := TRUE;
+		bDataIsNumeric := FALSE;
+	END_IF
+	
+	//Checken, ob an der Reihe (wird übersprungen, wenn "SerialPort.M_Register" TRUE zurückgibt
+	IF nState = 1 THEN
+		IF SerialPort.M_IsMyTurn(THIS) THEN
+			nState := 2;
+		END_IF
+	END_IF
+	
+	//Ist an der Reihe
+	IF nState = 2 THEN
+		//Kommunikationspuffer löschen (nicht der Hardware-Buffer)
+		SerialPort.M_ClearTxComBuffer();
+		SerialPort.M_ClearRxComBuffer();
+		
+		//# # # # # # # # # # # # # Sendestring zusammensetzen # # # # # # # # # # # # # # # # # # #
+		
+		//die DeviceNr befindet sich bereits in "sSendString" -> STX davor setzen!!
+		sSendString := CONCAT(CHR(2),sSendData);
+		//an dritte Stelle die Sequenznummer 1 einfügen
+		sSendString := INSERT(sSendString,'1',2);	
+		//am Ende ETX anhängen
+		sSendString := CONCAT(sSendString,CHR(3));
+		//Checksumme aus bisherigem String bilden
+		nCheckSum := F_GetCheckSumFromString(sSendString);
+		
+		//Die Checksumme kann nicht direkt an den String angehängt werden, da für den Fall, dass die Checksumme 0 ist,
+		//das ASCII-Zeichen "NUL" entsteht, und dieses bei Strings als Terminierung gilt.
+		//Der bisherige String muss also in ein Bytearray übertragen werden und die Checksumme wird dort als letztes angehängt.
+		//Gesendet wird dann über "SendData" und nicht mehr mit SendString!!!
+		
+		//Bisherigen String in Byterarray schieben
+		FOR i:= 1 TO INT_TO_USINT(LEN(sSendString)) BY 1 DO
+			aSendData[i]:= ASC(MID(STR:= sSendString, LEN:= 1, POS:= i));
+		END_FOR
+		
+		//CheckSum anhängen
+		nLenData := i;
+		aSendData[i]:= nCheckSum;
+		
+		nState := 3;	//weiter zu String senden
+	END_IF
+	
+	CASE nState OF
+		3:	//# # # # # # # # # # # # # Daten senden # # # # # # # # # # # # # # # # # # #
+			IF bFlag XOR fbSendData.Busy THEN
+				bFlag := FALSE;
+				fbSendData(pSendData:= ADR(aSendData),Length:= nLenData, TXbuffer:= SerialPort.P_TxBuffer);
+			END_IF
+			
+			IF NOT fbSendData.Busy THEN	//Sendung abgeschlossen
+				IF fbSendData.Error > 0 THEN
+					nErrorId := INT_TO_UINT(fbSendData.Error);
+					bError := TRUE;
+					bBusy := FALSE;
+					nState := 99;
+					RETURN;				
+				ELSE
+					IF bExpectReply THEN	//Antwort wird erwartet
+						//10ms auf Antwort warten DAS KANN ZUR NOT ENTFALLEN?
+						timer1(IN:= TRUE,PT:= T#20MS);
+						IF timer1.Q THEN
+							timer1(IN:= FALSE);
+							nState := 4;	//weiter zu Daten empfangen
+						END_IF;
+					ELSE	//Antwort wird nicht erwartet -> Daten nicht abrufen
+						bBusy := FALSE;
+						nState:= 80;	//FB ready	
+					END_IF
+				END_IF
+			END_IF
+		
+		4:	//# # # # # # # # # # # # # Daten empfangen # # # # # # # # # # # # # # # # # # #
+			//wenn keine Antwort erwartet wird (z.B. Command an mehrere Diluter gleichzeitig,
+			// dann diesen Schritt überspringen, da sonst ein Timeout eintritt
+			//wenn inerhalb von 200ms nicht emfangen  wurde, dann in Timeout-Fehler gehen
+			
+			timer1(IN:= TRUE,PT:= T#200MS);	//Timer für Timeout starten
+			//In dieser Zeit müssen die erwarteten Daten empfangen sein
+			//es werden nur Daten zwischen bzw. incl. STX und ETX empfangen
+			//das Checksumbyte wird anschließend separat empfangen 
+			fbReceiveData(pPrefix:= ADR(nPrefix),	//STX
+						LenPrefix:= 1, 
+						pSuffix:= ADR(nSuffix),	 //ETX
+						LenSuffix:= 1, 
+						pReceiveData:= ADR(aReceiveData), 
+						SizeReceiveData:= SIZEOF(aReceiveData), 
+						RXbuffer:= SerialPort.P_RxBuffer,
+						Reset:= FALSE);
+						
+			IF fbReceiveData.Error > 0 THEN
+				bError := TRUE;
+				bBusy := FALSE;
+				nErrorId := INT_TO_UINT(fbReceiveData.Error);
+				nState := 99;
+				RETURN;
+			END_IF
+
+			IF fbReceiveData.DataReceived THEN
+				timer1(IN:= FALSE);	
+				IF fbReceiveByte.Error > 0 THEN
+					bError := TRUE;
+					bBusy := FALSE;
+					nErrorId := INT_TO_UINT(fbReceiveByte.Error);
+					nState := 99;
+					RETURN;
+				END_IF
+				nState := 5; //weiter zu ChecksumByte empfangen				
+			END_IF
+			
+			IF timer1.Q THEN	//Timeout -> Error
+				fbReceiveData(Reset:=TRUE, pReceiveData:= ADR(aReceiveData), RXbuffer:= SerialPort.P_RxBuffer);
+				nErrorId := E_ErrorIdDiluter.ERRORID_ComTimeout;
+				bError := TRUE;
+				bBusy := FALSE;
+				nState := 99;
+				RETURN;
+			END_IF
+		
+		5:	//Checksum-Byte empfangen
+			fbReceiveByte(ReceivedByte=> nCheckSum, RxBuffer:= SerialPort.P_RxBuffer);
+			IF fbReceiveByte.ByteReceived THEN	//Checksumbyte wurde empfangen
+				SerialPort.M_ClearRxComBuffer(); //Restlichen Buffer löschen
+				//#################Checksumme überprüfen###################
+				nLenData := UDINT_TO_USINT(fbReceiveData.LenReceiveData);	//Länge der empfangenen Daten (zwischen bzw. incl. STX und ETX)
+				
+				IF NOT (F_GetCheckSumByte(aReceiveData, nLenData) = nCheckSum) THEN	//Checksumerror
+					nErrorId := E_ErrorIdDiluter.ERRORID_CecksumError;
+					bError := TRUE;
+					bBusy := FALSE;
+					nState := 99;
+					RETURN;
+				ELSE
+					//# # # # # # # # # # # # # # # # # empfangene Daten auswerten bzw extrahieren # # # # # # # # # # # # # # # # # # # # # # # # #
+					//Statusbit aus Byte2 extrahieren (Bit 5) -> Beschreibung Tecan
+					bStatus := ((aReceiveData[2] AND 16#20) =  16#20);
+					
+					//ErrorCode aus Byte2 extrahieren (Bit 0-3) -> Beschreibung Tecan
+					nErrorId := (aReceiveData[2] AND 16#0F); //Fehlercode vom Diluter
+					
+					//Datenblock extrahieren - stehen ab Byte 3, wenn Datenlänge größer als 4 Byte
+					nLenDatablock := nLenData - 4;
+					IF nLenDatablock > 0 THEN	//Daten vorhanden
+						bDataIsNumeric := TRUE;
+						//Beginnend mit DataByte1 (Byte3) in nData schieben
+						sReceiveData := '';
+						FOR i:= 3 TO (nLenDatablock + 2) BY 1 DO
+							IF NOT (aReceiveData[i] >= 16#30 AND aReceiveData[i] <= 16#39) THEN	//Inhalt dieses Bytes ist nicht numerisch
+								bDataIsNumeric := FALSE;	//Output zur Weiterverarbeitung, dass sReceiveData nicht numerisch 
+							END_IF
+							sChar := CHR(aReceiveData[i]);
+							sReceiveData := CONCAT(sReceiveData,sChar);
+						END_FOR
+					END_IF
+					bBusy := FALSE;
+					nState:= 80;	//FB ready				
+			
+					//Diluter-Fehlercode in eigene Fehlercode umsetzen
+					//an dieser Stelle kann "nErrorId" nur den Diluter-Fehlercode enthalten 
+					IF nErrorId > 0 THEN
+						CASE nErrorId OF
+							1:	//Error beim Initialisieren
+								nErrorId := E_ErrorIdDiluter.ERRORID_InitError;
+							2:	//Ungültiges Kommando übergeben
+								nErrorId := E_ErrorIdDiluter.ERRORID_InvalidCommand;
+							3:	//Fehlerhaften Parameter übergeben
+								nErrorId := E_ErrorIdDiluter.ERRORID_InvalidOperand;
+							4:	//Fehlerhafte Kommandostruktur
+								nErrorId := E_ErrorIdDiluter.ERRORID_InvalidCommandSeq;
+							6:	//EEPROM Fehler
+								nErrorId := E_ErrorIdDiluter.ERRORID_EepromFailure;
+							7:	//Diluter nicht initialisiert
+								nErrorId := E_ErrorIdDiluter.ERRORID_NotIniialized;
+							9:	//Kolben blockiert
+								nErrorId := E_ErrorIdDiluter.ERRORID_PlungerOverload;
+							10:	//Ventil blockiert
+								nErrorId := E_ErrorIdDiluter.ERRORID_ValveOverload;
+							11:	//Kolbenbewegung nicht erlaubt
+								nErrorId := E_ErrorIdDiluter.ERRORID_PlungerMoveNotAllowed;
+							15:	//vorherige aktion noch nicht abgearbeitet (StatusBit noch FALSE)
+								nErrorId := E_ErrorIdDiluter.ERRORID_CommandOverflow;
+						END_CASE
+						bError := TRUE;
+						bBusy := FALSE;
+						nState := 99;
+					END_IF					
+				END_IF
+			END_IF		
+	END_CASE	
+ELSE
+	IF SerialPort.M_IsMyTurn(THIS) THEN
+		fbReceiveData(Reset:=TRUE, pReceiveData:= ADR(aReceiveData), RXbuffer:= SerialPort.P_RxBuffer);
+		SerialPort.M_Release(THIS);
+	END_IF
+	bBusy := FALSE;
+	bError := FALSE;
+	nErrorId := 0;
+	nState := 0;
+	timer1(IN:= FALSE);
+	bFlag := TRUE;
+END_IF]]></ST>
+    </Implementation>
+    <Method Name="FB_init" Id="{c120ca59-4752-4c37-9bfd-2b338a6435ba}">
+      <Declaration><![CDATA[METHOD FB_init : BOOL
+VAR_INPUT
+	bInitRetains : BOOL; // if TRUE, the retain variables are initialized (warm start / cold start)
+	bInCopyCode : BOOL;  // if TRUE, the instance afterwards gets moved into the copy code (online change)
+	SerialPort 	: REFERENCE TO FB_SerialComPort_Base;
+END_VAR
+]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[THiS^.SerialPort REF= SerialPort;]]></ST>
+      </Implementation>
+    </Method>
+    <LineIds Name="FB_Dil_SendCmd">
+      <LineId Id="3" Count="1" />
+      <LineId Id="310" Count="1" />
+      <LineId Id="313" Count="0" />
+      <LineId Id="312" Count="0" />
+      <LineId Id="257" Count="0" />
+      <LineId Id="352" Count="0" />
+      <LineId Id="262" Count="0" />
+      <LineId Id="353" Count="1" />
+      <LineId Id="265" Count="1" />
+      <LineId Id="264" Count="0" />
+      <LineId Id="8" Count="5" />
+      <LineId Id="267" Count="2" />
+      <LineId Id="20" Count="5" />
+      <LineId Id="270" Count="0" />
+      <LineId Id="27" Count="52" />
+      <LineId Id="501" Count="0" />
+      <LineId Id="80" Count="2" />
+      <LineId Id="84" Count="61" />
+      <LineId Id="412" Count="51" />
+      <LineId Id="146" Count="3" />
+      <LineId Id="204" Count="0" />
+      <LineId Id="206" Count="0" />
+      <LineId Id="209" Count="0" />
+      <LineId Id="211" Count="7" />
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="FB_Dil_SendCmd.FB_init">
+      <LineId Id="7" Count="0" />
+    </LineIds>
+  </POU>
+</TcPlcObject>

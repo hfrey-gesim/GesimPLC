@@ -1,0 +1,167 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<TcPlcObject Version="1.1.0.1" ProductVersion="3.1.4024.11">
+  <POU Name="FB_NanotecPD_Move" Id="{74970ab7-a201-4333-ad66-fd46e7033d18}" SpecialFunc="None">
+    <Declaration><![CDATA[FUNCTION_BLOCK FB_NanotecPD_Move
+VAR_INPUT
+	bExecute 	: BOOL;
+	bStop		: BOOL;
+	nPosition	: DINT; //Reale Einheit (µm oder 1/10°)
+	nSpeed		: DINT; //Reale Einheit/s	
+END_VAR
+VAR_OUTPUT
+	bBusy 		: BOOL;
+	bError 		: BOOL;
+	nErrorId 	: ERRORID;	
+END_VAR
+VAR_IN_OUT
+	pHwRef : POINTER TO FB_HwRefNanotecPD; 
+END_VAR
+VAR
+	nState 					: USINT;
+	eCurrentCoDS402State 	: E_CoDS402States;
+	fbGetCurrTaskIndex		: GETCURTASKINDEX;
+	nCurrentTaskCycleCount 	: UDINT;	
+END_VAR
+]]></Declaration>
+    <Implementation>
+      <ST><![CDATA[IF bExecute THEN
+	eCurrentCoDS402State := pHwRef^.M_GetDS402State();
+	
+	CASE nState OF
+		0:	//Vorbedingungen prüfen
+			bBusy := TRUE;
+			nState := 1;
+			IF pHwRef^.bError THEN
+				nErrorID := E_ErrorIdHwGeneral.ERRORID_DriveIsInErrorState;
+				nState := 99;
+			ELSE
+				IF pHwRef^.bBusy THEN
+					nErrorID := E_ErrorIdHwGeneral.ERRORID_DriveIsStillBusy;
+					nState := 99;
+				ELSE
+					IF NOT pHwRef^.P_bIsHomed THEN
+						nErrorID := E_ErrorIdHwGeneral.ERRORID_DriveNotHomed;
+						nState := 99;
+					ELSE
+						IF NOT pHwRef^.M_SetTargetPos(nPosition) THEN
+							nErrorID := E_ErrorIdHwGeneral.ERRORID_InvalidPosition;
+							nState := 99;
+						ELSE
+							IF NOT pHwRef^.M_SetTargetSpeed(nSpeed) THEN
+								nErrorID := E_ErrorIdHwGeneral.ERRORID_InvalidSpeed;
+								nState := 99;
+							END_IF
+						END_IF	
+					END_IF
+				END_IF
+			END_IF
+			
+			fbGetCurrTaskIndex();
+			nCurrentTaskCycleCount := TwinCAT_SystemInfoVarList._TaskInfo[fbGetCurrTaskIndex.index].CycleCount;
+
+		1:	//Mode sollte durch Homing bereits auf 1 stehen
+			//Dieser State darf niemals im gleichen Zyklus wie State 0 ausgeführt werden. Passiert wenn FB im selben Zyklus auf-
+			//gerufen wird. Somit wird sichergestellt, dass die Zielposition auch im Drive eher ankommt, wie das Startbit.
+			IF TwinCAT_SystemInfoVarList._TaskInfo[fbGetCurrTaskIndex.index].CycleCount <> nCurrentTaskCycleCount THEN
+				IF eCurrentCoDS402State = E_CoDS402States.DS402STATE_OperationEnabled THEN
+					pHwRef^.nControlword := 31;
+					nState := 2;
+				ELSE
+					nErrorID := E_ErrorIdDS402.ERRORID_OperationNotEnabled;
+					nState := 99;
+				END_IF
+			END_IF
+			
+		2:	//Setpoint ACK?
+			IF pHwRef^.nStatusword.12 THEN
+				pHwRef^.nControlword := 15;
+				nState := 3;
+			END_IF
+			
+		3:	//Target reached?
+			IF pHwRef^.bError THEN
+				nErrorId := pHwRef^.P_nErrorID;
+				nState := 99;
+			ELSE
+				{warning 'Safety sollte noch mit abgefragt werden'}
+				IF bStop THEN
+					pHwRef^.nControlword.8 := TRUE;
+					nState := 4;
+				END_IF
+				
+				IF pHwRef^.nStatusword.10 THEN
+					nState := 80; //Ready
+				END_IF
+			END_IF
+			
+		4:	//Warten bis Motor sich nicht mehr dreht -> dann OperationEnable zurück nehmen
+			IF pHwRef^.nCurrentSpeed = 0 THEN
+				pHwRef^.nControlword := 7;
+				nState := 5;
+			END_IF			
+			
+		5:	//STM wieder in OperationEnable
+			IF pHwRef^.M_GetDS402State() = E_CoDS402States.DS402STATE_SwitchedOn THEN
+				pHwRef^.nControlword := 15;
+				nState := 80; //Ready
+			END_IF
+	END_CASE
+	
+	IF nState >= 80 THEN
+		bBusy := FALSE;
+		IF nState = 99 THEN
+			bError := TRUE;
+		END_IF
+	END_IF
+	
+ELSE
+	bError := FALSE;
+	nErrorId := 0;
+	nState := 0;
+END_IF]]></ST>
+    </Implementation>
+    <LineIds Name="FB_NanotecPD_Move">
+      <LineId Id="9" Count="0" />
+      <LineId Id="27" Count="0" />
+      <LineId Id="32" Count="1" />
+      <LineId Id="38" Count="0" />
+      <LineId Id="234" Count="1" />
+      <LineId Id="39" Count="0" />
+      <LineId Id="41" Count="0" />
+      <LineId Id="250" Count="0" />
+      <LineId Id="208" Count="0" />
+      <LineId Id="210" Count="1" />
+      <LineId Id="251" Count="0" />
+      <LineId Id="231" Count="0" />
+      <LineId Id="236" Count="13" />
+      <LineId Id="212" Count="0" />
+      <LineId Id="43" Count="0" />
+      <LineId Id="70" Count="1" />
+      <LineId Id="36" Count="0" />
+      <LineId Id="90" Count="4" />
+      <LineId Id="111" Count="3" />
+      <LineId Id="116" Count="2" />
+      <LineId Id="107" Count="0" />
+      <LineId Id="120" Count="0" />
+      <LineId Id="122" Count="4" />
+      <LineId Id="141" Count="0" />
+      <LineId Id="127" Count="4" />
+      <LineId Id="143" Count="0" />
+      <LineId Id="132" Count="8" />
+      <LineId Id="144" Count="0" />
+      <LineId Id="146" Count="3" />
+      <LineId Id="145" Count="0" />
+      <LineId Id="121" Count="0" />
+      <LineId Id="150" Count="4" />
+      <LineId Id="37" Count="0" />
+      <LineId Id="155" Count="2" />
+      <LineId Id="159" Count="2" />
+      <LineId Id="158" Count="0" />
+      <LineId Id="35" Count="0" />
+      <LineId Id="25" Count="0" />
+      <LineId Id="29" Count="1" />
+      <LineId Id="28" Count="0" />
+      <LineId Id="26" Count="0" />
+    </LineIds>
+  </POU>
+</TcPlcObject>

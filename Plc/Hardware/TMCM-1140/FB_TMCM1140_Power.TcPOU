@@ -1,0 +1,300 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<TcPlcObject Version="1.1.0.1" ProductVersion="3.1.4024.14">
+  <POU Name="FB_TMCM1140_Power" Id="{74546f5f-43e7-4a2d-ac41-18d8406b798a}" SpecialFunc="None">
+    <Declaration><![CDATA[FUNCTION_BLOCK FB_TMCM1140_Power
+VAR_INPUT
+	bExecute : BOOL;
+END_VAR
+VAR_OUTPUT
+	bBusy 		: BOOL;
+	bError 		: BOOL;
+	nErrorId 	: ERRORID;	
+END_VAR
+VAR_IN_OUT
+	pHwRef : POINTER TO FB_HwRefTMCM1140;
+END_VAR
+VAR
+	nState 		: USINT;
+	nStateNext 	: USINT;
+	fbSdoWrite	: FB_SDO_WRITE;
+	nDataDigiOut: DINT;
+END_VAR]]></Declaration>
+    <Implementation>
+      <ST><![CDATA[IF bExecute THEN
+	IF nState = 0 THEN
+		bBusy := TRUE; 
+		CASE pHwRef^.M_GetDS402State() OF
+			E_CoDS402States.DS402STATE_Fault:
+				pHwRef^.nControlword := 153;	//Reset error
+				nState := 1;
+			E_CoDS402States.DS402STATE_SwitchOnDisabled:
+				nState := 1;
+			E_CoDS402States.DS402STATE_ReadyToSwitchOn:
+				pHwRef^.nControlword := 0;	//Transition 7 in DS402 statemachine -> geht in Switch on disabled
+				nState := 1;
+			E_CoDS402States.DS402STATE_SwitchedOn:
+				pHwRef^.nControlword := 0;	//Transition 10 in DS402 statemachine -> geht in Switch on disabled
+				nState := 1;
+			E_CoDS402States.DS402STATE_OperationEnabled:
+				pHwRef^.nControlword := 0;	//Shutdown
+				nState := 1;
+			E_CoDS402States.DS402STATE_NotReadyToSwitchOn:	//Statusword wahrscheinlich nicht gemappt
+				nErrorId := E_ErrorIdDS402.ERRORID_NotReadyToSwitchOn;
+				nState := 99;
+		END_CASE
+	END_IF
+	
+	CASE nState OF
+		1:	//Hier sollte noch ein Timeout eingebaut werden?
+			IF pHwRef^.M_GetDS402State() = E_CoDS402States.DS402STATE_SwitchOnDisabled THEN
+				//max. current
+				fbSdoWrite.nIndex := 16#2003;
+				fbSdoWrite.nSubIndex := 0;
+				fbSdoWrite.nDataLength := 1;
+				fbSdoWrite.nData := pHwRef^.P_nMaxCurrentConverted;
+				nState := 40;
+				nStateNext := 2;
+			END_IF
+			
+		2:	//Hold current
+			fbSdoWrite.nIndex := 16#2004;
+			fbSdoWrite.nSubIndex := 0;
+			fbSdoWrite.nDataLength := 1;
+			fbSdoWrite.nData := pHwRef^.P_nHoldCurrentConverted;
+			nState := 40;
+			nStateNext := 3;
+
+		3:	//Switch parameters (Endlagen)		
+			fbSdoWrite.nIndex := 16#2005;
+			fbSdoWrite.nSubIndex := 0;
+			fbSdoWrite.nDataLength := 4;
+			fbSdoWrite.nData := pHwRef^.P_nSwitchConfig;
+			nState := 40;
+			nStateNext := 4;		
+			
+		4:	//Brake deaktivieren
+			fbSdoWrite.nIndex := 16#200C;
+			fbSdoWrite.nSubIndex := 2;
+			fbSdoWrite.nDataLength := 1;
+			fbSdoWrite.nData := 0;
+			nState := 40;
+			nStateNext := 5;
+
+		5:	//Position Windows setzen
+			fbSdoWrite.nIndex := 16#6067;
+			fbSdoWrite.nSubIndex := 0;
+			fbSdoWrite.nDataLength := 4;
+			fbSdoWrite.nData := 100;
+			nState := 40;
+			nStateNext := 6;
+			
+		6:	//Velocity Dimension Index -> Intern (damit die folgenden Werte geschrieben werden können)
+			fbSdoWrite.nIndex := 16#208C;
+			fbSdoWrite.nSubIndex := 0;
+			fbSdoWrite.nDataLength := 1;
+			fbSdoWrite.nData := E_TMCM_VeloDim.INTERN;
+			nState := 40;
+			nStateNext := 7;
+			
+		7:	//Microstep Resolution
+			fbSdoWrite.nIndex := 16#2000;
+			fbSdoWrite.nSubIndex := 0;
+			fbSdoWrite.nDataLength := 1;
+			fbSdoWrite.nData := pHwRef^.P_nMicrostepResolConverted;
+			nState := 40;
+			nStateNext := 31;
+			
+		31:	//FullStep Resolution
+			fbSdoWrite.nIndex := 16#2001;
+			fbSdoWrite.nSubIndex := 0;
+			fbSdoWrite.nDataLength := 2;
+			fbSdoWrite.nData := pHwRef^.P_nFullStepRevo;
+			nState := 40;
+			nStateNext := 8;
+			
+		8:	//Pulse Divisor
+			fbSdoWrite.nIndex := 16#2086;
+			fbSdoWrite.nSubIndex := 0;
+			fbSdoWrite.nDataLength := 1;
+			fbSdoWrite.nData := pHwRef^.P_nPulseDivisor;
+			nState := 40;
+			nStateNext := 9;
+			
+		9:	//Ramp Divisor
+			fbSdoWrite.nIndex := 16#2085;
+			fbSdoWrite.nSubIndex := 0;
+			fbSdoWrite.nDataLength := 1;
+			fbSdoWrite.nData := pHwRef^.P_nRampDivisor;
+			nState := 40;
+			nStateNext := 10;
+			
+		10:	//Digital out mask
+			fbSdoWrite.nIndex := 16#2703;
+			fbSdoWrite.nSubIndex := 2;
+			fbSdoWrite.nDataLength := 4;
+			nDataDigiOut.16 := pHwRef^.P_bSetDigiOut0;
+			nDataDigiOut.17 := pHwRef^.P_bSetDigiOut1;
+			fbSdoWrite.nData := nDataDigiOut;
+			nState := 40;
+			nStateNext := 11;
+
+		11:	//Set digital out
+			fbSdoWrite.nIndex := 16#2703;
+			fbSdoWrite.nSubIndex := 1;
+			fbSdoWrite.nDataLength := 4;
+			fbSdoWrite.nData := nDataDigiOut;
+			nState := 40;
+			nStateNext := 12;
+			
+		12:	//Change to "Ready to Switched on"
+			pHwRef^.nControlword := 6;
+			nState := 13;
+			
+		13:	IF pHwRef^.M_GetDS402State() = E_CoDS402States.DS402STATE_ReadyToSwitchOn THEN
+				pHwRef^.nControlword := 7;	//Change to "Switched on"
+				nState := 14;
+			ELSIF pHwRef^.M_GetDS402State() = E_CoDS402States.DS402STATE_Fault THEN
+				nErrorId := E_ErrorIdDS402.ERRORID_FaultState;
+				nState := 99;
+			END_IF
+			
+		14:	IF pHwRef^.M_GetDS402State() = E_CoDS402States.DS402STATE_SwitchedOn THEN
+				pHwRef^.nControlword := 15;	//Change to "Operation enable"
+				nState := 15;
+			ELSIF pHwRef^.M_GetDS402State() = E_CoDS402States.DS402STATE_Fault THEN
+				nErrorId := E_ErrorIdDS402.ERRORID_FaultState;
+				nErrorId := 232;
+				nState := 99;
+			END_IF
+			
+		15:	IF pHwRef^.M_GetDS402State() = E_CoDS402States.DS402STATE_OperationEnabled THEN
+				nState := 80;
+			ELSIF pHwRef^.M_GetDS402State() = E_CoDS402States.DS402STATE_Fault THEN
+				nErrorId := E_ErrorIdDS402.ERRORID_FaultState;
+				nErrorId := 232;
+				nState := 99;
+			END_IF
+	END_CASE
+	
+	//Sdo senden
+	IF nState = 40 THEN
+		fbSdoWrite(sADSNetID:= pHwRef^.P_sAdsNetId, nPortNr:= pHwRef^.P_nAdsPort, bExecute:= TRUE);
+		IF NOT fbSdoWrite.bBusy THEN
+			IF fbSdoWrite.bError THEN
+				nErrorId := fbSdoWrite.nAdsErrorId;
+				nState := 99;
+			ELSE
+				nState := nStateNext;
+			END_IF
+			fbSdoWrite(bExecute:= FALSE);
+		END_IF		
+	END_IF
+	
+	IF nState >= 80 THEN
+		bBusy := FALSE;
+		IF nState = 99 THEN
+			bError := TRUE;
+		END_IF
+	END_IF
+
+ELSE
+	bBusy := FALSE;
+	bError := FALSE;
+	nErrorId := 0;
+	nState := 0;	
+END_IF]]></ST>
+    </Implementation>
+    <LineIds Name="FB_TMCM1140_Power">
+      <LineId Id="38" Count="0" />
+      <LineId Id="60" Count="0" />
+      <LineId Id="205" Count="0" />
+      <LineId Id="85" Count="0" />
+      <LineId Id="94" Count="0" />
+      <LineId Id="106" Count="0" />
+      <LineId Id="109" Count="0" />
+      <LineId Id="107" Count="0" />
+      <LineId Id="110" Count="1" />
+      <LineId Id="228" Count="0" />
+      <LineId Id="232" Count="0" />
+      <LineId Id="113" Count="0" />
+      <LineId Id="230" Count="1" />
+      <LineId Id="115" Count="1" />
+      <LineId Id="114" Count="0" />
+      <LineId Id="221" Count="0" />
+      <LineId Id="494" Count="1" />
+      <LineId Id="92" Count="0" />
+      <LineId Id="86" Count="0" />
+      <LineId Id="84" Count="0" />
+      <LineId Id="117" Count="1" />
+      <LineId Id="127" Count="0" />
+      <LineId Id="120" Count="0" />
+      <LineId Id="129" Count="4" />
+      <LineId Id="128" Count="0" />
+      <LineId Id="121" Count="0" />
+      <LineId Id="142" Count="1" />
+      <LineId Id="146" Count="4" />
+      <LineId Id="145" Count="0" />
+      <LineId Id="152" Count="0" />
+      <LineId Id="151" Count="0" />
+      <LineId Id="153" Count="2" />
+      <LineId Id="295" Count="0" />
+      <LineId Id="157" Count="0" />
+      <LineId Id="144" Count="0" />
+      <LineId Id="122" Count="0" />
+      <LineId Id="158" Count="5" />
+      <LineId Id="123" Count="0" />
+      <LineId Id="165" Count="6" />
+      <LineId Id="164" Count="0" />
+      <LineId Id="336" Count="0" />
+      <LineId Id="338" Count="6" />
+      <LineId Id="179" Count="0" />
+      <LineId Id="532" Count="15" />
+      <LineId Id="550" Count="13" />
+      <LineId Id="466" Count="0" />
+      <LineId Id="419" Count="0" />
+      <LineId Id="286" Count="0" />
+      <LineId Id="280" Count="2" />
+      <LineId Id="298" Count="0" />
+      <LineId Id="314" Count="0" />
+      <LineId Id="283" Count="2" />
+      <LineId Id="294" Count="0" />
+      <LineId Id="287" Count="6" />
+      <LineId Id="233" Count="6" />
+      <LineId Id="244" Count="0" />
+      <LineId Id="241" Count="0" />
+      <LineId Id="491" Count="1" />
+      <LineId Id="245" Count="0" />
+      <LineId Id="496" Count="0" />
+      <LineId Id="246" Count="0" />
+      <LineId Id="249" Count="2" />
+      <LineId Id="488" Count="1" />
+      <LineId Id="253" Count="0" />
+      <LineId Id="247" Count="0" />
+      <LineId Id="256" Count="0" />
+      <LineId Id="255" Count="0" />
+      <LineId Id="257" Count="0" />
+      <LineId Id="259" Count="0" />
+      <LineId Id="487" Count="0" />
+      <LineId Id="374" Count="1" />
+      <LineId Id="258" Count="0" />
+      <LineId Id="119" Count="0" />
+      <LineId Id="136" Count="0" />
+      <LineId Id="140" Count="0" />
+      <LineId Id="137" Count="0" />
+      <LineId Id="187" Count="2" />
+      <LineId Id="192" Count="0" />
+      <LineId Id="377" Count="0" />
+      <LineId Id="194" Count="3" />
+      <LineId Id="138" Count="1" />
+      <LineId Id="207" Count="0" />
+      <LineId Id="378" Count="4" />
+      <LineId Id="210" Count="0" />
+      <LineId Id="56" Count="0" />
+      <LineId Id="55" Count="0" />
+      <LineId Id="58" Count="1" />
+      <LineId Id="514" Count="0" />
+      <LineId Id="57" Count="0" />
+      <LineId Id="41" Count="0" />
+    </LineIds>
+  </POU>
+</TcPlcObject>

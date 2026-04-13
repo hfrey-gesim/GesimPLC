@@ -1,0 +1,14 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<TcPlcObject Version="1.1.0.1" ProductVersion="3.1.4024.9">
+  <DUT Name="ST_ActionData" Id="{7ae75ca5-483f-450d-96e8-7dd1d3742df3}">
+    <Declaration><![CDATA[TYPE ST_ActionData :
+STRUCT
+	eAction		: E_Action;
+	nObject		: UINT;
+	nTarget		: UINT;
+	aParams		: ARRAY[1..19] OF DINT;
+END_STRUCT
+END_TYPE
+]]></Declaration>
+  </DUT>
+</TcPlcObject>

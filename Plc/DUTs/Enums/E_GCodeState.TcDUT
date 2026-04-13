@@ -1,0 +1,18 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<TcPlcObject Version="1.1.0.1" ProductVersion="3.1.4020.6">
+  <DUT Name="E_GCodeState" Id="{b9a1e077-ffd5-4b13-a3f5-efe893978682}">
+    <Declaration><![CDATA[TYPE E_GCodeState :
+(
+	GCodeState_Idle := 0,
+	GCodeState_Loading := 1,
+	GCodeState_Starting := 2,
+	GCodeState_Running := 3,
+	GCodeState_PauseRequest := 4,
+	GCodeState_Pause := 5,
+	GCodeState_ContinueRequest := 6,
+	GCodeState_Error := 99
+)USINT;
+END_TYPE
+]]></Declaration>
+  </DUT>
+</TcPlcObject>

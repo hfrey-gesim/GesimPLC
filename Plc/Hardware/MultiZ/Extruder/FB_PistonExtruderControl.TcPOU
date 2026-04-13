@@ -1,0 +1,1114 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<TcPlcObject Version="1.1.0.1" ProductVersion="3.1.4022.18">
+  <POU Name="FB_PistonExtruderControl" Id="{e81a9316-202c-4324-8f9c-757019bef4b3}" SpecialFunc="None">
+    <Declaration><![CDATA[FUNCTION_BLOCK FB_PistonExtruderControl EXTENDS FB_ExtruderControl
+
+VAR
+	eSubType				: E_ExtruderType;
+	pFbPistonExtruderRef	: POINTER TO FB_PistonExtruderRef;
+	nStateSdo 				: USINT;
+	nNextStateSdo			: USINT;
+	fbSdoWrite				: FB_SDO_WRITE;
+	bSendDistancePending	: BOOL;
+	bSendUnlockOffsetPending: BOOL;
+	fbList					: FB_LinkedListCtrl;
+	hList					: T_HLINKEDLIST;
+	aListNodes				: ARRAY[0..6] OF T_LinkedListEntry;
+	nListValue				: PVOID;
+	
+	bLock					: BOOL;
+	nLockOffset				: DINT;
+	bUnlock					: BOOL;
+	nUnlockOffset			: DINT;
+	bMovePlunger			: BOOL;
+	nMovePos				: DINT;
+	nMoveDistance			: DINT;
+	nMoveFeed				: DINT;
+	bExtrude				: BOOL;
+	
+	nCompDistanceTemp		: DINT;
+	nRelaxDistanceTemp		: DINT;
+	nRelaxFeedTemp			: DINT;
+	nDistanceTemp			: DINT;
+	nFeedTemp				: DINT;
+	
+	nStateAction			: USINT;
+	
+	timer					: TON;
+	
+	bStop					: BOOL;
+
+END_VAR
+
+VAR CONSTANT
+	cMaxPosPiston	 		: DINT := 65000;//µm
+	cMaxPosSyringe			: DINT := 87000;//µm
+	cMaxFeedPiston			: DINT := 3000;//µm/s
+	cMaxFeedSyringe			: DINT := 12000;//µm/s
+END_VAR]]></Declaration>
+    <Implementation>
+      <ST><![CDATA[IF pFbExtruderRef = 0 THEN
+	RETURN;
+END_IF
+
+pFbPistonExtruderRef := pFbExtruderRef;
+
+IF nStateSdo = 0 THEN //nächsten Eintrag aus Liste holen
+	fbList.A_GetHead(hList:= hList,getValue=> nListValue);
+	IF fbList.bOk THEN
+		{IF  hasvalue (RegisterSize, '32')}
+		nStateSdo := UDINT_TO_USINT(nListValue);
+		{ELSE}
+		nStateSdo := ULINT_TO_USINT(nListValue);
+		{END_IF}		
+		fbList.A_RemoveHeadValue(hList:= hList);
+	END_IF
+END_IF
+
+IF nStateSdo = 1 THEN	//Feed
+	fbSdoWrite(sADSNetID:= pFbPistonExtruderRef^.pMultiZRef^.P_sAdsNetId, nPortNr:= pFbPistonExtruderRef^.pMultiZRef^.P_nAdsPort, 
+				nIndex:= cExtruderFeed.nIndex, nSubIndex:= pFbPistonExtruderRef^.nChannel, nDataLength:= cExtruderFeed.nLength,
+				nData:= pFbPistonExtruderRef^.P_nFeedCalc, bExecute:= TRUE); 
+	
+ELSIF nStateSdo = 2 THEN //CompressFeed
+	fbSdoWrite(sADSNetID:= pFbPistonExtruderRef^.pMultiZRef^.P_sAdsNetId, nPortNr:= pFbPistonExtruderRef^.pMultiZRef^.P_nAdsPort, 
+				nIndex:= cExtruderCompressFeed.nIndex, nSubIndex:= pFbPistonExtruderRef^.nChannel, nDataLength:= cExtruderCompressFeed.nLength,
+				nData:= pFbPistonExtruderRef^.P_nCompFeedCalc, bExecute:= TRUE); 
+	
+ELSIF nStateSdo = 3 THEN //RelaxFeed
+	fbSdoWrite(sADSNetID:= pFbPistonExtruderRef^.pMultiZRef^.P_sAdsNetId, nPortNr:= pFbPistonExtruderRef^.pMultiZRef^.P_nAdsPort, 
+				nIndex:= cExtruderRelaxFeed.nIndex, nSubIndex:= pFbPistonExtruderRef^.nChannel, nDataLength:= cExtruderRelaxFeed.nLength,
+				nData:= pFbPistonExtruderRef^.P_nRelaxFeedCalc, bExecute:= TRUE); 
+	
+ELSIF nStateSdo = 4 THEN //Distance
+	fbSdoWrite(sADSNetID:= pFbPistonExtruderRef^.pMultiZRef^.P_sAdsNetId, nPortNr:= pFbPistonExtruderRef^.pMultiZRef^.P_nAdsPort, 
+				nIndex:= cExtruderDistance.nIndex, nSubIndex:= pFbPistonExtruderRef^.nChannel, nDataLength:= cExtruderDistance.nLength,
+				nData:= pFbPistonExtruderRef^.P_nDistanceCalc, bExecute:= TRUE);
+	
+ELSIF nStateSdo = 5 THEN //CompressDistance
+	fbSdoWrite(sADSNetID:= pFbPistonExtruderRef^.pMultiZRef^.P_sAdsNetId, nPortNr:= pFbPistonExtruderRef^.pMultiZRef^.P_nAdsPort, 
+				nIndex:= cExtruderCompressDistance.nIndex, nSubIndex:= pFbPistonExtruderRef^.nChannel, nDataLength:= cExtruderCompressDistance.nLength,
+				nData:= pFbPistonExtruderRef^.P_nCompDistanceCalc, bExecute:= TRUE);
+
+ELSIF nStateSdo = 6 THEN //RelaxDistance
+	fbSdoWrite(sADSNetID:= pFbPistonExtruderRef^.pMultiZRef^.P_sAdsNetId, nPortNr:= pFbPistonExtruderRef^.pMultiZRef^.P_nAdsPort, 
+				nIndex:= cExtruderRelaxDistance.nIndex, nSubIndex:= pFbPistonExtruderRef^.nChannel, nDataLength:= cExtruderRelaxDistance.nLength,
+				nData:= pFbPistonExtruderRef^.P_nRelaxDistanceCalc, bExecute:= TRUE);
+				
+ELSIF nStateSdo = 7 THEN //UnlockOffset
+	fbSdoWrite(sADSNetID:= pFbPistonExtruderRef^.pMultiZRef^.P_sAdsNetId, nPortNr:= pFbPistonExtruderRef^.pMultiZRef^.P_nAdsPort, 
+				nIndex:= cExtruderUnlockOffset.nIndex, nSubIndex:= pFbPistonExtruderRef^.nChannel, nDataLength:= cExtruderUnlockOffset.nLength,
+				nData:= pFbPistonExtruderRef^.P_nUnlockOffsetCalc, bExecute:= TRUE);				
+END_IF
+
+IF NOT fbSdoWrite.bBusy THEN
+	IF fbSdoWrite.bError THEN
+		bError := TRUE;
+		nErrorId := fbSdoWrite.nAdsErrorId;		
+	END_IF
+	fbSdoWrite(bExecute:= FALSE);
+	IF nStateSdo = 4 THEN
+		bSendDistancePending := FALSE;
+	ELSIF nStateSdo = 7 THEN
+		bSendUnlockOffsetPending := FALSE;
+	END_IF
+	nStateSdo := 0;
+END_IF
+
+
+IF bLock THEN
+	A_Lock();
+ELSIF bUnlock THEN
+	A_Unlock();
+ELSIF bMovePlunger THEN
+	A_MovePlunger();
+ELSIF bExtrude THEN
+	A_Extrude();
+END_IF
+
+IF nStateAction >= 80 THEN
+	IF nStateAction >= 99 THEN
+		bError := TRUE;
+	END_IF
+	bLock := bUnlock := bMovePlunger := bExtrude := FALSE;
+	nStateAction := 0;
+END_IF
+
+bBusy := bLock OR bUnlock OR bMovePlunger OR bExtrude;]]></ST>
+    </Implementation>
+    <Action Name="A_Extrude" Id="{cbbeb795-f017-486a-a146-c756f9c8af36}">
+      <Implementation>
+        <ST><![CDATA[CASE nStateAction OF
+	0:	//warten, bis Distance gesendet
+		IF NOT bSendDistancePending THEN
+			pFbPistonExtruderRef^.pToolCtrl^.0 := TRUE;
+			nStateAction := 1;				
+		END_IF
+		
+	1:	//Timeout für active
+		timer(IN:=TRUE,PT:=T#1S);
+		IF pFbPistonExtruderRef^.P_bIsActive THEN
+			timer(IN:=FALSE);
+			nStateAction := 2;
+		ELSE
+			IF timer.Q THEN
+				timer(IN:=FALSE);
+				nErrorId := E_ErrorIdMultiZ.ERRORID_TimeoutExtrude;
+				pFbPistonExtruderRef^.pToolCtrl^ := 0;
+				nStateAction := 99;
+			END_IF
+		END_IF
+		
+	2:	//warten, bis Extrude fertig
+		IF NOT pFbPistonExtruderRef^.P_bIsActive OR bStop THEN
+			bStop := FALSE;
+			pFbPistonExtruderRef^.pToolCtrl^.0 := FALSE;
+			nStateAction := 80;
+		END_IF
+	
+END_CASE]]></ST>
+      </Implementation>
+    </Action>
+    <Action Name="A_Lock" Id="{fc30b96a-fc15-449c-8aad-3a49d43240a8}">
+      <Implementation>
+        <ST><![CDATA[CASE nStateAction OF
+	0:	//Wartezyklus
+		IF pFbPistonExtruderRef^.P_bIsActive THEN
+			nStateAction := 99;
+		ELSE
+			nStateAction := 1;
+		END_IF
+	1:	//Locking starten
+		pFbPistonExtruderRef^.pToolCtrl^.0 := TRUE;
+		pFbPistonExtruderRef^.pToolCtrl^.2 := TRUE;
+		//Timeout für active
+		timer(IN:=TRUE,PT:=T#1S);
+		IF pFbPistonExtruderRef^.P_bIsActive THEN
+			pFbPistonExtruderRef^.pToolCtrl^.0 := FALSE;
+			timer(IN:=FALSE);
+			nStateAction := 2;
+		ELSE
+			IF timer.Q THEN
+				timer(IN:=FALSE);
+				nErrorId := E_ErrorIdMultiZ.ERRORID_TimeoutLock;
+				nStateAction := 99;
+			END_IF
+		END_IF
+		
+	2:	//waiting for "ready state"
+		timer(IN:=TRUE,PT:=T#25S);
+		IF NOT pFbPistonExtruderRef^.P_bIsActive THEN
+			timer(IN:=FALSE);
+			IF nLockOffset > 0 AND NOT pFbPistonExtruderRef^.pToolCtrl^.1 THEN
+				nStateAction := 3;
+			ELSE
+				nStateAction := 80;
+			END_IF
+			pFbPistonExtruderRef^.pToolCtrl^ := 0;
+		ELSE
+			IF timer.Q THEN
+				timer(IN:=FALSE);
+				nErrorId := E_ErrorIdMultiZ.ERRORID_TimeoutLock;
+				nStateAction := 99;
+			END_IF
+		END_IF
+		
+	3:	//auf Offset fahren
+		//aktuelle CompDistance, RelaxDistance, Feed, Distance sichern
+		nCompDistanceTemp := pFbPistonExtruderRef^.P_nCompDistanceOrgin;
+		nRelaxDistanceTemp := pFbPistonExtruderRef^.P_nRelaxDistanceOrgin;
+		nFeedTemp := pFbPistonExtruderRef^.P_nFeedOrgin;
+		nDistanceTemp := pFbPistonExtruderRef^.P_nDistanceOrgin;
+		
+		//CompDist + RelaxDist auf 0 setzen
+		M_SetCompDistance(0);
+		M_SetRelaxDistance(0);
+		nMoveFeed := M_SetFeedToMax();
+		M_SetDistance(nLockOffset); //Distance auf Offset setzen
+		nStateAction := 4;
+		
+	4:	//warten bis Distance gesendet (andere werden vorher gesendet)
+		IF NOT bSendDistancePending THEN
+			pFbPistonExtruderRef^.pToolCtrl^.0 := TRUE;
+			timer(IN:=FALSE);
+			nStateAction := 5;
+		END_IF
+		
+	5:	//waiting for "active state"
+		timer(IN:=TRUE,PT:=T#1S);
+		IF pFbPistonExtruderRef^.P_bIsActive THEN
+			timer(IN:=FALSE);
+			//timeout berechnen
+			timer.PT := REAL_TO_TIME((DINT_TO_REAL(nLockOffset) / DINT_TO_REAL(nMoveFeed))*10000.0 + 3000.0);
+			nStateAction := 6;
+		ELSE
+			IF timer.Q THEN
+				timer(IN:=FALSE);
+				nErrorId := E_ErrorIdMultiZ.ERRORID_TimeoutLock;
+				nStateAction := 7;
+			END_IF
+		END_IF
+		
+	6:	//waiting for "ready state"
+		timer(IN:=TRUE);
+		IF NOT pFbPistonExtruderRef^.P_bIsActive THEN
+			timer(IN:=FALSE);
+			pFbPistonExtruderRef^.pToolCtrl^ := 0;
+			nStateAction := 7;
+		ELSE
+			IF timer.Q THEN
+				timer(IN:=FALSE);
+				nErrorId := E_ErrorIdMultiZ.ERRORID_TimeoutLock;
+				nStateAction := 7;
+			END_IF
+		END_IF
+		
+	7:	//gesicherte Parameter zurückschreiben
+		M_SetCompDistance(nCompDistanceTemp);
+		M_SetRelaxDistance(nRelaxDistanceTemp);
+		M_SetFeed(nFeedTemp);
+		M_SetDistance(nDistanceTemp);
+		nStateAction := 8;
+
+	8:	//warten bis Distance gesendet (andere werden vorher gesendet)
+		IF NOT bSendDistancePending THEN
+			IF nErrorId > 0 THEN
+				nStateAction := 99;
+			ELSE
+				nStateAction := 80;
+			END_IF
+		END_IF		
+
+END_CASE
+
+IF nStateAction = 99 THEN
+	pFbPistonExtruderRef^.pToolCtrl^ := 0;
+END_IF]]></ST>
+      </Implementation>
+    </Action>
+    <Action Name="A_MovePlunger" Id="{52873978-f7b4-4179-85d8-663bea95e237}">
+      <Implementation>
+        <ST><![CDATA[//Ähnlich wie Extrude impl.
+//vorher aktuelle Position von Zielposition abziehen
+//CompDist und RelaxDist auf 0 setzen
+CASE nStateAction OF
+	0:	//aktuelle CompDistance, RelaxDistance, Feed, Distance sichern
+		nCompDistanceTemp := pFbPistonExtruderRef^.P_nCompDistanceOrgin;
+		nRelaxDistanceTemp := pFbPistonExtruderRef^.P_nRelaxDistanceOrgin;
+		nRelaxFeedTemp := pFbPistonExtruderRef^.P_nRelaxFeedOrgin;
+		nFeedTemp := pFbPistonExtruderRef^.P_nFeedOrgin;
+		nDistanceTemp := pFbPistonExtruderRef^.P_nDistanceOrgin;
+		
+		nStateAction := 1;
+
+		M_SetCompDistance(0);
+		IF nMovePos > pFbPistonExtruderRef^.P_nCurrentPos THEN
+			M_SetRelaxDistance(0);
+			nMoveFeed := M_SetFeedToMax();
+			nMoveDistance := nMovePos - pFbPistonExtruderRef^.P_nCurrentPos; 
+			M_SetDistance(nMoveDistance);
+		ELSIF nMovePos < pFbPistonExtruderRef^.P_nCurrentPos THEN
+			nMoveDistance := pFbPistonExtruderRef^.P_nCurrentPos - nMovePos;
+			M_SetRelaxDistance(nMoveDistance);
+			nMoveFeed := M_SetRelaxFeedToMax();
+			M_SetFeedToMax();
+			M_SetDistance(1);
+		ELSE
+			nStateAction := 80;
+			RETURN;
+		END_IF
+		
+	1:	//warten bis Distance gesendet (andere werden vorher gesendet)
+		IF NOT bSendDistancePending THEN
+			pFbPistonExtruderRef^.pToolCtrl^.0 := TRUE;
+			nStateAction := 2;
+		END_IF
+		
+	2:	//waiting for "active state"
+		timer(IN:=TRUE,PT:=T#1S);
+		IF pFbPistonExtruderRef^.P_bIsActive THEN
+			timer(IN:=FALSE);
+			//timeout berechnen
+			timer.PT := REAL_TO_TIME((DINT_TO_REAL(nMoveDistance) / DINT_TO_REAL(nMoveFeed))*10000.0 + 3000.0);
+			nStateAction := 3;
+		ELSE
+			IF timer.Q THEN
+				timer(IN:=FALSE);
+				nErrorId := E_ErrorIdMultiZ.ERRORID_TimeoutMovePlunger;
+				nStateAction := 4;
+			END_IF
+		END_IF	
+		
+	3:	//warten, bis Extrude fertig
+		timer(IN:=TRUE);
+		IF NOT pFbPistonExtruderRef^.P_bIsActive THEN
+			timer(IN:=FALSE);
+			pFbPistonExtruderRef^.pToolCtrl^ := 0;
+			nStateAction := 4;
+		ELSE
+			IF timer.Q THEN
+				timer(IN:=FALSE);
+				nErrorId := E_ErrorIdMultiZ.ERRORID_TimeoutMovePlunger;
+				nStateAction := 4;
+			END_IF
+		END_IF
+		
+	4:	//gesicherte Parameter zurückschreiben
+		M_SetCompDistance(nCompDistanceTemp);
+		M_SetRelaxDistance(nRelaxDistanceTemp);
+		M_SetRelaxFeed(nRelaxFeedTemp);
+		M_SetFeed(nFeedTemp);
+		M_SetDistance(nDistanceTemp);
+		nStateAction := 5;
+		
+	5:	//warten bis Distance gesendet (andere werden vorher gesendet)
+		IF NOT bSendDistancePending THEN
+			IF nErrorId > 0 THEN
+				nStateAction := 99;
+			ELSE
+				nStateAction := 80;	
+			END_IF
+		END_IF			
+END_CASE
+
+IF nStateAction = 99 THEN
+	pFbPistonExtruderRef^.pToolCtrl^ := 0;
+END_IF]]></ST>
+      </Implementation>
+    </Action>
+    <Action Name="A_Unlock" Id="{a98f7662-7402-4d8b-aaed-e9a256bae2f3}">
+      <Implementation>
+        <ST><![CDATA[CASE nStateAction OF
+	0:	//warten bis nUnlockOffset übertragen
+		IF NOT bSendUnlockOffsetPending THEN
+			nStateAction := 1;
+		END_IF
+		
+	1:	//UnLocking starten
+		pFbPistonExtruderRef^.pToolCtrl^.0 := TRUE;
+		pFbPistonExtruderRef^.pToolCtrl^.2 := TRUE;
+		//Timeout für active
+		timer(IN:=TRUE,PT:=T#1S);
+		IF pFbPistonExtruderRef^.P_bIsActive THEN
+			pFbPistonExtruderRef^.pToolCtrl^.0 := FALSE;
+			timer(IN:=FALSE);
+			nStateAction := 2;
+		ELSE
+			IF timer.Q THEN
+				timer(IN:=FALSE);
+				nErrorId := E_ErrorIdMultiZ.ERRORID_TimeoutUnLock;
+				nStateAction := 99;
+			END_IF
+		END_IF
+		
+	2:	//warten, bis UnLocking ready
+		timer(IN:=TRUE,PT:=T#70S);
+		IF NOT pFbPistonExtruderRef^.P_bIsActive THEN
+			timer(IN:=FALSE);
+			pFbPistonExtruderRef^.pToolCtrl^ := 0;
+			nStateAction := 80;
+		ELSE
+			IF timer.Q THEN
+				timer(IN:=FALSE);
+				nErrorId := E_ErrorIdMultiZ.ERRORID_TimeoutUnLock;
+				nStateAction := 99;
+			END_IF
+		END_IF
+END_CASE
+
+IF nStateAction = 99 THEN
+	pFbPistonExtruderRef^.pToolCtrl^ := 0;
+END_IF]]></ST>
+      </Implementation>
+    </Action>
+    <Method Name="FB_init" Id="{ad08ff75-f75f-4d4e-899b-a26246863797}">
+      <Declaration><![CDATA[METHOD FB_init : BOOL
+VAR_INPUT
+	bInitRetains : BOOL; // if TRUE, the retain variables are initialized (warm start / cold start)
+	bInCopyCode : BOOL;  // if TRUE, the instance afterwards gets moved into the copy code (online change)
+END_VAR
+]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[F_CreateLinkedListHnd(ADR(aListNodes ), SIZEOF(aListNodes ), hList);]]></ST>
+      </Implementation>
+    </Method>
+    <Method Name="M_Add" Id="{12b0027a-0213-46a0-bee7-338ff0559525}">
+      <Declaration><![CDATA[METHOD PRIVATE M_Add
+VAR_INPUT
+	nValue : UDINT;
+END_VAR
+VAR
+	pPosPtr	: POINTER TO T_LinkedListEntry := 0;
+END_VAR]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[//Checken, ob Eintrag schon vorhanden
+fbList.A_GetHead(hList:= hList,getValue=> nListValue, getPosPtr=> pPosPtr);
+IF fbList.bOk THEN
+	IF nValue = nListValue THEN	//Eintrag schon vorhanden
+		RETURN;		
+	ELSE //Eintrag nicht vorhanden -> weitersuchen
+		REPEAT
+			fbList.A_GetNext(hList:= hList,getValue=> nListValue, putPosPtr:= pPosPtr, getPosPtr=> pPosPtr);
+			IF fbList.bOk THEN
+				IF nValue = nListValue THEN	//Eintrag schon vorhanden
+					RETURN;
+				END_IF
+			END_IF
+		UNTIL NOT fbList.bOk
+		END_REPEAT
+	END_IF
+END_IF
+
+fbList.A_AddTailValue(hList:= hList, putValue:= nValue);]]></ST>
+      </Implementation>
+    </Method>
+    <Method Name="M_HardStop" Id="{cf72ab57-c2e2-4b83-99a9-25c7f9c24e9e}">
+      <Declaration><![CDATA[METHOD M_HardStop
+VAR_INPUT
+END_VAR
+]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[IF pFbPistonExtruderRef^.P_bIsActive THEN
+	pFbPistonExtruderRef^.pToolCtrl^ := 2;
+END_IF]]></ST>
+      </Implementation>
+    </Method>
+    <Method Name="M_Init" Id="{dce0e30f-6c7c-4159-9792-3884a0fde4dd}">
+      <Declaration><![CDATA[METHOD M_Init
+VAR_INPUT
+END_VAR
+
+VAR
+	i : USINT;
+END_VAR]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[//Alle Parameter übertragen
+FOR i := 1 TO 7 BY 1 DO
+	M_Add(i);
+END_FOR]]></ST>
+      </Implementation>
+    </Method>
+    <Method Name="M_Lock" Id="{7420e009-b527-44b6-9232-21b3000a9ced}">
+      <Declaration><![CDATA[METHOD M_Lock
+VAR_INPUT
+	nOffset : DINT;
+END_VAR
+]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[IF NOT (pFbPistonExtruderRef^.P_bIsActive OR pFbExtruderRef^.P_bError OR bBusy) THEN
+	nLockOffset := nOffset;
+	pFbPistonExtruderRef^.pToolCtrl^ := 0;
+	bBusy := TRUE;
+	bLock := TRUE;	
+END_IF]]></ST>
+      </Implementation>
+    </Method>
+    <Method Name="M_MovePlunger" Id="{38e60e70-e6a5-4b52-a900-86710b6fc9f2}">
+      <Declaration><![CDATA[METHOD M_MovePlunger
+VAR_INPUT
+	nPosition : DINT;
+END_VAR
+]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[nMovePos := nPosition;
+IF  NOT(pFbPistonExtruderRef^.P_bIsActive OR pFbPistonExtruderRef^.P_bError OR bBusy) THEN
+	bBusy := TRUE;
+	bMovePlunger := TRUE;
+	pFbPistonExtruderRef^.pToolCtrl^ := 0;
+END_IF]]></ST>
+      </Implementation>
+    </Method>
+    <Method Name="M_SetCompDistance" Id="{f27db045-b279-43ed-a422-eae536a4a5a8}">
+      <Declaration><![CDATA[METHOD M_SetCompDistance : ERRORID
+VAR_INPUT
+		nValue : DINT;
+END_VAR
+
+VAR
+	nMaxCompPos : DINT;
+END_VAR]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[IF eSubType = E_ExtruderType.PistonExtruder1 THEN
+	nMaxCompPos  := cMaxPosPiston;
+ELSIF eSubType = E_ExtruderType.SyringeExtruder1 THEN
+	nMaxCompPos  := cMaxPosSyringe;
+ELSE
+	M_SetCompDistance := E_ErrorIdObjMgmt.ERRORID_InvalidExtruderSubType;
+END_IF
+
+IF nValue >= 0 AND nValue <= nMaxCompPos THEN
+	IF pFbPistonExtruderRef > 0 THEN
+		IF pFbPistonExtruderRef^.P_nCompDistanceOrgin <> nValue THEN
+			pFbPistonExtruderRef^.P_nCompDistanceOrgin := nValue;
+			M_Add(5);
+		END_IF
+	END_IF
+ELSE
+	M_SetCompDistance := E_ErrorIdObjMgmt.ERRORID_InvalidCompressDistance;
+END_IF]]></ST>
+      </Implementation>
+    </Method>
+    <Method Name="M_SetCompFeed" Id="{af54794a-3074-406e-a512-ebf846531dfd}">
+      <Declaration><![CDATA[METHOD M_SetCompFeed : ERRORID
+VAR_INPUT
+	nValue : DINT;
+END_VAR
+
+VAR
+	nMaxCompFeed : DINT;
+END_VAR]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[IF eSubType = E_ExtruderType.PistonExtruder1 THEN
+	nMaxCompFeed := cMaxFeedPiston;
+ELSIF eSubType = E_ExtruderType.SyringeExtruder1 THEN
+	nMaxCompFeed := cMaxFeedSyringe;
+ELSE
+	M_SetCompFeed := E_ErrorIdObjMgmt.ERRORID_InvalidExtruderSubType;
+END_IF
+
+IF nValue >= 0 AND nValue <= nMaxCompFeed THEN
+	IF pFbPistonExtruderRef > 0 THEN
+		IF pFbPistonExtruderRef^.P_nCompFeedOrgin <> nValue THEN
+			pFbPistonExtruderRef^.P_nCompFeedOrgin := nValue;
+			M_Add(2);
+		END_IF
+	END_IF
+ELSE
+	M_SetCompFeed := E_ErrorIdObjMgmt.ERRORID_InvalidCompressFeed;
+END_IF]]></ST>
+      </Implementation>
+    </Method>
+    <Method Name="M_SetDistance" Id="{34b4b23e-096a-48d3-8ddf-55c6dee1e3ca}">
+      <Declaration><![CDATA[METHOD M_SetDistance : ERRORID
+VAR_INPUT
+	nValue : DINT;
+END_VAR
+
+VAR
+	nMaxPos : DINT;
+END_VAR
+]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[IF eSubType = E_ExtruderType.PistonExtruder1 THEN
+	nMaxPos := cMaxPosPiston;
+ELSIF eSubType = E_ExtruderType.SyringeExtruder1 THEN
+	nMaxPos := cMaxPosSyringe;
+ELSE
+	M_SetDistance := E_ErrorIdObjMgmt.ERRORID_InvalidExtruderSubType;
+END_IF
+
+IF nValue >= 0 AND nValue <= nMaxPos THEN
+	IF pFbPistonExtruderRef > 0 THEN
+		IF pFbPistonExtruderRef^.P_nDistanceOrgin <> nValue THEN
+			pFbPistonExtruderRef^.P_nDistanceOrgin := nValue;
+			M_Add(4);
+			bSendDistancePending := TRUE;
+		END_IF
+	END_IF
+ELSE
+	M_SetDistance := E_ErrorIdObjMgmt.ERRORID_InvalidExtrudeDistance;
+END_IF]]></ST>
+      </Implementation>
+    </Method>
+    <Method Name="M_SetFeed" Id="{839d52e2-6609-482f-816c-1649a2130ac9}">
+      <Declaration><![CDATA[METHOD M_SetFeed : ERRORID
+VAR_INPUT
+	nValue : DINT;
+END_VAR
+
+VAR
+	nMaxFeed : DINT;
+END_VAR
+]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[IF eSubType = E_ExtruderType.PistonExtruder1 THEN
+	nMaxFeed := cMaxFeedPiston;
+ELSIF eSubType = E_ExtruderType.SyringeExtruder1 THEN
+	nMaxFeed := cMaxFeedSyringe;
+ELSE
+	M_SetFeed := E_ErrorIdObjMgmt.ERRORID_InvalidExtruderSubType;
+END_IF
+
+IF nValue >= 0 AND nValue <= nMaxFeed THEN
+	IF pFbPistonExtruderRef > 0 THEN
+		IF pFbPistonExtruderRef^.P_nFeedOrgin <> nValue THEN
+			pFbPistonExtruderRef^.P_nFeedOrgin := nValue;
+			M_Add(1);
+		END_IF
+	END_IF
+ELSE
+	M_SetFeed := E_ErrorIdObjMgmt.ERRORID_InvalidExtrudeFeed;
+END_IF]]></ST>
+      </Implementation>
+    </Method>
+    <Method Name="M_SetFeedToMax" Id="{7644cab0-bcfb-4d8b-8c71-e7e1e5ba5222}">
+      <Declaration><![CDATA[METHOD M_SetFeedToMax : DINT
+VAR_INPUT
+END_VAR
+]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[IF eSubType = E_ExtruderType.PistonExtruder1 THEN
+	M_SetFeed(cMaxFeedPiston);
+	M_SetFeedToMax := cMaxFeedPiston;
+ELSIF eSubType = E_ExtruderType.SyringeExtruder1 THEN
+	M_SetFeed(cMaxFeedSyringe);
+	M_SetFeedToMax := cMaxFeedSyringe;
+END_IF]]></ST>
+      </Implementation>
+    </Method>
+    <Method Name="M_SetRelaxDistance" Id="{8ebd5eb2-be1c-498f-85fd-680e3e284565}">
+      <Declaration><![CDATA[METHOD M_SetRelaxDistance : ERRORID
+VAR_INPUT
+	nValue : DINT;
+END_VAR
+
+VAR
+	nMaxRelaxPos : DINT;
+END_VAR
+]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[IF eSubType = E_ExtruderType.PistonExtruder1 THEN
+	nMaxRelaxPos := cMaxPosPiston;
+ELSIF eSubType = E_ExtruderType.SyringeExtruder1 THEN
+	nMaxRelaxPos := cMaxPosSyringe;
+ELSE
+	M_SetRelaxDistance := E_ErrorIdObjMgmt.ERRORID_InvalidExtruderSubType;
+END_IF
+
+IF nValue >= 0 AND nValue <= nMaxRelaxPos THEN
+	IF pFbPistonExtruderRef > 0 THEN
+		IF pFbPistonExtruderRef^.P_nRelaxDistanceOrgin <> nValue THEN
+			pFbPistonExtruderRef^.P_nRelaxDistanceOrgin := nValue;
+			M_Add(6);
+		END_IF
+	END_IF
+ELSE
+	M_SetRelaxDistance := E_ErrorIdObjMgmt.ERRORID_InvalidRelaxDistance;
+END_IF]]></ST>
+      </Implementation>
+    </Method>
+    <Method Name="M_SetRelaxFeed" Id="{30677a91-e6ba-474e-abd8-7aa0b7a14a33}">
+      <Declaration><![CDATA[METHOD M_SetRelaxFeed : ERRORID
+VAR_INPUT
+	nValue : DINT;
+END_VAR
+
+VAR
+	nMaxRelaxFeed : DINT;
+END_VAR]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[IF eSubType = E_ExtruderType.PistonExtruder1 THEN
+	nMaxRelaxFeed := cMaxFeedPiston;
+ELSIF eSubType = E_ExtruderType.SyringeExtruder1 THEN
+	nMaxRelaxFeed := cMaxFeedSyringe;
+ELSE
+	M_SetRelaxFeed := E_ErrorIdObjMgmt.ERRORID_InvalidExtruderSubType;
+END_IF
+
+IF nValue >= 0 AND nValue <= nMaxRelaxFeed THEN
+	IF pFbPistonExtruderRef > 0 THEN
+		IF pFbPistonExtruderRef^.P_nRelaxFeedOrgin <> nValue THEN
+			pFbPistonExtruderRef^.P_nRelaxFeedOrgin := nValue;
+			M_Add(3);
+		END_IF
+	END_IF
+ELSE
+	M_SetRelaxFeed := E_ErrorIdObjMgmt.ERRORID_InvalidRelaxFeed;	
+END_IF]]></ST>
+      </Implementation>
+    </Method>
+    <Method Name="M_SetRelaxFeedToMax" Id="{01a14a88-5ca4-431d-8c5e-f5fc04731720}">
+      <Declaration><![CDATA[METHOD M_SetRelaxFeedToMax : DINT
+VAR_INPUT
+END_VAR
+]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[IF eSubType = E_ExtruderType.PistonExtruder1 THEN
+	M_SetRelaxFeed(cMaxFeedPiston);
+	M_SetRelaxFeedToMax := cMaxFeedPiston;
+ELSIF eSubType = E_ExtruderType.SyringeExtruder1 THEN
+	M_SetRelaxFeed(cMaxFeedSyringe);
+	M_SetRelaxFeedToMax := cMaxFeedSyringe;
+END_IF]]></ST>
+      </Implementation>
+    </Method>
+    <Method Name="M_SetUnlockOffset" Id="{4dccb08a-18ea-4482-9435-0f85dd43bcee}">
+      <Declaration><![CDATA[METHOD M_SetUnlockOffset : ERRORID
+VAR_INPUT
+	nValue : DINT;
+END_VAR
+
+VAR
+	nMaxUnlockOffset : DINT;
+END_VAR]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[IF eSubType = E_ExtruderType.PistonExtruder1 THEN
+	nMaxUnlockOffset := cMaxPosPiston;
+ELSIF eSubType = E_ExtruderType.SyringeExtruder1 THEN
+	nMaxUnlockOffset := cMaxPosSyringe;
+ELSE
+	M_SetUnlockOffset := E_ErrorIdObjMgmt.ERRORID_InvalidExtruderSubType;
+END_IF
+
+IF nValue >= 0 AND nValue <= nMaxUnlockOffset THEN
+	IF pFbPistonExtruderRef > 0 THEN
+		IF pFbPistonExtruderRef^.P_nUnlockOffsetOrgin <> nValue THEN
+			pFbPistonExtruderRef^.P_nUnlockOffsetOrgin := nValue;
+			M_Add(7);
+			bSendUnlockOffsetPending := TRUE;
+		END_IF
+	END_IF
+ELSE
+	M_SetUnlockOffset := E_ErrorIdObjMgmt.ERRORID_InvalidUnlockOffset;	
+END_IF]]></ST>
+      </Implementation>
+    </Method>
+    <Method Name="M_StartStop" Id="{a7d55010-a248-4e87-b7d9-dd3617b51ee5}">
+      <Declaration><![CDATA[METHOD M_StartStop
+VAR_INPUT
+	bStart : BOOL;
+END_VAR
+]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[//Extruder darf nur gestartet werden, wenn:
+//1. Das Status-bit ist nicht gesetzt
+//2. er ist nicht in Error
+
+IF bStart AND NOT (pFbPistonExtruderRef^.P_bIsActive OR pFbPistonExtruderRef^.P_bError OR bBusy) THEN
+	bBusy := TRUE;
+	bExtrude := TRUE;
+	bStop := FALSE;
+	pFbPistonExtruderRef^.pToolCtrl^.1 := FALSE; //HardStop
+	pFbPistonExtruderRef^.pToolCtrl^.2 := FALSE; //Mode "Lock/Unlock"
+ELSE
+	bStop := TRUE;
+END_IF]]></ST>
+      </Implementation>
+    </Method>
+    <Method Name="M_Unlock" Id="{cc8bb752-49e5-491c-86f9-29c8e3cc5498}">
+      <Declaration><![CDATA[METHOD M_Unlock
+VAR_INPUT
+	nOffset : DINT;
+END_VAR
+]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[IF NOT (pFbPistonExtruderRef^.P_bIsActive OR pFbExtruderRef^.P_bError OR bBusy) THEN
+	nUnlockOffset := nOffset;
+	M_SetUnlockOffset(nUnlockOffset);
+	pFbPistonExtruderRef^.pToolCtrl^.2 := FALSE;
+	bBusy := TRUE;
+	bUnLock := TRUE;
+END_IF]]></ST>
+      </Implementation>
+    </Method>
+    <Property Name="P_eSubType" Id="{992420da-7e6f-4629-a2f1-0876edbe31a9}">
+      <Declaration><![CDATA[PROPERTY P_eSubType : E_ExtruderType]]></Declaration>
+      <Get Name="Get" Id="{69605781-ddd0-45c9-989e-89d5e51a07d1}">
+        <Declaration><![CDATA[VAR
+END_VAR
+]]></Declaration>
+        <Implementation>
+          <ST><![CDATA[P_eSubType := eSubType;]]></ST>
+        </Implementation>
+      </Get>
+      <Set Name="Set" Id="{c004b309-5d0c-4b33-858e-5baf5b4d4f0f}">
+        <Declaration><![CDATA[VAR
+END_VAR
+]]></Declaration>
+        <Implementation>
+          <ST><![CDATA[eSubType := P_eSubType;]]></ST>
+        </Implementation>
+      </Set>
+    </Property>
+    <Property Name="P_nMaxPos" Id="{3c095b0e-bd84-4c83-ba07-7049027e6496}">
+      <Declaration><![CDATA[PROPERTY P_nMaxPos : DINT]]></Declaration>
+      <Get Name="Get" Id="{2e9de394-19d0-48a1-9af7-5ec5b9c1fe64}">
+        <Declaration><![CDATA[VAR
+END_VAR
+]]></Declaration>
+        <Implementation>
+          <ST><![CDATA[IF eSubType = E_ExtruderType.PistonExtruder1 THEN
+	P_nMaxPos := cMaxPosPiston;
+ELSIF eSubType = E_ExtruderType.SyringeExtruder1 THEN
+	P_nMaxPos := cMaxPosSyringe;
+END_IF]]></ST>
+        </Implementation>
+      </Get>
+    </Property>
+    <LineIds Name="FB_PistonExtruderControl">
+      <LineId Id="796" Count="13" />
+      <LineId Id="811" Count="0" />
+      <LineId Id="813" Count="31" />
+      <LineId Id="949" Count="0" />
+      <LineId Id="951" Count="2" />
+      <LineId Id="950" Count="0" />
+      <LineId Id="845" Count="9" />
+      <LineId Id="1001" Count="1" />
+      <LineId Id="855" Count="2" />
+      <LineId Id="978" Count="2" />
+      <LineId Id="982" Count="0" />
+      <LineId Id="986" Count="5" />
+      <LineId Id="983" Count="0" />
+      <LineId Id="993" Count="0" />
+      <LineId Id="992" Count="0" />
+      <LineId Id="994" Count="0" />
+      <LineId Id="996" Count="1" />
+      <LineId Id="1056" Count="0" />
+      <LineId Id="1000" Count="0" />
+      <LineId Id="995" Count="0" />
+      <LineId Id="1058" Count="0" />
+      <LineId Id="1057" Count="0" />
+    </LineIds>
+    <LineIds Name="FB_PistonExtruderControl.A_Extrude">
+      <LineId Id="40" Count="27" />
+      <LineId Id="3" Count="0" />
+    </LineIds>
+    <LineIds Name="FB_PistonExtruderControl.A_Lock">
+      <LineId Id="1" Count="1" />
+      <LineId Id="20" Count="1" />
+      <LineId Id="24" Count="1" />
+      <LineId Id="22" Count="0" />
+      <LineId Id="5" Count="0" />
+      <LineId Id="9" Count="1" />
+      <LineId Id="32" Count="1" />
+      <LineId Id="26" Count="0" />
+      <LineId Id="134" Count="0" />
+      <LineId Id="42" Count="0" />
+      <LineId Id="27" Count="0" />
+      <LineId Id="29" Count="0" />
+      <LineId Id="38" Count="0" />
+      <LineId Id="43" Count="0" />
+      <LineId Id="145" Count="0" />
+      <LineId Id="39" Count="1" />
+      <LineId Id="28" Count="0" />
+      <LineId Id="6" Count="0" />
+      <LineId Id="8" Count="0" />
+      <LineId Id="41" Count="0" />
+      <LineId Id="46" Count="1" />
+      <LineId Id="153" Count="1" />
+      <LineId Id="156" Count="1" />
+      <LineId Id="155" Count="0" />
+      <LineId Id="166" Count="0" />
+      <LineId Id="49" Count="2" />
+      <LineId Id="144" Count="0" />
+      <LineId Id="52" Count="2" />
+      <LineId Id="159" Count="0" />
+      <LineId Id="56" Count="0" />
+      <LineId Id="61" Count="2" />
+      <LineId Id="126" Count="0" />
+      <LineId Id="64" Count="0" />
+      <LineId Id="117" Count="0" />
+      <LineId Id="57" Count="0" />
+      <LineId Id="65" Count="1" />
+      <LineId Id="172" Count="0" />
+      <LineId Id="67" Count="0" />
+      <LineId Id="60" Count="0" />
+      <LineId Id="71" Count="3" />
+      <LineId Id="158" Count="0" />
+      <LineId Id="89" Count="0" />
+      <LineId Id="75" Count="0" />
+      <LineId Id="90" Count="0" />
+      <LineId Id="92" Count="3" />
+      <LineId Id="140" Count="0" />
+      <LineId Id="174" Count="0" />
+      <LineId Id="96" Count="3" />
+      <LineId Id="146" Count="0" />
+      <LineId Id="100" Count="3" />
+      <LineId Id="105" Count="8" />
+      <LineId Id="147" Count="0" />
+      <LineId Id="114" Count="2" />
+      <LineId Id="119" Count="2" />
+      <LineId Id="124" Count="1" />
+      <LineId Id="123" Count="0" />
+      <LineId Id="127" Count="0" />
+      <LineId Id="129" Count="0" />
+      <LineId Id="128" Count="0" />
+      <LineId Id="131" Count="0" />
+      <LineId Id="148" Count="1" />
+      <LineId Id="151" Count="1" />
+      <LineId Id="150" Count="0" />
+      <LineId Id="130" Count="0" />
+      <LineId Id="91" Count="0" />
+      <LineId Id="3" Count="0" />
+      <LineId Id="136" Count="0" />
+      <LineId Id="135" Count="0" />
+      <LineId Id="139" Count="0" />
+      <LineId Id="138" Count="0" />
+    </LineIds>
+    <LineIds Name="FB_PistonExtruderControl.A_MovePlunger">
+      <LineId Id="117" Count="40" />
+      <LineId Id="202" Count="0" />
+      <LineId Id="159" Count="42" />
+      <LineId Id="104" Count="0" />
+    </LineIds>
+    <LineIds Name="FB_PistonExtruderControl.A_Unlock">
+      <LineId Id="1" Count="1" />
+      <LineId Id="4" Count="3" />
+      <LineId Id="9" Count="5" />
+      <LineId Id="34" Count="0" />
+      <LineId Id="15" Count="4" />
+      <LineId Id="41" Count="0" />
+      <LineId Id="20" Count="1" />
+      <LineId Id="8" Count="0" />
+      <LineId Id="22" Count="0" />
+      <LineId Id="24" Count="3" />
+      <LineId Id="35" Count="0" />
+      <LineId Id="28" Count="3" />
+      <LineId Id="42" Count="0" />
+      <LineId Id="32" Count="1" />
+      <LineId Id="23" Count="0" />
+      <LineId Id="3" Count="0" />
+      <LineId Id="38" Count="2" />
+      <LineId Id="37" Count="0" />
+    </LineIds>
+    <LineIds Name="FB_PistonExtruderControl.FB_init">
+      <LineId Id="7" Count="0" />
+    </LineIds>
+    <LineIds Name="FB_PistonExtruderControl.M_Add">
+      <LineId Id="10" Count="1" />
+      <LineId Id="14" Count="1" />
+      <LineId Id="17" Count="0" />
+      <LineId Id="19" Count="1" />
+      <LineId Id="23" Count="0" />
+      <LineId Id="26" Count="2" />
+      <LineId Id="24" Count="0" />
+      <LineId Id="22" Count="0" />
+      <LineId Id="21" Count="0" />
+      <LineId Id="18" Count="0" />
+      <LineId Id="13" Count="0" />
+      <LineId Id="29" Count="1" />
+      <LineId Id="5" Count="0" />
+    </LineIds>
+    <LineIds Name="FB_PistonExtruderControl.M_HardStop">
+      <LineId Id="9" Count="1" />
+      <LineId Id="5" Count="0" />
+    </LineIds>
+    <LineIds Name="FB_PistonExtruderControl.M_Init">
+      <LineId Id="3" Count="2" />
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="FB_PistonExtruderControl.M_Lock">
+      <LineId Id="29" Count="0" />
+      <LineId Id="38" Count="0" />
+      <LineId Id="33" Count="0" />
+      <LineId Id="11" Count="0" />
+      <LineId Id="17" Count="0" />
+      <LineId Id="5" Count="0" />
+    </LineIds>
+    <LineIds Name="FB_PistonExtruderControl.M_MovePlunger">
+      <LineId Id="5" Count="0" />
+      <LineId Id="7" Count="1" />
+      <LineId Id="10" Count="1" />
+      <LineId Id="9" Count="0" />
+    </LineIds>
+    <LineIds Name="FB_PistonExtruderControl.M_SetCompDistance">
+      <LineId Id="26" Count="0" />
+      <LineId Id="29" Count="0" />
+      <LineId Id="27" Count="0" />
+      <LineId Id="31" Count="0" />
+      <LineId Id="30" Count="0" />
+      <LineId Id="32" Count="0" />
+      <LineId Id="28" Count="0" />
+      <LineId Id="25" Count="0" />
+      <LineId Id="7" Count="0" />
+      <LineId Id="9" Count="0" />
+      <LineId Id="14" Count="0" />
+      <LineId Id="16" Count="0" />
+      <LineId Id="15" Count="0" />
+      <LineId Id="10" Count="1" />
+      <LineId Id="13" Count="0" />
+      <LineId Id="8" Count="0" />
+      <LineId Id="5" Count="0" />
+    </LineIds>
+    <LineIds Name="FB_PistonExtruderControl.M_SetCompFeed">
+      <LineId Id="22" Count="5" />
+      <LineId Id="21" Count="0" />
+      <LineId Id="28" Count="0" />
+      <LineId Id="7" Count="7" />
+      <LineId Id="16" Count="0" />
+      <LineId Id="5" Count="0" />
+    </LineIds>
+    <LineIds Name="FB_PistonExtruderControl.M_SetDistance">
+      <LineId Id="27" Count="5" />
+      <LineId Id="25" Count="1" />
+      <LineId Id="13" Count="0" />
+      <LineId Id="7" Count="5" />
+      <LineId Id="14" Count="2" />
+      <LineId Id="5" Count="0" />
+    </LineIds>
+    <LineIds Name="FB_PistonExtruderControl.M_SetFeed">
+      <LineId Id="36" Count="5" />
+      <LineId Id="33" Count="1" />
+      <LineId Id="14" Count="4" />
+      <LineId Id="20" Count="2" />
+      <LineId Id="24" Count="0" />
+      <LineId Id="5" Count="0" />
+    </LineIds>
+    <LineIds Name="FB_PistonExtruderControl.M_SetFeedToMax">
+      <LineId Id="5" Count="0" />
+      <LineId Id="8" Count="0" />
+      <LineId Id="10" Count="0" />
+      <LineId Id="6" Count="0" />
+      <LineId Id="9" Count="0" />
+      <LineId Id="11" Count="0" />
+      <LineId Id="7" Count="0" />
+    </LineIds>
+    <LineIds Name="FB_PistonExtruderControl.M_SetRelaxDistance">
+      <LineId Id="45" Count="5" />
+      <LineId Id="39" Count="0" />
+      <LineId Id="51" Count="0" />
+      <LineId Id="19" Count="7" />
+      <LineId Id="28" Count="0" />
+      <LineId Id="5" Count="0" />
+    </LineIds>
+    <LineIds Name="FB_PistonExtruderControl.M_SetRelaxFeed">
+      <LineId Id="31" Count="5" />
+      <LineId Id="29" Count="1" />
+      <LineId Id="15" Count="7" />
+      <LineId Id="24" Count="0" />
+      <LineId Id="5" Count="0" />
+    </LineIds>
+    <LineIds Name="FB_PistonExtruderControl.M_SetRelaxFeedToMax">
+      <LineId Id="5" Count="0" />
+      <LineId Id="8" Count="0" />
+      <LineId Id="10" Count="0" />
+      <LineId Id="6" Count="0" />
+      <LineId Id="9" Count="0" />
+      <LineId Id="11" Count="0" />
+      <LineId Id="7" Count="0" />
+    </LineIds>
+    <LineIds Name="FB_PistonExtruderControl.M_SetUnlockOffset">
+      <LineId Id="39" Count="5" />
+      <LineId Id="38" Count="0" />
+      <LineId Id="45" Count="0" />
+      <LineId Id="15" Count="4" />
+      <LineId Id="30" Count="0" />
+      <LineId Id="20" Count="2" />
+      <LineId Id="24" Count="0" />
+      <LineId Id="5" Count="0" />
+    </LineIds>
+    <LineIds Name="FB_PistonExtruderControl.M_StartStop">
+      <LineId Id="51" Count="11" />
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="FB_PistonExtruderControl.M_Unlock">
+      <LineId Id="6" Count="0" />
+      <LineId Id="14" Count="0" />
+      <LineId Id="20" Count="0" />
+      <LineId Id="9" Count="0" />
+      <LineId Id="7" Count="1" />
+      <LineId Id="5" Count="0" />
+    </LineIds>
+    <LineIds Name="FB_PistonExtruderControl.P_eSubType.Get">
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="FB_PistonExtruderControl.P_eSubType.Set">
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="FB_PistonExtruderControl.P_nMaxPos.Get">
+      <LineId Id="2" Count="0" />
+      <LineId Id="7" Count="1" />
+      <LineId Id="5" Count="1" />
+    </LineIds>
+  </POU>
+</TcPlcObject>

@@ -1,0 +1,70 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<TcPlcObject Version="1.1.0.1" ProductVersion="3.1.4022.7">
+  <POU Name="F_GET_GCODE_NCLINE" Id="{4b468f38-948e-4330-a7cf-2f5eb3769aad}" SpecialFunc="None">
+    <Declaration><![CDATA[FUNCTION F_GET_GCODE_NCLINE : REAL
+VAR_INPUT
+	sGCodeLines: STRING(100);
+	sSeachCode: STRING;
+END_VAR
+VAR
+	nLines: USINT;
+	nLenString: INT;
+	nFirstPos: INT := 1;
+	nEndPos: INT;
+	i: INT;
+	sLine: STRING(100);
+	sChar: STRING(1);
+	sValue: STRING;
+END_VAR
+]]></Declaration>
+    <Implementation>
+      <ST><![CDATA[nLenString := LEN(sGCodeLines);
+//Anzahl der Zeilen ermitteln
+REPEAT
+	i := i + 1;
+	IF MID(sGCodeLines,1,i) = '$N' THEN
+		nLines := nLines + 1;
+		IF nLines = 1 THEN
+			nFirstPos := 1;
+			nEndPos := i - 2;	
+		ELSE
+			nFirstPos := nEndPos + 3;
+			nEndPos := i - 2;
+		END_IF
+	END_IF
+UNTIL i = nLenString OR nLines = 3
+END_REPEAT
+
+IF nLines > 0 THEN
+	sLine := MID(sGCodeLines, nEndPos - nFirstPos + 1, nFirstPos);
+	//Nach Code suchen
+	nFirstPos := FIND(sLine,sSeachCode);
+	IF nFirstPos > 0 THEN
+		IF sSeachCode = '@714' OR sSeachCode = '@717' THEN
+				F_GET_GCODE_NCLINE := 1.0;
+				RETURN;
+		ELSIF sSeachCode = 'F' THEN
+			i := nFirstPos;
+			nLenString := LEN(sLine);
+			//numerischen Wert nach F ermitteln
+			REPEAT
+				i := i + 1;
+				sChar := MID(sLine,1,i);
+				IF NOT ((sChar[0] > 47 AND sChar[0] < 58) OR sChar[0] = 46) OR i = nLenString THEN
+					EXIT;
+				ELSE
+					sValue := CONCAT(sValue,sChar);
+				END_IF
+			UNTIL FALSE
+			END_REPEAT
+		END_IF		
+	END_IF
+END_IF
+F_GET_GCODE_NCLINE := STRING_TO_REAL(sValue);]]></ST>
+    </Implementation>
+    <LineIds Name="F_GET_GCODE_NCLINE">
+      <LineId Id="3" Count="41" />
+      <LineId Id="2" Count="0" />
+    </LineIds>
+  </POU>
+</TcPlcObject>

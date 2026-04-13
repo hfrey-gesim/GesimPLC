@@ -1,0 +1,33 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<TcPlcObject Version="1.1.0.1" ProductVersion="3.1.4022.7">
+  <POU Name="FB_OM_SemiAuto" Id="{46128769-d126-4300-8b7c-225de175655d}" SpecialFunc="None">
+    <Declaration><![CDATA[FUNCTION_BLOCK FB_OM_SemiAuto
+VAR_INPUT
+END_VAR
+VAR_OUTPUT
+	eCurrentState : E_MachineState := E_MachineState.MACHINESTATE_Idle;
+END_VAR
+VAR
+	nCalls	: UINT;
+END_VAR
+]]></Declaration>
+    <Implementation>
+      <ST><![CDATA[nCalls := nCalls + 1;]]></ST>
+    </Implementation>
+    <Method Name="M_ResetError" Id="{dd4081f0-8c07-440b-9fe8-50f498f04c33}">
+      <Declaration><![CDATA[METHOD M_ResetError
+VAR_INPUT
+END_VAR
+]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[]]></ST>
+      </Implementation>
+    </Method>
+    <LineIds Name="FB_OM_SemiAuto">
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="FB_OM_SemiAuto.M_ResetError">
+      <LineId Id="2" Count="0" />
+    </LineIds>
+  </POU>
+</TcPlcObject>

@@ -1,0 +1,263 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<TcPlcObject Version="1.1.0.1" ProductVersion="3.1.0.25">
+  <POU Name="FB_TipCleanerInit" Id="{c3ff5efd-9898-4c67-a949-58a239bf5c7f}">
+    <Declaration><![CDATA[FUNCTION_BLOCK FB_TipCleanerInit
+VAR_INPUT
+	pstTipCleanerRef	: POINTER TO ST_TipCleanerRef;
+	bExecute			: BOOL;
+END_VAR
+VAR_OUTPUT
+	bBusy		: BOOL;
+	bError		: BOOL;
+	nErrorId	: ERRORID;
+END_VAR
+VAR
+	fbSdoWrite	: FB_SDO_WRITE;
+	nIndex		: DWORD;
+	nSubIndex	: DWORD;
+	nDataLength	: DWORD;
+	nData		: DINT;
+	nState		: USINT;
+	timer		: TON;
+END_VAR
+]]></Declaration>
+    <Implementation>
+      <ST><![CDATA[IF bExecute THEN
+	bBusy := TRUE;
+	CASE nState OF
+		0:	//*************ANFANG INITIALISIERUNG ************************************
+			IF pstTipCleanerRef^.nStatus.3 THEN	//Error?
+				pstTipCleanerRef^.nControl := 153;	//Error zurücksetzen
+			ELSE
+				pstTipCleanerRef^.nControl := 0;
+				nState := nState + 1;
+			END_IF
+			
+		1:	//max Strom auf 0,8A begrenzen (TMCM1140 max 2A entspricht "255" in Object 0x2003)
+			fbSdoWrite(sADSNetID:= pstTipCleanerRef^.stAdsAdress.sNetId,nPortNr:= pstTipCleanerRef^.stAdsAdress.nPort, 
+						nIndex:= 16#2003, nSubIndex:= 0, nDataLength:= 1, nData:= 128, bExecute:= TRUE);
+			 	
+			IF NOT fbSdoWrite.bBusy THEN
+				IF fbSdoWrite.bError THEN
+					nErrorId := fbSdoWrite.nAdsErrorId;
+					nState := 99;
+				ELSE
+					nState := nState + 1;
+				END_IF
+				fbSdoWrite(bExecute:= FALSE);
+			END_IF
+
+		2:	//Standby Strom auf 0,2A begrenzen (TMCM1140 max 2A entspricht "255" in Object 0x2004)
+			(*fbSdoWrite(sADSNetID:= pstTipCleanerRef^.stAdsAdress.sNetId,nPortNr:= pstTipCleanerRef^.stAdsAdress.nPort, 
+						nIndex:= 16#2004, nSubIndex:= 0, nDataLength:= 1, nData:= 35, bExecute:= TRUE);*)
+			 	
+			fbSdoWrite(sADSNetID:= pstTipCleanerRef^.stAdsAdress.sNetId,nPortNr:= pstTipCleanerRef^.stAdsAdress.nPort, 
+						nIndex:= 16#2004, nSubIndex:= 0, nDataLength:= 1, nData:= 0, bExecute:= TRUE);
+
+			IF NOT fbSdoWrite.bBusy THEN
+				IF fbSdoWrite.bError THEN
+					nErrorId := fbSdoWrite.nAdsErrorId;
+					nState := 99;
+				ELSE
+					nState := nState + 1;
+				END_IF
+				fbSdoWrite(bExecute:= FALSE);
+			END_IF
+			
+		3:	//SwitchParameters setzen (keine Endlagen verwenden)
+			fbSdoWrite(sADSNetID:= pstTipCleanerRef^.stAdsAdress.sNetId,nPortNr:= pstTipCleanerRef^.stAdsAdress.nPort, 
+						nIndex:= 16#2005, nSubIndex:= 0, nDataLength:= 4, nData:= 3, bExecute:= TRUE);
+			 	
+			IF NOT fbSdoWrite.bBusy THEN
+				IF fbSdoWrite.bError THEN
+					nErrorId := fbSdoWrite.nAdsErrorId;
+					nState := 99;
+				ELSE
+					nState := nState + 1;
+				END_IF
+				fbSdoWrite(bExecute:= FALSE);
+			END_IF
+
+		4:	//Brake deaktivieren
+			fbSdoWrite(sADSNetID:= pstTipCleanerRef^.stAdsAdress.sNetId,nPortNr:= pstTipCleanerRef^.stAdsAdress.nPort, 
+						nIndex:= 16#200C, nSubIndex:= 2, nDataLength:= 1, nData:= 0, bExecute:= TRUE);
+
+			IF NOT fbSdoWrite.bBusy THEN
+				IF fbSdoWrite.bError THEN
+					nErrorId := fbSdoWrite.nAdsErrorId;
+					nState := 99;
+				ELSE
+					nState := nState + 1;
+				END_IF
+				fbSdoWrite(bExecute:= FALSE);
+			END_IF
+			
+		5:	//Digital Outputmask setzen
+			fbSdoWrite(sADSNetID:= pstTipCleanerRef^.stAdsAdress.sNetId,nPortNr:= pstTipCleanerRef^.stAdsAdress.nPort, 
+						nIndex:= 16#2703, nSubIndex:= 2, nDataLength:= 4, nData:= 16#30000, bExecute:= TRUE);
+
+			IF NOT fbSdoWrite.bBusy THEN
+				IF fbSdoWrite.bError THEN
+					nErrorId := fbSdoWrite.nAdsErrorId;
+					nState := 99;
+				ELSE
+					nState := nState + 1;
+				END_IF
+				fbSdoWrite(bExecute:= FALSE);
+			END_IF
+
+		6:	//Fast Homing Speed setzen
+			fbSdoWrite(sADSNetID:= pstTipCleanerRef^.stAdsAdress.sNetId,nPortNr:= pstTipCleanerRef^.stAdsAdress.nPort, 
+						nIndex:= 16#6099, nSubIndex:= 1, nDataLength:= 4, nData:= 200, bExecute:= TRUE);
+
+			IF NOT fbSdoWrite.bBusy THEN
+				IF fbSdoWrite.bError THEN
+					nErrorId := fbSdoWrite.nAdsErrorId;
+					nState := 99;
+				ELSE
+					nState := nState + 1;
+				END_IF
+				fbSdoWrite(bExecute:= FALSE);
+			END_IF
+
+		7:	//Slow Homing Speed setzen
+			fbSdoWrite(sADSNetID:= pstTipCleanerRef^.stAdsAdress.sNetId,nPortNr:= pstTipCleanerRef^.stAdsAdress.nPort, 
+						nIndex:= 16#6099, nSubIndex:= 2, nDataLength:= 4, nData:= 100, bExecute:= TRUE);
+
+			IF NOT fbSdoWrite.bBusy THEN
+				IF fbSdoWrite.bError THEN
+					nErrorId := fbSdoWrite.nAdsErrorId;
+					nState := 99;
+				ELSE
+					nState := nState + 1;
+				END_IF
+				fbSdoWrite(bExecute:= FALSE);
+			END_IF
+			
+		8:	//Profile Velo setzen
+			fbSdoWrite(sADSNetID:= pstTipCleanerRef^.stAdsAdress.sNetId,nPortNr:= pstTipCleanerRef^.stAdsAdress.nPort, 
+						nIndex:= 16#6081, nSubIndex:= 0, nDataLength:= 4, nData:= 800, bExecute:= TRUE);
+
+			IF NOT fbSdoWrite.bBusy THEN
+				IF fbSdoWrite.bError THEN
+					nErrorId := fbSdoWrite.nAdsErrorId;
+					nState := 99;
+				ELSE
+					nState := nState + 1;
+				END_IF
+				fbSdoWrite(bExecute:= FALSE);
+			END_IF
+
+		9:	//Homing Method setzen
+			fbSdoWrite(sADSNetID:= pstTipCleanerRef^.stAdsAdress.sNetId,nPortNr:= pstTipCleanerRef^.stAdsAdress.nPort, 
+						nIndex:= 16#6098, nSubIndex:= 0, nDataLength:= 1, nData:= 19, bExecute:= TRUE);
+
+			IF NOT fbSdoWrite.bBusy THEN
+				IF fbSdoWrite.bError THEN
+					nErrorId := fbSdoWrite.nAdsErrorId;
+					nState := 99;
+				ELSE
+					nState := nState + 1;
+				END_IF
+				fbSdoWrite(bExecute:= FALSE);
+			END_IF
+			
+		10:	//Position Window setzen
+			fbSdoWrite(sADSNetID:= pstTipCleanerRef^.stAdsAdress.sNetId,nPortNr:= pstTipCleanerRef^.stAdsAdress.nPort, 
+						nIndex:= 16#6067, nSubIndex:= 0, nDataLength:= 4, nData:= 100, bExecute:= TRUE);
+
+			IF NOT fbSdoWrite.bBusy THEN
+				IF fbSdoWrite.bError THEN
+					nErrorId := fbSdoWrite.nAdsErrorId;
+					nState := 99;
+				ELSE
+					nState := nState + 1;
+				END_IF
+				fbSdoWrite(bExecute:= FALSE);
+			END_IF
+			
+		11:	//Leistungsteil einschalten - "Ready to switch on"
+			pstTipCleanerRef^.nControl := 6;
+			pstTipCleanerRef^.bVDD5V := TRUE;	//Versorgung für Digitale IOs (5V) einschalten
+			nState := nState + 1;
+
+		12:	//Abfrage auf Status "Ready to switch on"
+			IF F_GetCoDS402State(pstTipCleanerRef^.nStatus) = E_CoDS402States.DS402STATE_Fault THEN  //Error
+				nState := 99;
+			ELSIF F_GetCoDS402State(pstTipCleanerRef^.nStatus) = E_CoDS402States.DS402STATE_ReadyToSwitchOn  THEN//"Ready to switch on"
+				nState := nState + 1;
+			END_IF
+
+		13:	//Leistungsteil einschalten - "Switch on" und "Voltage Enabled"
+			pstTipCleanerRef^.nControl := 7;
+			nState := nState + 1;
+			
+		14:	//Abfrage auf Status "Switch on" und "Voltage Enabled"
+			IF F_GetCoDS402State(pstTipCleanerRef^.nStatus) = E_CoDS402States.DS402STATE_Fault THEN  //Error
+				nState := 99;
+			ELSIF F_GetCoDS402State(pstTipCleanerRef^.nStatus) = E_CoDS402States.DS402STATE_SwitchedOn THEN //"Switch on" und "Voltage Enabled"
+				nState := nState + 1;
+			END_IF
+
+		15:	//Leistungsteil einschalten - "Operation Enabled"
+			pstTipCleanerRef^.nControl := 15;
+			nState := nState + 1;
+
+		16:	//Abfrage auf Status "Operation Enabled"
+			IF F_GetCoDS402State(pstTipCleanerRef^.nStatus) = E_CoDS402States.DS402STATE_Fault THEN  //Error
+				nState := 99;
+			ELSIF F_GetCoDS402State(pstTipCleanerRef^.nStatus) = E_CoDS402States.DS402STATE_OperationEnabled THEN //"Operation Enabled"
+				nState := nState + 1;
+			END_IF
+			
+		17:	//Mode of Operation auf "Homing" setzen
+			pstTipCleanerRef^.nMode := 6;
+			IF pstTipCleanerRef^.nModeDisp = 6 THEN
+				nState := nState + 1;
+			END_IF
+			
+		18:	//Homing Starten
+			pstTipCleanerRef^.nControl := 31;
+			IF pstTipCleanerRef^.nStatus.3 OR pstTipCleanerRef^.nStatus.13 THEN //Error
+				nState := 99;
+			ELSIF NOT pstTipCleanerRef^.nStatus.10 AND NOT pstTipCleanerRef^.nStatus.12 AND NOT pstTipCleanerRef^.nStatus.13 THEN	//Homig in process
+				nState := nState + 1;
+				timer(IN:= FALSE);
+			END_IF
+			
+		19:	//Homing ready?
+			timer(IN:= TRUE, PT:=T#6S);
+			IF timer.Q THEN	//Error
+				timer(IN:= FALSE);
+				pstTipCleanerRef^.nControl := 0;
+				nState := 99;
+				RETURN;
+			END_IF
+			
+			IF pstTipCleanerRef^.nStatus.3 OR pstTipCleanerRef^.nStatus.13 THEN //Error
+				nState := 99;
+			ELSIF pstTipCleanerRef^.nStatus.10 AND pstTipCleanerRef^.nStatus.12 AND NOT pstTipCleanerRef^.nStatus.13 THEN
+				pstTipCleanerRef^.nControl := 15;
+				nState := nState + 1;
+			END_IF
+
+		20:	//Mode of Operation auf "PP" setzen
+			pstTipCleanerRef^.nMode := 1;
+			IF pstTipCleanerRef^.nModeDisp = 1 THEN
+				nState := nState + 1;
+				bBusy := FALSE;
+			END_IF
+
+		99:	//Error
+			bBusy := FALSE;
+			bError := TRUE;
+	END_CASE
+ ELSE
+	bError := FALSE;
+	nErrorId := 0;
+	nState := 0;
+END_IF]]></ST>
+    </Implementation>
+    <ObjectProperties />
+  </POU>
+</TcPlcObject>

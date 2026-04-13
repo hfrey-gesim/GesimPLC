@@ -1,0 +1,70 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<TcPlcObject Version="1.1.0.1" ProductVersion="3.1.4020.12">
+  <POU Name="FB_PTOStepperRotate" Id="{d78bdff1-196a-40e4-bc79-b7c42aa8dd96}" SpecialFunc="None">
+    <Declaration><![CDATA[FUNCTION_BLOCK FB_PTOStepperRotate
+VAR_INPUT
+	bExecute	: BOOL;
+	bStop		: BOOL;
+	bCCW		: BOOL;	//Gegen Uhrzeiger
+	nSpeed		: UINT;	//Steps/sec
+END_VAR
+VAR_OUTPUT
+	bBusy		: BOOL;
+END_VAR
+VAR_IN_OUT
+	pPTOStepperRef : POINTER TO ST_PTOStepperRef;
+END_VAR
+VAR
+	nSpeedIntern : INT;
+	nState : USINT;
+END_VAR
+]]></Declaration>
+    <Implementation>
+      <ST><![CDATA[IF bExecute THEN
+	CASE nState OF
+		0:	//Prepare
+			IF bStop THEN
+				RETURN;
+			END_IF
+			bBusy := TRUE;
+			IF bCCW THEN
+				nSpeedIntern := UINT_TO_INT(nSpeed);
+			ELSE
+				nSpeedIntern := -UINT_TO_INT(nSpeed);
+			END_IF
+			MEMCPY(ADR(pPTOStepperRef^.nFrequencyValue),ADR(nSpeedIntern),2);
+			nState := 1;
+			
+		1:	//Waiting for stop
+			IF bStop THEN
+				pPTOStepperRef^.nFrequencyValue := 0;
+				nState := 80;
+				bBusy := FALSE;
+			END_IF
+	END_CASE
+ELSE
+	nState := 0;
+	bBusy := FALSE;	
+END_IF]]></ST>
+    </Implementation>
+    <LineIds Name="FB_PTOStepperRotate">
+      <LineId Id="21" Count="0" />
+      <LineId Id="27" Count="0" />
+      <LineId Id="29" Count="0" />
+      <LineId Id="32" Count="4" />
+      <LineId Id="38" Count="1" />
+      <LineId Id="37" Count="0" />
+      <LineId Id="40" Count="0" />
+      <LineId Id="44" Count="1" />
+      <LineId Id="31" Count="0" />
+      <LineId Id="41" Count="1" />
+      <LineId Id="46" Count="0" />
+      <LineId Id="74" Count="0" />
+      <LineId Id="43" Count="0" />
+      <LineId Id="64" Count="0" />
+      <LineId Id="23" Count="2" />
+      <LineId Id="22" Count="0" />
+      <LineId Id="9" Count="0" />
+    </LineIds>
+  </POU>
+</TcPlcObject>

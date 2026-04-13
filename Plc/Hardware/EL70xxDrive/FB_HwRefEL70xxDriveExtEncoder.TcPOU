@@ -1,0 +1,134 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<TcPlcObject Version="1.1.0.1" ProductVersion="3.1.4024.11">
+  <POU Name="FB_HwRefEL70xxDriveExtEncoder" Id="{ce4ef4d4-10e0-438e-8b8f-0eeacefbb9cd}" SpecialFunc="None">
+    <Declaration><![CDATA[FUNCTION_BLOCK FB_HwRefEL70xxDriveExtEncoder EXTENDS FB_HwRefEL70xxDrive
+VAR_INPUT
+END_VAR
+VAR_OUTPUT
+	nExtEncoderValue	AT %I* : UDINT;
+	bExtEncoderError	AT %I* : BOOL;	
+END_VAR
+VAR
+	rPositionOffset		: REAL;	//Bei absolutem Encoder der Wert, an dem das Drive an Position "0" steht
+								//wird über RefPos errechnet
+	rActualPosition 	: REAL; //das ist die tatsächliche Position berechnet aus dem aktuellen Encoderwert.
+	//nSetCounterValue	AT %Q* : UDINT; //wäre nur für relative Encoder interessant ?
+	//bSetCounter		AT %Q* : BOOL;	//dito
+	//bSetCounterDone	AT %I* : BOOL;	//dito
+END_VAR
+]]></Declaration>
+    <Implementation>
+      <ST><![CDATA[SUPER^();]]></ST>
+    </Implementation>
+    <Action Name="A_CalcActPosition" Id="{617cca4b-4353-4933-b3e7-4325578951ec}">
+      <Implementation>
+        <ST><![CDATA[IF eEncoderType = E_EL70xx_EncoderType.ExternSingleturnAbs THEN
+	rPositionOffset := 360.0 * DINT_TO_REAL(nRefPos) / UDINT_TO_REAL(nEncoderIncrements);
+	IF nExtEncoderValue < DINT_TO_UDINT(nRefPos) THEN
+		rActualPosition := (360.0 - rPositionOffset + 360.0 * UDINT_TO_REAL(nExtEncoderValue) / UDINT_TO_REAL(nEncoderIncrements));
+	ELSE
+		rActualPosition := 360.0 * UDINT_TO_REAL(nExtEncoderValue) / UDINT_TO_REAL(nEncoderIncrements)- rPositionOffset;
+	END_IF	
+END_IF
+nActualPosition := REAL_TO_DINT(rActualPosition * 1000.0);	//Integer als milliGrad oder µm
+]]></ST>
+      </Implementation>
+    </Action>
+    <Action Name="A_Prepare" Id="{114d501e-1d9d-4344-a9f6-8099e31b0ddb}">
+      <Implementation>
+        <ST><![CDATA[//In dieser Klasse dürfen nur externe Encoder definiert sein.
+IF eEncoderType <> E_EL70xx_EncoderType.ExternSingleturnAbs THEN
+	nStateA_Prepare := 99;
+END_IF
+SUPER^.A_Prepare();]]></ST>
+      </Implementation>
+    </Action>
+    <Method Name="FB_init" Id="{c821c0a6-4615-4efa-8574-f8c38892d66d}">
+      <Declaration><![CDATA[METHOD FB_init : BOOL
+VAR_INPUT
+	bInitRetains 	: BOOL; 	// if TRUE, the retain variables are initialized (warm start / cold start)
+	bInCopyCode  	: BOOL;  	// if TRUE, the instance afterwards gets moved into the copy code (online change)
+	nBoxAddress		: UINT;
+	eHomingMode		: E_EL70xx_StartType;
+	eEncoderType	: E_EL70xx_EncoderType;
+	nEnoderIncrements : UDINT;	
+END_VAR
+
+VAR
+END_VAR]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[THIS^.eEncoderType := eEncoderType;
+THIS^.nEncoderIncrements := nEnoderIncrements;]]></ST>
+      </Implementation>
+    </Method>
+    <Method Name="M_GetPosDiff" Id="{76cc9ce8-4680-4c88-ad9b-729a3df69315}">
+      <Declaration><![CDATA[METHOD M_GetPosDiff : DINT
+VAR_INPUT
+	nSetPosition : DINT;
+END_VAR
+]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[IF nActualPosition > 359000 THEN //dann steht die aktuelle Position kurz über der Nullmarke
+   M_GetPosDiff := nSetPosition - (P_nActualPosition - 360000);
+ELSE
+	M_GetPosDiff := nSetPosition - P_nActualPosition;
+END_IF]]></ST>
+      </Implementation>
+    </Method>
+    <Method Name="M_SetTargetPos" Id="{5fe8212c-f411-4cec-b582-df43fbb5697d}">
+      <Declaration><![CDATA[METHOD M_SetTargetPos : BOOL
+VAR_INPUT
+	nValue : DINT; //Reale Einheit
+END_VAR
+]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[IF (nValue >= nMinPos) AND (nValue <= nMaxPos) THEN
+	//Wenn sich Position zwischen 355° und 360° befindet, dann muss die Drehrichtung geändert werden
+	IF nActualPosition > 355000 THEN
+		POS_Control.TargetPosition := REAL_TO_DINT(DINT_TO_REAL(nValue - nActualPosition + 360000) *  rTranslationFactorPosition);
+	ELSE
+		POS_Control.TargetPosition := REAL_TO_DINT(DINT_TO_REAL(nValue - nActualPosition) * rTranslationFactorPosition);	
+	END_IF
+	POS_Control.StartType := E_EL70xx_StartType.Relative;
+	M_SetTargetPos := TRUE;
+END_IF]]></ST>
+      </Implementation>
+    </Method>
+    <LineIds Name="FB_HwRefEL70xxDriveExtEncoder">
+      <LineId Id="9" Count="0" />
+    </LineIds>
+    <LineIds Name="FB_HwRefEL70xxDriveExtEncoder.A_CalcActPosition">
+      <LineId Id="14" Count="0" />
+      <LineId Id="17" Count="1" />
+      <LineId Id="23" Count="0" />
+      <LineId Id="20" Count="1" />
+      <LineId Id="15" Count="1" />
+      <LineId Id="24" Count="0" />
+      <LineId Id="1" Count="0" />
+    </LineIds>
+    <LineIds Name="FB_HwRefEL70xxDriveExtEncoder.A_Prepare">
+      <LineId Id="2" Count="3" />
+      <LineId Id="1" Count="0" />
+    </LineIds>
+    <LineIds Name="FB_HwRefEL70xxDriveExtEncoder.FB_init">
+      <LineId Id="14" Count="0" />
+      <LineId Id="11" Count="0" />
+    </LineIds>
+    <LineIds Name="FB_HwRefEL70xxDriveExtEncoder.M_GetPosDiff">
+      <LineId Id="8" Count="0" />
+      <LineId Id="13" Count="0" />
+      <LineId Id="12" Count="0" />
+      <LineId Id="14" Count="0" />
+      <LineId Id="10" Count="0" />
+    </LineIds>
+    <LineIds Name="FB_HwRefEL70xxDriveExtEncoder.M_SetTargetPos">
+      <LineId Id="10" Count="0" />
+      <LineId Id="15" Count="2" />
+      <LineId Id="19" Count="1" />
+      <LineId Id="18" Count="0" />
+      <LineId Id="21" Count="0" />
+      <LineId Id="12" Count="0" />
+      <LineId Id="9" Count="0" />
+    </LineIds>
+  </POU>
+</TcPlcObject>

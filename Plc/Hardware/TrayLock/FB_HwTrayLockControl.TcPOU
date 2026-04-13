@@ -1,0 +1,171 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<TcPlcObject Version="1.1.0.1" ProductVersion="3.1.4024.11">
+  <POU Name="FB_HwTrayLockControl" Id="{2d2ea207-d808-444d-8a0d-7ebcc53e7717}" SpecialFunc="None">
+    <Declaration><![CDATA[FUNCTION_BLOCK FB_HwTrayLockControl
+VAR_INPUT
+	bExecute		: BOOL;
+	eCtrl			: E_LockCtrl;
+END_VAR
+VAR_OUTPUT
+	bBusy 		: BOOL;
+	bError 		: BOOL;
+	nErrorId	: ERRORID;	
+END_VAR
+VAR_IN_OUT
+	pHwRef : POINTER TO FB_HwRefTrayLock;
+END_VAR
+VAR
+	nState		: USINT;
+	timer		: TON;
+END_VAR
+]]></Declaration>
+    <Implementation>
+      <ST><![CDATA[IF bExecute THEN
+	IF pHwRef = 0 THEN
+		bError := TRUE;
+		nErrorId := E_ErrorIdHwGeneral.ERRORID_InvalidHwRef;
+		RETURN;
+	END_IF
+
+	CASE nState OF
+		0:	IF eCtrl = E_LockCtrl.Unlock THEN
+				IF pHwRef^.eCurrentState = E_LockState.Unlocked THEN
+					RETURN;
+				ELSE
+					bBusy := TRUE;
+					nState := 1; //Unlocking
+				END_IF
+			ELSE
+				IF pHwRef^.eCurrentState = E_LockState.Locked THEN
+					RETURN;
+				ELSE
+					bBusy := TRUE;
+					nState := 10; //Locking
+				END_IF
+			END_IF
+			
+		1:	//Unlocking, disable heater
+			pHwRef^.bDisableHeater := TRUE;
+			timer(IN:= TRUE, PT:= T#200MS);
+			nState := 2;
+			
+		2:	//Time elapsed?
+			timer();
+			IF timer.Q THEN
+				timer(IN:= FALSE);
+				nState := 3;
+			END_IF
+			
+		3:	//Set outputs
+			pHwRef^.bLock := FALSE;
+			pHwRef^.bUnlock := TRUE;
+			timer(IN:= TRUE, PT:= T#3S); //Timeout
+			IF pHwRef^.P_bFeedback THEN
+				IF pHwRef^.bUnlocked THEN
+					nState := 80;
+				ELSIF timer.Q THEN
+					nErrorId := E_ErrorIdHwGeneral.ERRORID_UnlockingFailed;
+					nState := 99; //Error
+				END_IF
+			ELSE
+				IF timer.Q THEN
+					nState := 80;
+				END_IF
+			END_IF
+			
+		10: //Locking
+			pHwRef^.bLock := TRUE;
+			pHwRef^.bUnlock := FALSE;
+			timer(IN:= TRUE, PT:= T#3S); //Timeout
+			IF pHwRef^.P_bFeedback THEN
+				IF pHwRef^.bLocked THEN
+					//Enable heater
+					pHwRef^.bDisableHeater := FALSE;
+					nState := 80;
+				ELSIF timer.Q THEN
+					nErrorId := E_ErrorIdHwGeneral.ERRORID_LockingFailed;
+					nState := 99; //Error
+				END_IF
+			ELSE
+				IF timer.Q THEN
+					nState := 80;
+				END_IF
+			END_IF
+	END_CASE
+	
+	IF nState >= 80 THEN
+		pHwRef^.bLock := FALSE;
+		pHwRef^.bUnlock := FALSE;
+		bBusy := FALSE;
+		IF nState = 99 THEN
+			bError := TRUE;
+		END_IF
+	END_IF
+
+ELSE
+	timer(IN:= FALSE);
+	bBusy := FALSE;
+	bError := FALSE;
+	nErrorId := 0;
+	nState := 0;	
+END_IF]]></ST>
+    </Implementation>
+    <LineIds Name="FB_HwTrayLockControl">
+      <LineId Id="9" Count="0" />
+      <LineId Id="115" Count="0" />
+      <LineId Id="118" Count="0" />
+      <LineId Id="120" Count="1" />
+      <LineId Id="119" Count="0" />
+      <LineId Id="116" Count="0" />
+      <LineId Id="30" Count="0" />
+      <LineId Id="34" Count="0" />
+      <LineId Id="44" Count="0" />
+      <LineId Id="48" Count="0" />
+      <LineId Id="50" Count="0" />
+      <LineId Id="123" Count="0" />
+      <LineId Id="51" Count="0" />
+      <LineId Id="49" Count="0" />
+      <LineId Id="46" Count="0" />
+      <LineId Id="52" Count="2" />
+      <LineId Id="124" Count="0" />
+      <LineId Id="55" Count="1" />
+      <LineId Id="37" Count="0" />
+      <LineId Id="58" Count="0" />
+      <LineId Id="57" Count="0" />
+      <LineId Id="65" Count="1" />
+      <LineId Id="64" Count="0" />
+      <LineId Id="67" Count="1" />
+      <LineId Id="70" Count="4" />
+      <LineId Id="69" Count="0" />
+      <LineId Id="63" Count="0" />
+      <LineId Id="75" Count="1" />
+      <LineId Id="148" Count="0" />
+      <LineId Id="187" Count="0" />
+      <LineId Id="192" Count="5" />
+      <LineId Id="190" Count="0" />
+      <LineId Id="198" Count="2" />
+      <LineId Id="189" Count="0" />
+      <LineId Id="97" Count="1" />
+      <LineId Id="103" Count="1" />
+      <LineId Id="201" Count="0" />
+      <LineId Id="155" Count="0" />
+      <LineId Id="161" Count="7" />
+      <LineId Id="158" Count="0" />
+      <LineId Id="202" Count="2" />
+      <LineId Id="157" Count="0" />
+      <LineId Id="33" Count="0" />
+      <LineId Id="90" Count="1" />
+      <LineId Id="101" Count="1" />
+      <LineId Id="96" Count="0" />
+      <LineId Id="92" Count="0" />
+      <LineId Id="94" Count="1" />
+      <LineId Id="93" Count="0" />
+      <LineId Id="25" Count="0" />
+      <LineId Id="23" Count="0" />
+      <LineId Id="88" Count="0" />
+      <LineId Id="27" Count="2" />
+      <LineId Id="26" Count="0" />
+      <LineId Id="24" Count="0" />
+    </LineIds>
+  </POU>
+</TcPlcObject>

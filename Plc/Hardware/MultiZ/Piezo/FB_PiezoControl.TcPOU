@@ -1,0 +1,511 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<TcPlcObject Version="1.1.0.1" ProductVersion="3.1.4022.18">
+  <POU Name="FB_PiezoControl" Id="{f6e8756c-9bf0-4d95-8548-738da26ee79a}" SpecialFunc="None">
+    <Declaration><![CDATA[FUNCTION_BLOCK FB_PiezoControl
+
+VAR_OUTPUT
+	bBusy : BOOL;
+	bError : BOOL;
+	nErrorId : ERRORID;
+END_VAR
+
+VAR_IN_OUT
+	pFbPiezoRef	: POINTER TO FB_PiezoRef;
+END_VAR
+
+VAR
+	nCyclCnt : UINT;
+	nPeriodSum : UDINT;
+	bLost	: BOOL;
+	fbSdoWrite	: FB_SDO_WRITE;
+	bSendPeriod : BOOL;
+	bSendPeriodFlag : BOOL := TRUE;
+	bSendPulse : BOOL;
+	bSendPulseFlag : BOOL := TRUE;
+	bSendVoltage : BOOL;
+	bSendVoltageFlag : BOOL := TRUE;
+	bSendHoldVoltage : BOOL;
+	bSendHoldVoltageFlag : BOOL := TRUE;
+	bSendPrePeakTime : BOOL;
+	bSendPrePeakTimeFlag : BOOL := TRUE;
+	bSendDrops : BOOL;
+	bSendDropsFlag : BOOL := TRUE;
+	bStroboscope : BOOL;
+	fbFTrig : F_TRIG;
+END_VAR]]></Declaration>
+    <Implementation>
+      <ST><![CDATA[IF pFbPiezoRef = 0 THEN
+	RETURN;
+END_IF
+
+IF bSendPeriod THEN
+	IF bSendPeriodFlag XOR fbSdoWrite.bBusy THEN
+		bSendPeriodFlag := FALSE;
+		fbSdoWrite(sADSNetID:= pFbPiezoRef^.pMultiZRef^.P_sAdsNetId, nPortNr:= pFbPiezoRef^.pMultiZRef^.P_nAdsPort,
+					nIndex:= cPiezoPeriod.nIndex, nSubIndex:= pFbPiezoRef^.nChannel, 
+					nDataLength:= cPiezoPeriod.nLength, nData:= pFbPiezoRef^.P_nPeriod, bExecute:= TRUE);
+	END_IF
+
+	IF NOT fbSdoWrite.bBusy THEN
+		IF fbSdoWrite.bError THEN
+			bError := TRUE;
+			nErrorId := fbSdoWrite.nAdsErrorId;
+		END_IF
+		fbSdoWrite(bExecute:= FALSE);
+		bSendPeriodFlag := TRUE;
+		bSendPeriod := FALSE;
+	END_IF	
+END_IF	
+
+IF bSendPulse THEN
+	IF bSendPulseFlag XOR fbSdoWrite.bBusy THEN
+		bSendPulseFlag := FALSE;
+		fbSdoWrite(sADSNetID:= pFbPiezoRef^.pMultiZRef^.P_sAdsNetId, nPortNr:= pFbPiezoRef^.pMultiZRef^.P_nAdsPort,
+					nIndex:= cPiezoPulse.nIndex, nSubIndex:= pFbPiezoRef^.nChannel, 
+					nDataLength:= cPiezoPulse.nLength, nData:= pFbPiezoRef^.P_nPulse, bExecute:= TRUE);
+	END_IF
+	IF NOT fbSdoWrite.bBusy THEN
+		IF fbSdoWrite.bError THEN
+			bError := TRUE;
+			nErrorId := fbSdoWrite.nAdsErrorId;
+		END_IF
+		fbSdoWrite(bExecute:= FALSE);
+		bSendPulseFlag := TRUE;
+		bSendPulse := FALSE;
+	END_IF
+END_IF	
+
+IF bSendVoltage THEN
+	IF bSendVoltageFlag XOR fbSdoWrite.bBusy THEN
+		bSendVoltageFlag := FALSE;
+		fbSdoWrite(sADSNetID:= pFbPiezoRef^.pMultiZRef^.P_sAdsNetId, nPortNr:= pFbPiezoRef^.pMultiZRef^.P_nAdsPort,
+					nIndex:= cPiezoVoltage.nIndex, nSubIndex:= pFbPiezoRef^.nChannel, 
+					nDataLength:= cPiezoVoltage.nLength, nData:= pFbPiezoRef^.P_nVoltage, bExecute:= TRUE);
+	END_IF
+	IF NOT fbSdoWrite.bBusy THEN
+		IF fbSdoWrite.bError THEN
+			bError := TRUE;
+			nErrorId := fbSdoWrite.nAdsErrorId;
+		END_IF
+		fbSdoWrite(bExecute:= FALSE);
+		bSendVoltageFlag := TRUE;
+		bSendVoltage := FALSE;
+	END_IF
+END_IF
+
+IF bSendHoldVoltage THEN
+	IF bSendHoldVoltageFlag XOR fbSdoWrite.bBusy THEN
+		bSendHoldVoltageFlag := FALSE;
+		fbSdoWrite(sADSNetID:= pFbPiezoRef^.pMultiZRef^.P_sAdsNetId, nPortNr:= pFbPiezoRef^.pMultiZRef^.P_nAdsPort,
+					nIndex:= cPiezoHoldVoltage.nIndex, nSubIndex:= pFbPiezoRef^.nChannel, 
+					nDataLength:= cPiezoHoldVoltage.nLength, nData:= pFbPiezoRef^.P_nHoldVoltage, bExecute:= TRUE);
+	END_IF
+	IF NOT fbSdoWrite.bBusy THEN
+		IF fbSdoWrite.bError THEN
+			bError := TRUE;
+			nErrorId := fbSdoWrite.nAdsErrorId;
+		END_IF
+		fbSdoWrite(bExecute:= FALSE);
+		bSendHoldVoltageFlag := TRUE;
+		bSendHoldVoltage := FALSE;
+	END_IF
+END_IF
+
+IF bSendPrePeakTime THEN
+	IF bSendPrePeakTimeFlag XOR fbSdoWrite.bBusy THEN
+		bSendPrePeakTimeFlag := FALSE;
+		fbSdoWrite(sADSNetID:= pFbPiezoRef^.pMultiZRef^.P_sAdsNetId, nPortNr:= pFbPiezoRef^.pMultiZRef^.P_nAdsPort,
+					nIndex:= cPiezoPrePeakTime.nIndex, nSubIndex:= pFbPiezoRef^.nChannel, 
+					nDataLength:= cPiezoPrePeakTime.nLength, nData:= pFbPiezoRef^.P_nPrePeakTime, bExecute:= TRUE);
+	END_IF
+	IF NOT fbSdoWrite.bBusy THEN
+		IF fbSdoWrite.bError THEN
+			bError := TRUE;
+			nErrorId := fbSdoWrite.nAdsErrorId;
+		END_IF
+		fbSdoWrite(bExecute:= FALSE);
+		bSendPrePeakTimeFlag := TRUE;
+		bSendPrePeakTime := FALSE;
+	END_IF
+END_IF
+
+IF bSendDrops THEN
+	IF bSendDropsFlag XOR fbSdoWrite.bBusy THEN
+		bSendDropsFlag := FALSE;
+		fbSdoWrite(sADSNetID:= pFbPiezoRef^.pMultiZRef^.P_sAdsNetId, nPortNr:= pFbPiezoRef^.pMultiZRef^.P_nAdsPort,
+					nIndex:= cPiezoDrops.nIndex, nSubIndex:= pFbPiezoRef^.nChannel, 
+					nDataLength:= cPiezoDrops.nLength, nData:= pFbPiezoRef^.P_nDrops, bExecute:= TRUE);
+	END_IF
+	IF NOT fbSdoWrite.bBusy THEN
+		IF fbSdoWrite.bError THEN
+			bError := TRUE;
+			nErrorId := fbSdoWrite.nAdsErrorId;
+		END_IF
+		fbSdoWrite(bExecute:= FALSE);
+		bSendDropsFlag := TRUE;
+		bSendDrops := FALSE;
+	END_IF
+END_IF
+
+{warning 'siehe Kommentar'}
+//wurde gegeüber Version V2.0.16.X überarbeitet und ist noch nicht im Dauertest gelaufen
+//es ist nicht ausgeschlossen, dass wenn das ToolState nicht "1" wird, dieser Baustein immer im Busy bleibt, da nur auf eine fallende Flanke reagiert wird
+
+//Für den Fall, dass die Anzahl der Tropfen x Periodendauer 20ms unterschreitet, kann es dazu führen, dass das Statusbit nicht erfasst werden kann. Das hängt
+//stark von der Laufzeit der Kopfbasis ab. In diesem Fall sollte 
+//Man könnte auch davon ausgehen, dass spätestens im zweiten Zyklus nach dem bBusy auf true gewechselt hat, der Toolstate entsprechend auf true wechselt
+//Wenn das nicht der Fall ist, dann überprüfen, ob Periodendauer x Zykluszeit kleiner 20ms.
+
+IF bBusy THEN
+	fbFTrig(CLK:= pFbPiezoRef^.pToolState^.0); 
+	IF fbFTrig.Q THEN
+		pFbPiezoRef^.pToolCtrl^.0 := FALSE;
+		pFbPiezoRef^.pToolCtrl^.1 := FALSE;
+		pFbPiezoRef^.P_bSynchronize := FALSE;
+		bBusy := FALSE;
+	END_IF
+	IF bBusy THEN
+		nCyclCnt := nCyclCnt + 1;
+		IF nCyclCnt = 4 THEN
+			//Hier sollte spätestens der ToolState auf 1 gesetzt sein
+			IF NOT pFbPiezoRef^.pToolState^.0 THEN
+				bLost := TRUE;
+				nPeriodSum := pFbPiezoRef^.P_nPeriod * pFbPiezoRef^.P_nDrops;
+				IF (pFbPiezoRef^.P_nDrops > 0) AND  (nPeriodSum < 20000) THEN
+					//der ToolState wurde wahrscheinlich verpasst
+					pFbPiezoRef^.pToolCtrl^.0 := FALSE;
+					pFbPiezoRef^.pToolCtrl^.1 := FALSE;
+					pFbPiezoRef^.P_bSynchronize := FALSE;
+					bBusy := FALSE;
+				END_IF
+			END_IF
+		END_IF
+	END_IF
+END_IF
+]]></ST>
+    </Implementation>
+    <Method Name="M_Init" Id="{e3b8e366-847b-47c2-a992-3a466aac1d6f}">
+      <Declaration><![CDATA[METHOD M_Init : ERRORID
+VAR_INPUT
+END_VAR
+
+VAR
+	nMode	: BYTE;
+END_VAR]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[IF NOT pFbPiezoRef^.pMultiZRef^.P_bLegacy THEN
+	nMode := pFbPiezoRef^.P_eDispenserMode;
+	nMode := SHL(nMode,3);
+	pFbPiezoRef^.pToolCtrl^ := pFbPiezoRef^.pToolCtrl^ OR nMode;	
+	bSendHoldVoltage := TRUE;
+	bSendPrePeakTime := TRUE;
+END_IF
+bSendPeriod := TRUE;
+bSendPulse := TRUE;
+bSendVoltage := TRUE;]]></ST>
+      </Implementation>
+    </Method>
+    <Method Name="M_StartStop" Id="{c80c4338-cd28-4627-b8f2-bed7ef7d79dc}">
+      <Declaration><![CDATA[METHOD M_StartStop
+VAR_INPUT
+	bStart : BOOL;
+END_VAR
+]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[IF bStart THEN
+	IF NOT bBusy THEN
+		nCyclCnt := 0;
+		bBusy := TRUE;
+		bLost := FALSE;
+	END_IF
+	pFbPiezoRef^.pToolCtrl^.0 := TRUE;
+	pFbPiezoRef^.pToolCtrl^.1 := bStroboscope;
+	pFbPiezoRef^.pToolCtrl^.2 := TRUE; //LED am Pipettenhalter
+	pFbPiezoRef^.pToolCtrl^.5 := pFbPiezoRef^.P_bSynchronize;
+ELSE
+	pFbPiezoRef^.pToolCtrl^.0 := FALSE;
+	pFbPiezoRef^.pToolCtrl^.1 := FALSE;
+	pFbPiezoRef^.pToolCtrl^.2 := FALSE; //LED am Pipettenhalter
+	pFbPiezoRef^.pToolCtrl^.5 := FALSE; //Synchronize
+END_IF]]></ST>
+      </Implementation>
+    </Method>
+    <Property Name="P_bIsSending" Id="{5ca7ff4a-ea73-4a1b-ab23-27a4e3fb4b5f}">
+      <Declaration><![CDATA[PROPERTY P_bIsSending : BOOL]]></Declaration>
+      <Get Name="Get" Id="{641010f7-8baa-4904-8852-50ff2ed0f361}">
+        <Declaration><![CDATA[VAR
+END_VAR
+]]></Declaration>
+        <Implementation>
+          <ST><![CDATA[P_bIsSending := bSendPeriod OR bSendPulse OR bSendVoltage OR bSendHoldVoltage OR bSendPrePeakTime OR bSendDrops;]]></ST>
+        </Implementation>
+      </Get>
+    </Property>
+    <Property Name="P_bStroboscope" Id="{fc11dc8f-c3a3-4a3c-bf3e-117dcc7e45b7}">
+      <Declaration><![CDATA[PROPERTY P_bStroboscope : BOOL]]></Declaration>
+      <Set Name="Set" Id="{15b1a624-ee2a-4f76-8f6a-e1ed1c40a755}">
+        <Declaration><![CDATA[VAR
+END_VAR
+]]></Declaration>
+        <Implementation>
+          <ST><![CDATA[bStroboscope := P_bStroboscope;
+pFbPiezoRef^.pToolCtrl^.1 := bStroboscope;]]></ST>
+        </Implementation>
+      </Set>
+    </Property>
+    <Property Name="P_nDrops" Id="{c1472080-58f1-4ab6-a378-702a0c81b43d}">
+      <Declaration><![CDATA[PROPERTY P_nDrops : UINT]]></Declaration>
+      <Get Name="Get" Id="{f506deb2-75bd-4f78-b38b-8d234c3c09b2}">
+        <Declaration><![CDATA[VAR
+END_VAR
+]]></Declaration>
+        <Implementation>
+          <ST><![CDATA[IF pFbPiezoRef > 0 THEN
+	P_nDrops := pFbPiezoRef^.P_nDrops;
+END_IF
+
+
+]]></ST>
+        </Implementation>
+      </Get>
+      <Set Name="Set" Id="{da18bdb4-0d97-4dbf-bba7-f0da6b7628cb}">
+        <Declaration><![CDATA[VAR
+END_VAR
+]]></Declaration>
+        <Implementation>
+          <ST><![CDATA[IF pFbPiezoRef > 0 THEN
+	IF P_nDrops <> pFbPiezoRef^.P_nDrops THEN
+		pFbPiezoRef^.P_nDrops := P_nDrops;
+		bSendDrops := TRUE;
+	END_IF
+END_IF]]></ST>
+        </Implementation>
+      </Set>
+    </Property>
+    <Property Name="P_nFrequency" Id="{f26d7e3f-5367-4992-90eb-ba792f49a8e0}">
+      <Declaration><![CDATA[PROPERTY P_nFrequency : UINT]]></Declaration>
+      <Get Name="Get" Id="{89ee3e1e-c594-40b8-b342-be18b543cdb6}">
+        <Declaration><![CDATA[VAR
+END_VAR
+]]></Declaration>
+        <Implementation>
+          <ST><![CDATA[IF pFbPiezoRef > 0 THEN
+	IF pFbPiezoRef^.P_nPeriod <> 0 THEN
+		P_nFrequency := UDINT_TO_UINT(1000000 / pFbPiezoRef^.P_nPeriod);
+	ELSE
+		P_nFrequency := 0;	
+	END_IF
+END_IF]]></ST>
+        </Implementation>
+      </Get>
+      <Set Name="Set" Id="{b3831d05-7d32-4253-b000-c3c340cf0591}">
+        <Declaration><![CDATA[VAR
+	nPeriodTemp : UINT;
+END_VAR
+]]></Declaration>
+        <Implementation>
+          <ST><![CDATA[IF pFbPiezoRef > 0 THEN
+	nPeriodTemp := UDINT_TO_UINT(1000000/P_nFrequency);
+	IF nPeriodTemp <> pFbPiezoRef^.P_nPeriod THEN
+		pFbPiezoRef^.P_nPeriod := nPeriodTemp;
+		bSendPeriod := TRUE;
+	END_IF	
+END_IF]]></ST>
+        </Implementation>
+      </Set>
+    </Property>
+    <Property Name="P_nHoldVoltage" Id="{2819c58c-bee0-4210-8efe-c95768af3df3}">
+      <Declaration><![CDATA[PROPERTY P_nHoldVoltage : UINT]]></Declaration>
+      <Get Name="Get" Id="{112a3700-8e03-444d-a271-ab2d519881b7}">
+        <Declaration><![CDATA[VAR
+END_VAR
+]]></Declaration>
+        <Implementation>
+          <ST><![CDATA[IF pFbPiezoRef > 0 THEN
+	P_nHoldVoltage := pFbPiezoRef^.P_nHoldVoltage;
+END_IF]]></ST>
+        </Implementation>
+      </Get>
+      <Set Name="Set" Id="{e72e4021-f398-4814-9bef-77f99f69081d}">
+        <Declaration><![CDATA[VAR
+END_VAR
+]]></Declaration>
+        <Implementation>
+          <ST><![CDATA[IF pFbPiezoRef > 0 THEN
+	IF P_nHoldVoltage <> pFbPiezoRef^.P_nHoldVoltage THEN
+		pFbPiezoRef^.P_nHoldVoltage := P_nHoldVoltage;
+		bSendHoldVoltage := TRUE;
+	END_IF
+END_IF]]></ST>
+        </Implementation>
+      </Set>
+    </Property>
+    <Property Name="P_nPrePeakTime" Id="{8a145128-6102-4efb-a79e-1a71948e07dd}">
+      <Declaration><![CDATA[PROPERTY P_nPrePeakTime : UINT]]></Declaration>
+      <Get Name="Get" Id="{794b2ce4-4db5-452d-8546-8cf00d4db8d8}">
+        <Declaration><![CDATA[VAR
+END_VAR
+]]></Declaration>
+        <Implementation>
+          <ST><![CDATA[IF pFbPiezoRef > 0 THEN
+	P_nPrePeakTime := pFbPiezoRef^.P_nPrePeakTime;
+END_IF]]></ST>
+        </Implementation>
+      </Get>
+      <Set Name="Set" Id="{8ebc75d5-a122-4980-9659-8514a01fdaad}">
+        <Declaration><![CDATA[VAR
+END_VAR
+]]></Declaration>
+        <Implementation>
+          <ST><![CDATA[IF pFbPiezoRef > 0 THEN
+	IF P_nPrePeakTime <> pFbPiezoRef^.P_nPrePeakTime THEN
+		pFbPiezoRef^.P_nPrePeakTime := P_nPrePeakTime;
+		bSendPrePeakTime := TRUE;
+	END_IF
+END_IF]]></ST>
+        </Implementation>
+      </Set>
+    </Property>
+    <Property Name="P_nPulse" Id="{29916f6c-43c2-4449-b884-823f84853bad}">
+      <Declaration><![CDATA[PROPERTY P_nPulse : UINT]]></Declaration>
+      <Get Name="Get" Id="{38043249-bee0-4d2e-ad90-e0cb846c85c8}">
+        <Declaration><![CDATA[VAR
+END_VAR
+]]></Declaration>
+        <Implementation>
+          <ST><![CDATA[IF pFbPiezoRef > 0 THEN
+	P_nPulse := pFbPiezoRef^.P_nPulse;
+END_IF]]></ST>
+        </Implementation>
+      </Get>
+      <Set Name="Set" Id="{f84634b3-4da0-4df5-bf3d-ee9128bb53c5}">
+        <Declaration><![CDATA[VAR
+END_VAR
+]]></Declaration>
+        <Implementation>
+          <ST><![CDATA[IF pFbPiezoRef > 0 THEN
+	IF P_nPulse <> pFbPiezoRef^.P_nPulse THEN
+		pFbPiezoRef^.P_nPulse := P_nPulse;
+		bSendPulse := TRUE;
+	END_IF
+END_IF]]></ST>
+        </Implementation>
+      </Set>
+    </Property>
+    <Property Name="P_nVoltage" Id="{1482e8f9-133a-455e-894f-df740ca88b01}">
+      <Declaration><![CDATA[PROPERTY P_nVoltage : UINT]]></Declaration>
+      <Get Name="Get" Id="{caa78669-2581-49c8-a450-21039e199bfb}">
+        <Declaration><![CDATA[VAR
+END_VAR
+]]></Declaration>
+        <Implementation>
+          <ST><![CDATA[IF pFbPiezoRef > 0 THEN
+	P_nVoltage := pFbPiezoRef^.P_nVoltage;
+END_IF]]></ST>
+        </Implementation>
+      </Get>
+      <Set Name="Set" Id="{05a41f61-1c92-4824-b4cb-e3fd282651c9}">
+        <Declaration><![CDATA[VAR
+END_VAR
+]]></Declaration>
+        <Implementation>
+          <ST><![CDATA[IF pFbPiezoRef > 0 THEN
+	IF P_nVoltage <> pFbPiezoRef^.P_nVoltage THEN
+		pFbPiezoRef^.P_nVoltage := P_nVoltage;
+		bSendVoltage := TRUE;
+	END_IF
+END_IF]]></ST>
+        </Implementation>
+      </Set>
+    </Property>
+    <LineIds Name="FB_PiezoControl">
+      <LineId Id="3" Count="3" />
+      <LineId Id="9" Count="4" />
+      <LineId Id="163" Count="0" />
+      <LineId Id="15" Count="101" />
+      <LineId Id="230" Count="0" />
+      <LineId Id="117" Count="0" />
+      <LineId Id="227" Count="0" />
+      <LineId Id="260" Count="1" />
+      <LineId Id="265" Count="2" />
+      <LineId Id="263" Count="0" />
+      <LineId Id="228" Count="0" />
+      <LineId Id="337" Count="8" />
+      <LineId Id="347" Count="6" />
+      <LineId Id="355" Count="7" />
+      <LineId Id="269" Count="0" />
+      <LineId Id="133" Count="0" />
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="FB_PiezoControl.M_Init">
+      <LineId Id="3" Count="4" />
+      <LineId Id="2" Count="0" />
+      <LineId Id="9" Count="3" />
+    </LineIds>
+    <LineIds Name="FB_PiezoControl.M_StartStop">
+      <LineId Id="19" Count="0" />
+      <LineId Id="22" Count="0" />
+      <LineId Id="3" Count="0" />
+      <LineId Id="23" Count="0" />
+      <LineId Id="21" Count="0" />
+      <LineId Id="20" Count="0" />
+      <LineId Id="6" Count="8" />
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="FB_PiezoControl.P_bIsSending.Get">
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="FB_PiezoControl.P_bStroboscope.Set">
+      <LineId Id="3" Count="0" />
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="FB_PiezoControl.P_nDrops.Get">
+      <LineId Id="3" Count="4" />
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="FB_PiezoControl.P_nDrops.Set">
+      <LineId Id="3" Count="4" />
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="FB_PiezoControl.P_nFrequency.Get">
+      <LineId Id="3" Count="5" />
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="FB_PiezoControl.P_nFrequency.Set">
+      <LineId Id="3" Count="5" />
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="FB_PiezoControl.P_nHoldVoltage.Get">
+      <LineId Id="3" Count="1" />
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="FB_PiezoControl.P_nHoldVoltage.Set">
+      <LineId Id="3" Count="4" />
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="FB_PiezoControl.P_nPrePeakTime.Get">
+      <LineId Id="3" Count="1" />
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="FB_PiezoControl.P_nPrePeakTime.Set">
+      <LineId Id="3" Count="4" />
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="FB_PiezoControl.P_nPulse.Get">
+      <LineId Id="3" Count="1" />
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="FB_PiezoControl.P_nPulse.Set">
+      <LineId Id="3" Count="4" />
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="FB_PiezoControl.P_nVoltage.Get">
+      <LineId Id="3" Count="1" />
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="FB_PiezoControl.P_nVoltage.Set">
+      <LineId Id="3" Count="4" />
+      <LineId Id="2" Count="0" />
+    </LineIds>
+  </POU>
+</TcPlcObject>

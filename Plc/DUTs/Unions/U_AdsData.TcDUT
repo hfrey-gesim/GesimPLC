@@ -1,0 +1,14 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<TcPlcObject Version="1.1.0.1" ProductVersion="3.1.4022.18">
+  <DUT Name="U_AdsData" Id="{9203676a-3bdb-4aac-ab35-14682bee4e80}">
+    <Declaration><![CDATA[TYPE U_AdsData :
+UNION
+	stCmdData	: ST_CmdData;
+	aUINT_1000	: ARRAY[0..999] OF UINT;
+	aDINT_20	: ARRAY[0..19] OF DINT;
+	aDINT_40	: ARRAY[0..39] OF DINT;
+	ConfigId	: GUID;
+END_UNION
+END_TYPE]]></Declaration>
+  </DUT>
+</TcPlcObject>

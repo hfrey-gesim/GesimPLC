@@ -1,0 +1,14 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<TcPlcObject Version="1.1.0.1" ProductVersion="3.1.0.25">
+  <DUT Name="ST_HardwareId" Id="{eb539aa8-73d7-4abf-bb5c-90368cc35838}">
+    <Declaration><![CDATA[TYPE ST_HardwareId :
+STRUCT
+	nItem		: USINT;
+	nParentItem : USINT;
+	eGroup 		: E_HardwareGrp; 
+END_STRUCT
+END_TYPE
+]]></Declaration>
+    <ObjectProperties />
+  </DUT>
+</TcPlcObject>

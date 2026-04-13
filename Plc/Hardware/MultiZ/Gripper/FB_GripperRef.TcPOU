@@ -1,0 +1,105 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<TcPlcObject Version="1.1.0.1" ProductVersion="3.1.4024.6">
+  <POU Name="FB_GripperRef" Id="{5ba6d2de-f4a7-4fba-8040-e12d05453dc1}" SpecialFunc="None">
+    <Declaration><![CDATA[FUNCTION_BLOCK FB_GripperRef
+VAR_INPUT
+END_VAR
+VAR_OUTPUT
+END_VAR
+VAR
+	nChannel 		: USINT;
+	pToolCtrl		: POINTER TO BYTE;
+	pToolState		: POINTER TO BYTE;
+	bVialDetector	AT %I* : BOOL;
+END_VAR
+]]></Declaration>
+    <Implementation>
+      <ST><![CDATA[]]></ST>
+    </Implementation>
+    <Method Name="FB_init" Id="{067f5934-8892-4b05-91db-878fa811ce39}">
+      <Declaration><![CDATA[METHOD FB_init : BOOL
+VAR_INPUT
+	bInitRetains 	: BOOL; // if TRUE, the retain variables are initialized (warm start / cold start)
+	bInCopyCode 	: BOOL;  // if TRUE, the instance afterwards gets moved into the copy code (online change)
+	pMultiZRef 		: POINTER TO FB_MultiZRef;
+END_VAR
+
+VAR
+	nFirstAdress : PVOID;
+	nSelfAdress : PVOID;		
+END_VAR
+]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[nFirstAdress := ADR(pMultiZRef^.aFbGripperRef);
+nSelfAdress := THIS;
+{IF hasvalue (RegisterSize, '32')}
+nChannel := UDINT_TO_USINT((nSelfAdress - nFirstAdress)/SIZEOF(THIS^) + 1);
+{ELSE}
+nChannel := ULINT_TO_USINT((nSelfAdress - nFirstAdress)/SIZEOF(THIS^) + 1);
+{END_IF}
+pToolCtrl := ADR(pMultiZRef^.aFbZAxisRef[nChannel].stOutput.nToolCtrl);
+pToolState := ADR(pMultiZRef^.aFbZAxisRef[nChannel].stInput.nToolState);]]></ST>
+      </Implementation>
+    </Method>
+    <Method Name="M_Actuate" Id="{debbd48d-4498-4f83-b798-dc89a925ac02}">
+      <Declaration><![CDATA[METHOD M_Actuate
+VAR_INPUT
+	eCtrl : E_OpClCtrl;
+END_VAR
+]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[pToolCtrl^ := eCtrl;]]></ST>
+      </Implementation>
+    </Method>
+    <Property Name="P_bVialDetector" Id="{535017f4-4a94-44d8-bd5f-3698fbefa80b}">
+      <Declaration><![CDATA[PROPERTY P_bVialDetector : BOOL]]></Declaration>
+      <Get Name="Get" Id="{8c0ba058-5935-40c3-a64a-7e6e8c91c7da}">
+        <Declaration><![CDATA[VAR
+END_VAR
+]]></Declaration>
+        <Implementation>
+          <ST><![CDATA[P_bVialDetector := NOT bVialDetector;]]></ST>
+        </Implementation>
+      </Get>
+    </Property>
+    <Property Name="P_eGripperState" Id="{b3b2a80e-cd6d-4623-bd52-e5ab2d84ab37}">
+      <Declaration><![CDATA[PROPERTY P_eGripperState : E_GripperState]]></Declaration>
+      <Get Name="Get" Id="{6699658c-ef1e-436b-a96e-b1e6f5716051}">
+        <Declaration><![CDATA[VAR
+END_VAR
+]]></Declaration>
+        <Implementation>
+          <ST><![CDATA[IF pToolState^ = 24 THEN
+	P_eGripperState := E_GripperState.Open;
+ELSIF pToolState^ = 9 THEN
+	P_eGripperState := E_GripperState.HalfClosed;
+ELSIF pToolState^ = 11 THEN
+	P_eGripperState := E_GripperState.FullyClosed;
+ELSE
+	P_eGripperState := E_GripperState.Undefined;
+END_IF]]></ST>
+        </Implementation>
+      </Get>
+    </Property>
+    <LineIds Name="FB_GripperRef">
+      <LineId Id="9" Count="0" />
+    </LineIds>
+    <LineIds Name="FB_GripperRef.FB_init">
+      <LineId Id="15" Count="7" />
+      <LineId Id="7" Count="0" />
+    </LineIds>
+    <LineIds Name="FB_GripperRef.M_Actuate">
+      <LineId Id="5" Count="0" />
+    </LineIds>
+    <LineIds Name="FB_GripperRef.P_bVialDetector.Get">
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="FB_GripperRef.P_eGripperState.Get">
+      <LineId Id="2" Count="0" />
+      <LineId Id="7" Count="0" />
+      <LineId Id="5" Count="0" />
+      <LineId Id="8" Count="4" />
+      <LineId Id="6" Count="0" />
+    </LineIds>
+  </POU>
+</TcPlcObject>

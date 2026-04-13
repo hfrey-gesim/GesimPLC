@@ -1,0 +1,56 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<TcPlcObject Version="1.1.0.1" ProductVersion="3.1.4022.10">
+  <POU Name="FB_Dil_GetValveConfig" Id="{7313fd23-5c05-4730-88a4-de979afda87e}" SpecialFunc="None">
+    <Declaration><![CDATA[FUNCTION_BLOCK FB_Dil_GetValveConfig
+VAR_INPUT
+	bExecute	: BOOL;	
+END_VAR
+VAR_OUTPUT
+	bBusy		: BOOL;
+	bError		: BOOL;
+	nErrorId	: ERRORID;
+	nValue		: USINT;
+END_VAR
+VAR
+END_VAR
+VAR_IN_OUT
+	DilSendCmd 	: FB_Dil_SendCmd;
+	pDilRef		: POINTER TO FB_HwRefDiluter;
+END_VAR
+]]></Declaration>
+    <Implementation>
+      <ST><![CDATA[IF pDilRef = 0 THEN
+	bError := TRUE;
+	RETURN;	
+END_IF
+
+IF bExecute THEN
+	bBusy := TRUE;
+
+	DilSendCmd(bExecute:= TRUE, bExpectReply:= TRUE, sSendData:= CONCAT(USINT_TO_STRING(pDilRef^.nChannel),'?21'));
+	
+	IF NOT DilSendCmd.bBusy THEN
+		IF DilSendCmd.bError THEN
+			bError := TRUE;
+			nErrorId := DilSendCmd.nErrorId;
+		ELSE
+			nValue := F_ToASC(LEFT(DilSendCmd.sReceiveData,1)) AND 16#0F;
+			pDilRef^.eValveType := nValue;
+		END_IF
+		DilSendCmd(bExecute:= FALSE);
+		bBusy := FALSE;
+	END_IF
+ELSE
+	DilSendCmd(bExecute:= FALSE);
+	bBusy := FALSE;
+	bError := FALSE;
+	nErrorId := 0;
+	nValue := 0;
+END_IF]]></ST>
+    </Implementation>
+    <LineIds Name="FB_Dil_GetValveConfig">
+      <LineId Id="3" Count="26" />
+      <LineId Id="2" Count="0" />
+    </LineIds>
+  </POU>
+</TcPlcObject>

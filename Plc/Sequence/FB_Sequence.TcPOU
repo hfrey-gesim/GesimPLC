@@ -1,0 +1,1179 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<TcPlcObject Version="1.1.0.1" ProductVersion="3.1.4024.11">
+  <POU Name="FB_Sequence" Id="{70bd2856-4cb0-45e0-b946-0b679947c5e3}" SpecialFunc="None">
+    <Declaration><![CDATA[{attribute 'enable_dynamic_creation'}
+FUNCTION_BLOCK FB_Sequence
+VAR_INPUT
+END_VAR
+VAR_OUTPUT
+	eCurrentState	: E_SequenceState;
+END_VAR
+VAR
+	nId					: UDINT;
+	fbStepList			: FB_StepList();
+	fbProcessingQueue 	: FB_ProcessingQueue;
+	nMonitorStepNr		: UINT := 1;
+	nMonitorStep 		: POINTER TO ST_Step;
+	
+	i					: UINT;
+	pStep				: POINTER TO ST_Step;
+	pFollowStep			: POINTER TO ST_Step;
+	pLastStep			: POINTER TO ST_Step;
+	
+	bError				: BOOL;
+	stError				: ST_Error;
+	
+	eOldState			: E_SequenceState;
+	
+	nCondiCheckResult	: BYTE; //Bit0 und Bit1 werden einzeln ausgewertet
+	
+	nCancelState		: USINT;
+	
+	nStepsReady			: UINT;
+	
+	eActionStatus		: E_ActionStatus;
+	nInfo				: DINT;
+	
+	nSequParam			: UINT;
+	nCounter			: DINT;
+END_VAR
+]]></Declaration>
+    <Implementation>
+      <ST><![CDATA[nMonitorStep := fbStepList.M_Get(nMonitorStepNr);	
+//Sequence ruft den ActionDispacher auch, wie sonst FB_Auto
+//auch die Untersequenzen werden von hier aufgerufen
+stError.POUState := eCurrentState;
+
+IF eOldState <> eCurrentState THEN
+	fbSequenceInfo.M_AddTail(nId,eCurrentState,0);
+	eOldState := eCurrentState;
+END_IF
+
+CASE eCurrentState OF
+	E_SequenceState.State_Start:
+		//InitialStep(1) und die Steps, welche keinen Forerunner haben in die ProcessingQueue eintragen
+		fbProcessingQueue.M_Reset();
+		nCancelState := 0;
+		FOR i:= 1 TO fbStepList.P_nCount BY 1 DO	//Alle Steps durchlaufen
+			pStep := fbStepList.M_Get(i);
+			IF pStep > 0 THEN
+				M_ChangeStepState(pStep,E_StepState.STEPSTATUS_Idle);
+				M_ChangeStepInfo(pStep,0);
+				pStep^.bFollowerInQueue := FALSE;
+				IF NOT pStep^.bHasForerunner THEN
+					fbProcessingQueue.M_Add(pStep);
+					M_ChangeStepState(pStep,E_StepState.STEPSTATUS_InQueue);
+				END_IF
+			ELSE //Dieser Fall dürfte normalerweise nicht eintreten
+				bError := TRUE;
+				EXIT;
+			END_IF
+			//fbSequenceInfo.M_AddTail(nId,eCurrentState,pStep);
+			//Auskommentiert, da bei sehr vielen Steps es zu Zyklusüberschreitungen kommen kann.
+		END_FOR
+		pLastStep := fbStepList.M_GetLast();
+		fbComplexAction.P_nDispenseTrials := 0;
+		eCurrentState := E_SequenceState.State_Active;
+		
+	E_SequenceState.State_Active:
+		//ProcessingQueue einmal durchlaufen
+		fbProcessingQueue.M_SetCurrentToHead();
+		REPEAT
+			pStep := fbProcessingQueue.M_Get();
+			IF pStep > 0 THEN
+				CASE pStep^.eState OF
+					E_StepState.STEPSTATUS_InQueue:
+						nInfo := 0;
+						//sind alle Bedingungen für eine Ausführung erfüllt?
+						pStep^.bActionResultIsValid := FALSE;
+						IF pStep^.pCondi > 0 THEN
+							nCondiCheckResult := pStep^.pCondi^.M_Check(1);
+							IF nCondiCheckResult.0 THEN
+								//Hier checken, ob die Action einen Move mit Pipette beinhaltet
+								//Wenn ja, dann checken, ob ZSensor mounted -> entsprechend Interaktion senden
+								IF nCondiCheckResult.1 THEN //Cancel (Vergleich CondiStepResult negativ)
+									//Step aus ProcessingQueue entfernen
+									pStep^.bFollowerInQueue := FALSE;
+									fbProcessingQueue.M_Remove(pStep);
+									M_ChangeStepState(pStep, E_StepState.STEPSTATUS_Idle);
+									fbSequenceInfo.M_AddTail(nId,eCurrentState,pStep);
+								ELSE
+									IF pStep^.stActionData.eAction = E_Action.ACTION_CounterStep THEN
+										IF NOT pStep^.bFollowerInQueue THEN	//Follower in ProcessingQueue eintragen
+											pStep^.bFollowerInQueue := TRUE;
+											REPEAT
+												pFollowStep := M_ReadFollowerStep(pStep);
+												IF pFollowStep > 0 THEN
+													fbProcessingQueue.M_Add(pFollowStep);
+													M_ChangeStepState(pFollowStep,E_StepState.STEPSTATUS_InQueue);
+													M_ChangeStepInfo(pFollowStep,0);
+													fbSequenceInfo.M_AddTail(nId,eCurrentState,pFollowStep);
+												END_IF
+											UNTIL (pFollowStep = 0)
+											END_REPEAT
+										END_IF
+										
+										IF pStep^.stActionData.aParams[1] = 0 THEN //Set
+											pStep^.nActionResult := pStep^.stActionData.aParams[2];
+										ELSIF pStep^.stActionData.aParams[1] = 1 THEN //Add
+											pStep^.nActionResult := pStep^.nActionResult + pStep^.stActionData.aParams[2];
+										END_IF
+										
+										//Provisorium
+										nCounter := pStep^.nActionResult;
+										//Provisorium
+										
+										nInfo := pStep^.nActionResult;
+										pStep^.bActionResultIsValid := TRUE;
+										//Step aus ProcessingQueue entfernen
+										pStep^.bFollowerInQueue := FALSE;
+										fbProcessingQueue.M_Remove(pStep);
+										M_ChangeStepState(pStep, E_StepState.STEPSTATUS_Ready);
+										M_ChangeStepInfo(pStep,pStep^.nActionResult);
+										fbSequenceInfo.M_AddTail(nId,eCurrentState,pStep);
+									ELSIF pStep^.stActionData.eAction = E_Action.ACTION_PauseStep THEN //PauseStep führt keine Action aus
+										M_ChangeStepState(pStep, E_StepState.STEPSTATUS_Active);
+										fbSequenceInfo.M_AddTail(nId,eCurrentState,pStep);
+									ELSE //Action ausführen
+										M_ChangeStepState(pStep, E_StepState.STEPSTATUS_Active);
+										IF pStep^.stActionData.eAction = E_Action.ACTION_MoveToTarget AND pStep^.stActionData.aParams[1] = E_TargetRef.TARGETREF_SequParaToArrayItem THEN
+											pStep^.stActionData.aParams[2] := nSequParam;
+										ELSIF pStep^.stActionData.eAction = E_Action.ACTION_RunSequence THEN
+											pStep^.stActionData.aParams[2] := nCounter;
+										END_IF
+										stError.ErrorId := ActionDispacher.M_ExeAction(pStep^.stActionData, FALSE, nActionId=>pStep^.nActionId);
+										fbSequenceInfo.M_AddTail(nId,eCurrentState,pStep);
+									END_IF
+								END_IF
+							END_IF
+						ELSE	//Step hat keine Condi
+							M_ChangeStepState(pStep, E_StepState.STEPSTATUS_Active);
+							IF pStep^.stActionData.eAction = E_Action.ACTION_CounterStep THEN
+								IF NOT pStep^.bFollowerInQueue THEN	//Follower in ProcessingQueue eintragen
+									pStep^.bFollowerInQueue := TRUE;
+									REPEAT
+										pFollowStep := M_ReadFollowerStep(pStep);
+										IF pFollowStep > 0 THEN
+											fbProcessingQueue.M_Add(pFollowStep);
+											M_ChangeStepState(pFollowStep, E_StepState.STEPSTATUS_InQueue);
+											M_ChangeStepInfo(pFollowStep,0);
+											fbSequenceInfo.M_AddTail(nId,eCurrentState,pFollowStep);
+										END_IF
+									UNTIL (pFollowStep = 0)
+									END_REPEAT
+								END_IF
+								
+								IF pStep^.stActionData.aParams[1] = 0 THEN //Set
+									pStep^.nActionResult := pStep^.stActionData.aParams[2];
+								ELSIF pStep^.stActionData.aParams[1] = 1 THEN //Add
+									pStep^.nActionResult := pStep^.nActionResult + pStep^.stActionData.aParams[2];
+								END_IF
+								
+								//Provisorium
+								nCounter := pStep^.nActionResult;
+								//Provisorium
+								
+								pStep^.bActionResultIsValid := TRUE;
+								//Step aus ProcessingQueue entfernen
+								pStep^.bFollowerInQueue := FALSE;
+								fbProcessingQueue.M_Remove(pStep);
+								M_ChangeStepState(pStep, E_StepState.STEPSTATUS_Ready);
+								M_ChangeStepInfo(pStep,pStep^.nActionResult);
+								fbSequenceInfo.M_AddTail(nId,eCurrentState,pStep);
+							ELSIF pStep^.stActionData.eAction = E_Action.ACTION_PauseStep THEN //PauseStep führt keine Action aus
+								M_ChangeStepState(pStep, E_StepState.STEPSTATUS_Active);
+								fbSequenceInfo.M_AddTail(nId,eCurrentState,pStep);
+							ELSE //Action ausführen
+								M_ChangeStepState(pStep, E_StepState.STEPSTATUS_Active);
+								
+								IF pStep^.stActionData.eAction = E_Action.ACTION_MoveToTarget AND pStep^.stActionData.aParams[1] = E_TargetRef.TARGETREF_SequParaToArrayItem THEN
+									pStep^.stActionData.aParams[2] := nSequParam;
+								ELSIF pStep^.stActionData.eAction = E_Action.ACTION_RunSequence THEN
+									pStep^.stActionData.aParams[2] := nCounter;
+								END_IF
+								
+								stError.ErrorId := ActionDispacher.M_ExeAction(pStep^.stActionData, FALSE, nActionId=>pStep^.nActionId);
+								fbSequenceInfo.M_AddTail(nId,eCurrentState,pStep);
+							END_IF
+						END_IF
+						
+						IF stError.ErrorId > 0 THEN
+							M_ChangeStepState(pStep, E_StepState.STEPSTATUS_Error);
+							fbSequenceInfo.M_AddTail(nId,eCurrentState,pStep);
+							bError := TRUE;
+						END_IF
+						
+						
+					E_StepState.STEPSTATUS_Active:
+						IF NOT pStep^.bFollowerInQueue THEN	//Follower in ProcessingQueue eintragen
+							pStep^.bFollowerInQueue := TRUE;
+							REPEAT
+								pFollowStep := M_ReadFollowerStep(pStep);
+								IF pFollowStep > 0 THEN
+									fbProcessingQueue.M_Add(pFollowStep);
+									M_ChangeStepState(pFollowStep, E_StepState.STEPSTATUS_InQueue);
+									M_ChangeStepInfo(pFollowStep,pFollowStep^.nActionResult);
+									fbSequenceInfo.M_AddTail(nId,eCurrentState,pFollowStep);
+								END_IF
+							UNTIL (pFollowStep = 0)
+							END_REPEAT
+						END_IF
+						
+						IF pStep^.stActionData.eAction = E_Action.ACTION_PauseStep THEN
+							eCurrentState := E_SequenceState.State_PauseRequest;
+							EXIT;
+						ELSE
+							//Action-Status abfragen
+							IF nId = 1 THEN
+								nId := 1;
+							END_IF
+							eActionStatus := ActionDispacher.M_GetActionStatus(pStep^.nActionId,nProgress=>nInfo);
+							M_ChangeStepInfo(pStep, nInfo); 
+							IF eActionStatus = E_ActionStatus.ACTIONSTATUS_Ready OR eActionStatus = E_ActionStatus.ACTIONSTATUS_Idle THEN //Action nicht mehr aktiv
+								//Es gibt momentan genau eine Action, welche nach ihrer Abarbeitung die Sequence in Pause versetzt (DispenseTest)
+								//Rückmeldung aus ActionDispacher
+								//PauseRequest beim ActionDispacher gesetzt?
+								//Delay bis Fertigmeldung
+								M_ChangeStepState(pStep, E_StepState.STEPSTATUS_Ready);
+								pStep^.bFollowerInQueue := FALSE;
+								fbProcessingQueue.M_Remove(pStep);
+								IF ActionDispacher.P_bLastActionResult THEN
+									pStep^.bActionResultIsValid := TRUE;
+									pStep^.nActionResult := ActionDispacher.P_nLastActionResult;
+									M_ChangeStepInfo(pStep, pStep^.nActionResult);
+									ActionDispacher.P_bLastActionResult := FALSE;
+								END_IF
+								IF ActionDispacher.P_bPauseRequestIntern THEN
+									ActionDispacher.P_bPauseRequestIntern := FALSE;
+									eCurrentState := E_SequenceState.State_PauseRequest;
+									fbSequenceInfo.M_AddTail(nId,eCurrentState,pStep);
+									EXIT;
+								END_IF
+							ELSIF eActionStatus = E_ActionStatus.ACTIONSTATUS_Pause THEN
+								//Tritt auf, wenn Action intern auf Pause gesetzt werden (z.B. Untersequenzen, welche einen Pause-Step beinhalten)
+								//->Seq. selber in Pause versetzen
+								M_ChangeStepState(pStep, E_StepState.STEPSTATUS_Pause);
+								eCurrentState := E_SequenceState.State_Pause;
+								fbSequenceInfo.M_AddTail(nId,eCurrentState,pStep);
+								EXIT;
+							ELSIF eActionStatus = E_ActionStatus.ACTIONSTATUS_Error THEN //Action hat Error verursacht
+								M_ChangeStepState(pStep, E_StepState.STEPSTATUS_Error);
+								fbProcessingQueue.M_Remove(pStep);
+								bError := TRUE;
+							END_IF
+							//Nur melden, wenn sich am jeweiligem Step etwas geändert hat
+							//Diese Info kann nur im Step selber stehen.
+							fbSequenceInfo.M_AddTail(nId,eCurrentState,pStep);
+						END_IF
+				END_CASE
+			END_IF
+		UNTIL (pStep = 0)
+		END_REPEAT
+		//Sequence ist abgearbeitet, wenn der letzte Step ready
+		IF fbProcessingQueue.P_bEmpty THEN
+			eCurrentState := E_SequenceState.State_Ready;
+		END_IF
+		
+	E_SequenceState.State_PauseRequest:
+		eCurrentState := E_SequenceState.State_Pause;
+		//Active Steps in PauseRequest setzen
+		//In diesem State wird solange verharrt, bis kein Step mehr in Active
+		//ProcessingQueue einmal durchlaufen
+		fbProcessingQueue.M_SetCurrentToHead();
+		REPEAT
+			pStep := fbProcessingQueue.M_Get();
+			IF pStep > 0 THEN
+				IF pStep^.eState = E_StepState.STEPSTATUS_Active THEN
+					eCurrentState := E_SequenceState.State_PauseRequest; 
+					CASE ActionDispacher.M_GetActionStatus(pStep^.nActionId,nProgress=>nInfo) OF
+						E_ActionStatus.ACTIONSTATUS_Active:
+							ActionDispacher.M_PauseAction(pStep^.nActionId);
+						E_ActionStatus.ACTIONSTATUS_Pause:
+							M_ChangeStepState(pStep, E_StepState.STEPSTATUS_Pause);
+							fbSequenceInfo.M_AddTail(nId,eCurrentState,pStep);
+						E_ActionStatus.ACTIONSTATUS_Ready:
+							M_ChangeStepState(pStep, E_StepState.STEPSTATUS_Ready);
+							pStep^.bFollowerInQueue := FALSE;
+							fbProcessingQueue.M_Remove(pStep);
+							fbSequenceInfo.M_AddTail(nId,eCurrentState,pStep);
+							IF ActionDispacher.P_bLastActionResult THEN
+								pStep^.bActionResultIsValid := TRUE;
+								pStep^.nActionResult := ActionDispacher.P_nLastActionResult; 
+								ActionDispacher.P_bLastActionResult := FALSE;
+							END_IF
+					END_CASE
+				END_IF
+			END_IF
+		UNTIL (pStep = 0)
+		END_REPEAT
+	E_SequenceState.State_Pause:
+		//Do nothing
+	E_SequenceState.State_Continue:
+		//Steps, die in Pause sind, fortsetzen
+		fbProcessingQueue.M_SetCurrentToHead();
+		REPEAT
+			pStep := fbProcessingQueue.M_Get();
+			IF pStep > 0 THEN
+				IF pStep^.eState = E_StepState.STEPSTATUS_Pause THEN
+					ActionDispacher.M_ContinueAction(pStep^.nActionId,nProgress=>nInfo);
+					M_ChangeStepState(pStep, E_StepState.STEPSTATUS_Active);
+					M_ChangeStepInfo(pStep, nInfo);
+					fbSequenceInfo.M_AddTail(nId,eCurrentState,pStep);
+				END_IF
+			END_IF
+		UNTIL (pStep = 0)
+		END_REPEAT
+		eCurrentState := E_SequenceState.State_Active;
+	
+	E_SequenceState.State_Ready:
+		//Do nothing
+	E_SequenceState.State_Cancel:
+		//Alle aktiven Steps abbrechen
+		//ProcessingQueue leeren
+		//in Canceled gehen
+		IF nCancelState = 0 THEN
+			fbComplexAction.P_nDispenseTrials := 0;
+			fbProcessingQueue.M_SetCurrentToHead();
+			REPEAT
+				pStep := fbProcessingQueue.M_Get();
+				IF pStep > 0 THEN
+					IF pStep^.eState = E_StepState.STEPSTATUS_Active OR pStep^.eState = E_StepState.STEPSTATUS_Pause THEN
+						ActionDispacher.M_StopAction(pStep^.nActionId);
+					END_IF
+				END_IF
+			UNTIL (pStep = 0)
+			END_REPEAT
+			nCancelState := 1;
+		ELSIF nCancelState = 1 THEN
+			eCurrentState := E_SequenceState.State_Canceled;	
+			fbProcessingQueue.M_SetCurrentToHead();
+			REPEAT
+				pStep := fbProcessingQueue.M_Get();
+				IF pStep > 0 THEN
+					IF pStep^.eState = E_StepState.STEPSTATUS_Active OR pStep^.eState = E_StepState.STEPSTATUS_Pause THEN
+						//kommt man hier an?
+						//geht ActionStatus in Ready oder Idle?
+						//eventuell mit Scope aufzeichnen
+						IF ActionDispacher.M_GetActionStatus(pStep^.nActionId) <> E_ActionStatus.ACTIONSTATUS_Ready THEN
+							eCurrentState := E_SequenceState.State_Cancel;
+						END_IF
+					END_IF
+				END_IF
+			UNTIL (pStep = 0)
+			END_REPEAT			
+		END_IF
+END_CASE
+
+IF eOldState <> eCurrentState THEN
+	//Progress?
+	fbSequenceInfo.M_AddTail(nId,eCurrentState,0);
+	eOldState := eCurrentState;
+END_IF
+
+IF bError THEN
+	fbComplexAction.P_nDispenseTrials := 0;
+	stError.POU := POU_FB_Sequenece;
+	fbErrorList.M_Add(stError);
+	eCurrentState := E_SequenceState.State_Error;
+	bError := FALSE;
+END_IF]]></ST>
+    </Implementation>
+    <Method Name="FB_init" Id="{ebe55b7a-f263-4c86-9591-9555691be7e0}">
+      <Declaration><![CDATA[METHOD FB_init : BOOL
+VAR_INPUT
+	bInitRetains : BOOL; // if TRUE, the retain variables are initialized (warm start / cold start)
+	bInCopyCode : BOOL;  // if TRUE, the instance afterwards gets moved into the copy code (online change)
+	nNoOfSteps	: UINT;
+END_VAR
+]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[fbStepList.FB_SetNoOfSteps(nNoOfSteps);]]></ST>
+      </Implementation>
+    </Method>
+    <Method Name="M_AddCondi" Id="{895deca7-f1ed-47cd-82e8-e35ee1da2801}">
+      <Declaration><![CDATA[METHOD M_AddCondi : ERRORID
+VAR_INPUT
+	refCmdData : REFERENCE TO  ST_CmdData;	
+END_VAR
+VAR
+	eOperator : E_LogicOperator;
+	pCondi : POINTER TO FB_CondiBase;
+	pStep  : POINTER TO ST_Step; 
+END_VAR
+]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[//checken, ob zugehörige /ProgramNr/StepNr vorhanden, dh. es muss schon eine Condition vorhanden sein, in die dann der
+//Zeiger auf hinzuzufügende Condition eingetragen wird
+pStep := fbStepList.M_Get(refCmdData.aHeader[0]);
+IF pStep = 0 THEN
+	M_AddCondi := E_ErrorIdCmd.ERRORID_StepNotExists;
+	RETURN;
+END_IF
+
+IF pStep^.pCondi = 0 THEN	//Step besitzt noch keine Condition und kann deshalb keine zusätzliche bekommen
+	M_AddCondi := E_ErrorIdCmd.ERRORID_StepHasNoBasicCondi;
+	RETURN;
+END_IF
+
+eOperator := UINT_TO_USINT(refCmdData.aHeader[1]);
+
+IF NOT (eOperator = E_LogicOperator.LOGIC_OP_AND OR eOperator = E_LogicOperator.LOGIC_OP_OR) THEN	//unzulässiger CondiOperator
+	M_AddCondi := E_ErrorIdCmd.ERRORID_InvalidCondiOperator;
+	RETURN;
+END_IF
+
+M_AddCondi := M_CreateCondi(pStep:= pStep, 
+				eOperator:= eOperator, 
+				eCondition:= DINT_TO_USINT(refCmdData.n32Data[0]), 
+				nValue1:= refCmdData.n32Data[1], 
+				nValue2:= refCmdData.n32Data[2], 
+				nValue3:= refCmdData.n32Data[3], 
+				pCondi=>pCondi);
+
+IF M_AddCondi = 0 THEN
+	pStep^.pCondi^.M_AddNext(pCondi);
+END_IF]]></ST>
+      </Implementation>
+    </Method>
+    <Method Name="M_AddStep" Id="{d6f8e2ef-7817-4a72-aa3c-3428b7f67851}">
+      <Declaration><![CDATA[METHOD M_AddStep : ERRORID
+VAR_INPUT
+	refCmdData : REFERENCE TO  ST_CmdData;
+END_VAR
+
+VAR
+	stStep		: ST_Step;
+	eCondition 	: E_Condition;
+END_VAR]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[//Es werden nur Programmsätze mit zulässiger Action hinzugefügt
+stStep.nStepNr := refCmdData.aHeader[0];
+stStep.bStop := refCmdData.aHeader[1].0;
+stStep.tDelay := UINT_TO_TIME(refCmdData.aHeader[2]);
+stStep.stActionData.eAction := DINT_TO_UINT(refCmdData.n32Data[5]);
+stStep.stActionData.nObject := DINT_TO_UINT(refCmdData.n32Data[6]);
+stStep.bFollowerInQueue := FALSE;
+stStep.bHasForerunner := FALSE;
+
+//Basiscondtion hinzufügen
+eCondition := DINT_TO_USINT(refCmdData.n32Data[0]);
+
+M_AddStep := M_CreateCondi(pStep:= ADR(stStep), 
+							eOperator:= E_LogicOperator.LOGIC_OP_AND,	//bei der ersten Condi immer "AND"
+							eCondition:= eCondition, 
+							nValue1:= refCmdData.n32Data[1], 
+							nValue2:= refCmdData.n32Data[2], 
+							nValue3:= refCmdData.n32Data[3], 
+							pCondi=> stStep.pCondi);
+
+IF M_AddStep > 0 THEN
+	RETURN;
+END_IF
+
+CASE stStep.stActionData.eAction OF
+	//BasicActions
+	E_Action.ACTION_MoveXY, E_Action.ACTION_MoveZ, E_Action.ACTION_SetPressure, E_Action.ACTION_SetVacuum, E_Action.ACTION_SwitchPressure, 
+	E_Action.ACTION_Heating, E_Action.ACTION_Cooling, E_Action.ACTION_Aspirate, E_Action.ACTION_Dispense, E_Action.ACTION_DispenseDrops, 
+	E_Action.ACTION_InkSpin, E_Action.ACTION_Expose, E_Action.ACTION_InkOpClCover, E_Action.ACTION_ReactorOpCl, E_Action.ACTION_FillLiquid,
+	E_Action.ACTION_EmptyLiquid, E_Action.ACTION_DilPrepare,E_Action.ACTION_Mix,E_Action.ACTION_MeasurepH,E_Action.ACTION_SetVoltage,
+	E_Action.ACTION_SuckOff, E_Action.ACTION_BasicDispense, E_Action.ACTION_StirrCartridge,
+	E_Action.ACTION_MoveLifter, E_Action.ACTION_TurnTo:
+		//max 8 Parameter kopieren
+		MEMCPY(ADR(stStep.stActionData.aParams),ADR(refCmdData.n32Data[7]),32);
+	E_Action.ACTION_TakePicture:
+		//1 Parameter kopieren
+		MEMCPY(ADR(stStep.stActionData.aParams),ADR(refCmdData.n32Data[7]),4);
+		//Parameter 2 wird mit SequenceID gefüllt und Parameter 3 wird mit StepNummer gefüllt
+		stStep.stActionData.aParams[2] := UDINT_TO_DINT(nId);
+		stStep.stActionData.aParams[3] := stStep.nStepNr;
+	
+	//ComplexActions
+	E_Action.ACTION_MoveToTarget, E_Action.ACTION_ExchangePiece,E_Action.ACTION_OpenCloseFlipTube,E_Action.ACTION_InsertTool,
+	E_Action.ACTION_DockTool:
+		//Object muss ein MzTool sein
+		IF fbObjectDirectory.M_ObjIsMzTool(stStep.stActionData.nObject) THEN
+			stStep.stActionData.nTarget := DINT_TO_UINT(refCmdData.n32Data[7]);
+			//Target checken
+			IF fbObjectDirectory.M_ObjIsTarget(stStep.stActionData.nTarget) THEN
+				//11 Parameter kopieren
+				MEMCPY(ADR(stStep.stActionData.aParams),ADR(refCmdData.n32Data[8]),44);
+			ELSE
+				M_AddStep := E_ErrorIdCmd.ERRORID_UnsuitableTarget;
+			END_IF
+		ELSE
+			M_AddStep := E_ErrorIdCmd.ERRORID_UnsuitableObject;
+		END_IF
+
+	E_Action.ACTION_TransferGas, E_Action.ACTION_TransferLiquid:
+		//Object und Target müssen ein Luers sein
+		IF fbObjectDirectory.M_GetObjType(stStep.stActionData.nObject) = E_ObjectType.OBJECTTYPE_Luer THEN
+			stStep.stActionData.nTarget := DINT_TO_UINT(refCmdData.n32Data[7]);
+			IF fbObjectDirectory.M_GetObjType(stStep.stActionData.nTarget) = E_ObjectType.OBJECTTYPE_Luer THEN
+				//max. 3 Parameter kopieren
+				MEMCPY(ADR(stStep.stActionData.aParams),ADR(refCmdData.n32Data[8]),12);
+			ELSE
+				M_AddStep := E_ErrorIdCmd.ERRORID_UnsuitableObject;
+			END_IF
+		ELSE
+			M_AddStep := E_ErrorIdCmd.ERRORID_UnsuitableObject;
+		END_IF
+		
+	E_Action.ACTION_TransferTray:
+		IF fbObjectDirectory.M_ObjIsDevice(stStep.stActionData.nObject) THEN
+			MEMCPY(ADR(stStep.stActionData.aParams),ADR(refCmdData.n32Data[8]),4);
+		ELSE
+			M_AddStep := E_ErrorIdCmd.ERRORID_UnsuitableObject;
+		END_IF
+	
+	E_Action.ACTION_MeasureTool:
+		//Object muss ein MzTool sein
+		IF fbObjectDirectory.M_ObjIsMzTool(stStep.stActionData.nObject) THEN
+			stStep.stActionData.nTarget := DINT_TO_UINT(refCmdData.n32Data[7]);
+			MEMCPY(ADR(stStep.stActionData.aParams),ADR(refCmdData.n32Data[8]),12);
+			//Target checken
+			IF fbObjectDirectory.M_ObjIsTarget(stStep.stActionData.nTarget) THEN
+				;
+			ELSE
+				M_AddStep := E_ErrorIdCmd.ERRORID_UnsuitableTarget;
+			END_IF
+		ELSE
+			M_AddStep := E_ErrorIdCmd.ERRORID_UnsuitableObject;
+		END_IF		
+		
+	E_Action.ACTION_CleanTip:
+		//Object muss ein MzTool sein
+		IF fbObjectDirectory.M_ObjIsMzTool(stStep.stActionData.nObject) THEN
+			stStep.stActionData.nTarget := DINT_TO_UINT(refCmdData.n32Data[7]);
+			//Target checken
+			IF fbObjectDirectory.M_GetObjType(stStep.stActionData.nTarget) = E_ObjectType.OBJECTTYPE_TipCleaner THEN
+				;
+			ELSIF
+				fbObjectDirectory.M_GetObjType(stStep.stActionData.nTarget) = E_ObjectType.OBJECTTYPE_TipCleanerGen2 THEN
+				MEMCPY(ADR(stStep.stActionData.aParams[1]),ADR(refCmdData.n32Data[8]),16);
+			ELSE
+				M_AddStep := E_ErrorIdCmd.ERRORID_UnsuitableTarget;
+			END_IF
+		ELSE
+			M_AddStep := E_ErrorIdCmd.ERRORID_UnsuitableObject;
+		END_IF
+		
+	E_Action.ACTION_DryPip:
+		//Object muss ein MzTool sein
+		IF fbObjectDirectory.M_ObjIsMzTool(stStep.stActionData.nObject) THEN
+			stStep.stActionData.nTarget := DINT_TO_UINT(refCmdData.n32Data[7]);
+			//Target checken
+			IF fbObjectDirectory.M_GetObjType(stStep.stActionData.nTarget) = E_ObjectType.OBJECTTYPE_DryPad THEN
+				MEMCPY(ADR(stStep.stActionData.aParams[1]),ADR(refCmdData.n32Data[8]),8);
+			ELSE
+				M_AddStep := E_ErrorIdCmd.ERRORID_UnsuitableTarget;
+			END_IF
+		ELSE
+			M_AddStep := E_ErrorIdCmd.ERRORID_UnsuitableObject;
+		END_IF		
+		
+	E_Action.ACTION_WashTool:
+		//Object muss eine Pipette sein
+		IF fbObjectDirectory.M_GetObjType(stStep.stActionData.nObject) = E_ObjectType.OBJECTTYPE_PiezoPip OR
+				fbObjectDirectory.M_GetObjType(stStep.stActionData.nObject) = E_ObjectType.OBJECTTYPE_PassivPip OR
+				fbObjectDirectory.M_GetObjType(stStep.stActionData.nObject) = E_ObjectType.OBJECTTYPE_Luer OR
+				fbObjectDirectory.M_GetObjType(stStep.stActionData.nObject) = E_ObjectType.OBJECTTYPE_SolenoidPip OR
+				fbObjectDirectory.M_GetObjType(stStep.stActionData.nObject) = E_ObjectType.OBJECTTYPE_TitrationTool OR
+				fbObjectDirectory.M_GetObjType(stStep.stActionData.nObject) = E_ObjectType.OBJECTTYPE_TwinPiezoHolder OR
+				fbObjectDirectory.M_GetObjType(stStep.stActionData.nObject) = E_ObjectType.OBJECTTYPE_TriplePip THEN
+			stStep.stActionData.nTarget := DINT_TO_UINT(refCmdData.n32Data[7]);
+			//Target checken
+			IF fbObjectDirectory.M_GetObjType(stStep.stActionData.nTarget) = E_ObjectType.OBJECTTYPE_WashStation THEN
+				//5 Parameter kopieren
+				MEMCPY(ADR(stStep.stActionData.aParams[1]),ADR(refCmdData.n32Data[8]),60);
+			ELSE
+				M_AddStep := E_ErrorIdCmd.ERRORID_UnsuitableTarget;
+			END_IF
+		ELSE
+			M_AddStep := E_ErrorIdCmd.ERRORID_UnsuitableObject;
+		END_IF
+		
+	E_Action.ACTION_DispenseTest:
+		//Object muss eine PiezoPip
+		IF (fbObjectDirectory.M_GetObjType(stStep.stActionData.nObject) = E_ObjectType.OBJECTTYPE_PiezoPip) OR
+			(fbObjectDirectory.M_GetObjType(stStep.stActionData.nObject) = E_ObjectType.OBJECTTYPE_TwinPiezoHolder) THEN
+			stStep.stActionData.nTarget := DINT_TO_UINT(refCmdData.n32Data[7]);
+			//Target checken
+			IF fbObjectDirectory.M_GetObjType(stStep.stActionData.nTarget) = E_ObjectType.OBJECTTYPE_Stroboscope THEN
+				MEMCPY(ADR(stStep.stActionData.aParams[1]),ADR(refCmdData.n32Data[8]),8);
+			ELSE
+				M_AddStep := E_ErrorIdCmd.ERRORID_UnsuitableTarget;
+			END_IF
+		ELSE
+			M_AddStep := E_ErrorIdCmd.ERRORID_UnsuitableObject;
+		END_IF
+
+	E_Action.ACTION_GetPipSample:
+		//Object muss eine Pipette sein
+		IF fbObjectDirectory.M_GetObjType(stStep.stActionData.nObject) = E_ObjectType.OBJECTTYPE_PiezoPip OR
+				fbObjectDirectory.M_GetObjType(stStep.stActionData.nObject) = E_ObjectType.OBJECTTYPE_PassivPip OR
+				fbObjectDirectory.M_GetObjType(stStep.stActionData.nObject) = E_ObjectType.OBJECTTYPE_SolenoidPip OR
+				fbObjectDirectory.M_GetObjType(stStep.stActionData.nObject) = E_ObjectType.OBJECTTYPE_TwinPiezoHolder THEN
+			stStep.stActionData.nTarget := DINT_TO_UINT(refCmdData.n32Data[7]);
+			//Target checken
+			IF fbObjectDirectory.M_GetObjType(stStep.stActionData.nTarget) = E_ObjectType.OBJECTTYPE_Mtp THEN
+				//6 Parameter kopieren
+				MEMCPY(ADR(stStep.stActionData.aParams[1]),ADR(refCmdData.n32Data[8]),24);		
+			ELSE
+				M_AddStep := E_ErrorIdCmd.ERRORID_UnsuitableTarget;
+			END_IF
+		ELSE
+			M_AddStep := E_ErrorIdCmd.ERRORID_UnsuitableObject;
+		END_IF
+		
+	E_Action.ACTION_StampDemolding:
+		//Object muss ein StampSupport sein
+		IF fbObjectDirectory.M_GetObjType(stStep.stActionData.nObject) = E_ObjectType.OBJECTTYPE_StampSupport THEN
+			//6 Parameter kopieren
+			MEMCPY(ADR(stStep.stActionData.aParams[1]),ADR(refCmdData.n32Data[7]),24);			
+		ELSE
+			M_AddStep := E_ErrorIdCmd.ERRORID_UnsuitableObject;
+		END_IF
+		
+	E_Action.ACTION_StampInking:
+		//Object muss ein StampSupport sein
+		IF fbObjectDirectory.M_GetObjType(stStep.stActionData.nObject) = E_ObjectType.OBJECTTYPE_StampSupport THEN
+			stStep.stActionData.nTarget := DINT_TO_UINT(refCmdData.n32Data[7]);
+			//3 Parameter kopieren
+			MEMCPY(ADR(stStep.stActionData.aParams[1]),ADR(refCmdData.n32Data[8]),12);
+		ELSE	
+			M_AddStep := E_ErrorIdCmd.ERRORID_UnsuitableObject;
+		END_IF
+		
+	E_Action.ACTION_PickPutPowder:
+		//Object kann nur eine Pulverpipette sein
+		IF fbObjectDirectory.M_GetObjType(stStep.stActionData.nObject) = E_ObjectType.OBJECTTYPE_PowderPip OR
+			fbObjectDirectory.M_GetObjType(stStep.stActionData.nObject) = E_ObjectType.OBJECTTYPE_PickPlacePip THEN
+			//7 Parameter kopieren
+			MEMCPY(ADR(stStep.stActionData.aParams[1]),ADR(refCmdData.n32Data[7]),28);		
+		ELSE
+			M_AddStep := E_ErrorIdCmd.ERRORID_UnsuitableObject;
+		END_IF
+
+	E_Action.ACTION_PowdStatShaking:
+		//Object kann nur eine PowderStation sein
+		IF fbObjectDirectory.M_GetObjType(stStep.stActionData.nObject) = E_ObjectType.OBJECTTYPE_PowderStation THEN
+			//5 Parameter kopieren
+			MEMCPY(ADR(stStep.stActionData.aParams[1]),ADR(refCmdData.n32Data[7]),20);		
+		ELSE
+			M_AddStep := E_ErrorIdCmd.ERRORID_UnsuitableObject;
+		END_IF
+	
+	E_Action.ACTION_PowdStatLeveling:		
+		//Object kann nur eine PowderStation sein
+		IF fbObjectDirectory.M_GetObjType(stStep.stActionData.nObject) = E_ObjectType.OBJECTTYPE_PowderStation THEN
+			stStep.stActionData.aParams[1] := (refCmdData.n32Data[7]);
+		ELSE
+			M_AddStep := E_ErrorIdCmd.ERRORID_UnsuitableObject;
+		END_IF
+		
+	E_Action.ACTION_ActionOnArray:
+		//Object muss ein MzTool sein
+		IF fbObjectDirectory.M_ObjIsMzTool(stStep.stActionData.nObject) THEN
+			stStep.stActionData.nTarget := DINT_TO_UINT(refCmdData.n32Data[7]);
+			//Target checken
+			IF fbObjectDirectory.M_ObjIsArray(stStep.stActionData.nTarget) THEN 
+				//18 Parameter kopieren
+				MEMCPY(ADR(stStep.stActionData.aParams),ADR(refCmdData.n32Data[8]),72);
+				//Wenn Action TakePicture, dann SequenceID und StepNummer übertragen
+				IF stStep.stActionData.aParams[11] = E_Action.ACTION_TakePicture THEN
+					//stStep.stActionData.aParams[12] = Delay
+					stStep.stActionData.aParams[13] := UDINT_TO_DINT(nId);
+					stStep.stActionData.aParams[14] := stStep.nStepNr;
+				END_IF
+			ELSE
+				M_AddStep := E_ErrorIdCmd.ERRORID_UnsuitableTarget;
+			END_IF
+		ELSE
+			M_AddStep := E_ErrorIdCmd.ERRORID_UnsuitableObject;
+		END_IF
+		
+	E_Action.ACTION_RunGCode:
+			//6 Parameter kopieren
+			stStep.stActionData.nTarget := DINT_TO_UINT(refCmdData.n32Data[6]);
+			MEMCPY(ADR(stStep.stActionData.aParams[1]),ADR(refCmdData.n32Data[7]),52);
+	E_Action.ACTION_Delay, E_Action.ACTION_CoupleHeads:
+			stStep.stActionData.aParams[1] := refCmdData.n32Data[6];
+	E_Action.ACTION_RunSequence:
+			MEMCPY(ADR(stStep.stActionData.aParams[1]),ADR(refCmdData.n32Data[6]),24);
+			IF DINT_TO_UDINT(stStep.stActionData.aParams[1]) = nId THEN
+				M_AddStep := E_ErrorIdCmd.ERRORID_SequenceCannotCallItself;
+			ELSE
+				//Sequence vorhanden?
+				IF fbSequenceList.M_Get(DINT_TO_UDINT(stStep.stActionData.aParams[1])) = 0 THEN
+					M_AddStep := E_ErrorIdCmd.ERRORID_SequenceNotExists;
+				END_IF
+			END_IF
+	E_Action.ACTION_GoToStep:
+			//Follower eintragen
+			M_AddStep := F_SetFollowerStep(ADR(stStep),DINT_TO_UINT(refCmdData.n32Data[6]));
+	E_Action.ACTION_CounterStep:
+			stStep.stActionData.aParams[1] := refCmdData.n32Data[6]; //Operator (0=set, 1=Add)
+			stStep.stActionData.aParams[2] := refCmdData.n32Data[7]; //Amount
+			
+	E_Action.ACTION_PauseStep:
+		;
+	ELSE
+		M_AddStep := E_ErrorIdCmd.ERRORID_InvalidAction;
+END_CASE
+
+IF M_AddStep > 0 THEN	//Condition wieder löschen!!
+	__DELETE(stStep.pCondi);
+ELSE
+	M_AddStep := fbStepList.M_Add(stStep);
+	IF M_AddStep > 0 THEN
+		__DELETE(stStep.pCondi);
+	END_IF
+END_IF]]></ST>
+      </Implementation>
+    </Method>
+    <Method Name="M_ChangeStepInfo" Id="{ed219540-400d-4b85-986d-f79264f78bad}">
+      <Declaration><![CDATA[METHOD M_ChangeStepInfo
+VAR_INPUT
+	pStep : POINTER TO ST_Step;
+	nInfo : DINT;
+END_VAR
+]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[IF pStep^.nInfo <> nInfo THEN
+	pStep^.nInfo := nInfo;
+	pStep^.bInfoChanged := TRUE;
+END_IF]]></ST>
+      </Implementation>
+    </Method>
+    <Method Name="M_ChangeStepState" Id="{0bf2014b-8e09-458d-8918-269f56045fcb}">
+      <Declaration><![CDATA[METHOD M_ChangeStepState
+VAR_INPUT
+	pStep : POINTER TO ST_Step;
+	eState : E_StepState;
+END_VAR
+]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[IF pStep^.eState = eState THEN
+	RETURN;
+END_IF
+//Übergänge
+// von "active" nach "ready" -> stepsReady inkrementieren
+// von "ready" nach "InQueue"  -> stepsReady dekrementieren
+// von allen States nach "Idle" -> stepsReady dekrementieren
+IF pStep^.eState = E_StepState.STEPSTATUS_Active AND eState = E_StepState.STEPSTATUS_Ready THEN
+	nStepsReady := MIN(fbStepList.P_nCount,nStepsReady + 1);
+ELSIF (pStep^.eState = E_StepState.STEPSTATUS_Ready AND eState = E_StepState.STEPSTATUS_InQueue) OR
+ 		eState = E_StepState.STEPSTATUS_Idle THEN
+	IF nStepsReady > 0 THEN	//Vermeiden, dass negativee Überlauf bei Neustart der Sequenz stattfindet
+		nStepsReady := nStepsReady - 1;	
+	END_IF
+END_IF
+pStep^.eState := eState;
+pStep^.bInfoChanged := TRUE;
+
+	
+]]></ST>
+      </Implementation>
+    </Method>
+    <Method Name="M_CheckForStart" Id="{50c69d90-7e7c-4cf7-81ba-58db7dcee1f1}">
+      <Declaration><![CDATA[METHOD M_CheckForStart : ERRORID
+VAR_INPUT
+END_VAR
+]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[IF fbStepList.P_nCount = 0 THEN
+	M_CheckForStart := E_ErrorIdCmd.ERRORID_NoStepsInSequence;
+	RETURN;
+END_IF
+
+IF NOT eCurrentState = E_SequenceState.State_Idle THEN
+	M_CheckForStart := E_ErrorIdCmd.ERRORID_InvalidState;
+	RETURN;
+END_IF]]></ST>
+      </Implementation>
+    </Method>
+    <Method Name="M_Continue" Id="{52cf7419-21c6-4423-b654-d13e7c3bb724}">
+      <Declaration><![CDATA[METHOD M_Continue : ERRORID
+VAR_INPUT
+END_VAR
+]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[IF eCurrentState = E_SequenceState.State_Pause THEN
+	eCurrentState := E_SequenceState.State_Continue;
+END_IF]]></ST>
+      </Implementation>
+    </Method>
+    <Method Name="M_CreateCondi" Id="{dcccb27c-40b6-487e-9f06-5836981b7f87}">
+      <Declaration><![CDATA[METHOD M_CreateCondi : ERRORID
+VAR_INPUT
+	pStep		: POINTER TO ST_Step;
+	eOperator	: E_LogicOperator;
+	eCondition 	: E_Condition;
+	nValue1		: DINT;
+	nValue2		: DINT;
+	nValue3		: DINT;
+END_VAR
+VAR_OUTPUT
+	pCondi	: POINTER TO FB_CondiBase;
+END_VAR
+VAR
+	pCondiStepReady		: POINTER TO FB_CondiStepReady;
+	pCondiProcessData	: POINTER TO FB_CondiProcessData;
+	pCondiStepResult 	: POINTER TO FB_CondiStepResult;
+	nSpecStepNr 		: UINT;
+	pRefStep			: POINTER TO ST_Step;
+	nDeviceObjId		: UINT;
+	iDevice				: I_Device;
+	eProcDataType		: E_ProcDataType;
+END_VAR]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[IF pStep = 0 THEN
+	M_CreateCondi := E_ErrorIdCmd.ERRORID_StepNotExists;
+END_IF
+CASE eCondition OF
+	E_Condition.CONDITION_Nothing:
+	;
+	E_Condition.CONDITION_PreStepReady:
+		//Vorgängerschritt vorhanden?
+		pRefStep := fbStepList.M_Get(pStep^.nStepNr - 1);
+		IF pRefStep > 0 THEN
+			//Step als Follower in PreStep eintragen
+			M_CreateCondi := F_SetFollowerStep(pStep:= pRefStep, pStep^.nStepNr);
+			IF M_CreateCondi = 0 THEN
+				pStep^.bHasForerunner := TRUE;
+				pCondiStepReady := __NEW(FB_CondiStepReady);
+				pCondiStepReady^.P_eOperator := eOperator;
+				pCondiStepReady^.P_pStep := fbStepList.M_Get(pStep^.nStepNr - 1);
+				pCondiStepReady^.P_eCondition := E_Condition.CONDITION_PreStepReady;
+				pCondi := pCondiStepReady;
+			END_IF
+		ELSE
+			M_CreateCondi := E_ErrorIdCmd.ERRORID_PrestepNotExists;
+		END_IF
+		
+	E_Condition.CONDITION_SpecStepReady:
+		//angegebener Schritt vorhanden?
+		nSpecStepNr := DINT_TO_UINT(nValue1);
+		pRefStep := fbStepList.M_Get(nSpecStepNr);
+		IF pRefStep > 0 THEN
+			//Step als Follower in PreStep eintragen
+			M_CreateCondi := F_SetFollowerStep(pStep:= pRefStep,pStep^.nStepNr);
+			IF M_CreateCondi = 0 THEN
+				pStep^.bHasForerunner := TRUE;
+				pCondiStepReady := __NEW(FB_CondiStepReady);
+				pCondiStepReady^.P_eOperator := eOperator;
+				pCondiStepReady^.P_pStep := fbStepList.M_Get(nSpecStepNr);
+				pCondiStepReady^.P_eCondition := E_Condition.CONDITION_SpecStepReady;
+				pCondi := pCondiStepReady;
+			END_IF
+		ELSE
+			M_CreateCondi := E_ErrorIdCmd.ERRORID_SpecstepNotExists;
+		END_IF
+		
+	E_Condition.CONDITION_ProcessVarLEQ, E_Condition.CONDITION_ProcessVarGEQ:
+		//In Value2 steht das Object -> checken ob gültiges Object
+		nDeviceObjId := DINT_TO_UINT(nValue2);
+		IF NOT fbObjectDirectory.M_ObjIsDevice(nDeviceObjId) THEN
+			M_CreateCondi := ERRORID_InvalidDeviceForProcData;
+			RETURN;
+		END_IF
+		iDevice := fbObjectDirectory.M_GetDevice(nDeviceObjId);
+		
+		//In Value1 steht der Prozessdatentyp -> Checken, ob Device Daten für diesen Typ anbietet
+		eProcDataType := DINT_TO_USINT(nValue1);
+		IF iDevice.M_CheckProcDataType(eProcDataType) THEN
+			pCondiProcessData := __NEW(FB_CondiProcessData);
+			pCondiProcessData^.P_eOperator := eOperator;
+			pCondiProcessData^.P_eCondition := eCondition;
+			pCondiProcessData^.P_iDevice := iDevice;
+			pCondiProcessData^.P_eProcDataType := eProcDataType;
+			pCondiProcessData^.P_nValue := nValue3;
+			pCondi := pCondiProcessData;
+			
+		ELSE
+			M_CreateCondi := ERRORID_InvalidDeviceForProcData;
+		END_IF
+	E_Condition.CONDITION_StepResult:
+		//angegebener Schritt vorhanden?
+		nSpecStepNr := DINT_TO_UINT(nValue1);
+		pRefStep := fbStepList.M_Get(nSpecStepNr);
+		IF pRefStep > 0 THEN
+			//Step als Follower in RefStep eintragen
+			M_CreateCondi := F_SetFollowerStep(pStep:= pRefStep, pStep^.nStepNr);
+			IF M_CreateCondi = 0 THEN
+				pStep^.bHasForerunner := TRUE;
+				pCondiStepResult := __NEW(FB_CondiStepResult);
+				pCondiStepResult^.P_eCondition := eCondition;
+				pCondiStepResult^.P_eOperator := eOperator;
+				pCondiStepResult^.P_pStep := pRefStep;
+				pCondiStepResult^.P_eCompareOperator := DINT_TO_USINT(nValue2);
+				pCondiStepResult^.P_nCompareValue := nValue3;
+				pCondi := pCondiStepResult;
+			END_IF
+		ELSE
+			M_CreateCondi := E_ErrorIdCmd.ERRORID_SpecstepNotExists;
+		END_IF
+ELSE
+	M_CreateCondi := E_ErrorIdCmd.ERRORID_InvalidCondition;
+END_CASE]]></ST>
+      </Implementation>
+    </Method>
+    <Method Name="M_Delete" Id="{3b613c62-02e3-4870-ba9d-f1de1204e492}">
+      <Declaration><![CDATA[METHOD M_Delete : BOOL
+VAR_INPUT
+	nMaxSteps	: UINT;
+END_VAR
+VAR_OUTPUT
+	nDeletedSteps : UINT;
+END_VAR]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[M_Delete := fbStepList.M_Delete(nMaxSteps:= nMaxSteps, nDeletedSteps=> nDeletedSteps);]]></ST>
+      </Implementation>
+    </Method>
+    <Method Name="M_GetNextStep" Id="{8385b555-34aa-44ab-b35d-ee09e3bd02eb}">
+      <Declaration><![CDATA[METHOD M_GetNextStep : BOOL
+VAR_INPUT
+END_VAR
+]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[]]></ST>
+      </Implementation>
+    </Method>
+    <Method Name="M_Pause" Id="{c0f5ca6d-4715-4c35-8896-5a7d6549ee51}">
+      <Declaration><![CDATA[METHOD M_Pause : ERRORID
+VAR_INPUT
+END_VAR
+]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[IF eCurrentState = E_SequenceState.State_Active THEN
+	eCurrentState := E_SequenceState.State_PauseRequest;
+	//fbSequenceInfo.M_AddTail(nId,eCurrentState,0);
+END_IF]]></ST>
+      </Implementation>
+    </Method>
+    <Method Name="M_ReadFollowerStep" Id="{f70e7631-3456-401a-8d65-1951a27eb960}">
+      <Declaration><![CDATA[METHOD M_ReadFollowerStep : POINTER TO ST_Step
+VAR_INPUT
+	pStep : POINTER TO ST_Step;
+END_VAR
+
+VAR
+	nMaxFollowers : USINT;
+END_VAR
+
+VAR_INST
+	i : USINT;
+END_VAR
+]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[IF pStep > 0 THEN
+	nMaxFollowers := UINT_TO_USINT(SIZEOF (pStep^.aFollower) / 2);
+	IF i < nMaxFollowers THEN
+		IF pStep^.aFollower[i] > 0 THEN
+			M_ReadFollowerStep := fbStepList.M_Get(pStep^.aFollower[i]);
+			i := i + 1;
+		ELSE
+			i := 0;
+		END_IF
+	ELSE
+		i := 0;
+	END_IF
+END_IF]]></ST>
+      </Implementation>
+    </Method>
+    <Method Name="M_Reset" Id="{059b637c-f3a7-48aa-9850-c10b296e3120}">
+      <Declaration><![CDATA[METHOD M_Reset
+VAR_INPUT
+END_VAR
+]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[IF eCurrentState = E_SequenceState.State_Error OR
+	eCurrentState = E_SequenceState.State_Ready OR
+	eCurrentState = E_SequenceState.State_Canceled THEN
+	eCurrentState := E_SequenceState.State_Idle;
+END_IF]]></ST>
+      </Implementation>
+    </Method>
+    <Method Name="M_Start" Id="{3c634e01-4154-47f3-a80c-41726f2eb55f}">
+      <Declaration><![CDATA[METHOD M_Start
+VAR_INPUT
+	nSequParam : UINT;
+END_VAR
+]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[IF eCurrentState = E_SequenceState.State_Idle OR 
+	eCurrentState = E_SequenceState.State_Ready OR
+	eCurrentState = E_SequenceState.State_Canceled THEN
+	eCurrentState := E_SequenceState.State_Start;
+	nStepsReady := 0;
+	THIS^.nSequParam := nSequParam;
+END_IF]]></ST>
+      </Implementation>
+    </Method>
+    <Method Name="M_Stop" Id="{42f1fd98-33cd-4531-9b63-d7156f6aa2c9}">
+      <Declaration><![CDATA[METHOD M_Stop : BOOL
+VAR_INPUT
+END_VAR
+]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[IF eCurrentState = E_SequenceState.State_Active OR 
+	eCurrentState = E_SequenceState.State_Pause OR eCurrentState = E_SequenceState.State_PauseRequest THEN
+	eCurrentState := E_SequenceState.State_Cancel;
+END_IF]]></ST>
+      </Implementation>
+    </Method>
+    <Property Name="P_nCount" Id="{a514a9db-96ac-4e29-993a-6c51f986df50}">
+      <Declaration><![CDATA[PROPERTY P_nCount : UINT]]></Declaration>
+      <Get Name="Get" Id="{9150198e-4488-4c86-ac46-7d4532fad654}">
+        <Declaration><![CDATA[VAR
+END_VAR
+]]></Declaration>
+        <Implementation>
+          <ST><![CDATA[P_nCount := fbStepList.P_nCount;]]></ST>
+        </Implementation>
+      </Get>
+    </Property>
+    <Property Name="P_nId" Id="{e547e7f2-fb5a-429b-b4a4-fee4174c089d}">
+      <Declaration><![CDATA[PROPERTY P_nId : UDINT]]></Declaration>
+      <Get Name="Get" Id="{ad6c8f77-ea12-426b-9d39-1966d8345f16}">
+        <Declaration><![CDATA[VAR
+END_VAR
+]]></Declaration>
+        <Implementation>
+          <ST><![CDATA[P_nId := nId;]]></ST>
+        </Implementation>
+      </Get>
+      <Set Name="Set" Id="{3e63581d-45bf-4273-8fd6-fa523cef5298}">
+        <Declaration><![CDATA[VAR
+END_VAR
+]]></Declaration>
+        <Implementation>
+          <ST><![CDATA[nId := P_nId;]]></ST>
+        </Implementation>
+      </Set>
+    </Property>
+    <Property Name="P_nProgress" Id="{53f88210-c8db-45b4-9126-ea9ac38d495a}">
+      <Declaration><![CDATA[PROPERTY P_nProgress : UINT]]></Declaration>
+      <Get Name="Get" Id="{27be711f-2187-419c-883b-e3e8ef2c6a07}">
+        <Declaration><![CDATA[VAR
+END_VAR
+]]></Declaration>
+        <Implementation>
+          <ST><![CDATA[//Gibt den Fortschritt in % an (momentan auf Anzahl abgearbeiteter Schritte bezogen)
+P_nProgress := 100 * nStepsReady / fbStepList.P_nCount;
+]]></ST>
+        </Implementation>
+      </Get>
+    </Property>
+    <LineIds Name="FB_Sequence">
+      <LineId Id="1447" Count="336" />
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="FB_Sequence.FB_init">
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="FB_Sequence.M_AddCondi">
+      <LineId Id="3" Count="29" />
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="FB_Sequence.M_AddStep">
+      <LineId Id="2221" Count="30" />
+      <LineId Id="2526" Count="0" />
+      <LineId Id="2252" Count="168" />
+      <LineId Id="2517" Count="0" />
+      <LineId Id="2421" Count="32" />
+      <LineId Id="2508" Count="0" />
+      <LineId Id="2454" Count="45" />
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="FB_Sequence.M_ChangeStepInfo">
+      <LineId Id="19" Count="0" />
+      <LineId Id="21" Count="0" />
+      <LineId Id="20" Count="0" />
+      <LineId Id="13" Count="0" />
+    </LineIds>
+    <LineIds Name="FB_Sequence.M_ChangeStepState">
+      <LineId Id="36" Count="1" />
+      <LineId Id="35" Count="0" />
+      <LineId Id="5" Count="0" />
+      <LineId Id="9" Count="0" />
+      <LineId Id="8" Count="0" />
+      <LineId Id="10" Count="0" />
+      <LineId Id="14" Count="0" />
+      <LineId Id="16" Count="0" />
+      <LineId Id="18" Count="0" />
+      <LineId Id="38" Count="0" />
+      <LineId Id="40" Count="1" />
+      <LineId Id="39" Count="0" />
+      <LineId Id="28" Count="0" />
+      <LineId Id="34" Count="0" />
+      <LineId Id="17" Count="0" />
+      <LineId Id="11" Count="2" />
+    </LineIds>
+    <LineIds Name="FB_Sequence.M_CheckForStart">
+      <LineId Id="3" Count="7" />
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="FB_Sequence.M_Continue">
+      <LineId Id="3" Count="1" />
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="FB_Sequence.M_CreateCondi">
+      <LineId Id="3" Count="64" />
+      <LineId Id="91" Count="0" />
+      <LineId Id="181" Count="8" />
+      <LineId Id="200" Count="0" />
+      <LineId Id="190" Count="0" />
+      <LineId Id="199" Count="0" />
+      <LineId Id="192" Count="0" />
+      <LineId Id="201" Count="0" />
+      <LineId Id="193" Count="5" />
+      <LineId Id="69" Count="1" />
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="FB_Sequence.M_Delete">
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="FB_Sequence.M_GetNextStep">
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="FB_Sequence.M_Pause">
+      <LineId Id="3" Count="2" />
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="FB_Sequence.M_ReadFollowerStep">
+      <LineId Id="3" Count="11" />
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="FB_Sequence.M_Reset">
+      <LineId Id="3" Count="3" />
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="FB_Sequence.M_Start">
+      <LineId Id="3" Count="0" />
+      <LineId Id="14" Count="0" />
+      <LineId Id="16" Count="0" />
+      <LineId Id="20" Count="0" />
+      <LineId Id="6" Count="0" />
+      <LineId Id="26" Count="0" />
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="FB_Sequence.M_Stop">
+      <LineId Id="3" Count="2" />
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="FB_Sequence.P_nCount.Get">
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="FB_Sequence.P_nId.Get">
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="FB_Sequence.P_nId.Set">
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="FB_Sequence.P_nProgress.Get">
+      <LineId Id="3" Count="1" />
+      <LineId Id="2" Count="0" />
+    </LineIds>
+  </POU>
+</TcPlcObject>

@@ -1,0 +1,329 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<TcPlcObject Version="1.1.0.1" ProductVersion="3.1.4024.11">
+  <POU Name="FB_TitrationTool" Id="{110b2416-cee0-46a8-b36a-2813c09b5730}" SpecialFunc="None">
+    <Declaration><![CDATA[FUNCTION_BLOCK FB_TitrationTool EXTENDS FB_MzTool
+VAR
+	
+	stCenterPos: ST_3DPoint;
+	stCenterOffset: ST_3DPoint;
+	///****************************************Aktionvariablen****************************************************
+	///Action: "InitTool"
+	bInitTool: BOOL;
+	bInitSpecFlag: BOOL := TRUE;
+	nStateA_InitTool: USINT;
+	timeout: TON;
+END_VAR
+VAR CONSTANT
+	cNumberOfSlots: UINT := 2;
+END_VAR]]></Declaration>
+    <Implementation>
+      <ST><![CDATA[SUPER^();	//FB_MzTool aufrufen
+
+//Prozessdaten aktualisieren
+aObjProcData[nNotifyId] := stProcessData;
+]]></ST>
+    </Implementation>
+    <Action Name="A_Reset" Id="{61a37a4f-1b6e-4452-a4cc-d397e879d336}">
+      <Implementation>
+        <ST><![CDATA[nStateA_ResetSpec := 80;
+SUPER^.A_Reset();]]></ST>
+      </Implementation>
+    </Action>
+    <Action Name="A_Stop" Id="{b994c548-3557-4e04-9310-798e12dd9563}">
+      <Implementation>
+        <ST><![CDATA[IF nStateA_Stop = 0 THEN
+	IF bInitTool AND nStateA_InitTool < 70 THEN
+		nStateA_InitTool := 70;
+	END_IF
+	
+	nStateA_Stop := 1;
+END_IF
+
+SUPER^.A_Stop();]]></ST>
+      </Implementation>
+    </Action>
+    <Method Name="FB_init" Id="{cab557d0-0572-4d53-a86d-fcacf96c9d43}">
+      <Declaration><![CDATA[METHOD FB_init : BOOL
+VAR_INPUT
+	bInitRetains : BOOL; // if TRUE, the retain variables are initialized (warm start / cold start)
+	bInCopyCode : BOOL;  // if TRUE, the instance afterwards gets moved into the copy code (online change)
+END_VAR
+]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[eObjectType := E_ObjectType.OBJECTTYPE_TitrationTool;
+eObjectGroup := E_ObjectGroup.OBJECTGROUP_MzTool OR E_ObjectGroup.OBJECTGROUP_Device;]]></ST>
+      </Implementation>
+    </Method>
+    <Method Name="M_AddChild" Id="{5e9761c9-a186-472a-a15b-c09ec10a2ca4}">
+      <Declaration><![CDATA[METHOD M_AddChild : ERRORID
+VAR_INPUT
+	pObject : POINTER TO FB_Object;
+	nSlotNr	: UINT;
+	nIndex 	: INT;
+END_VAR
+]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[//Kann folgende Objekt-Typen aufnehmen
+//pH-Elektrode, PassivPip
+IF pObject > 0 THEN
+	IF pObject^.P_eObjectType = E_ObjectType.OBJECTTYPE_pHElectrode OR
+		pObject^.P_eObjectType = E_ObjectType.OBJECTTYPE_DummyTool OR
+		pObject^.P_eObjectType = E_ObjectType.OBJECTTYPE_PassivPip THEN
+		M_AddChild := SUPER^.M_AddChild(pObject,nSlotNr,nIndex);
+	ELSE
+		M_AddChild := E_ErrorIdObjMgmt.ERRORID_InvalidParentObject;
+	END_IF
+ELSE
+	M_AddChild := E_ErrorIdObjMgmt.ERRORID_InvalidParentObject;
+END_IF]]></ST>
+      </Implementation>
+    </Method>
+    <Method Name="M_CancelAction" Id="{887313d1-c529-4b3a-9cdc-9116ece71dad}">
+      <Declaration><![CDATA[METHOD M_CancelAction
+VAR_INPUT
+	eAction : E_Action;
+END_VAR
+]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[CASE eAction OF
+	(*E_Action.ACTION_Aspirate:
+		IF bAspirate AND nStateA_Aspirate < 70 THEN
+			nStateA_Aspirate := 70;
+		END_IF
+	E_Action.ACTION_Dispense:
+		IF bDispense AND nStateA_Dispense < 70 THEN
+			nStateA_Dispense := 70;
+		END_IF
+	E_Action.ACTION_DispenseDrops:
+		IF bDispensePiezo AND nStateA_DispensePiezo < 70 THEN
+			nStateA_DispensePiezo := 70;
+		END_IF*)
+ELSE
+	SUPER^.M_CancelAction(eAction);
+END_CASE]]></ST>
+      </Implementation>
+    </Method>
+    <Method Name="M_CheckAction" Id="{62329403-f062-4fa4-93bd-43902477c004}">
+      <Declaration><![CDATA[METHOD M_CheckAction : ERRORID
+VAR_INPUT
+	refActionData	: REFERENCE TO ST_ActionData;
+	pCorrelObject	: POINTER TO FB_Object;
+END_VAR
+VAR
+	pTarget : POINTER TO FB_TargetBase;
+	pRack	: POINTER TO FB_Rack;
+	pSlot	: POINTER TO FB_PieceSlot;	
+END_VAR]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[CASE refActionData.eAction OF
+	E_Action.ACTION_InsertTool:
+		//TitrationTool darf nur in offene Vials eintauchen
+		//-> Target muss also ein VialRack sein
+		pTarget := pCorrelObject;
+		IF pTarget > 0 THEN
+			IF (pTarget^.P_eObjectGroup AND E_ObjectGroup.OBJECTGROUP_Rack) = E_ObjectGroup.OBJECTGROUP_Rack THEN
+				pRack := pTarget;
+				pSlot := pRack^.M_GetSlot(DINT_TO_UINT(refActionData.aParams[2]));
+				IF pSlot > 0 THEN
+					IF pSlot^.P_pPiece = 0 THEN
+						M_CheckAction := E_ErrorIdCmd.ERRORID_NoPieceInSlot;
+						RETURN;
+					ELSIF NOT (pSlot^.P_pPiece^.P_eObjectType = E_ObjectType.OBJECTTYPE_Vial OR pSlot^.P_pPiece^.P_eObjectType = E_ObjectType.OBJECTTYPE_FlipTube) THEN
+						M_CheckAction := E_ErrorIdCmd.ERRORID_InvalidPieceType;
+					END_IF
+				ELSE
+					M_CheckAction := E_ErrorIdCmd.ERRORID_InvalidTargetSlot;
+					RETURN;
+				END_IF	
+			ELSE
+				M_CheckAction := E_ErrorIdCmd.ERRORID_UnsuitableTarget;	
+			END_IF
+		ELSE
+			M_CheckAction := E_ErrorIdCmd.ERRORID_UnsuitableTarget;	
+		END_IF	
+	E_Action.ACTION_WashTool:
+		RETURN;
+	E_Action.ACTION_MeasureTool:
+		IF fbObjectDirectory.M_GetObjType(refActionData.nTarget) <> E_ObjectType.OBJECTTYPE_TipCalibrator THEN
+			M_CheckAction := E_ErrorIdCmd.ERRORID_UnsuitableTarget;
+			RETURN;
+		END_IF
+ELSE
+	M_CheckAction := SUPER^.M_CheckAction(refActionData, pCorrelObject);
+END_CASE]]></ST>
+      </Implementation>
+    </Method>
+    <Method Name="M_GetAllProps" Id="{851b52d3-6989-4324-b6d8-7b587ef81e48}">
+      <Declaration><![CDATA[METHOD M_GetAllProps : ERRORID
+VAR_INPUT
+	refCmdData : REFERENCE TO  ST_CmdData;
+END_VAR
+
+VAR
+	i : UINT;
+	pToolSlot	: POINTER TO FB_Slot;
+END_VAR]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[//BaseProperties lesen
+SUPER^.M_GetAllProps(refCmdData);
+//BaseProperties lesen
+nCurrentPropIndex := nCurrentPropIndex + 1;
+refCmdData.n32Data[nCurrentPropIndex] := REAL_TO_DINT(stCenterPos.X);
+nCurrentPropIndex := nCurrentPropIndex + 1;
+refCmdData.n32Data[nCurrentPropIndex] := REAL_TO_DINT(stCenterPos.Y);
+nCurrentPropIndex := nCurrentPropIndex + 1;
+refCmdData.n32Data[nCurrentPropIndex] := REAL_TO_DINT(stCenterPos.Z);
+nCurrentPropIndex := nCurrentPropIndex + 1;
+refCmdData.n32Data[nCurrentPropIndex] := REAL_TO_DINT(stCenterOffset.X);
+nCurrentPropIndex := nCurrentPropIndex + 1;
+refCmdData.n32Data[nCurrentPropIndex] := REAL_TO_DINT(stCenterOffset.Y);
+nCurrentPropIndex := nCurrentPropIndex + 1;
+refCmdData.n32Data[nCurrentPropIndex] := REAL_TO_DINT(stCenterOffset.Z);]]></ST>
+      </Implementation>
+    </Method>
+    <Method Name="M_SetAllProps" Id="{9973d2b6-d369-4a0a-8133-aa9c554cebf1}">
+      <Declaration><![CDATA[METHOD M_SetAllProps : ERRORID
+VAR_INPUT
+	refCmdData : REFERENCE TO  ST_CmdData;
+END_VAR
+
+VAR
+	nParentMzToolObjId	: UINT;
+	pParentTool 		: POINTER TO FB_MzTool;
+	pParentHead 		: POINTER TO FB_MzHead;
+END_VAR]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[M_SetAllProps := SUPER^.M_SetAllProps(refCmdData);
+
+IF M_SetAllProps > 0 THEN
+	RETURN;
+END_IF
+
+//Spezi-Paramter schreiben
+nCurrentPropIndex := nCurrentPropIndex + 1;
+nSpecPropIndex := nCurrentPropIndex;
+stCenterPos.X := DINT_TO_REAL(refCmdData.n32Data[nCurrentPropIndex]);
+nCurrentPropIndex := nCurrentPropIndex + 1;
+stCenterPos.Y := DINT_TO_REAL(refCmdData.n32Data[nCurrentPropIndex]);
+nCurrentPropIndex := nCurrentPropIndex + 1;
+stCenterPos.Z := DINT_TO_REAL(refCmdData.n32Data[nCurrentPropIndex]);
+nCurrentPropIndex := nCurrentPropIndex + 1;
+stCenterOffset.X := DINT_TO_REAL(refCmdData.n32Data[nCurrentPropIndex]);
+nCurrentPropIndex := nCurrentPropIndex + 1;
+stCenterOffset.Y := DINT_TO_REAL(refCmdData.n32Data[nCurrentPropIndex]);
+nCurrentPropIndex := nCurrentPropIndex + 1;
+stCenterOffset.Z := DINT_TO_REAL(refCmdData.n32Data[nCurrentPropIndex]);
+
+nNoOfProps := nCurrentPropIndex + 1;]]></ST>
+      </Implementation>
+    </Method>
+    <Method Name="M_SetSingleProp" Id="{49bfb6b8-5545-4a9b-bdd2-580748b0192b}">
+      <Declaration><![CDATA[METHOD M_SetSingleProp : ERRORID
+VAR_INPUT
+	refCmdData: REFERENCE TO ST_CmdData;
+END_VAR
+]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[IF nSpecPropIndex = refCmdData.aHeader[1] THEN
+	stCenterPos.X := DINT_TO_REAL(refCmdData.n32Data[0]);
+ELSIF (nSpecPropIndex + 1) = refCmdData.aHeader[1] THEN
+	stCenterPos.Y := DINT_TO_REAL(refCmdData.n32Data[0]);
+ELSIF (nSpecPropIndex + 2) = refCmdData.aHeader[1] THEN
+	stCenterPos.Z := DINT_TO_REAL(refCmdData.n32Data[0]);
+ELSIF (nSpecPropIndex + 3) = refCmdData.aHeader[1] THEN
+	stCenterOffset.X := DINT_TO_REAL(refCmdData.n32Data[0]);
+ELSIF (nSpecPropIndex + 4) = refCmdData.aHeader[1] THEN
+	stCenterOffset.Y := DINT_TO_REAL(refCmdData.n32Data[0]);
+ELSIF (nSpecPropIndex + 5) = refCmdData.aHeader[1] THEN
+	stCenterOffset.Z := DINT_TO_REAL(refCmdData.n32Data[0]);
+ELSE
+	M_SetSingleProp := SUPER^.M_SetSingleProp(refCmdData);	
+END_IF]]></ST>
+      </Implementation>
+    </Method>
+    <Property Name="P_rToolRadius" Id="{19f4ac27-5d94-4ff0-9e75-b3d23f670d4b}">
+      <Declaration><![CDATA[PROPERTY P_rToolRadius : REAL]]></Declaration>
+      <Get Name="Get" Id="{bef8545f-8a1e-4ea0-91b9-33cbe527ee6a}">
+        <Declaration><![CDATA[VAR
+	stDim : ST_3DDimension;
+END_VAR
+]]></Declaration>
+        <Implementation>
+          <ST><![CDATA[P_rToolRadius := 2500.0;]]></ST>
+        </Implementation>
+      </Get>
+    </Property>
+    <Property Name="P_stAbsPosPhys" Id="{401a4a45-00d4-4a9a-b3b2-597ae0810f2f}">
+      <Declaration><![CDATA[PROPERTY P_stAbsPosPhys : ST_3DPoint
+]]></Declaration>
+      <Get Name="Get" Id="{1031195d-5b00-48ac-a2f1-a910bc240e1f}">
+        <Declaration><![CDATA[VAR
+	stTemp: ST_3DPoint;
+	stDim: ST_3DDimension;
+END_VAR
+]]></Declaration>
+        <Implementation>
+          <ST><![CDATA[//Die absolute Postion eines Tool in "Z" hat nicht den gleichen Bezug wie X und Y
+//X und Y beziehen sich auf den Koordinatenursprung, wenn die Achsen theoretisch aus Antrieb (0;0) stehen
+//Z bezieht sich auf die Sliderunterkante des Z-Antriebes verechnet mit AbsPos vom Head(Ergebnis ist in den meisten Fällen negativ)
+
+stTemp := F_Add3DPoints(stRelPos,stOffset);
+//AbsPos vom ParentSlot holen
+IF pParentSlot > 0 THEN
+	stTemp := F_Add3DPoints(stTemp,pParentSlot^.P_stAbsPos);
+END_IF
+
+stTemp := F_Add3DPoints(stTemp,stCenterPos);
+P_stAbsPosPhys := F_Add3DPoints(stTemp,stCenterOffset);]]></ST>
+        </Implementation>
+      </Get>
+    </Property>
+    <LineIds Name="FB_TitrationTool">
+      <LineId Id="98" Count="2" />
+      <LineId Id="103" Count="0" />
+      <LineId Id="9" Count="0" />
+    </LineIds>
+    <LineIds Name="FB_TitrationTool.A_Reset">
+      <LineId Id="2" Count="0" />
+      <LineId Id="1" Count="0" />
+    </LineIds>
+    <LineIds Name="FB_TitrationTool.A_Stop">
+      <LineId Id="2" Count="7" />
+      <LineId Id="1" Count="0" />
+    </LineIds>
+    <LineIds Name="FB_TitrationTool.FB_init">
+      <LineId Id="7" Count="1" />
+    </LineIds>
+    <LineIds Name="FB_TitrationTool.M_AddChild">
+      <LineId Id="3" Count="11" />
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="FB_TitrationTool.M_CancelAction">
+      <LineId Id="7" Count="14" />
+      <LineId Id="6" Count="0" />
+    </LineIds>
+    <LineIds Name="FB_TitrationTool.M_CheckAction">
+      <LineId Id="97" Count="34" />
+      <LineId Id="19" Count="0" />
+    </LineIds>
+    <LineIds Name="FB_TitrationTool.M_GetAllProps">
+      <LineId Id="11" Count="13" />
+      <LineId Id="10" Count="0" />
+    </LineIds>
+    <LineIds Name="FB_TitrationTool.M_SetAllProps">
+      <LineId Id="12" Count="20" />
+      <LineId Id="11" Count="0" />
+    </LineIds>
+    <LineIds Name="FB_TitrationTool.M_SetSingleProp">
+      <LineId Id="3" Count="13" />
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="FB_TitrationTool.P_rToolRadius.Get">
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="FB_TitrationTool.P_stAbsPosPhys.Get">
+      <LineId Id="3" Count="10" />
+      <LineId Id="2" Count="0" />
+    </LineIds>
+  </POU>
+</TcPlcObject>

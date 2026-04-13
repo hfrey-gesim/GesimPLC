@@ -1,0 +1,13 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<TcPlcObject Version="1.1.0.1" ProductVersion="3.1.4022.12">
+  <DUT Name="ST_TipCalibrator" Id="{4d279aaf-94d7-4d13-8294-5a61a6e15d2f}">
+    <Declaration><![CDATA[TYPE ST_TipCalibrator :
+STRUCT
+	bXSensor AT %I* : BOOL;
+	bYSensor AT %I* : BOOL;
+	bInvert	 : BOOL; //für Linmotantriebe	
+END_STRUCT
+END_TYPE
+]]></Declaration>
+  </DUT>
+</TcPlcObject>

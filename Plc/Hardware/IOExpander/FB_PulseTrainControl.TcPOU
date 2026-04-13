@@ -1,0 +1,171 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<TcPlcObject Version="1.1.0.1" ProductVersion="3.1.4022.12">
+  <POU Name="FB_PulseTrainControl" Id="{4e94401d-c1c7-48b6-af12-c6dac1216317}" SpecialFunc="None">
+    <Declaration><![CDATA[FUNCTION_BLOCK FB_PulseTrainControl
+VAR_INPUT
+END_VAR
+VAR_OUTPUT
+END_VAR
+VAR
+	pPulseTrainChannel : POINTER TO ST_PulseTrainChannel;
+	nFrequency : UINT;
+END_VAR
+]]></Declaration>
+    <Implementation>
+      <ST><![CDATA[]]></ST>
+    </Implementation>
+    <Method Name="M_GetFrequency" Id="{7d5645c0-644c-4d57-a080-a85fdc85682e}">
+      <Declaration><![CDATA[METHOD M_GetFrequency : UINT
+VAR_INPUT
+END_VAR
+]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[M_GetFrequency := nFrequency;]]></ST>
+      </Implementation>
+    </Method>
+    <Method Name="M_GetPulse" Id="{ef55df2c-cf1a-427f-b88f-348ce810c547}">
+      <Declaration><![CDATA[METHOD M_GetPulse : UINT
+VAR_INPUT
+END_VAR
+]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[IF pPulseTrainChannel > 0 THEN
+	M_GetPulse := pPulseTrainChannel^.nPulse;
+END_IF]]></ST>
+      </Implementation>
+    </Method>
+    <Method Name="M_SetFrequency" Id="{85334777-6d9e-43b4-b823-c238eb39883f}">
+      <Declaration><![CDATA[METHOD M_SetFrequency : ERRORID
+VAR_INPUT
+	nValue : UINT;
+END_VAR
+]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[IF pPulseTrainChannel = 0 THEN
+	M_SetFrequency := E_ErrorIdObjMgmt.ERRORID_InvalidTriggerChannel;
+	RETURN;
+END_IF
+IF nValue >= 16 AND nValue <= 10000 THEN
+	nFrequency := nValue;
+	pPulseTrainChannel^.nPeriod := UDINT_TO_UINT(1000000 / nFrequency);
+ELSE
+	M_SetFrequency := E_ErrorIdObjMgmt.ERRORID_InvalidFrequency;
+END_IF
+
+ ]]></ST>
+      </Implementation>
+    </Method>
+    <Method Name="M_SetPulse" Id="{3a21dcf7-c0ad-4c98-a25c-aa22cd473a78}">
+      <Declaration><![CDATA[METHOD M_SetPulse : ERRORID
+VAR_INPUT
+	nValue : UINT;
+END_VAR
+]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[IF pPulseTrainChannel = 0 THEN
+	M_SetPulse := E_ErrorIdObjMgmt.ERRORID_InvalidTriggerChannel;
+	RETURN;
+END_IF
+IF nValue > 0 AND nValue <= 65635 THEN
+	pPulseTrainChannel^.nPulse := nValue;
+ELSE
+	M_SetPulse := E_ErrorIdObjMgmt.ERRORID_InvalidPulseWidth;
+END_IF]]></ST>
+      </Implementation>
+    </Method>
+    <Method Name="M_SetPulseTrainChannel" Id="{d57af17d-521b-4ad9-899d-0bd58d71e661}">
+      <Declaration><![CDATA[METHOD M_SetPulseTrainChannel
+VAR_INPUT
+	pPulseTrainChannel : POINTER TO ST_PulseTrainChannel;
+END_VAR
+]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[THIS^.pPulseTrainChannel := pPulseTrainChannel; 
+]]></ST>
+      </Implementation>
+    </Method>
+    <Method Name="M_Start" Id="{345143db-58b2-429d-a443-c788f0a8c2b7}">
+      <Declaration><![CDATA[METHOD M_Start
+VAR_INPUT
+	nNrOfPulses : UINT;
+END_VAR
+]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[IF pPulseTrainChannel > 0 THEN
+	pPulseTrainChannel^.nNoOfPulses := nNrOfPulses;
+	pPulseTrainChannel^.nCtrl := 1;
+END_IF]]></ST>
+      </Implementation>
+    </Method>
+    <Method Name="M_Stop" Id="{cb9ad9e6-dac3-43cc-97e2-ef84f8607eb5}">
+      <Declaration><![CDATA[METHOD M_Stop
+VAR_INPUT
+END_VAR
+]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[IF pPulseTrainChannel > 0 THEN
+	pPulseTrainChannel^.nCtrl := 0;
+END_IF]]></ST>
+      </Implementation>
+    </Method>
+    <Property Name="P_bBusy" Id="{13d633f0-2cfa-49bd-89fc-a3183b13522a}">
+      <Declaration><![CDATA[PROPERTY P_bBusy : BOOL]]></Declaration>
+      <Get Name="Get" Id="{e8acd363-c099-4731-adfe-9c0d7d80a410}">
+        <Declaration><![CDATA[VAR
+END_VAR
+]]></Declaration>
+        <Implementation>
+          <ST><![CDATA[IF pPulseTrainChannel > 0 THEN
+	P_bBusy := pPulseTrainChannel^.nState.0;
+END_IF]]></ST>
+        </Implementation>
+      </Get>
+    </Property>
+    <LineIds Name="FB_PulseTrainControl">
+      <LineId Id="9" Count="0" />
+    </LineIds>
+    <LineIds Name="FB_PulseTrainControl.M_GetFrequency">
+      <LineId Id="5" Count="0" />
+    </LineIds>
+    <LineIds Name="FB_PulseTrainControl.M_GetPulse">
+      <LineId Id="6" Count="1" />
+      <LineId Id="5" Count="0" />
+    </LineIds>
+    <LineIds Name="FB_PulseTrainControl.M_SetFrequency">
+      <LineId Id="20" Count="0" />
+      <LineId Id="22" Count="0" />
+      <LineId Id="21" Count="0" />
+      <LineId Id="19" Count="0" />
+      <LineId Id="13" Count="0" />
+      <LineId Id="23" Count="0" />
+      <LineId Id="9" Count="0" />
+      <LineId Id="12" Count="0" />
+      <LineId Id="10" Count="0" />
+      <LineId Id="7" Count="1" />
+      <LineId Id="5" Count="0" />
+    </LineIds>
+    <LineIds Name="FB_PulseTrainControl.M_SetPulse">
+      <LineId Id="7" Count="4" />
+      <LineId Id="13" Count="1" />
+      <LineId Id="12" Count="0" />
+      <LineId Id="5" Count="0" />
+    </LineIds>
+    <LineIds Name="FB_PulseTrainControl.M_SetPulseTrainChannel">
+      <LineId Id="17" Count="0" />
+      <LineId Id="5" Count="0" />
+    </LineIds>
+    <LineIds Name="FB_PulseTrainControl.M_Start">
+      <LineId Id="9" Count="0" />
+      <LineId Id="7" Count="1" />
+      <LineId Id="5" Count="0" />
+    </LineIds>
+    <LineIds Name="FB_PulseTrainControl.M_Stop">
+      <LineId Id="7" Count="1" />
+      <LineId Id="5" Count="0" />
+    </LineIds>
+    <LineIds Name="FB_PulseTrainControl.P_bBusy.Get">
+      <LineId Id="5" Count="1" />
+      <LineId Id="2" Count="0" />
+    </LineIds>
+  </POU>
+</TcPlcObject>

@@ -1,0 +1,16 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<TcPlcObject Version="1.1.0.1" ProductVersion="3.1.4022.10">
+  <DUT Name="ST_SequenceInfo" Id="{54a70cf3-1e23-43f3-b254-f3d4dd6e8f77}">
+    <Declaration><![CDATA[{attribute 'enable_dynamic_creation'}
+TYPE ST_SequenceInfo :
+STRUCT
+	nSequId 		: UDINT;			//4 Byte
+	nStepNr 		: UINT;				//2 Byte
+	eSequenceState	: E_SequenceState;	//1 Byte
+	eStepState		: E_StepState;		//1 Byte
+	nInfo			: DINT;				//4 Byte
+END_STRUCT
+END_TYPE
+]]></Declaration>
+  </DUT>
+</TcPlcObject>

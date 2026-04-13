@@ -1,0 +1,15 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<TcPlcObject Version="1.1.0.1" ProductVersion="3.1.4020.6">
+  <DUT Name="ST_LiquidChannel" Id="{d0f65918-ea97-4788-a2a1-a495ae46357f}">
+    <Declaration><![CDATA[TYPE ST_LiquidChannel :
+STRUCT
+	nNr		 : USINT;
+	nSlotNr	 : USINT;
+	nWasteCh : USINT;
+	nBottleNr: USINT;
+	pGearPump: POINTER TO FB_GearPump;
+END_STRUCT
+END_TYPE
+]]></Declaration>
+  </DUT>
+</TcPlcObject>

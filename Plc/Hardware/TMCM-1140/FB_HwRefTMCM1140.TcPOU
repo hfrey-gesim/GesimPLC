@@ -1,0 +1,823 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<TcPlcObject Version="1.1.0.1" ProductVersion="3.1.4024.14">
+  <POU Name="FB_HwRefTMCM1140" Id="{c5eb1d93-7bbb-4586-940d-476c77b762b9}" SpecialFunc="None">
+    <Declaration><![CDATA[FUNCTION_BLOCK FB_HwRefTMCM1140 EXTENDS FB_CanNodeBase
+VAR_INPUT
+	nControlword	AT%Q* : UINT;
+	nMode			AT%Q* : SINT;
+	nTargetPosition AT%Q* : DINT;	//PP-mode
+	nTargetSpeed	AT%Q* : INT;	//VL-mode (in PP-mode anders Object über SDO)	
+END_VAR
+VAR_OUTPUT
+	nStatusword 	 	AT%I* : UINT;
+	nCurrentMode 	 	AT%I* : SINT;
+	nDigiInputs 	 	AT%I* : UDINT;
+	nCurrentPosIntern 	AT%I* : DINT;
+END_VAR
+
+VAR
+	//Diese Variablen werden in FB_Init() initialisiert
+	bSetDigiOut0		: BOOL;
+	bSetDigiOut1		: BOOL;
+	nSwitchConfig		: USINT;
+	eHomingMethode		: E_TMCM_HomingMethode;
+	nMicrostepResol 	: UINT;
+	nFullStepRevo		: UINT;     //0-65535
+	nRampDivisor		: USINT; 	//0-13 ; erweitert bei PureDyne Anpassung
+	nPulseDivisor		: USINT;	//0-13
+	
+	//////////////////////////////////////////////////
+	nStateNext			: USINT;
+	bIsHomed 			: BOOL;
+	lrMicroStepsPerRevo	: LREAL; //FullstepPerRevo * nMicrostepResol (FB_Init()) 
+	nCurrentPosReal		: DINT;
+END_VAR
+
+VAR PERSISTENT
+	nMaxCurrent				: UINT;	//Maximaler Strom in mA
+	nHoldCurrent 			: UINT;	//Haltestrom in mA
+	nDistPerMotorRev		: DINT; //Weg der prop Motorumdrehung zurückgelegt wird (hier wird Getriebeübersetzung oder Spindelsteigung
+									//mit beachtet) reale Einheit (Weg oder Winkel) 
+	nRefPos					: DINT; //reale Einheit (Weg oder Winkel)
+	nMinPos					: DINT; //reale Einheit (Weg oder Winkel)
+	nMaxPos					: DINT; //reale Einheit (Weg oder Winkel)
+	nHomePos				: DINT; //reale Einheit (Weg oder Winkel)
+	nFastHomingSpeed		: DINT;	//reale Einheit/s
+	nSlowHomingSpeed		: DINT; //reale Einheit/s
+	nMaxSpeed				: DINT; //reale Einheit/s
+
+END_VAR]]></Declaration>
+    <Implementation>
+      <ST><![CDATA[SUPER^();
+IF lrMicroStepsPerRevo > 0 THEN
+	nCurrentPosReal := LREAL_TO_DINT((DINT_TO_LREAL(nCurrentPosIntern) * nDistPerMotorRev) / lrMicroStepsPerRevo);
+END_IF]]></ST>
+    </Implementation>
+    <Method Name="FB_init" Id="{a7b87af1-14ab-4334-b720-9513c8bb0bd4}">
+      <Declaration><![CDATA[METHOD FB_init : BOOL
+VAR_INPUT
+	bInitRetains : BOOL; // if TRUE, the retain variables are initialized (warm start / cold start)
+	bInCopyCode  : BOOL;  // if TRUE, the instance afterwards gets moved into the copy code (online change)
+	bSetDigiOut0 : BOOL; //bei TMCM-1140 open drain
+	bSetDigiOut1 : BOOL; //bei TMCM-1140 5V
+	eLimitSwitchLeftConfig 	: E_TMCM_SwitchConfig;
+	eLimitSwitchRightConfig : E_TMCM_SwitchConfig;
+	eHomeSwitchConfig	: E_TMCM_SwitchConfig;
+	eHomingMethode		: E_TMCM_HomingMethode;
+	nMicrostepResol 	: UINT; //2, 4, 8, 16, 32, 64, 128 oder 256
+	nFullStepRevo		: UINT;  //0-65535
+	nRampDivisor		: USINT; //0-13
+	nPulseDivisor		: USINT; //0-13
+END_VAR
+
+VAR
+	nSwitchConfigLimitLeft 	: USINT;
+	nSwitchConfigLimitRight : USINT;
+	nSwitchConfigHome 		: USINT;
+END_VAR]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[THIS^.bSetDigiOut0 := bSetDigiOut0;
+THIS^.bSetDigiOut1 := bSetDigiOut1;
+IF eLimitSwitchLeftConfig = E_TMCM_SwitchConfig.Deactivated THEN
+	nSwitchConfigLimitLeft := 1;
+ELSIF eLimitSwitchLeftConfig = E_TMCM_SwitchConfig.Inverted THEN
+	nSwitchConfigLimitLeft := 4;
+END_IF
+IF eLimitSwitchRightConfig = E_TMCM_SwitchConfig.Deactivated THEN
+	nSwitchConfigLimitRight := 2;
+ELSIF eLimitSwitchRightConfig = E_TMCM_SwitchConfig.Inverted THEN
+	nSwitchConfigLimitRight := 8;
+END_IF
+IF eHomeSwitchConfig = E_TMCM_SwitchConfig.Deactivated THEN
+	nSwitchConfigHome := 16;
+ELSIF eHomeSwitchConfig = E_TMCM_SwitchConfig.Inverted THEN
+	nSwitchConfigHome := 32;
+END_IF
+nSwitchConfig := nSwitchConfigLimitLeft OR nSwitchConfigLimitRight OR nSwitchConfigHome;
+THIS^.eHomingMethode := eHomingMethode;
+THIS^.nMicrostepResol := nMicrostepResol;
+THIS^.nFullStepRevo := nFullStepRevo;
+THIS^.nRampDivisor := nRampDivisor;
+THIS^.nPulseDivisor := nPulseDivisor;
+lrMicroStepsPerRevo := nFullStepRevo * nMicrostepResol; ]]></ST>
+      </Implementation>
+    </Method>
+    <Method Name="M_GetDS402State" Id="{7f6da09d-40e1-4f27-9a81-cf6c8cf9e193}">
+      <Declaration><![CDATA[METHOD M_GetDS402State : E_CoDS402States
+VAR_INPUT
+END_VAR
+]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[IF (nStatusword AND 16#4F) = 0 THEN
+	M_GetDS402State := E_CoDS402States.DS402STATE_NotReadyToSwitchOn;
+ELSIF (nStatusword AND 16#4F) = 16#40 THEN
+	M_GetDS402State := E_CoDS402States.DS402STATE_SwitchOnDisabled;
+ELSIF (nStatusword AND 16#6F) = 16#21 THEN
+	M_GetDS402State := E_CoDS402States.DS402STATE_ReadyToSwitchOn;
+ELSIF (nStatusword AND 16#6F) = 16#23 THEN
+	M_GetDS402State := E_CoDS402States.DS402STATE_SwitchedOn;
+ELSIF (nStatusword AND 16#6F) = 16#27 THEN
+	M_GetDS402State := E_CoDS402States.DS402STATE_OperationEnabled;
+ELSIF (nStatusword AND 16#6F) = 16#07 THEN
+	M_GetDS402State := E_CoDS402States.DS402STATE_QuickStopActive;
+ELSIF (nStatusword AND 16#4F) = 16#0F THEN
+	M_GetDS402State := E_CoDS402States.DS402STATE_FaultReactionActive;
+ELSIF (nStatusword AND 16#4F) = 16#08 THEN
+	M_GetDS402State := E_CoDS402States.DS402STATE_Fault;
+ELSE
+	M_GetDS402State := E_CoDS402States.DS402STATE_Notspecified;
+END_IF]]></ST>
+      </Implementation>
+    </Method>
+    <Method Name="M_GetHomingState" Id="{fd45d7c0-c12d-4253-a813-44d3445f79ea}">
+      <Declaration><![CDATA[METHOD M_GetHomingState : E_CoDS402HomingState
+VAR_INPUT
+END_VAR
+
+VAR 
+	nTest : UINT;
+END_VAR]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[//werted nur die Bits 10,12,13 vom Statusword aus
+nTest := nStatusword AND 16#3400;
+CASE nStatusword AND 16#3400 OF
+	16#0000:	M_GetHomingState := E_CoDS402HomingState.HomingInProgress;
+	16#0400:	M_GetHomingState := E_CoDS402HomingState.HomingInteruptedOrNotReached;
+	16#1000:	M_GetHomingState := E_CoDS402HomingState.HomingAttainedButNotReached;
+	16#1400:	M_GetHomingState := E_CoDS402HomingState.HomingSuccess;
+	16#2000,
+	16#2400		:M_GetHomingState := E_CoDS402HomingState.HomingError;
+END_CASE]]></ST>
+      </Implementation>
+    </Method>
+    <Method Name="M_RealToInternPos" Id="{d187c7d6-3b5e-40d5-b106-dc85af1b1e6f}">
+      <Declaration><![CDATA[METHOD M_RealToInternPos : DINT
+VAR_INPUT
+	nValue : DINT; //RealPos
+END_VAR]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[//Formel siehe TMCM-Berechungen.xlsx
+IF nDistPerMotorRev > 0 THEN //Div/0 vermeiden
+	M_RealToInternPos := LREAL_TO_DINT(lrMicroStepsPerRevo * DINT_TO_LREAL(nValue) / nDistPerMotorRev); 
+END_IF]]></ST>
+      </Implementation>
+    </Method>
+    <Method Name="M_RealToInternSpeed" Id="{e76c359a-da47-432c-8476-da4292c4b2ab}">
+      <Declaration><![CDATA[METHOD M_RealToInternSpeed : DINT
+VAR_INPUT
+	nValue : DINT; //reelle Speed,z.B. µm/s oder °/s. Hängt von Einheit DistancePerRevolution ab
+END_VAR
+
+VAR
+	lrResult	: LREAL;
+END_VAR
+]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[//Formel siehe TMCM-Berechungen.xlsx
+IF nDistPerMotorRev > 0 THEN //Div/0 vermeiden
+	lrResult := (nValue * lrMicroStepsPerRevo * EXPT(2, nPulseDivisor) * 65536) / (nDistPerMotorRev * LREAL#16000000);
+	M_RealToInternSpeed := MIN(2047, LREAL_TO_DINT(lrResult));
+END_IF
+
+]]></ST>
+      </Implementation>
+    </Method>
+    <Method Name="M_SetTargetPos" Id="{cac2517f-deeb-4c0f-b2b8-664739899eab}">
+      <Declaration><![CDATA[METHOD M_SetTargetPos : BOOL
+VAR_INPUT
+	nValue 		: DINT; //Reale Position
+	bRelative 	: BOOL;
+END_VAR
+
+VAR
+	nTempTargetPos : DINT; //Nur für Min/Max Überprüfung
+END_VAR]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[IF bRelative THEN
+	nTempTargetPos := nCurrentPosReal + nValue;
+ELSE
+	nTempTargetPos := nValue;
+END_IF
+
+//Wenn MinPos und MaxPos = 0, dann handelt es sich im Antriebe wie FDM-Extruder o.ä.
+//Diese haben diese Begrenzung nicht.
+IF (nTempTargetPos >= nMinPos) AND (nTempTargetPos <= nMaxPos) OR (nMinPos = 0 AND nMaxPos = 0) THEN
+	nTargetPosition := M_RealToInternPos(nValue);
+	M_SetTargetPos := TRUE;
+END_IF]]></ST>
+      </Implementation>
+    </Method>
+    <Method Name="M_SetVLSpeed" Id="{5db492af-304d-4948-9c1e-8315ae7e894e}">
+      <Declaration><![CDATA[METHOD M_SetVLSpeed : BOOL
+VAR_INPUT
+	nValue 	: DINT; //reelle Speed,z.B. µm/s oder °/s. Hängt von Einheit DistancePerRevolution ab
+	bCCW	: BOOL;	//Drehrichtung gehen den Uhrzeigersinn
+END_VAR
+]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[IF nValue >= 0 AND nValue <= nMaxSpeed THEN
+	nTargetSpeed := DINT_TO_INT(M_RealToInternSpeed(nValue));
+	IF bCCW THEN
+		nTargetSpeed := nTargetSpeed * -1;
+	END_IF
+	M_SetVLSpeed := TRUE;
+END_IF]]></ST>
+      </Implementation>
+    </Method>
+    <Property Name="P_bHomeSwitch" Id="{16ad026a-86e0-48a8-b66b-f7f01c66718f}">
+      <Declaration><![CDATA[PROPERTY P_bHomeSwitch : BOOL]]></Declaration>
+      <Get Name="Get" Id="{c16d8213-f67a-4566-ad2b-e19c169ff219}">
+        <Declaration><![CDATA[VAR
+END_VAR
+]]></Declaration>
+        <Implementation>
+          <ST><![CDATA[P_bHomeSwitch := nDigiInputs.19;]]></ST>
+        </Implementation>
+      </Get>
+    </Property>
+    <Property Name="P_bIsHomed" Id="{fd6a12f9-2c05-4a8f-8973-fc2656ec2bf5}">
+      <Declaration><![CDATA[PROPERTY P_bIsHomed : BOOL]]></Declaration>
+      <Get Name="Get" Id="{b675c22a-0e55-4918-9586-fa67528045ce}">
+        <Declaration><![CDATA[VAR
+END_VAR
+]]></Declaration>
+        <Implementation>
+          <ST><![CDATA[P_bIsHomed := bIsHomed;]]></ST>
+        </Implementation>
+      </Get>
+      <Set Name="Set" Id="{4dbd6a92-80b2-4659-88bc-d5b991b35e6f}">
+        <Declaration><![CDATA[VAR
+END_VAR
+]]></Declaration>
+        <Implementation>
+          <ST><![CDATA[bIsHomed := P_bIsHomed;]]></ST>
+        </Implementation>
+      </Set>
+    </Property>
+    <Property Name="P_bIsMoving" Id="{1c01da41-86b8-499d-9eee-d2d59d383f1d}">
+      <Declaration><![CDATA[PROPERTY P_bIsMoving : BOOL]]></Declaration>
+      <Get Name="Get" Id="{850bf2eb-c32b-48bd-b4c2-147eca583223}">
+        <Declaration><![CDATA[VAR
+END_VAR
+]]></Declaration>
+        <Implementation>
+          <ST><![CDATA[P_bIsMoving := nStatusword.14;]]></ST>
+        </Implementation>
+      </Get>
+    </Property>
+    <Property Name="P_bLeftLimitSwitch" Id="{1632395c-1445-4e15-b7cb-a27f98e5c417}">
+      <Declaration><![CDATA[PROPERTY P_bLeftLimitSwitch : BOOL]]></Declaration>
+      <Get Name="Get" Id="{3054f564-ebde-498f-946e-86bf8e5677ae}">
+        <Declaration><![CDATA[VAR
+END_VAR
+]]></Declaration>
+        <Implementation>
+          <ST><![CDATA[P_bLeftLimitSwitch := nDigiInputs.17;]]></ST>
+        </Implementation>
+      </Get>
+    </Property>
+    <Property Name="P_bRightLimitSwitch" Id="{ff764534-00f6-4147-aa0a-f472bda9a036}">
+      <Declaration><![CDATA[PROPERTY P_bRightLimitSwitch : BOOL]]></Declaration>
+      <Get Name="Get" Id="{96430229-c8f6-4459-8a6b-d9ab53084e0f}">
+        <Declaration><![CDATA[VAR
+END_VAR
+]]></Declaration>
+        <Implementation>
+          <ST><![CDATA[P_bRightLimitSwitch := nDigiInputs.18;]]></ST>
+        </Implementation>
+      </Get>
+    </Property>
+    <Property Name="P_bSetDigiOut0" Id="{44ab8171-c7a3-4b7a-9143-bd4fd8c1899b}">
+      <Declaration><![CDATA[PROPERTY P_bSetDigiOut0 : BOOL]]></Declaration>
+      <Get Name="Get" Id="{b177f75c-ab55-42d1-b1d4-c5c95250ac04}">
+        <Declaration><![CDATA[VAR
+END_VAR
+]]></Declaration>
+        <Implementation>
+          <ST><![CDATA[P_bSetDigiOut0 := bSetDigiOut0;]]></ST>
+        </Implementation>
+      </Get>
+    </Property>
+    <Property Name="P_bSetDigiOut1" Id="{e18b5853-d0b7-4d11-b6e4-bb88a1b44629}">
+      <Declaration><![CDATA[PROPERTY P_bSetDigiOut1 : BOOL]]></Declaration>
+      <Get Name="Get" Id="{dcf25658-f2e0-4a46-8a5c-17463c775bf8}">
+        <Declaration><![CDATA[VAR
+END_VAR
+]]></Declaration>
+        <Implementation>
+          <ST><![CDATA[P_bSetDigiOut1 := bSetDigiOut1;]]></ST>
+        </Implementation>
+      </Get>
+    </Property>
+    <Property Name="P_eHomingMethode" Id="{a4da843c-28f1-4fda-b38f-141c71ec00b7}">
+      <Declaration><![CDATA[PROPERTY P_eHomingMethode : E_TMCM_HomingMethode]]></Declaration>
+      <Get Name="Get" Id="{0388d611-e74f-4b35-82cf-746671b6de6a}">
+        <Declaration><![CDATA[VAR
+END_VAR
+]]></Declaration>
+        <Implementation>
+          <ST><![CDATA[P_eHomingMethode := eHomingMethode;]]></ST>
+        </Implementation>
+      </Get>
+    </Property>
+    <Property Name="P_nCurrentPosReal" Id="{1e749efd-e4fb-4427-9ad1-1e6d78698f15}">
+      <Declaration><![CDATA[PROPERTY P_nCurrentPosReal : DINT]]></Declaration>
+      <Get Name="Get" Id="{adb10b51-64e6-44d1-b5e8-526d4f6bacc6}">
+        <Declaration><![CDATA[VAR
+END_VAR
+]]></Declaration>
+        <Implementation>
+          <ST><![CDATA[P_nCurrentPosReal := nCurrentPosReal;
+]]></ST>
+        </Implementation>
+      </Get>
+    </Property>
+    <Property Name="P_nDistPerMotorRev" Id="{c9d58e9f-da9b-4bc9-b273-5c1de1b684eb}">
+      <Declaration><![CDATA[PROPERTY P_nDistPerMotorRev : DINT]]></Declaration>
+      <Get Name="Get" Id="{a9af9313-e465-4b17-a43e-77c542aef259}">
+        <Declaration><![CDATA[VAR
+END_VAR
+]]></Declaration>
+        <Implementation>
+          <ST><![CDATA[P_nDistPerMotorRev := nDistPerMotorRev;]]></ST>
+        </Implementation>
+      </Get>
+      <Set Name="Set" Id="{1444ab11-7d66-478d-aaf7-b9910e03e8a6}">
+        <Declaration><![CDATA[VAR
+END_VAR
+]]></Declaration>
+        <Implementation>
+          <ST><![CDATA[nDistPerMotorRev := P_nDistPerMotorRev;
+fbSettings.M_WritePersData();]]></ST>
+        </Implementation>
+      </Set>
+    </Property>
+    <Property Name="P_nFastHomingSpeed" Id="{4859d55e-244d-4a5f-a7ab-8e38f663df64}">
+      <Declaration><![CDATA[PROPERTY P_nFastHomingSpeed : DINT]]></Declaration>
+      <Get Name="Get" Id="{7f267794-9da8-4847-bf4b-c91a85d6f87d}">
+        <Declaration><![CDATA[VAR
+END_VAR
+]]></Declaration>
+        <Implementation>
+          <ST><![CDATA[P_nFastHomingSpeed := nFastHomingSpeed;]]></ST>
+        </Implementation>
+      </Get>
+      <Set Name="Set" Id="{1a65665e-1561-4af1-acdd-fb20e02c1370}">
+        <Declaration><![CDATA[VAR
+END_VAR
+]]></Declaration>
+        <Implementation>
+          <ST><![CDATA[nFastHomingSpeed := P_nFastHomingSpeed;
+fbSettings.M_WritePersData();]]></ST>
+        </Implementation>
+      </Set>
+    </Property>
+    <Property Name="P_nFullStepRevo" Id="{1ca1979b-75f4-4b6b-abcc-870dfc3516cd}">
+      <Declaration><![CDATA[PROPERTY PUBLIC P_nFullStepRevo : UINT]]></Declaration>
+      <Get Name="Get" Id="{20bf8b26-3c67-438b-a960-2972323a695f}">
+        <Declaration><![CDATA[VAR
+END_VAR
+]]></Declaration>
+        <Implementation>
+          <ST><![CDATA[P_nFullStepRevo := nFullStepRevo;]]></ST>
+        </Implementation>
+      </Get>
+    </Property>
+    <Property Name="P_nHoldCurrent" Id="{fcb95ff3-547c-47f6-872f-738de60f9339}">
+      <Declaration><![CDATA[PROPERTY P_nHoldCurrent : UINT]]></Declaration>
+      <Get Name="Get" Id="{a000cd92-c90a-442f-b337-254e0799c764}">
+        <Declaration><![CDATA[VAR
+END_VAR
+]]></Declaration>
+        <Implementation>
+          <ST><![CDATA[P_nHoldCurrent := nHoldCurrent;]]></ST>
+        </Implementation>
+      </Get>
+      <Set Name="Set" Id="{ce14f079-3f36-4838-b2b2-72baa762595e}">
+        <Declaration><![CDATA[VAR
+END_VAR
+]]></Declaration>
+        <Implementation>
+          <ST><![CDATA[ nHoldCurrent := P_nHoldCurrent;
+ fbSettings.M_WritePersData();]]></ST>
+        </Implementation>
+      </Set>
+    </Property>
+    <Property Name="P_nHoldCurrentConverted" Id="{27a0b968-3355-4d60-a270-3de37c90431e}">
+      <Declaration><![CDATA[PROPERTY P_nHoldCurrentConverted : USINT]]></Declaration>
+      <Get Name="Get" Id="{912bc745-68ad-425d-8e64-c19c08603925}">
+        <Declaration><![CDATA[VAR
+	rValue : REAL;
+END_VAR
+
+VAR CONSTANT
+	cMaxCurrent : REAL := 2000.0;	//maximaler Strom der Steuerung im mA entspricht 255 
+END_VAR
+]]></Declaration>
+        <Implementation>
+          <ST><![CDATA[rValue := UINT_TO_REAL(nHoldCurrent);
+rValue := 255.0 / cMaxCurrent * rValue;
+P_nHoldCurrentConverted := MIN(255,REAL_TO_USINT(rValue));]]></ST>
+        </Implementation>
+      </Get>
+    </Property>
+    <Property Name="P_nHomePos" Id="{3cb1e7da-ee9d-4ef4-aad6-d5dbdd0dc9cb}">
+      <Declaration><![CDATA[PROPERTY P_nHomePos : DINT]]></Declaration>
+      <Get Name="Get" Id="{a6850398-92ee-4920-8af0-c69c55d7a640}">
+        <Declaration><![CDATA[VAR
+END_VAR
+]]></Declaration>
+        <Implementation>
+          <ST><![CDATA[P_nHomePos := nHomePos;]]></ST>
+        </Implementation>
+      </Get>
+      <Set Name="Set" Id="{b7c36e91-a30e-4355-b315-3fd26d287a3d}">
+        <Declaration><![CDATA[
+VAR
+END_VAR
+]]></Declaration>
+        <Implementation>
+          <ST><![CDATA[nHomePos := P_nHomePos;
+fbSettings.M_WritePersData();]]></ST>
+        </Implementation>
+      </Set>
+    </Property>
+    <Property Name="P_nMaxCurrent" Id="{3a0a5667-dad6-4e4c-baf2-e8626b959eea}">
+      <Declaration><![CDATA[PROPERTY P_nMaxCurrent : UINT]]></Declaration>
+      <Get Name="Get" Id="{10169efe-35f7-4e07-ab15-dd44e186a70e}">
+        <Declaration><![CDATA[VAR
+END_VAR
+]]></Declaration>
+        <Implementation>
+          <ST><![CDATA[P_nMaxCurrent := nMaxCurrent;]]></ST>
+        </Implementation>
+      </Get>
+      <Set Name="Set" Id="{1531f5e0-4623-4551-865c-cd85211e1d01}">
+        <Declaration><![CDATA[VAR
+END_VAR
+]]></Declaration>
+        <Implementation>
+          <ST><![CDATA[ nMaxCurrent := P_nMaxCurrent;
+ fbSettings.M_WritePersData();]]></ST>
+        </Implementation>
+      </Set>
+    </Property>
+    <Property Name="P_nMaxCurrentConverted" Id="{f04274bb-ce53-4a9a-b5eb-1f57259b80ba}">
+      <Declaration><![CDATA[PROPERTY P_nMaxCurrentConverted : USINT]]></Declaration>
+      <Get Name="Get" Id="{d2efc0a0-1c6d-45f9-9b02-09fe2aca9d3d}">
+        <Declaration><![CDATA[VAR
+	rValue : REAL;
+END_VAR
+
+VAR CONSTANT
+	cMaxCurrent : REAL := 2000.0;	//maximaler Strom der Steuerung im mA entspricht 255 
+END_VAR
+]]></Declaration>
+        <Implementation>
+          <ST><![CDATA[rValue := UINT_TO_REAL(nMaxCurrent);
+rValue := 255.0 / cMaxCurrent * rValue;
+P_nMaxCurrentConverted := MIN(255,REAL_TO_USINT(rValue));]]></ST>
+        </Implementation>
+      </Get>
+    </Property>
+    <Property Name="P_nMaxPos" Id="{b56ec63c-3de0-47e5-9cb7-fdc73a79b9b0}">
+      <Declaration><![CDATA[PROPERTY P_nMaxPos : DINT]]></Declaration>
+      <Get Name="Get" Id="{1bc0ab5a-d57d-4dc8-9f03-909001e6d295}">
+        <Declaration><![CDATA[VAR
+END_VAR
+]]></Declaration>
+        <Implementation>
+          <ST><![CDATA[P_nMaxPos := nMaxPos;]]></ST>
+        </Implementation>
+      </Get>
+      <Set Name="Set" Id="{96be935c-ba01-4676-add1-ab2d9cd26128}">
+        <Declaration><![CDATA[
+VAR
+END_VAR
+]]></Declaration>
+        <Implementation>
+          <ST><![CDATA[nMaxPos := P_nMaxPos;
+fbSettings.M_WritePersData();]]></ST>
+        </Implementation>
+      </Set>
+    </Property>
+    <Property Name="P_nMaxSpeed" Id="{24b5826e-007f-4b3e-9120-afcd86c5f529}">
+      <Declaration><![CDATA[PROPERTY P_nMaxSpeed : DINT]]></Declaration>
+      <Get Name="Get" Id="{7052eafa-c2f7-4b41-be3b-d8150e3f21b5}">
+        <Declaration><![CDATA[VAR
+END_VAR
+]]></Declaration>
+        <Implementation>
+          <ST><![CDATA[P_nMaxSpeed := nMaxSpeed;]]></ST>
+        </Implementation>
+      </Get>
+      <Set Name="Set" Id="{cc92c28f-1379-4d5b-b7af-c1cbf5280478}">
+        <Declaration><![CDATA[
+VAR
+END_VAR
+]]></Declaration>
+        <Implementation>
+          <ST><![CDATA[nMaxSpeed := P_nMaxSpeed;
+fbSettings.M_WritePersData();]]></ST>
+        </Implementation>
+      </Set>
+    </Property>
+    <Property Name="P_nMicrostepResolConverted" Id="{59355890-7201-43e8-bd91-7d446db8a355}">
+      <Declaration><![CDATA[PROPERTY P_nMicrostepResolConverted : USINT]]></Declaration>
+      <Get Name="Get" Id="{ccab6fb0-afdd-4267-bfe2-e588457d1528}">
+        <Declaration><![CDATA[VAR
+END_VAR]]></Declaration>
+        <Implementation>
+          <ST><![CDATA[P_nMicrostepResolConverted := LREAL_TO_USINT(LOG(nMicrostepResol)/LOG(2));]]></ST>
+        </Implementation>
+      </Get>
+    </Property>
+    <Property Name="P_nMinPos" Id="{184aa5b8-8d59-4ea9-acb6-0834eff4ff1d}">
+      <Declaration><![CDATA[PROPERTY P_nMinPos : DINT]]></Declaration>
+      <Get Name="Get" Id="{f66b67d8-f190-4ebe-9023-f3473f2fa86d}">
+        <Declaration><![CDATA[VAR
+END_VAR
+]]></Declaration>
+        <Implementation>
+          <ST><![CDATA[P_nMinPos := nMinPos;]]></ST>
+        </Implementation>
+      </Get>
+      <Set Name="Set" Id="{d8f15cef-b0c9-45c4-bdd0-b8a8f7d87728}">
+        <Declaration><![CDATA[
+VAR
+END_VAR
+]]></Declaration>
+        <Implementation>
+          <ST><![CDATA[nMinPos := P_nMinPos;
+fbSettings.M_WritePersData();]]></ST>
+        </Implementation>
+      </Set>
+    </Property>
+    <Property Name="P_nPulseDivisor" Id="{49a49299-7327-4ce7-8e63-a8a083418729}">
+      <Declaration><![CDATA[PROPERTY P_nPulseDivisor : USINT]]></Declaration>
+      <Get Name="Get" Id="{f47bae0b-af09-43b6-92b3-433adb1f8038}">
+        <Declaration><![CDATA[VAR
+END_VAR
+]]></Declaration>
+        <Implementation>
+          <ST><![CDATA[P_nPulseDivisor := nPulseDivisor;]]></ST>
+        </Implementation>
+      </Get>
+    </Property>
+    <Property Name="P_nRampDivisor" Id="{d4cc0c7c-a484-41fa-afac-a0a0bfea20e7}">
+      <Declaration><![CDATA[PROPERTY PUBLIC P_nRampDivisor : USINT]]></Declaration>
+      <Get Name="Get" Id="{e9585709-f8af-4e71-bfd8-4011ff710cdd}">
+        <Declaration><![CDATA[VAR
+END_VAR
+]]></Declaration>
+        <Implementation>
+          <ST><![CDATA[P_nRampDivisor := nRampDivisor;]]></ST>
+        </Implementation>
+      </Get>
+    </Property>
+    <Property Name="P_nRefPos" Id="{f686978e-6d8d-4188-b581-f3f86db1fb0a}">
+      <Declaration><![CDATA[PROPERTY P_nRefPos : DINT]]></Declaration>
+      <Get Name="Get" Id="{162a761d-6d83-4408-9937-3f14ccf91191}">
+        <Declaration><![CDATA[VAR
+END_VAR
+]]></Declaration>
+        <Implementation>
+          <ST><![CDATA[P_nRefPos := nRefPos;]]></ST>
+        </Implementation>
+      </Get>
+      <Set Name="Set" Id="{4ec80a7e-0297-47b0-ae10-9c69d61dd414}">
+        <Declaration><![CDATA[
+VAR
+END_VAR
+]]></Declaration>
+        <Implementation>
+          <ST><![CDATA[nRefPos := P_nRefPos;
+fbSettings.M_WritePersData();]]></ST>
+        </Implementation>
+      </Set>
+    </Property>
+    <Property Name="P_nSlowHomingSpeed" Id="{58ed342a-af66-44ad-80af-14e85c27f63a}">
+      <Declaration><![CDATA[PROPERTY P_nSlowHomingSpeed : DINT]]></Declaration>
+      <Get Name="Get" Id="{70d5b155-92d9-4023-b6d8-785ea3389a24}">
+        <Declaration><![CDATA[VAR
+END_VAR
+]]></Declaration>
+        <Implementation>
+          <ST><![CDATA[P_nSlowHomingSpeed := nSlowHomingSpeed;]]></ST>
+        </Implementation>
+      </Get>
+      <Set Name="Set" Id="{25a1d3c9-990a-4913-8ef8-820f98aaa418}">
+        <Declaration><![CDATA[
+VAR
+END_VAR
+]]></Declaration>
+        <Implementation>
+          <ST><![CDATA[nSlowHomingSpeed := P_nSlowHomingSpeed;
+fbSettings.M_WritePersData();]]></ST>
+        </Implementation>
+      </Set>
+    </Property>
+    <Property Name="P_nSwitchConfig" Id="{0703f6c2-816e-401c-a99b-1e351a221a38}">
+      <Declaration><![CDATA[PROPERTY P_nSwitchConfig : USINT]]></Declaration>
+      <Get Name="Get" Id="{79687488-1b26-4f49-afd3-eb8f77740ed9}">
+        <Declaration><![CDATA[VAR
+END_VAR
+]]></Declaration>
+        <Implementation>
+          <ST><![CDATA[P_nSwitchConfig := nSwitchConfig;]]></ST>
+        </Implementation>
+      </Get>
+    </Property>
+    <LineIds Name="FB_HwRefTMCM1140">
+      <LineId Id="9" Count="0" />
+      <LineId Id="99" Count="1" />
+      <LineId Id="98" Count="0" />
+    </LineIds>
+    <LineIds Name="FB_HwRefTMCM1140.FB_init">
+      <LineId Id="19" Count="1" />
+      <LineId Id="39" Count="0" />
+      <LineId Id="42" Count="0" />
+      <LineId Id="40" Count="0" />
+      <LineId Id="44" Count="0" />
+      <LineId Id="41" Count="0" />
+      <LineId Id="46" Count="3" />
+      <LineId Id="45" Count="0" />
+      <LineId Id="51" Count="3" />
+      <LineId Id="50" Count="0" />
+      <LineId Id="55" Count="0" />
+      <LineId Id="74" Count="0" />
+      <LineId Id="221" Count="3" />
+      <LineId Id="198" Count="0" />
+    </LineIds>
+    <LineIds Name="FB_HwRefTMCM1140.M_GetDS402State">
+      <LineId Id="32" Count="17" />
+      <LineId Id="5" Count="0" />
+    </LineIds>
+    <LineIds Name="FB_HwRefTMCM1140.M_GetHomingState">
+      <LineId Id="41" Count="0" />
+      <LineId Id="43" Count="0" />
+      <LineId Id="32" Count="0" />
+      <LineId Id="35" Count="0" />
+      <LineId Id="37" Count="3" />
+      <LineId Id="42" Count="0" />
+      <LineId Id="36" Count="0" />
+    </LineIds>
+    <LineIds Name="FB_HwRefTMCM1140.M_RealToInternPos">
+      <LineId Id="45" Count="0" />
+      <LineId Id="24" Count="0" />
+      <LineId Id="36" Count="0" />
+      <LineId Id="23" Count="0" />
+    </LineIds>
+    <LineIds Name="FB_HwRefTMCM1140.M_RealToInternSpeed">
+      <LineId Id="122" Count="0" />
+      <LineId Id="93" Count="0" />
+      <LineId Id="98" Count="0" />
+      <LineId Id="94" Count="1" />
+      <LineId Id="109" Count="0" />
+      <LineId Id="65" Count="0" />
+    </LineIds>
+    <LineIds Name="FB_HwRefTMCM1140.M_SetTargetPos">
+      <LineId Id="34" Count="0" />
+      <LineId Id="39" Count="0" />
+      <LineId Id="37" Count="0" />
+      <LineId Id="40" Count="0" />
+      <LineId Id="38" Count="0" />
+      <LineId Id="49" Count="0" />
+      <LineId Id="35" Count="0" />
+      <LineId Id="50" Count="0" />
+      <LineId Id="25" Count="2" />
+      <LineId Id="24" Count="0" />
+    </LineIds>
+    <LineIds Name="FB_HwRefTMCM1140.M_SetVLSpeed">
+      <LineId Id="31" Count="0" />
+      <LineId Id="42" Count="0" />
+      <LineId Id="49" Count="2" />
+      <LineId Id="43" Count="0" />
+      <LineId Id="34" Count="0" />
+    </LineIds>
+    <LineIds Name="FB_HwRefTMCM1140.P_bHomeSwitch.Get">
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="FB_HwRefTMCM1140.P_bIsHomed.Get">
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="FB_HwRefTMCM1140.P_bIsHomed.Set">
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="FB_HwRefTMCM1140.P_bIsMoving.Get">
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="FB_HwRefTMCM1140.P_bLeftLimitSwitch.Get">
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="FB_HwRefTMCM1140.P_bRightLimitSwitch.Get">
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="FB_HwRefTMCM1140.P_bSetDigiOut0.Get">
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="FB_HwRefTMCM1140.P_bSetDigiOut1.Get">
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="FB_HwRefTMCM1140.P_eHomingMethode.Get">
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="FB_HwRefTMCM1140.P_nCurrentPosReal.Get">
+      <LineId Id="6" Count="0" />
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="FB_HwRefTMCM1140.P_nDistPerMotorRev.Get">
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="FB_HwRefTMCM1140.P_nDistPerMotorRev.Set">
+      <LineId Id="3" Count="0" />
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="FB_HwRefTMCM1140.P_nFastHomingSpeed.Get">
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="FB_HwRefTMCM1140.P_nFastHomingSpeed.Set">
+      <LineId Id="2" Count="0" />
+      <LineId Id="6" Count="0" />
+    </LineIds>
+    <LineIds Name="FB_HwRefTMCM1140.P_nFullStepRevo.Get">
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="FB_HwRefTMCM1140.P_nHoldCurrent.Get">
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="FB_HwRefTMCM1140.P_nHoldCurrent.Set">
+      <LineId Id="2" Count="0" />
+      <LineId Id="5" Count="0" />
+    </LineIds>
+    <LineIds Name="FB_HwRefTMCM1140.P_nHoldCurrentConverted.Get">
+      <LineId Id="10" Count="1" />
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="FB_HwRefTMCM1140.P_nHomePos.Get">
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="FB_HwRefTMCM1140.P_nHomePos.Set">
+      <LineId Id="2" Count="0" />
+      <LineId Id="6" Count="0" />
+    </LineIds>
+    <LineIds Name="FB_HwRefTMCM1140.P_nMaxCurrent.Get">
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="FB_HwRefTMCM1140.P_nMaxCurrent.Set">
+      <LineId Id="2" Count="0" />
+      <LineId Id="5" Count="0" />
+    </LineIds>
+    <LineIds Name="FB_HwRefTMCM1140.P_nMaxCurrentConverted.Get">
+      <LineId Id="10" Count="1" />
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="FB_HwRefTMCM1140.P_nMaxPos.Get">
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="FB_HwRefTMCM1140.P_nMaxPos.Set">
+      <LineId Id="2" Count="0" />
+      <LineId Id="6" Count="0" />
+    </LineIds>
+    <LineIds Name="FB_HwRefTMCM1140.P_nMaxSpeed.Get">
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="FB_HwRefTMCM1140.P_nMaxSpeed.Set">
+      <LineId Id="2" Count="0" />
+      <LineId Id="6" Count="0" />
+    </LineIds>
+    <LineIds Name="FB_HwRefTMCM1140.P_nMicrostepResolConverted.Get">
+      <LineId Id="5" Count="0" />
+    </LineIds>
+    <LineIds Name="FB_HwRefTMCM1140.P_nMinPos.Get">
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="FB_HwRefTMCM1140.P_nMinPos.Set">
+      <LineId Id="2" Count="0" />
+      <LineId Id="6" Count="0" />
+    </LineIds>
+    <LineIds Name="FB_HwRefTMCM1140.P_nPulseDivisor.Get">
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="FB_HwRefTMCM1140.P_nRampDivisor.Get">
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="FB_HwRefTMCM1140.P_nRefPos.Get">
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="FB_HwRefTMCM1140.P_nRefPos.Set">
+      <LineId Id="2" Count="0" />
+      <LineId Id="6" Count="0" />
+    </LineIds>
+    <LineIds Name="FB_HwRefTMCM1140.P_nSlowHomingSpeed.Get">
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="FB_HwRefTMCM1140.P_nSlowHomingSpeed.Set">
+      <LineId Id="2" Count="0" />
+      <LineId Id="6" Count="0" />
+    </LineIds>
+    <LineIds Name="FB_HwRefTMCM1140.P_nSwitchConfig.Get">
+      <LineId Id="2" Count="0" />
+    </LineIds>
+  </POU>
+</TcPlcObject>

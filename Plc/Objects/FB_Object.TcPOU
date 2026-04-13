@@ -1,0 +1,415 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<TcPlcObject Version="1.1.0.1">
+  <POU Name="FB_Object" Id="{dafb0000-3307-4ea2-a148-e6eeb646c546}" SpecialFunc="None">
+    <Declaration><![CDATA[FUNCTION_BLOCK FB_Object
+VAR_INPUT
+END_VAR
+VAR_OUTPUT
+END_VAR
+VAR
+	nObjectID			: UINT;
+	eObjectType 		: E_ObjectType;
+	eObjectGroup		: E_ObjectGroup;//Zugehörigkeit zu Objektgruppe [Flags]
+	pObjCollectNode		: POINTER TO FB_ObjCollectionNode;
+	pParentSlot			: POINTER TO FB_Slot;
+	nNoOfProps			: UINT;
+	wChecksum			: WORD;
+END_VAR]]></Declaration>
+    <Implementation>
+      <ST><![CDATA[//Basisklasse für alle Objekte]]></ST>
+    </Implementation>
+    <Method Name="M_AddChild" Id="{15681bd5-aa3d-4151-93a8-ef366c5b3c5e}">
+      <Declaration><![CDATA[METHOD M_AddChild : ERRORID
+VAR_INPUT
+	pObject	: POINTER TO FB_Object;
+	nSlotNr	: UINT;
+	nIndex : INT;
+END_VAR
+]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[]]></ST>
+      </Implementation>
+    </Method>
+    <Method Name="M_bIsGroup" Id="{148466bb-7554-4bd2-af99-8b6e209359f3}">
+      <Declaration><![CDATA[METHOD M_bIsGroup : BOOL
+VAR_INPUT
+	eGroup	: E_ObjectGroup;
+END_VAR
+]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[M_bIsGroup := (eObjectGroup AND eGroup) = eGroup;]]></ST>
+      </Implementation>
+    </Method>
+    <Method Name="M_CheckProps" Id="{e299850d-443c-4f77-9a4b-a14f1f4e80ae}">
+      <Declaration><![CDATA[METHOD M_CheckProps : ERRORID
+]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[]]></ST>
+      </Implementation>
+    </Method>
+    <Method Name="M_ClearAllProps" Id="{c6181026-0c4e-40e4-bd77-8cec92305f9e}">
+      <Declaration><![CDATA[METHOD M_ClearAllProps
+
+VAR_INPUT
+	bIgnoreParent : BOOL; //Es wird das gesamte OD gelöscht. -> Zeiger auf Parent nicht mehr gültig!
+END_VAR
+]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[]]></ST>
+      </Implementation>
+    </Method>
+    <Method Name="M_GetAllProps" Id="{3ba8a592-fc8f-4794-9a6e-03bbd147e4ea}">
+      <Declaration><![CDATA[METHOD M_GetAllProps : ERRORID
+VAR_INPUT
+	refCmdData	: REFERENCE TO ST_CmdData;
+END_VAR
+]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[]]></ST>
+      </Implementation>
+    </Method>
+    <Method Name="M_GetDevice" Id="{0c76071d-8fd4-4334-993f-7de7f1da8394}">
+      <Declaration><![CDATA[METHOD M_GetDevice : I_Device
+VAR_INPUT
+END_VAR
+]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[]]></ST>
+      </Implementation>
+    </Method>
+    <Method Name="M_GetPropCheckSum" Id="{1b864eb4-ca15-4169-88ba-ca0b087c5b80}">
+      <Declaration><![CDATA[METHOD M_GetPropCheckSum : UINT
+VAR_INPUT
+END_VAR
+
+VAR
+	i			: UINT;
+	stData 		: ST_CmdData;
+END_VAR]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[M_GetAllProps(stData);
+wChecksum := F_DATA_TO_CRC16_CCITT(ADR(stData.n32Data[0]),nNoOfProps * 4,16#FFFF);
+M_GetPropCheckSum := wChecksum;]]></ST>
+      </Implementation>
+    </Method>
+    <Method Name="M_GetSlot" Id="{ba9bed8b-d5e7-476f-9359-48c995c9302a}">
+      <Declaration><![CDATA[METHOD M_GetSlot : POINTER TO FB_Slot
+VAR_INPUT
+	nSlotNr : UINT;
+END_VAR
+]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[]]></ST>
+      </Implementation>
+    </Method>
+    <Method Name="M_GetSlotFromChild" Id="{8851af2f-0e6f-4d0a-81d3-b945a799be53}">
+      <Declaration><![CDATA[METHOD M_GetSlotFromChild : POINTER TO FB_Slot
+VAR_INPUT
+	pObject : POINTER TO FB_Object;
+END_VAR]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[]]></ST>
+      </Implementation>
+    </Method>
+    <Method Name="M_RemoveChild" Id="{a4fdd1a9-85af-4d60-804f-2b95973c7db4}">
+      <Declaration><![CDATA[METHOD M_RemoveChild : ERRORID
+VAR_INPUT
+	pObject	: POINTER TO FB_Object;
+END_VAR
+
+VAR
+	iter : FB_ObjCollectIterator;
+END_VAR]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[//Das Objekt in der Collection suchen (flach)
+pObjCollectNode^.nodes.M_GetIterator(iter);
+WHILE iter.pNode > 0 DO
+	IF iter.pNode^.P_pObject = pObject THEN
+		//Falls Object an einem Slot, von diesem entfernen
+		IF pObject^.P_pParentSlot > 0 THEN
+			pObject^.P_pParentSlot^.P_pChild := 0;
+		END_IF
+		pObjCollectNode^.nodes.M_RemoveNode(iter.pNode);
+		pObject^.M_UpdateParent();
+		EXIT;
+	END_IF
+	iter.M_Increment();
+END_WHILE
+
+IF iter.pNode = 0 THEN
+	M_RemoveChild := E_ErrorIdObjMgmt.ERRORID_ObjectNotInCollection;
+END_IF]]></ST>
+      </Implementation>
+    </Method>
+    <Method Name="M_SetAllProps" Id="{2aa1fadb-c8f5-4fab-a5d0-64328a4d0239}">
+      <Declaration><![CDATA[METHOD M_SetAllProps : ERRORID
+VAR_INPUT
+	refCmdData	: REFERENCE TO ST_CmdData;
+END_VAR
+]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[]]></ST>
+      </Implementation>
+    </Method>
+    <Method Name="M_SetSingleProp" Id="{bd51375e-f7d7-466b-9ea7-2f695e193e51}">
+      <Declaration><![CDATA[METHOD M_SetSingleProp : ERRORID
+VAR_INPUT
+	refCmdData	: REFERENCE TO ST_CmdData;
+END_VAR
+]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[]]></ST>
+      </Implementation>
+    </Method>
+    <Method Name="M_UpdateParent" Id="{60a3d0a9-4998-4589-a7d6-89641a375343}">
+      <Declaration><![CDATA[METHOD M_UpdateParent
+]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[]]></ST>
+      </Implementation>
+    </Method>
+    <Property Name="P_bHasChilds" Id="{ace6323d-7d9d-4d1f-8e5b-a91592ab1a10}">
+      <Declaration><![CDATA[PROPERTY P_bHasChilds : BOOL
+]]></Declaration>
+      <Get Name="Get" Id="{8afe265b-2f92-4dbe-9ff3-6a6f4c11b095}">
+        <Declaration><![CDATA[VAR
+END_VAR
+]]></Declaration>
+        <Implementation>
+          <ST><![CDATA[P_bHasChilds := pObjCollectNode > 0 and_then pObjCollectNode^.nodes.nCount > 0;]]></ST>
+        </Implementation>
+      </Get>
+    </Property>
+    <Property Name="P_eObjectGroup" Id="{b94e65bd-d653-427d-8fa5-6193a0e4b5f5}">
+      <Declaration><![CDATA[PROPERTY P_eObjectGroup : E_ObjectGroup
+]]></Declaration>
+      <Get Name="Get" Id="{ea5ad8b5-52a1-42df-ab1a-bc744dff3896}">
+        <Declaration><![CDATA[VAR
+END_VAR
+]]></Declaration>
+        <Implementation>
+          <ST><![CDATA[P_eObjectGroup := eObjectGroup;]]></ST>
+        </Implementation>
+      </Get>
+    </Property>
+    <Property Name="P_eObjectType" Id="{61c4d3a3-c06f-49c9-83a6-d9c40a7b9275}">
+      <Declaration><![CDATA[PROPERTY P_eObjectType : E_ObjectType
+]]></Declaration>
+      <Get Name="Get" Id="{669098f0-4ac6-42ab-996d-03def5965c2b}">
+        <Declaration><![CDATA[VAR
+END_VAR
+]]></Declaration>
+        <Implementation>
+          <ST><![CDATA[P_eObjectType := eObjectType;]]></ST>
+        </Implementation>
+      </Get>
+    </Property>
+    <Property Name="P_nNoOfProps" Id="{7b3ff459-ce45-4ac3-b566-241558331cbf}">
+      <Declaration><![CDATA[PROPERTY P_nNoOfProps : UINT
+]]></Declaration>
+      <Get Name="Get" Id="{f81fe8ac-9e2d-4b54-803f-ffcc2e7cb497}">
+        <Declaration><![CDATA[VAR
+END_VAR
+]]></Declaration>
+        <Implementation>
+          <ST><![CDATA[P_nNoOfProps := nNoOfProps; ]]></ST>
+        </Implementation>
+      </Get>
+    </Property>
+    <Property Name="P_nNotifyId" Id="{e4b2e2df-1801-4f89-8df1-7548bac25d8c}">
+      <Declaration><![CDATA[PROPERTY P_nNotifyId : UINT]]></Declaration>
+      <Get Name="Get" Id="{aa02bafe-4392-46db-ad39-296675877b46}">
+        <Declaration><![CDATA[VAR
+END_VAR
+]]></Declaration>
+        <Implementation>
+          <ST><![CDATA[]]></ST>
+        </Implementation>
+      </Get>
+      <Set Name="Set" Id="{c1c872a4-bc23-44cd-946e-07cc3255a58b}">
+        <Declaration><![CDATA[VAR
+END_VAR
+]]></Declaration>
+        <Implementation>
+          <ST><![CDATA[]]></ST>
+        </Implementation>
+      </Set>
+    </Property>
+    <Property Name="P_nObjectID" Id="{edd2a331-c397-4992-b113-832f9415bd91}">
+      <Declaration><![CDATA[PROPERTY P_nObjectID : UINT
+]]></Declaration>
+      <Get Name="Get" Id="{180a3d84-00f7-48f6-9df8-142b6f1bf69a}">
+        <Declaration><![CDATA[VAR
+END_VAR
+]]></Declaration>
+        <Implementation>
+          <ST><![CDATA[P_nObjectID := nObjectID;]]></ST>
+        </Implementation>
+      </Get>
+      <Set Name="Set" Id="{1c81fe87-3942-4c0d-b798-a6c36cb387d7}">
+        <Declaration><![CDATA[VAR
+END_VAR
+]]></Declaration>
+        <Implementation>
+          <ST><![CDATA[nObjectID := P_nObjectID;]]></ST>
+        </Implementation>
+      </Set>
+    </Property>
+    <Property Name="P_nParentSlotNr" Id="{80aadf76-7e96-40d5-9b64-f68bbc8e10de}">
+      <Declaration><![CDATA[PROPERTY P_nParentSlotNr : UINT]]></Declaration>
+      <Get Name="Get" Id="{2e344dce-1eec-4b50-b4e0-7384751712c5}">
+        <Declaration><![CDATA[VAR
+END_VAR
+]]></Declaration>
+        <Implementation>
+          <ST><![CDATA[IF pParentSlot > 0 THEN
+	P_nParentSlotNr := pParentSlot^.P_nNr;
+END_IF]]></ST>
+        </Implementation>
+      </Get>
+    </Property>
+    <Property Name="P_pObjCollectNode" Id="{44c81f7b-fdd1-401c-99b9-979d769599c9}">
+      <Declaration><![CDATA[PROPERTY P_pObjCollectNode : POINTER TO FB_ObjCollectionNode
+]]></Declaration>
+      <Get Name="Get" Id="{3845ab7e-2398-4bcb-bea9-d268027aa224}">
+        <Declaration><![CDATA[VAR
+END_VAR
+]]></Declaration>
+        <Implementation>
+          <ST><![CDATA[P_pObjCollectNode := pObjCollectNode;]]></ST>
+        </Implementation>
+      </Get>
+      <Set Name="Set" Id="{dc96722f-4bc7-469f-9085-bc5ba8afd212}">
+        <Declaration><![CDATA[VAR
+END_VAR
+]]></Declaration>
+        <Implementation>
+          <ST><![CDATA[pObjCollectNode := P_pObjCollectNode;]]></ST>
+        </Implementation>
+      </Set>
+    </Property>
+    <Property Name="P_pParentObject" Id="{4c243c53-27fd-4f6e-a2e8-ed45a2496a0d}">
+      <Declaration><![CDATA[PROPERTY P_pParentObject : POINTER TO FB_Object
+]]></Declaration>
+      <Get Name="Get" Id="{b2175f77-e943-4cdd-a82a-2897c541a222}">
+        <Declaration><![CDATA[VAR
+END_VAR
+]]></Declaration>
+        <Implementation>
+          <ST><![CDATA[IF pObjCollectNode > 0 AND_THEN pObjCollectNode^.pOwnerColl > 0 AND_THEN pObjCollectNode^.pOwnerColl^.pOwnerNode > 0 THEN
+	P_pParentObject := pObjCollectNode^.pOwnerColl^.pOwnerNode^.P_pObject;
+END_IF]]></ST>
+        </Implementation>
+      </Get>
+    </Property>
+    <Property Name="P_pParentSlot" Id="{f8ea0287-83ca-4904-9770-3f0dcbd44ea6}">
+      <Declaration><![CDATA[PROPERTY P_pParentSlot : POINTER TO FB_Slot]]></Declaration>
+      <Get Name="Get" Id="{619f79e0-a1c7-48b9-b1d4-17012cfa4233}">
+        <Declaration><![CDATA[VAR
+END_VAR
+]]></Declaration>
+        <Implementation>
+          <ST><![CDATA[P_pParentSlot := pParentSlot;]]></ST>
+        </Implementation>
+      </Get>
+    </Property>
+    <LineIds Name="FB_Object">
+      <LineId Id="9" Count="0" />
+    </LineIds>
+    <LineIds Name="FB_Object.M_AddChild">
+      <LineId Id="8" Count="0" />
+    </LineIds>
+    <LineIds Name="FB_Object.M_bIsGroup">
+      <LineId Id="7" Count="0" />
+    </LineIds>
+    <LineIds Name="FB_Object.M_CheckProps">
+      <LineId Id="4" Count="0" />
+    </LineIds>
+    <LineIds Name="FB_Object.M_ClearAllProps">
+      <LineId Id="4" Count="0" />
+    </LineIds>
+    <LineIds Name="FB_Object.M_GetAllProps">
+      <LineId Id="7" Count="0" />
+    </LineIds>
+    <LineIds Name="FB_Object.M_GetDevice">
+      <LineId Id="5" Count="0" />
+    </LineIds>
+    <LineIds Name="FB_Object.M_GetPropCheckSum">
+      <LineId Id="3" Count="0" />
+      <LineId Id="5" Count="0" />
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="FB_Object.M_GetSlot">
+      <LineId Id="5" Count="0" />
+    </LineIds>
+    <LineIds Name="FB_Object.M_GetSlotFromChild">
+      <LineId Id="6" Count="0" />
+    </LineIds>
+    <LineIds Name="FB_Object.M_RemoveChild">
+      <LineId Id="13" Count="0" />
+      <LineId Id="17" Count="1" />
+      <LineId Id="36" Count="2" />
+      <LineId Id="40" Count="0" />
+      <LineId Id="21" Count="0" />
+      <LineId Id="42" Count="0" />
+      <LineId Id="23" Count="0" />
+      <LineId Id="22" Count="0" />
+      <LineId Id="20" Count="0" />
+      <LineId Id="19" Count="0" />
+      <LineId Id="24" Count="1" />
+      <LineId Id="35" Count="0" />
+      <LineId Id="27" Count="0" />
+      <LineId Id="7" Count="0" />
+    </LineIds>
+    <LineIds Name="FB_Object.M_SetAllProps">
+      <LineId Id="7" Count="0" />
+    </LineIds>
+    <LineIds Name="FB_Object.M_SetSingleProp">
+      <LineId Id="7" Count="0" />
+    </LineIds>
+    <LineIds Name="FB_Object.M_UpdateParent">
+      <LineId Id="4" Count="0" />
+    </LineIds>
+    <LineIds Name="FB_Object.P_bHasChilds.Get">
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="FB_Object.P_eObjectGroup.Get">
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="FB_Object.P_eObjectType.Get">
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="FB_Object.P_nNoOfProps.Get">
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="FB_Object.P_nNotifyId.Get">
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="FB_Object.P_nNotifyId.Set">
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="FB_Object.P_nObjectID.Get">
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="FB_Object.P_nObjectID.Set">
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="FB_Object.P_nParentSlotNr.Get">
+      <LineId Id="3" Count="1" />
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="FB_Object.P_pObjCollectNode.Get">
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="FB_Object.P_pObjCollectNode.Set">
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="FB_Object.P_pParentObject.Get">
+      <LineId Id="7" Count="1" />
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="FB_Object.P_pParentSlot.Get">
+      <LineId Id="2" Count="0" />
+    </LineIds>
+  </POU>
+</TcPlcObject>

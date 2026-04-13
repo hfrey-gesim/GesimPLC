@@ -1,0 +1,523 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<TcPlcObject Version="1.1.0.1" ProductVersion="3.1.4024.5">
+  <POU Name="FB_Dil_Transfer" Id="{0b8650bf-c82e-4f17-ab8b-a1a53b7e15de}" SpecialFunc="None">
+    <Declaration><![CDATA[FUNCTION_BLOCK FB_Dil_Transfer
+VAR_INPUT
+	pDilRef1		: POINTER TO FB_HwRefDiluter;
+	pDilRef2		: POINTER TO FB_HwRefDiluter;
+	nTransferSteps	: UDINT;	//TransferMenge in Microsteps
+	nPreSteps		: INT;
+	nPostSteps		: INT;
+	nValveInput1	: SINT;		//Ventilstellung Input(SystemLiquid) Source (Press-Diluter)
+	nValveOutput1	: SINT;		//Ventilstellung Output(Luer) Source (Press-Diluter)
+	nValveWaste1	: SINT;		//Ventilstellung Waste Source (Press-Diluter)
+	nValveInput2	: SINT;		//Ventilstellung Input(SystemLiquid) Source (Suck-Diluter)
+	nValveOutput2	: SINT;		//Ventilstellung Output(Luer) Source (Suck-Diluter)
+	nValveWaste2	: SINT;		//Ventilstellung Waste Source (Press-Diluter))*)
+	nSpeedPump		: DINT;		//Gechwindigkeit Pumpen in Halbsteps/s
+	nSpeedReload	: DINT;		//Gechwindigkeit Nachladen in Halbsteps/s
+	bExecute		: BOOL;
+END_VAR
+VAR_OUTPUT
+	bBusy		: BOOL;
+	bError		: BOOL;
+	nErrorId	: ERRORID;
+END_VAR
+VAR
+	rTrig 				: R_TRIG;
+	nState				: USINT;
+	sString				: STRING[100];	//Sendestring
+	sValvePos			: STRING[2];
+	sValvePos2			: STRING[2];
+	nStartPosSrc		: UINT;
+	nStartPosDest		: UINT;
+	nCurPlungerPosSrc	: UINT;
+	nCurPlungerPosDest	: UINT;
+	nTotalSteps			: UDINT;
+	
+	pDilRefSrc			: POINTER TO FB_HwRefDiluter;
+	pDilRefDest			: POINTER TO FB_HwRefDiluter;
+	nValveInputSrc		: SINT;		//Ventilstellung Input(SystemLiquid) Source (Press-Diluter)
+	nValveOutputSrc		: SINT;		//Ventilstellung Output(Luer) Source (Press-Diluter)
+	nValveWasteSrc		: SINT;		//Ventilstellung Waste Source (Press-Diluter)
+	nValveInputDest		: SINT;		//Ventilstellung Input(SystemLiquid) Source (Suck-Diluter)
+	nValveOutputDest	: SINT;		//Ventilstellung Output(Luer) Source (Suck-Diluter)
+	nValveWasteDest		: SINT;		//Ventilstellung Waste Source (Press-Diluter))*)
+	
+	fbGetPlungerPos		: FB_Dil_GetPlungerPos;
+	fbGetValvePos		: FB_Dil_GetValvePos;
+	fbMoveToPos			: FB_Dil_MoveToPos;
+END_VAR
+VAR_IN_OUT
+	DilSendCmd 	: FB_Dil_SendCmd;
+END_VAR
+]]></Declaration>
+    <Implementation>
+      <ST><![CDATA[rTrig(CLK:= bExecute);
+IF rTrig.Q THEN
+	IF pDilRef1 = 0 OR pDilRef2 = 0 THEN
+		bError := TRUE;
+		RETURN;	
+	ELSE
+		pDilRefSrc := pDilRef1;
+		nValveInputSrc := nValveInput1;
+		nValveOutputSrc := nValveOutput1;
+		nValveWasteSrc := nValveWaste1;
+		pDilRefDest := pDilRef2;
+		nValveInputDest := nValveInput2;
+		nValveOutputDest := nValveOutput2;
+		nValveWasteDest := nValveWaste2;
+	END_IF	
+END_IF
+
+(*Diluter in jeweilige Ausgangsstellung fahren:
+Es gibt 3 verschiedene Möglichkeiten
+1. 	PreSteps > 0: 
+   	DilPress beginnt früher -> DilPress: Bottom, DilSuck: Top - PreSteps
+	DilSuck startet mit Delay
+2. 	PreSteps = 0:
+	Beide starten zugeleich -> DilPress: Bottom, DilSuck: Top
+3.	PreSteps < 0:
+	DilSuck beginnt früher -> DilPress: Bottom + PreSteps, DilSuck: Top
+	DilPress startet mit Delay
+*)
+
+IF bExecute THEN
+	IF nState = 0 THEN	//Aktuelle Kolbenposition DilSrc abrufen
+		bBusy := TRUE;
+		fbGetPlungerPos(DilSendCmd:= DilSendCmd, pDilRef:= pDilRefSrc, bExecute:= TRUE);
+		IF NOT fbGetPlungerPos.bBusy THEN
+			IF fbGetPlungerPos.bError THEN
+				bError := TRUE;
+				nErrorId := fbGetPlungerPos.nErrorId;
+				bBusy := FALSE;
+			ELSE
+				nCurPlungerPosSrc := fbGetPlungerPos.nValue;
+				nState := 1;
+			END_IF
+			fbGetPlungerPos(DilSendCmd:= DilSendCmd, bExecute:= FALSE);
+		ELSE
+			RETURN;
+		END_IF
+	END_IF
+	
+	IF nState = 1 THEN	//Aktuelle Kolbenposition DilDest abrufen
+		fbGetPlungerPos(DilSendCmd:= DilSendCmd, pDilRef:= pDilRefDest, bExecute:= TRUE);
+		IF NOT fbGetPlungerPos.bBusy THEN
+			IF fbGetPlungerPos.bError THEN
+				bError := TRUE;
+				nErrorId := fbGetPlungerPos.nErrorId;
+				bBusy := FALSE;
+			ELSE
+				nCurPlungerPosDest := fbGetPlungerPos.nValue;
+				//Startpositionen berechenen
+				IF nPreSteps > 0 THEN
+					nStartPosSrc := 24000;
+					nStartPosDest := INT_TO_UINT(nPreSteps);
+				ELSIF nPreSteps = 0 THEN
+					nStartPosSrc := 24000;
+					nStartPosDest := 0;
+				ELSE // < 0
+					nStartPosSrc := INT_TO_UINT(24000 + nPreSteps);
+					nStartPosDest := 0;
+				END_IF
+				nState := 2;
+			END_IF
+			fbGetPlungerPos(bExecute:= FALSE, DilSendCmd:= DilSendCmd);
+		ELSE
+			RETURN;
+		END_IF
+	END_IF
+	
+	IF nState = 2 THEN	//Startposition DilSrc anfahren
+		sString := CONCAT(USINT_TO_STRING(pDilRefSrc^.nChannel),'v100c100V');	//Startspeed,CutOffSpeed + Kennung für Topspeed
+		sString := CONCAT(sString,DINT_TO_STRING(nSpeedReload));		//Topspeed
+		//Ventilstellung ist abhängig von aktueller Kolbenposition
+		IF nStartPosSrc < nCurPlungerPosSrc THEN //Drücken in Waste
+			sValvePos := F_GetValveCode(nValveWasteSrc,pDilRefSrc^.nActValvePos,pDilRefSrc^.eValveType);
+			sString := CONCAT(sString,sValvePos);					//Ventilstellung in Richtung Waste	
+		ELSE //Saugen aus Input
+			sValvePos := F_GetValveCode(nValveInputSrc,pDilRefSrc^.nActValvePos,pDilRefSrc^.eValveType);
+			sString := CONCAT(sString,sValvePos);					//Ventilstellung in Richtung Input(SystemLiquid)
+		END_IF
+		IF sValvePos = '' THEN
+			bError := TRUE;
+			nErrorId := E_ErrorIdDiluter.ERRORID_InvalidValveParam;
+			RETURN;
+		END_IF
+		sString := CONCAT(sString,'A');									//Kennung für Move
+		sString := CONCAT(sString, UINT_TO_STRING(nStartPosSrc));		//Position
+		sValvePos := F_GetValveCode(nValveOutputSrc,pDilRefSrc^.nActValvePos, pDilRefSrc^.eValveType);
+		IF sValvePos = '' THEN
+			bError := TRUE;
+			nErrorId := E_ErrorIdDiluter.ERRORID_InvalidValveParam;
+			RETURN;			
+		END_IF
+		sString := CONCAT(sString,sValvePos);						//Ventilstellung in Richtung Luer nach Erreichen Startposition
+		sString := CONCAT(sString,'R');									//Execute-Zeichen
+		
+		DilSendCmd(bExecute:= TRUE, bExpectReply:= TRUE, sSendData:= sString);
+		
+		IF NOT DilSendCmd.bBusy THEN
+			IF DilSendCmd.bError THEN
+				bError := TRUE;
+				nErrorId := DilSendCmd.nErrorId;
+				bBusy:= FALSE;
+			ELSE
+				nState := 3;
+			END_IF
+			DilSendCmd(bExecute:= FALSE);
+		ELSE
+			RETURN;
+		END_IF
+	ELSIF nState = 3 THEN	//Startposition DilDest anfahren
+		sString := CONCAT(USINT_TO_STRING(pDilRefDest^.nChannel),'v100c100V');	//Startspeed,CutOffSpeed + Kennung für Topspeed
+		sString := CONCAT(sString,DINT_TO_STRING(nSpeedReload));		//Topspeed
+		//Ventilstellung ist abhängig von aktueller Kolbenposition
+		IF nStartPosDest < nCurPlungerPosDest THEN //Drücken in Waste
+			sValvePos := F_GetValveCode(nValveWasteDest,pDilRefDest^.nActValvePos,pDilRefDest^.eValveType);
+			sString := CONCAT(sString,sValvePos);					//Ventilstellung in Richtung Waste	
+		ELSE //Saugen aus Input
+			sValvePos := F_GetValveCode(nValveInputDest,pDilRefDest^.nActValvePos,pDilRefDest^.eValveType);
+			sString := CONCAT(sString,sValvePos);					//Ventilstellung in Richtung Input(SystemLiquid)	
+		END_IF
+		
+		IF sValvePos = '' THEN
+			bError := TRUE;
+			nErrorId := E_ErrorIdDiluter.ERRORID_InvalidValveParam;
+			RETURN;
+		END_IF		
+		sString := CONCAT(sString,'A');									//Kennung für Move
+		sString := CONCAT(sString, UINT_TO_STRING(nStartPosDest));		//Position
+		sValvePos := F_GetValveCode(nValveOutputDest,pDilRefDest^.nActValvePos, pDilRefDest^.eValveType);
+		IF sValvePos = '' THEN
+			bError := TRUE;
+			nErrorId := E_ErrorIdDiluter.ERRORID_InvalidValveParam;
+			RETURN;			
+		END_IF		
+		sString := CONCAT(sString,sValvePos);						//Ventilstellung in Richtung Luer nach Erreichen Startposition
+		sString := CONCAT(sString,'R');							//Execute-Zeichen
+		
+		DilSendCmd(bExecute:= TRUE, bExpectReply:= TRUE, sSendData:= sString);
+		
+		IF NOT DilSendCmd.bBusy THEN
+			IF DilSendCmd.bError THEN
+				bError := TRUE;
+				nErrorId := DilSendCmd.nErrorId;
+				bBusy:= FALSE;
+			ELSE
+				nState := 4;
+			END_IF
+			DilSendCmd(bExecute:= FALSE);
+		ELSE
+			RETURN;
+		END_IF
+	ELSIF nState = 4 THEN	//Ausgangsposition DilSrc erreicht?
+		fbGetPlungerPos(bExecute:= TRUE, DilSendCmd:= DilSendCmd, pDilRef:= pDilRefSrc);
+		IF NOT fbGetPlungerPos.bBusy THEN
+			IF fbGetPlungerPos.bError THEN
+				bBusy := FALSE;
+				bError := TRUE;
+				nErrorId := fbGetPlungerPos.nErrorId;
+			ELSE
+				nCurPlungerPosSrc := fbGetPlungerPos.nValue;
+				IF fbGetPlungerPos.bStatus THEN
+					IF nCurPlungerPosSrc = nStartPosSrc THEN
+						nState := 5;
+					ELSE
+						bBusy := FALSE;
+						bError := TRUE;
+						nErrorId := 333;
+					END_IF
+				END_IF
+			END_IF
+			fbGetPlungerPos(bExecute:= FALSE, DilSendCmd:= DilSendCmd);
+		ELSE
+			RETURN;
+		END_IF
+	ELSIF nState = 5 THEN	//Ausgangsposition DilDest erreicht?
+		fbGetPlungerPos(bExecute:= TRUE, DilSendCmd:= DilSendCmd, pDilRef:= pDilRefDest);
+		IF NOT fbGetPlungerPos.bBusy THEN
+			IF fbGetPlungerPos.bError THEN
+				bBusy := FALSE;
+				bError := TRUE;
+				nErrorId := fbGetPlungerPos.nErrorId;
+			ELSE
+				nCurPlungerPosDest := fbGetPlungerPos.nValue;
+				IF fbGetPlungerPos.bStatus THEN
+					IF nCurPlungerPosDest = nStartPosDest THEN
+						IF nPreSteps > 0 THEN
+							//DilSrc mit PreSteps Pumpen
+							nState := 6;
+						ELSIF nPreSteps = 0 THEN
+							nState := 8;
+						ELSE // < 0
+							//DilDest mit PreSteps Pumpen
+							nState := 7;
+						END_IF
+					ELSE
+						bBusy := FALSE;
+						bError := TRUE;
+						nErrorId := 333;
+					END_IF
+				END_IF
+			END_IF
+			fbGetPlungerPos(bExecute:= FALSE, DilSendCmd:= DilSendCmd);
+		ELSE
+			RETURN;
+		END_IF
+	ELSIF nState = 6 THEN	//DilSrc mit PreSteps pumpen
+		fbMoveToPos(nTopSpeed:= DINT_TO_UINT(nSpeedPump), nPosition:= INT_TO_UINT(24000 - nPreSteps), nValvePos:= nValveOutputSrc, bExecute:= TRUE,
+					DilSendCmd:= DilSendCmd, pDilRef:= pDilRefSrc);
+		IF NOT fbMoveToPos.bBusy THEN
+			IF fbMoveToPos.bError THEN
+				bBusy := FALSE;
+				bError := TRUE;
+				nErrorId := fbMoveToPos.nErrorId;
+			ELSE
+				nCurPlungerPosSrc := pDilRefSrc^.nActPlungerPos;
+			END_IF
+			fbMoveToPos(bExecute:= FALSE, DilSendCmd:= DilSendCmd, pDilRef:= pDilRefSrc);
+			nState := 8;
+		ELSE
+			RETURN;
+		END_IF
+	ELSIF nState = 7 THEN	//DilDest mit PreSteps pumpen
+		fbMoveToPos(nTopSpeed:= DINT_TO_UINT(nSpeedPump), nPosition:= INT_TO_UINT(-nPreSteps), nValvePos:= nValveOutputDest, bExecute:= TRUE,
+					DilSendCmd:= DilSendCmd, pDilRef:= pDilRefDest);
+		IF NOT fbMoveToPos.bBusy THEN
+			IF fbMoveToPos.bError THEN
+				bBusy := FALSE;
+				bError := TRUE;
+				nErrorId := fbMoveToPos.nErrorId;
+			ELSE
+				nCurPlungerPosDest := pDilRefDest^.nActPlungerPos;
+			END_IF
+			fbMoveToPos(bExecute:= FALSE, DilSendCmd:= DilSendCmd, pDilRef:= pDilRefDest);
+			nState := 8;
+		ELSE
+			RETURN;
+		END_IF
+	ELSIF nState = 8 THEN
+		//PumpString DilSrc ermitteln
+		//Die beiden Valve-Position (Pump und Reload ermitteln)
+		//Damit jeweils der kürzeste Umschaltweg ermittelt wird, werden sie sich gegenseitig als OldPos eingesetzt
+		sValvePos := F_GetValveCode(nValveOutputSrc,nValveInputSrc,pDilRefSrc^.eValveType);
+		sValvePos2 := F_GetValveCode(nValveInputSrc,nValveOutputSrc,pDilRefSrc^.eValveType);
+		IF sValvePos = '' OR sValvePos2 = '' THEN
+			bError := FALSE;
+			nErrorId := E_ErrorIdDiluter.ERRORID_InvalidValveParam;
+			bBusy := FALSE;
+			RETURN;
+		END_IF
+		
+		//Muss DilSrc die PastSteps ausführen?
+		IF nPostSteps < 0 THEN
+			nTotalSteps := nTransferSteps + INT_TO_UINT(-nPostSteps);
+		ELSE
+			nTotalSteps := nTransferSteps;
+		END_IF
+		
+		sString := F_GetPumpString(nChannel:= pDilRefSrc^.nChannel ,eMode := E_DilPumpMode.MODE_Press, sValvePump:= sValvePos, 
+									sValveReload:= sValvePos2, nSpeedPump:= nSpeedPump, nSpeedReload:= nSpeedReload, nTotalSteps:= nTotalSteps,
+									nCurPlungerPos:= pDilRefSrc^.nActPlungerPos,bEndless:= FALSE, bFirstReload := FALSE);
+		nState := 9;
+	END_IF
+	
+	IF nState = 9 THEN //PumpString DilSrc senden (ohne Execute) + PumpString DilDest ermitteln 
+		DilSendCmd(bExecute:= TRUE, bExpectReply:= TRUE, sSendData:= sString);
+		IF NOT DilSendCmd.bBusy THEN
+			IF DilSendCmd.bError THEN
+				bError := TRUE;
+				nErrorId := DilSendCmd.nErrorId;
+				bBusy:= FALSE;
+			ELSE
+				//PumpString DilDest ermitteln
+				sValvePos := F_GetValveCode(nValveOutputDest,nValveWasteDest,pDilRefDest^.eValveType);
+				sValvePos2 := F_GetValveCode(nValveWasteDest,nValveOutputDest,pDilRefDest^.eValveType);
+				IF sValvePos = '' OR sValvePos2 = '' THEN
+					bError := FALSE;
+					nErrorId := E_ErrorIdDiluter.ERRORID_InvalidValveParam;
+					bBusy := FALSE;
+					RETURN;
+				END_IF
+				
+				//Muss DilSrc die PastSteps ausführen?
+				IF nPostSteps > 0 THEN
+					nTotalSteps := nTransferSteps + INT_TO_UINT(nPostSteps);
+				ELSE
+					nTotalSteps := nTransferSteps;
+				END_IF
+				
+				sString := F_GetPumpString(nChannel:= pDilRefDest^.nChannel ,eMode := E_DilPumpMode.MODE_Suck, sValvePump:= sValvePos,
+											sValveReload:= sValvePos2, nSpeedPump:= nSpeedPump, nSpeedReload:= nSpeedReload, nTotalSteps:= nTotalSteps,
+											nCurPlungerPos:= nCurPlungerPosDest, bEndless:= FALSE, bFirstReload:= FALSE);
+				nState := 10;
+			END_IF
+			DilSendCmd(bExecute:= FALSE);
+		ELSE
+			RETURN;
+		END_IF;
+	END_IF
+
+	IF nState = 10 THEN //PumpString DilDest senden (ohne Execute)
+		DilSendCmd(bExecute:= TRUE, bExpectReply:= TRUE, sSendData:= sString);
+		IF NOT DilSendCmd.bBusy THEN
+			IF DilSendCmd.bError THEN
+				bError := TRUE;
+				nErrorId := DilSendCmd.nErrorId;
+				bBusy:= FALSE;
+			ELSE
+				nState := 11;
+				//ChannelCode für TwinDiluter ermitteln und Execute anhängen
+				sString := CONCAT(F_GetChannelCodeTwin(pDilRefSrc^.nChannel,pDilRefDest^.nChannel),'R');
+			END_IF
+			DilSendCmd(bExecute:= FALSE);
+		ELSE
+			RETURN;
+		END_IF;
+	END_IF
+	
+	IF nState = 11 THEN //Execute 'R' an beide Diluter senden
+		DilSendCmd(bExecute:= TRUE, bExpectReply:= FALSE, sSendData:= sString);
+		IF NOT DilSendCmd.bBusy THEN
+			IF DilSendCmd.bError THEN
+				bError := TRUE;
+				nErrorId := DilSendCmd.nErrorId;
+				bBusy:= FALSE;
+			ELSE
+				nState := 12;
+			END_IF
+			DilSendCmd(bExecute:= FALSE);
+		ELSE
+			RETURN;
+		END_IF;
+	END_IF
+	
+	IF nState = 12 THEN //DilSrc fertig? (PlungerPos abfragen)
+		fbGetPlungerPos(DilSendCmd:= DilSendCmd, pDilRef:= pDilRefSrc, bExecute:= TRUE);
+		IF NOT fbGetPlungerPos.bBusy THEN
+			IF fbGetPlungerPos.bError THEN
+				bError := TRUE;
+				nErrorId := fbGetPlungerPos.nErrorId;
+				bBusy := FALSE;
+			ELSE
+				IF fbGetPlungerPos.bStatus THEN
+					nState := 13;	
+				END_IF
+			END_IF
+			fbGetPlungerPos(DilSendCmd:= DilSendCmd, bExecute:= FALSE);
+		ELSE
+			RETURN;
+		END_IF
+	END_IF
+		
+	IF nState = 13 THEN //DilDest fertig? (PlungerPos abfragen)
+		fbGetPlungerPos(DilSendCmd:= DilSendCmd, pDilRef:= pDilRefDest, bExecute:= TRUE);
+		IF NOT fbGetPlungerPos.bBusy THEN
+			IF fbGetPlungerPos.bError THEN
+				bError := TRUE;
+				nErrorId := fbGetPlungerPos.nErrorId;
+				bBusy := FALSE;
+			ELSE
+				IF fbGetPlungerPos.bStatus THEN
+					nState := 14;	
+				END_IF
+			END_IF
+			fbGetPlungerPos(DilSendCmd:= DilSendCmd, bExecute:= FALSE);
+		ELSE
+			RETURN;
+		END_IF	
+	END_IF
+		
+	IF nState = 14 THEN //ValvePos DilSrc abfragen
+		fbGetValvePos(bExecute:= TRUE, DilSendCmd:= DilSendCmd,	pDilRef:= pDilRefSrc);
+		IF NOT fbGetValvePos.bBusy THEN
+			IF fbGetValvePos.bError THEN
+				bError := TRUE;
+				nErrorId := fbGetPlungerPos.nErrorId;
+				bBusy := FALSE;
+			ELSE
+				nState := 15;
+			END_IF
+			fbGetValvePos(bExecute:= FALSE, DilSendCmd:= DilSendCmd);
+		END_IF
+	END_IF
+		
+	IF nState = 15 THEN //ValvePos DilDest abfragen
+		fbGetValvePos(bExecute:= TRUE, DilSendCmd:= DilSendCmd,	pDilRef:= pDilRefDest);
+		IF NOT fbGetValvePos.bBusy THEN
+			IF fbGetValvePos.bError THEN
+				bError := TRUE;
+				nErrorId := fbGetPlungerPos.nErrorId;
+			END_IF
+			bBusy := FALSE;
+			fbGetValvePos(bExecute:= FALSE, DilSendCmd:= DilSendCmd);
+		END_IF
+	END_IF
+	
+ELSE
+	IF bBusy THEN
+		IF fbGetPlungerPos.bBusy THEN	//FB noch zu Ende führen
+			fbGetPlungerPos(bExecute:= TRUE, DilSendCmd:= DilSendCmd);
+			IF NOT fbGetPlungerPos.bBusy THEN
+				IF fbGetPlungerPos.bError THEN
+					bError := TRUE;
+					nErrorId := fbGetPlungerPos.nErrorId;
+				END_IF
+				fbGetPlungerPos(bExecute:= FALSE, DilSendCmd:= DilSendCmd);
+				bBusy := FALSE;
+				nState := 0;
+			END_IF
+		ELSIF fbGetValvePos.bBusy THEN	//FB noch zu Ende führen
+			fbGetValvePos(bExecute:= TRUE, DilSendCmd:= DilSendCmd);
+			IF NOT fbGetValvePos.bBusy THEN
+				IF fbGetValvePos.bError THEN
+					bError := TRUE;
+					nErrorId := fbGetValvePos.nErrorId;
+				END_IF
+				fbGetValvePos(bExecute:= FALSE, DilSendCmd:= DilSendCmd);
+				bBusy := FALSE;
+				nState := 0;
+			END_IF
+		ELSIF fbMoveToPos.bBusy THEN //FB beenden
+			fbMoveToPos(bExecute:= FALSE, DilSendCmd:= DilSendCmd);
+			IF NOT fbMoveToPos.bBusy THEN
+				IF fbMoveToPos.bError THEN
+					bError := TRUE;
+					nErrorId := fbMoveToPos.nErrorId;
+				END_IF
+				fbMoveToPos(bExecute:= FALSE, DilSendCmd:= DilSendCmd);
+				bBusy := FALSE;
+				nState := 0;
+			END_IF
+		ELSIF DilSendCmd.bBusy THEN	//FB noch zu Ende führen
+			DilSendCmd();
+			IF NOT DilSendCmd.bBusy THEN
+				IF DilSendCmd.bError THEN
+					bError := TRUE;
+					nErrorId := DilSendCmd.nErrorId;
+				END_IF
+				DilSendCmd(bExecute:= FALSE);
+				bBusy := FALSE;
+				nState := 0;
+			END_IF
+		ELSE
+			bBusy := FALSE;
+			nState := 0;
+		END_IF
+	ELSE
+		nState := 0;
+		bBusy := FALSE;
+		bError := FALSE;
+		nErrorId := 0;		
+	END_IF
+END_IF
+ ]]></ST>
+    </Implementation>
+    <LineIds Name="FB_Dil_Transfer">
+      <LineId Id="1020" Count="459" />
+      <LineId Id="2" Count="0" />
+    </LineIds>
+  </POU>
+</TcPlcObject>

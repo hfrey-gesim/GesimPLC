@@ -1,0 +1,121 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<TcPlcObject Version="1.1.0.1" ProductVersion="3.1.4022.18">
+  <POU Name="FB_DimSlot" Id="{9535a7d4-4b3e-49d7-8b14-f087bc74f964}" SpecialFunc="None">
+    <Declaration><![CDATA[{attribute 'enable_dynamic_creation'}
+FUNCTION_BLOCK FB_DimSlot EXTENDS FB_Slot
+VAR_INPUT
+END_VAR
+VAR_OUTPUT
+END_VAR
+VAR
+	stDimension : ST_3DDimension;
+END_VAR
+]]></Declaration>
+    <Implementation>
+      <ST><![CDATA[]]></ST>
+    </Implementation>
+    <Property Name="P_rDimDepth" Id="{ee63836d-51f3-40d7-9ae2-e59c48159f75}">
+      <Declaration><![CDATA[PROPERTY P_rDimDepth : REAL]]></Declaration>
+      <Get Name="Get" Id="{88584d37-7d2d-4a98-ae29-6763ff2c4c0d}">
+        <Declaration><![CDATA[VAR
+END_VAR
+]]></Declaration>
+        <Implementation>
+          <ST><![CDATA[P_rDimDepth := stDimension.Depth;]]></ST>
+        </Implementation>
+      </Get>
+      <Set Name="Set" Id="{9d4a2c1e-a3ed-4d90-9b85-448da49af184}">
+        <Declaration><![CDATA[VAR
+END_VAR
+]]></Declaration>
+        <Implementation>
+          <ST><![CDATA[stDimension.Depth := P_rDimDepth;]]></ST>
+        </Implementation>
+      </Set>
+    </Property>
+    <Property Name="P_rDimHeight" Id="{d8c14121-9866-4520-a1fd-3a3eb85f4315}">
+      <Declaration><![CDATA[PROPERTY P_rDimHeight : REAL]]></Declaration>
+      <Get Name="Get" Id="{6966fb0e-9da7-4307-b041-9c339b580b89}">
+        <Declaration><![CDATA[VAR
+END_VAR
+]]></Declaration>
+        <Implementation>
+          <ST><![CDATA[P_rDimHeight := stDimension.Height;]]></ST>
+        </Implementation>
+      </Get>
+      <Set Name="Set" Id="{e6593a3d-e4e0-4332-9e75-25a595f14ae0}">
+        <Declaration><![CDATA[VAR
+END_VAR
+]]></Declaration>
+        <Implementation>
+          <ST><![CDATA[stDimension.Height := P_rDimHeight;]]></ST>
+        </Implementation>
+      </Set>
+    </Property>
+    <Property Name="P_rDimWidth" Id="{8fe2505e-8eaa-4179-bb39-da70899792ce}">
+      <Declaration><![CDATA[PROPERTY P_rDimWidth : REAL]]></Declaration>
+      <Get Name="Get" Id="{b88113c2-2e54-47d6-bacc-77516cbb2f8d}">
+        <Declaration><![CDATA[VAR
+END_VAR
+]]></Declaration>
+        <Implementation>
+          <ST><![CDATA[P_rDimWidth := stDimension.Width;]]></ST>
+        </Implementation>
+      </Get>
+      <Set Name="Set" Id="{5d7a347f-fcae-4c89-943d-5cd7fd03cef3}">
+        <Declaration><![CDATA[VAR
+END_VAR
+]]></Declaration>
+        <Implementation>
+          <ST><![CDATA[stDimension.Width := P_rDimWidth;]]></ST>
+        </Implementation>
+      </Set>
+    </Property>
+    <Property Name="P_stDimension" Id="{4ce14945-dc41-4e8a-9124-7a51ccdca2a8}">
+      <Declaration><![CDATA[PROPERTY P_stDimension : ST_3DDimension]]></Declaration>
+      <Get Name="Get" Id="{54b01c9b-38f2-4e9a-93ff-b6e3b467755b}">
+        <Declaration><![CDATA[VAR
+END_VAR
+]]></Declaration>
+        <Implementation>
+          <ST><![CDATA[P_stDimension := stDimension;]]></ST>
+        </Implementation>
+      </Get>
+      <Set Name="Set" Id="{3321d9c1-2193-46fa-98ca-43a12042e4de}">
+        <Declaration><![CDATA[VAR
+END_VAR
+]]></Declaration>
+        <Implementation>
+          <ST><![CDATA[stDimension := P_stDimension;]]></ST>
+        </Implementation>
+      </Set>
+    </Property>
+    <LineIds Name="FB_DimSlot">
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="FB_DimSlot.P_rDimDepth.Get">
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="FB_DimSlot.P_rDimDepth.Set">
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="FB_DimSlot.P_rDimHeight.Get">
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="FB_DimSlot.P_rDimHeight.Set">
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="FB_DimSlot.P_rDimWidth.Get">
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="FB_DimSlot.P_rDimWidth.Set">
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="FB_DimSlot.P_stDimension.Get">
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="FB_DimSlot.P_stDimension.Set">
+      <LineId Id="2" Count="0" />
+    </LineIds>
+  </POU>
+</TcPlcObject>

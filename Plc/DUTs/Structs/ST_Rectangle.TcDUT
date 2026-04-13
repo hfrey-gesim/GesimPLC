@@ -1,0 +1,15 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<TcPlcObject Version="1.1.0.1" ProductVersion="3.1.0.24">
+  <DUT Name="ST_Rectangle" Id="{0c51e61c-9639-471b-b7b4-a3cd948507ee}">
+    <Declaration><![CDATA[TYPE ST_Rectangle :
+STRUCT
+	X1 : REAL;
+	X2 : REAL;
+	Y1 : REAL;
+	Y2 : REAL;
+END_STRUCT
+END_TYPE
+]]></Declaration>
+    <ObjectProperties />
+  </DUT>
+</TcPlcObject>

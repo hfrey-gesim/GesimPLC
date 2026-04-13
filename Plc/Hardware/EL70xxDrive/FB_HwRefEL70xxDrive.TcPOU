@@ -1,0 +1,586 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<TcPlcObject Version="1.1.0.1">
+  <POU Name="FB_HwRefEL70xxDrive" Id="{eca6a7e8-f0ed-41df-8811-c2bfb9665c0c}" SpecialFunc="None">
+    <Declaration><![CDATA[FUNCTION_BLOCK FB_HwRefEL70xxDrive EXTENDS FB_HwModule
+VAR_INPUT
+	STM_Control : ST_EL70xx_STM_Control;
+	POS_Control	: ST_EL70xx_POS_Control;	
+END_VAR
+VAR_OUTPUT
+	STM_Status : ST_EL70xx_STM_Status;
+	POS_Status : ST_EL70xx_POS_Status;
+	nMotorLoad 		AT %I* : UINT;
+	nMotorCurrent 	AT %I* : UINT;
+	bInput1			AT %I* : BOOL;
+	bInput2			AT %I* : BOOL;
+	bHwEnable		AT %I* : BOOL;	//muss mit Input1 oder Input2 der Klemme verknüpft werden
+									//entsprechend muss dieser Input auch konfiguriert werden
+									//8012:32 bzw. 36 auf Hardware enable konfigurieren
+	
+END_VAR
+VAR
+	stAdsAddress : ST_AdsAdress;	
+	rTranslationFactorPosition : REAL;
+	
+	fbEcCoESdoRead 			: FB_EcCoESdoRead;
+	nMotorFullsteps 		: UINT;
+	nEncoderIncrements		: UDINT;
+	nSpeedRangeRaw			: USINT;	//wie es im OD steht
+	nSpeedRangeCalculated	: UINT;		//wird berechnet aus 2^nSpeedRangeRaw * 1000
+	eEncoderType			: E_EL70xx_EncoderType := E_EL70xx_EncoderType.InternCounter;
+	sTermName				: STRING(5);
+	
+	nActualPosition			: DINT;
+	eHomingMode				: E_EL70xx_StartType;
+	bPrepare				: BOOL;
+	nStateA_Prepare 		: USINT;
+	
+END_VAR
+VAR PERSISTENT
+	nDistPerMotorRev	: DINT; //reale Einheit (Weg oder Winkel)
+	nRefPos	 			: DINT; //reale Einheit (Weg oder Winkel)
+	nMinPos				: DINT; //reale Einheit (Weg oder Winkel)
+	nMaxPos				: DINT; //reale Einheit (Weg oder Winkel)
+	nMaxSpeed			: DINT;	//reale Einheit/s
+	bInvertInitDir		: BOOL;
+END_VAR]]></Declaration>
+    <Implementation>
+      <ST><![CDATA[IF bPrepare THEN
+	bBusy := TRUE;
+	A_Prepare();
+	IF nStateA_Prepare >= 80 THEN
+		IF nStateA_Prepare >= 99 THEN
+			bError := TRUE;
+		END_IF
+		nStateA_Prepare := 0;
+		bPrepare := FALSE;
+		bBusy := FALSE;
+	END_IF
+ELSE
+	bBusy := POS_Status.Busy;
+	bError := POS_Status.Error OR STM_Status.Error;
+	A_CalcActPosition();
+END_IF
+]]></ST>
+    </Implementation>
+    <Action Name="A_CalcActPosition" Id="{ec641027-becc-4bb5-a9ea-4491124111d1}">
+      <Implementation>
+        <ST><![CDATA[IF rTranslationFactorPosition > 0 THEN
+	nActualPosition := REAL_TO_DINT(DINT_TO_REAL(POS_Status.ActualPosition) / rTranslationFactorPosition);
+END_IF
+]]></ST>
+      </Implementation>
+    </Action>
+    <Action Name="A_Prepare" Id="{b5862633-92e0-477d-ace4-61e3252384e3}">
+      <Implementation>
+        <ST><![CDATA[//Werte aus Coe auslesen
+//Motor fullsteps (8010:06)
+IF nStateA_Prepare = 0 THEN
+	fbEcCoESdoRead(sNetId:= stAdsAddress.sNetId, nSlaveAddr:= stAdsAddress.nPort, nIndex:= 16#8010, nSubIndex:= 6 , 
+					pDstBuf:= ADR(nMotorFullsteps) , cbBufLen:=SIZEOF(nMotorFullsteps) , bExecute:= TRUE);
+	IF NOT fbEcCoESdoRead.bBusy THEN
+		IF fbEcCoESdoRead.bError THEN
+			nStateA_Prepare := 99;
+		ELSE
+			IF eEncoderType <> E_EL70xx_EncoderType.InternCounter THEN //Initialwert
+				//Encodertype wurde bereits in der abgeleiteten Klasse gesetzt, deshalb wird dieser nicht aus der Klemme gelesen
+				//auch die Inkremente werden nicht gelesen, diese werden auch in der abgeleiteten Klasse gesetzt
+				nStateA_Prepare := 3;
+			ELSE
+				nStateA_Prepare := 1;	
+			END_IF			
+		END_IF
+		fbEcCoESdoRead(bExecute:= FALSE);		
+	END_IF
+END_IF
+ 
+//die ersten 5 Stellen des Klemmentyps auslesen
+IF nStateA_Prepare = 1 THEN
+	fbEcCoESdoRead(nIndex:= 16#1008, nSubIndex:= 0, pDstBuf:= ADR(sTermName), cbBufLen:=SIZEOF(sTermName), bExecute:= TRUE);
+	IF NOT fbEcCoESdoRead.bBusy THEN
+		IF fbEcCoESdoRead.bError THEN
+			nStateA_Prepare := 99;
+		ELSE
+			sTermName[5] := 0; //da der String nicht komplett ausgelesen wurde, muss das letzte Byte im String wieder terminiert werden
+			IF sTermName = 'EL704' THEN //nur die Klemmen dieser Reihe können einen internen Encoder
+				nStateA_Prepare := 2;
+			ELSE
+				nStateA_Prepare := 4;
+			END_IF
+		END_IF
+		fbEcCoESdoRead(bExecute:= FALSE);
+	END_IF
+END_IF
+
+//Encodertype bzw. Feedback auslesen (8012:08)
+IF nStateA_Prepare = 2 THEN
+	fbEcCoESdoRead(nIndex:= 16#8012, nSubIndex:= 8, pDstBuf:= ADR(eEncoderType) , cbBufLen:=SIZEOF(eEncoderType), bExecute:= TRUE);
+	IF NOT fbEcCoESdoRead.bBusy THEN
+		IF fbEcCoESdoRead.bError THEN
+			nStateA_Prepare := 99;	
+		ELSE
+			IF eEncoderType = E_EL70xx_EncoderType.InternEncoder THEN
+				nStateA_Prepare := 3;
+			ELSE
+				nStateA_Prepare := 4;
+			END_IF
+		END_IF
+		fbEcCoESdoRead(bExecute:= FALSE);
+	END_IF	
+END_IF
+
+//Encoder increments (8010:07) nur wenn Feedbacktype "InternEncoder"
+//Achtung, nEncoderIncrements ist UDINT, der Wert im OD aber nur UINT
+IF nStateA_Prepare = 3 THEN
+	fbEcCoESdoRead(nIndex:= 16#8010, nSubIndex:= 7, pDstBuf:= ADR(nEncoderIncrements) , cbBufLen:= 2, bExecute:= TRUE);
+	IF NOT fbEcCoESdoRead.bBusy THEN
+		IF fbEcCoESdoRead.bError THEN
+			nStateA_Prepare := 99;
+		ELSE
+			nStateA_Prepare := 4;
+		END_IF
+		fbEcCoESdoRead(bExecute:= FALSE);		
+	END_IF	
+END_IF
+
+//Speedrange (8012:05)
+IF nStateA_Prepare = 4 THEN
+	fbEcCoESdoRead(nIndex:= 16#8012, nSubIndex:= 5, pDstBuf:= ADR(nSpeedRangeRaw) , cbBufLen:=SIZEOF(nSpeedRangeRaw), bExecute:= TRUE);
+	IF NOT fbEcCoESdoRead.bBusy THEN
+		IF fbEcCoESdoRead.bError THEN
+			nStateA_Prepare := 99;	
+		ELSE
+			nSpeedRangeCalculated := SHL(1,nSpeedRangeRaw) * 1000;
+			M_CalcTranslationFact();
+			nStateA_Prepare := 80;
+		END_IF
+		fbEcCoESdoRead(bExecute:= FALSE);		
+	END_IF	
+END_IF]]></ST>
+      </Implementation>
+    </Action>
+    <Method Name="FB_init" Id="{1208c288-5abb-4dd6-896b-1f2ae06a2970}">
+      <Declaration><![CDATA[METHOD FB_init : BOOL
+VAR_INPUT
+	bInitRetains 	: BOOL; 	// if TRUE, the retain variables are initialized (warm start / cold start)
+	bInCopyCode  	: BOOL;  	// if TRUE, the instance afterwards gets moved into the copy code (online change)
+	nBoxAddress		: UINT;
+	eHomingMode		: E_EL70xx_StartType;
+END_VAR
+
+VAR
+END_VAR]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[THIS^.eHomingMode := eHomingMode;
+stAdsAddress.nPort := nBoxAddress;]]></ST>
+      </Implementation>
+    </Method>
+    <Method Name="M_CalcTranslationFact" Id="{d6f1580e-b3d1-4933-9ac0-b42d0ff00f5e}">
+      <Declaration><![CDATA[METHOD M_CalcTranslationFact
+VAR_INPUT
+END_VAR
+]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[IF nDistPerMotorRev > 0 THEN
+	IF eEncoderType = E_EL70xx_EncoderType.InternCounter OR eEncoderType = E_EL70xx_EncoderType.ExternSingleturnAbs THEN 
+		rTranslationFactorPosition := (nMotorFullsteps * 64) / DINT_TO_REAL(nDistPerMotorRev);
+	ELSE
+		rTranslationFactorPosition := UDINT_TO_REAL(nEncoderIncrements) / DINT_TO_REAL(nDistPerMotorRev);
+	END_IF
+END_IF
+]]></ST>
+      </Implementation>
+    </Method>
+    <Method Name="M_GetPosDiff" Id="{347db253-9f8c-429e-99e7-3ca6b484bbdf}">
+      <Declaration><![CDATA[METHOD M_GetPosDiff : DINT
+VAR_INPUT
+	nSetPosition : DINT;
+END_VAR
+]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[M_GetPosDiff := nSetPosition - P_nActualPosition;]]></ST>
+      </Implementation>
+    </Method>
+    <Method Name="M_Prepare" Id="{29f7d2d8-f23d-4dba-8737-36e12a1bf9d5}">
+      <Declaration><![CDATA[METHOD M_Prepare
+VAR_INPUT
+END_VAR
+]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[bPrepare := TRUE;]]></ST>
+      </Implementation>
+    </Method>
+    <Method Name="M_SetSpeed" Id="{770bb2d1-9fcb-4db1-9b6f-558a509c94f1}">
+      <Declaration><![CDATA[METHOD M_SetSpeed : BOOL
+VAR_INPUT
+	nValue : DINT; //Speed in µm/s oder 1/100°/sec
+END_VAR
+]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[IF (nValue > 0) AND (nValue <= nMaxSpeed) THEN
+	POS_Control.Velocity := DINT_TO_INT(nMotorFullsteps * nValue / nDistPerMotorRev * 10000 / nSpeedRangeCalculated);
+	M_SetSpeed := TRUE;
+END_IF]]></ST>
+      </Implementation>
+    </Method>
+    <Method Name="M_SetTargetPos" Id="{77092a79-58ea-45cf-88c8-48174c5a92f8}">
+      <Declaration><![CDATA[METHOD M_SetTargetPos : BOOL
+VAR_INPUT
+	nValue : DINT; //Reale Einheit
+END_VAR
+]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[IF (nValue >= nMinPos) AND (nValue <= nMaxPos) THEN
+	POS_Control.StartType := E_EL70xx_StartType.Absolute;
+	POS_Control.TargetPosition := REAL_TO_DINT(DINT_TO_REAL(nValue) * rTranslationFactorPosition);
+	M_SetTargetPos := TRUE;
+END_IF]]></ST>
+      </Implementation>
+    </Method>
+    <Property Name="P_bHardwareEnable" Id="{1808b1c3-adba-4a18-bf19-9d6b7da816fb}">
+      <Declaration><![CDATA[PROPERTY P_bHardwareEnable : BOOL]]></Declaration>
+      <Get Name="Get" Id="{1c2bc4aa-0836-4e83-94fd-ad76daac39c6}">
+        <Declaration><![CDATA[VAR
+END_VAR
+]]></Declaration>
+        <Implementation>
+          <ST><![CDATA[IF F_GetMappingStatus(ADR(bHwEnable), SIZEOF(bHwEnable)) = EPlcMappingStatus.MS_Partial THEN
+	P_bHardwareEnable := bHwEnable;
+ELSE
+	P_bHardwareEnable := TRUE;
+END_IF]]></ST>
+        </Implementation>
+      </Get>
+    </Property>
+    <Property Name="P_bInvertInitDir" Id="{cde26a5f-9a48-4f22-8147-520e9f9eaa5e}">
+      <Declaration><![CDATA[PROPERTY P_bInvertInitDir : BOOL]]></Declaration>
+      <Get Name="Get" Id="{54898dbf-9d97-4d50-9ca0-28d54901b191}">
+        <Declaration><![CDATA[VAR
+END_VAR
+]]></Declaration>
+        <Implementation>
+          <ST><![CDATA[P_bInvertInitDir := bInvertInitDir;]]></ST>
+        </Implementation>
+      </Get>
+      <Set Name="Set" Id="{cb7460e0-ace1-437f-93dc-d96d8dfad308}">
+        <Declaration><![CDATA[VAR
+END_VAR
+]]></Declaration>
+        <Implementation>
+          <ST><![CDATA[bInvertInitDir := P_bInvertInitDir;
+fbSettings.M_WritePersData();]]></ST>
+        </Implementation>
+      </Set>
+    </Property>
+    <Property Name="P_bIsInit" Id="{3b1c7424-7d2f-4d29-8c40-6b617b6c0e78}">
+      <Declaration><![CDATA[PROPERTY P_bIsInit : BOOL]]></Declaration>
+      <Get Name="Get" Id="{f598c205-055a-4d2f-9cbe-06a0e744ef46}">
+        <Declaration><![CDATA[VAR
+END_VAR
+]]></Declaration>
+        <Implementation>
+          <ST><![CDATA[P_bIsInit := POS_Status.Calibrated;]]></ST>
+        </Implementation>
+      </Get>
+    </Property>
+    <Property Name="P_eEncoderType" Id="{f7819475-a1dd-45ba-9607-ce8c6c939af4}">
+      <Declaration><![CDATA[PROPERTY P_eEncoderType : E_EL70xx_EncoderType]]></Declaration>
+      <Get Name="Get" Id="{055548fa-907f-4bde-8009-1109ea58592a}">
+        <Declaration><![CDATA[VAR
+END_VAR
+]]></Declaration>
+        <Implementation>
+          <ST><![CDATA[P_eEncoderType := eEncoderType;]]></ST>
+        </Implementation>
+      </Get>
+    </Property>
+    <Property Name="P_eHomingMode" Id="{a576990e-e42b-4c77-a92e-9330d396e7ca}">
+      <Declaration><![CDATA[PROPERTY P_eHomingMode : E_EL70xx_StartType]]></Declaration>
+      <Get Name="Get" Id="{dc78ba4b-4d56-446a-8416-75e8b123abc2}">
+        <Declaration><![CDATA[VAR
+END_VAR
+]]></Declaration>
+        <Implementation>
+          <ST><![CDATA[P_eHomingMode := eHomingMode;]]></ST>
+        </Implementation>
+      </Get>
+    </Property>
+    <Property Name="P_nActualPosition" Id="{bc38b5bd-91a2-49cc-a0ed-19577ea3d6ad}">
+      <Declaration><![CDATA[PROPERTY P_nActualPosition : DINT]]></Declaration>
+      <Get Name="Get" Id="{05c35a6c-dfb6-40a9-890c-9a8d35a50368}">
+        <Declaration><![CDATA[VAR
+END_VAR
+]]></Declaration>
+        <Implementation>
+          <ST><![CDATA[A_CalcActPosition();
+P_nActualPosition := nActualPosition;]]></ST>
+        </Implementation>
+      </Get>
+    </Property>
+    <Property Name="P_nDistPerMotorRev" Id="{a4214b94-068b-410e-8493-685e3df40151}">
+      <Declaration><![CDATA[PROPERTY P_nDistPerMotorRev : DINT]]></Declaration>
+      <Get Name="Get" Id="{e5e1b38b-7031-469a-aed0-ffad50cb3f87}">
+        <Declaration><![CDATA[VAR
+END_VAR
+]]></Declaration>
+        <Implementation>
+          <ST><![CDATA[P_nDistPerMotorRev := nDistPerMotorRev;]]></ST>
+        </Implementation>
+      </Get>
+      <Set Name="Set" Id="{b222aa30-385d-4fbe-ad3c-41f3f302c4be}">
+        <Declaration><![CDATA[VAR
+END_VAR
+]]></Declaration>
+        <Implementation>
+          <ST><![CDATA[nDistPerMotorRev := P_nDistPerMotorRev;
+M_CalcTranslationFact();
+fbSettings.M_WritePersData();]]></ST>
+        </Implementation>
+      </Set>
+    </Property>
+    <Property Name="P_nMaxPos" Id="{05925b31-78a8-4adf-b460-7174ba60d2cc}">
+      <Declaration><![CDATA[PROPERTY P_nMaxPos : DINT]]></Declaration>
+      <Get Name="Get" Id="{aa050f70-284f-4bc4-9e6c-0c0ff667b1b2}">
+        <Declaration><![CDATA[VAR
+END_VAR
+]]></Declaration>
+        <Implementation>
+          <ST><![CDATA[P_nMaxPos := nMaxPos;]]></ST>
+        </Implementation>
+      </Get>
+      <Set Name="Set" Id="{8912b7ed-dd19-4717-b5f3-ad404bbc4908}">
+        <Declaration><![CDATA[VAR
+END_VAR
+]]></Declaration>
+        <Implementation>
+          <ST><![CDATA[nMaxPos := P_nMaxPos;
+fbSettings.M_WritePersData();]]></ST>
+        </Implementation>
+      </Set>
+    </Property>
+    <Property Name="P_nMaxSpeed" Id="{a4ad343d-dbb9-4e7e-9a79-bcd0f351df2f}">
+      <Declaration><![CDATA[PROPERTY P_nMaxSpeed : DINT]]></Declaration>
+      <Get Name="Get" Id="{7e80d47b-0d9f-4726-9ef4-6912eb8218a6}">
+        <Declaration><![CDATA[VAR
+END_VAR
+]]></Declaration>
+        <Implementation>
+          <ST><![CDATA[P_nMaxSpeed := nMaxSpeed;]]></ST>
+        </Implementation>
+      </Get>
+      <Set Name="Set" Id="{0afae7f0-82b9-45dd-8fc5-cb41909c579b}">
+        <Declaration><![CDATA[VAR
+END_VAR
+]]></Declaration>
+        <Implementation>
+          <ST><![CDATA[nMaxSpeed := P_nMaxSpeed;
+fbSettings.M_WritePersData();]]></ST>
+        </Implementation>
+      </Set>
+    </Property>
+    <Property Name="P_nMinPos" Id="{5a966f0e-12f4-4765-af41-672116bbcd0e}">
+      <Declaration><![CDATA[PROPERTY P_nMinPos : DINT]]></Declaration>
+      <Get Name="Get" Id="{47453e2e-9a8f-4115-852a-adf20eca1b7c}">
+        <Declaration><![CDATA[VAR
+END_VAR
+]]></Declaration>
+        <Implementation>
+          <ST><![CDATA[P_nMinPos := nMinPos;]]></ST>
+        </Implementation>
+      </Get>
+      <Set Name="Set" Id="{7c2d4032-4e38-4763-9b79-3da3dce40012}">
+        <Declaration><![CDATA[VAR
+END_VAR
+]]></Declaration>
+        <Implementation>
+          <ST><![CDATA[nMinPos := P_nMinPos;
+fbSettings.M_WritePersData();]]></ST>
+        </Implementation>
+      </Set>
+    </Property>
+    <Property Name="P_nRefPos" Id="{87ce4820-0838-493b-a57d-a9e0caed1536}">
+      <Declaration><![CDATA[PROPERTY P_nRefPos : DINT]]></Declaration>
+      <Get Name="Get" Id="{00eebf87-1584-41c8-904c-36f84e4fb21b}">
+        <Declaration><![CDATA[VAR
+END_VAR
+]]></Declaration>
+        <Implementation>
+          <ST><![CDATA[P_nRefPos := nRefPos;]]></ST>
+        </Implementation>
+      </Get>
+      <Set Name="Set" Id="{78a9a7d0-876f-4b60-b88f-4a3e7bcdd7ce}">
+        <Declaration><![CDATA[VAR
+END_VAR
+]]></Declaration>
+        <Implementation>
+          <ST><![CDATA[nRefPos := P_nRefPos;
+fbSettings.M_WritePersData();]]></ST>
+        </Implementation>
+      </Set>
+    </Property>
+    <Property Name="P_nRefPosRaw" Id="{4d6a090d-0bed-4ab9-a85e-c8a3f8f6a968}">
+      <Declaration><![CDATA[PROPERTY P_nRefPosRaw : DINT]]></Declaration>
+      <Get Name="Get" Id="{ab918e41-8057-4d52-a40d-adadf5f297e3}">
+        <Declaration><![CDATA[VAR
+END_VAR
+]]></Declaration>
+        <Implementation>
+          <ST><![CDATA[P_nRefPosRaw := REAL_TO_DINT(DINT_TO_REAL(nRefPos) * rTranslationFactorPosition);]]></ST>
+        </Implementation>
+      </Get>
+    </Property>
+    <Property Name="P_nSlaveAddr" Id="{f860848a-413b-4bca-a724-b76e2ed810e5}">
+      <Declaration><![CDATA[PROPERTY P_nSlaveAddr : UINT]]></Declaration>
+      <Get Name="Get" Id="{68a98cc5-07c9-4168-bc20-d41d03d392fa}">
+        <Declaration><![CDATA[VAR
+END_VAR
+]]></Declaration>
+        <Implementation>
+          <ST><![CDATA[P_nSlaveAddr := stAdsAddress.nPort;]]></ST>
+        </Implementation>
+      </Get>
+    </Property>
+    <Property Name="P_sNetId" Id="{736fd48a-7df6-4786-ad07-0c354f072afc}">
+      <Declaration><![CDATA[PROPERTY P_sNetId : STRING(23)]]></Declaration>
+      <Get Name="Get" Id="{605c39e3-73cf-4ffd-acc2-efc4617cf2c3}">
+        <Declaration><![CDATA[VAR
+END_VAR
+]]></Declaration>
+        <Implementation>
+          <ST><![CDATA[P_sNetId := stAdsAddress.sNetId;]]></ST>
+        </Implementation>
+      </Get>
+      <Set Name="Set" Id="{3fa03466-3444-4bc2-bf17-5f68f31c6cf3}">
+        <Declaration><![CDATA[VAR
+END_VAR
+]]></Declaration>
+        <Implementation>
+          <ST><![CDATA[stAdsAddress.sNetId := P_sNetId;]]></ST>
+        </Implementation>
+      </Set>
+    </Property>
+    <LineIds Name="FB_HwRefEL70xxDrive">
+      <LineId Id="79" Count="0" />
+      <LineId Id="219" Count="0" />
+      <LineId Id="80" Count="6" />
+      <LineId Id="220" Count="0" />
+      <LineId Id="87" Count="0" />
+      <LineId Id="175" Count="0" />
+      <LineId Id="221" Count="1" />
+      <LineId Id="176" Count="0" />
+      <LineId Id="39" Count="0" />
+      <LineId Id="127" Count="0" />
+    </LineIds>
+    <LineIds Name="FB_HwRefEL70xxDrive.A_CalcActPosition">
+      <LineId Id="2" Count="2" />
+      <LineId Id="1" Count="0" />
+    </LineIds>
+    <LineIds Name="FB_HwRefEL70xxDrive.A_Prepare">
+      <LineId Id="2" Count="77" />
+      <LineId Id="85" Count="0" />
+      <LineId Id="81" Count="3" />
+      <LineId Id="1" Count="0" />
+    </LineIds>
+    <LineIds Name="FB_HwRefEL70xxDrive.FB_init">
+      <LineId Id="117" Count="0" />
+      <LineId Id="128" Count="0" />
+    </LineIds>
+    <LineIds Name="FB_HwRefEL70xxDrive.M_CalcTranslationFact">
+      <LineId Id="13" Count="6" />
+      <LineId Id="5" Count="0" />
+    </LineIds>
+    <LineIds Name="FB_HwRefEL70xxDrive.M_GetPosDiff">
+      <LineId Id="5" Count="0" />
+    </LineIds>
+    <LineIds Name="FB_HwRefEL70xxDrive.M_Prepare">
+      <LineId Id="5" Count="0" />
+    </LineIds>
+    <LineIds Name="FB_HwRefEL70xxDrive.M_SetSpeed">
+      <LineId Id="7" Count="0" />
+      <LineId Id="10" Count="0" />
+      <LineId Id="12" Count="0" />
+      <LineId Id="11" Count="0" />
+    </LineIds>
+    <LineIds Name="FB_HwRefEL70xxDrive.M_SetTargetPos">
+      <LineId Id="11" Count="0" />
+      <LineId Id="25" Count="0" />
+      <LineId Id="20" Count="0" />
+      <LineId Id="12" Count="1" />
+    </LineIds>
+    <LineIds Name="FB_HwRefEL70xxDrive.P_bHardwareEnable.Get">
+      <LineId Id="2" Count="0" />
+      <LineId Id="7" Count="0" />
+      <LineId Id="5" Count="0" />
+      <LineId Id="8" Count="0" />
+      <LineId Id="6" Count="0" />
+    </LineIds>
+    <LineIds Name="FB_HwRefEL70xxDrive.P_bInvertInitDir.Get">
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="FB_HwRefEL70xxDrive.P_bInvertInitDir.Set">
+      <LineId Id="2" Count="0" />
+      <LineId Id="5" Count="0" />
+    </LineIds>
+    <LineIds Name="FB_HwRefEL70xxDrive.P_bIsInit.Get">
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="FB_HwRefEL70xxDrive.P_eEncoderType.Get">
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="FB_HwRefEL70xxDrive.P_eHomingMode.Get">
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="FB_HwRefEL70xxDrive.P_nActualPosition.Get">
+      <LineId Id="2" Count="0" />
+      <LineId Id="5" Count="0" />
+    </LineIds>
+    <LineIds Name="FB_HwRefEL70xxDrive.P_nDistPerMotorRev.Get">
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="FB_HwRefEL70xxDrive.P_nDistPerMotorRev.Set">
+      <LineId Id="3" Count="0" />
+      <LineId Id="6" Count="0" />
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="FB_HwRefEL70xxDrive.P_nMaxPos.Get">
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="FB_HwRefEL70xxDrive.P_nMaxPos.Set">
+      <LineId Id="3" Count="0" />
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="FB_HwRefEL70xxDrive.P_nMaxSpeed.Get">
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="FB_HwRefEL70xxDrive.P_nMaxSpeed.Set">
+      <LineId Id="3" Count="0" />
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="FB_HwRefEL70xxDrive.P_nMinPos.Get">
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="FB_HwRefEL70xxDrive.P_nMinPos.Set">
+      <LineId Id="3" Count="0" />
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="FB_HwRefEL70xxDrive.P_nRefPos.Get">
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="FB_HwRefEL70xxDrive.P_nRefPos.Set">
+      <LineId Id="2" Count="0" />
+      <LineId Id="5" Count="0" />
+    </LineIds>
+    <LineIds Name="FB_HwRefEL70xxDrive.P_nRefPosRaw.Get">
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="FB_HwRefEL70xxDrive.P_nSlaveAddr.Get">
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="FB_HwRefEL70xxDrive.P_sNetId.Get">
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="FB_HwRefEL70xxDrive.P_sNetId.Set">
+      <LineId Id="2" Count="0" />
+    </LineIds>
+  </POU>
+</TcPlcObject>

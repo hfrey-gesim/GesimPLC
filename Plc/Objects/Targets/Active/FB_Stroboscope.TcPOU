@@ -1,0 +1,654 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<TcPlcObject Version="1.1.0.1" ProductVersion="3.1.4024.9">
+  <POU Name="FB_Stroboscope" Id="{dc0541c9-fe17-498a-b443-b555104c63fe}" SpecialFunc="None">
+    <Declaration><![CDATA[FUNCTION_BLOCK FB_Stroboscope EXTENDS FB_WorkplateCamera
+VAR_INPUT
+END_VAR
+VAR
+	nMultiZNr				: USINT;
+	nCamDelay				: UINT;
+	nStrobDelay				: UINT;
+	nStrobDelay2			: UINT;
+	aDroplist				: ARRAY[1..16] OF USINT;
+	
+	fbSdoWrite	: FB_SDO_WRITE;
+
+	bNewCamDelay			: BOOL;
+	bSendCamDelay			: BOOL;
+	bSendCamDelayFlag		: BOOL := TRUE;
+	
+	bNewStrobDelay			: BOOL;
+	bSendStrobDelay			: BOOL;
+	bSendStrobDelayFlag		: BOOL := TRUE;
+
+	bNewStrobDelay2			: BOOL;
+	bSendStrobDelay2		: BOOL;
+	bSendStrobDelay2Flag	: BOOL := TRUE;
+
+	bNewDropList1_4			: BOOL;
+	bSendDroplist1_4		: BOOL;
+	bSendDroplist1_4Flag	: BOOL := TRUE;
+
+	bNewDropList5_8			: BOOL;
+	bSendDroplist5_8		: BOOL;
+	bSendDroplist5_8Flag	: BOOL := TRUE;
+
+	bNewDropList9_12		: BOOL;
+	bSendDroplist9_12		: BOOL;
+	bSendDroplist9_12Flag	: BOOL := TRUE;
+
+	bNewDropList13_16		: BOOL;
+	bSendDroplist13_16		: BOOL;
+	bSendDroplist13_16Flag	: BOOL := TRUE;
+	
+	bSendStrobTestFlag		: BOOL := TRUE;
+	pFbMultiZ				: POINTER TO FB_MultiZRef;
+	
+	nGCodeTargetNr	: UINT;
+	
+	//****************************************Aktionvariablen****************************************************
+	
+	//Action: "StrobTest"	(das Stroboskop mit 125 triggern (zu Testzwecken))
+	bStrobTest			: BOOL;
+	nStateA_StrobTest	: USINT;
+	bStrobTestCtrl		: BOOL;
+	
+	nSendPauseCnt		: USINT;
+END_VAR
+]]></Declaration>
+    <Implementation>
+      <ST><![CDATA[IF bInitFB THEN
+	bInitFB := FALSE;
+	//Fehlerstruktur vorausfüllen
+	stError.ObjectId := nObjectID;
+	stError.HardwareGrp := E_HardwareGrp.Nothing;
+	stError.POU := E_POU.POU_FB_Stroboscope;
+END_IF
+
+CASE eCurrentState OF
+	E_MachineState.MACHINESTATE_Active:
+	IF bStrobTest THEN
+		A_StrobTest();
+		IF nStateA_StrobTest = 80 THEN
+			bStrobTest := FALSE;
+			nStateA_StrobTest := 0;
+			eCurrentState := E_MachineState.MACHINESTATE_Ready;
+		ELSIF nStateA_StrobTest = 99 THEN
+			bStrobTest := FALSE;
+			nStateA_StrobTest := 0;
+			stError.Cmd := E_Action.ACTION_StrobTest;
+			fbErrorList.M_Add(stError);	//Error in Error-Liste eintragen
+			eCurrentState := E_MachineState.MACHINESTATE_Error;
+		END_IF
+	END_IF
+	
+	E_MachineState.MACHINESTATE_Ready:
+		bBusy := FALSE;
+		eCurrentState := E_MachineState.MACHINESTATE_Idle;
+	
+	E_MachineState.MACHINESTATE_Error:
+		bBusy := FALSE;
+END_CASE
+
+IF nSendPauseCnt < 100 THEN
+	nSendPauseCnt := nSendPauseCnt + 1;
+ELSE
+	IF bSendCamDelay THEN
+		IF bSendCamDelayFlag XOR fbSdoWrite.bBusy THEN
+			bSendCamDelayFlag := FALSE;
+			pFbMultiZ^.stStrobTrigger.nCamDelay := nCamDelay;
+			fbSdoWrite(sADSNetID:= pFbMultiZ^.P_sAdsNetId, nPortNr:= pFbMultiZ^.P_nAdsPort,
+						nIndex:= cPiezoCamDelay.nIndex, nSubIndex:= cPiezoCamDelay.nSubIndex, 
+						nDataLength:= cPiezoCamDelay.nLength, nData:= pFbMultiZ^.stStrobTrigger.nCamDelay, bExecute:= TRUE);		
+		END_IF
+		
+		IF NOT fbSdoWrite.bBusy THEN
+			nSendPauseCnt := 0;
+			bSendCamDelayFlag := TRUE;
+			bSendCamDelay := FALSE;
+			IF fbSdoWrite.bError THEN
+				stError.Cmd := 0;
+				fbSdoWrite(bExecute:= FALSE);
+				RETURN;
+			END_IF
+			fbSdoWrite(bExecute:= FALSE);
+		END_IF
+	ELSE
+		IF bNewCamDelay THEN
+			bNewCamDelay := FALSE;
+			bSendCamDelay := TRUE;
+		END_IF
+	END_IF
+
+	IF bSendStrobDelay THEN
+		IF bSendStrobDelayFlag XOR fbSdoWrite.bBusy THEN
+			bSendStrobDelayFlag := FALSE;
+			pFbMultiZ^.stStrobTrigger.nStrobDelay := nStrobDelay;
+			fbSdoWrite(sADSNetID:= pFbMultiZ^.P_sAdsNetId, nPortNr:= pFbMultiZ^.P_nAdsPort,
+						nIndex:= cPiezoStrobDelay.nIndex, nSubIndex:= cPiezoStrobDelay.nSubIndex, 
+						nDataLength:= cPiezoStrobDelay.nLength, nData:= pFbMultiZ^.stStrobTrigger.nStrobDelay, bExecute:= TRUE);							
+		END_IF
+		IF NOT fbSdoWrite.bBusy THEN
+			nSendPauseCnt := 0;
+			bSendStrobDelayFlag := TRUE;
+			bSendStrobDelay := FALSE;
+			IF fbSdoWrite.bError THEN
+				stError.Cmd := 0;
+				stError.ObjectId := nObjectID;
+				stError.POU := E_POU.POU_FB_Stroboscope;
+				fbSdoWrite(bExecute:= FALSE);
+				RETURN;
+			END_IF
+			fbSdoWrite(bExecute:= FALSE);
+		END_IF
+	ELSE
+		IF bNewStrobDelay THEN
+			bNewStrobDelay := FALSE;
+			bSendStrobDelay := TRUE;
+		END_IF		
+	END_IF
+	
+	IF bSendStrobDelay2 THEN
+		IF bSendStrobDelay2Flag XOR fbSdoWrite.bBusy THEN
+			bSendStrobDelay2Flag := FALSE;
+			pFbMultiZ^.stStrobTrigger.nStrobDelay2 := nStrobDelay2;
+			fbSdoWrite(sADSNetID:= pFbMultiZ^.P_sAdsNetId, nPortNr:= pFbMultiZ^.P_nAdsPort,
+						nIndex:= cPiezoStrobDelay2.nIndex, nSubIndex:= cPiezoStrobDelay2.nSubIndex, 
+						nDataLength:= cPiezoStrobDelay2.nLength, nData:= pFbMultiZ^.stStrobTrigger.nStrobDelay2, bExecute:= TRUE);							
+		END_IF
+		IF NOT fbSdoWrite.bBusy THEN
+			nSendPauseCnt := 0;
+			bSendStrobDelay2Flag := TRUE;
+			bSendStrobDelay2 := FALSE;
+			IF fbSdoWrite.bError THEN
+				stError.Cmd := 0;
+				stError.ObjectId := nObjectID;
+				fbSdoWrite(bExecute:= FALSE);
+				RETURN;
+			END_IF
+			fbSdoWrite(bExecute:= FALSE);
+		END_IF
+	ELSE
+		IF bNewStrobDelay2 THEN
+			bNewStrobDelay2 := FALSE;
+			bSendStrobDelay2 := TRUE;
+		END_IF			
+	END_IF
+	
+	IF bSendDroplist1_4 THEN
+		IF bSendDroplist1_4Flag XOR fbSdoWrite.bBusy THEN
+			bSendDroplist1_4Flag := FALSE;
+			pFbMultiZ^.stStrobTrigger.aDroplist := aDroplist; 
+			MEMCPY(ADR(fbSdoWrite.nData),ADR(pFbMultiZ^.stStrobTrigger.aDroplist[1]),4);			
+			fbSdoWrite(sADSNetID:= pFbMultiZ^.P_sAdsNetId, nPortNr:= pFbMultiZ^.P_nAdsPort,
+						nIndex:= cPiezoStrobDroplist1_4.nIndex, nSubIndex:= cPiezoStrobDroplist1_4.nSubIndex, 
+						nDataLength:= cPiezoStrobDroplist1_4.nLength, bExecute:= TRUE);								
+		END_IF
+		IF NOT fbSdoWrite.bBusy THEN
+			nSendPauseCnt := 0;
+			bSendDroplist1_4Flag := TRUE;
+			bSendDroplist1_4 := FALSE;
+			IF fbSdoWrite.bError THEN
+				stError.Cmd := 0;
+				stError.ObjectId := nObjectID;
+				fbSdoWrite(bExecute:= FALSE);
+				RETURN;
+			END_IF
+			fbSdoWrite(bExecute:= FALSE);
+		END_IF
+		IF bNewDroplist1_4 THEN
+			bNewDroplist1_4 := FALSE;
+			bSendDroplist1_4 := TRUE;
+		END_IF			
+	END_IF
+	
+	IF bSendDroplist5_8 THEN
+		IF bSendDroplist5_8Flag XOR fbSdoWrite.bBusy THEN
+			bSendDroplist5_8Flag := FALSE;
+			pFbMultiZ^.stStrobTrigger.aDroplist := aDroplist; 
+			MEMCPY(ADR(fbSdoWrite.nData),ADR(pFbMultiZ^.stStrobTrigger.aDroplist[5]),4);		
+			fbSdoWrite(sADSNetID:= pFbMultiZ^.P_sAdsNetId, nPortNr:= pFbMultiZ^.P_nAdsPort,
+						nIndex:= cPiezoStrobDroplist5_8.nIndex, nSubIndex:= cPiezoStrobDroplist5_8.nSubIndex, 
+						nDataLength:= cPiezoStrobDroplist5_8.nLength, bExecute:= TRUE);								
+								
+		END_IF
+		IF NOT fbSdoWrite.bBusy THEN
+			nSendPauseCnt := 0;
+			bSendDroplist5_8Flag := TRUE;
+			bSendDroplist5_8 := FALSE;
+			IF fbSdoWrite.bError THEN
+				stError.Cmd := 0;
+				stError.ObjectId := nObjectID;
+				fbSdoWrite(bExecute:= FALSE);
+				RETURN;
+			END_IF
+			fbSdoWrite(bExecute:= FALSE);
+		END_IF
+	ELSE
+		IF bNewDroplist5_8 THEN
+			bNewDroplist5_8 := FALSE;
+			bSendDroplist5_8 := TRUE;
+		END_IF			
+	END_IF
+	
+	IF bSendDroplist9_12 THEN
+		IF bSendDroplist9_12Flag XOR fbSdoWrite.bBusy THEN
+			bSendDroplist9_12Flag := FALSE;
+			pFbMultiZ^.stStrobTrigger.aDroplist := aDroplist; 
+			MEMCPY(ADR(fbSdoWrite.nData),ADR(pFbMultiZ^.stStrobTrigger.aDroplist[9]),4);
+			fbSdoWrite(sADSNetID:= pFbMultiZ^.P_sAdsNetId, nPortNr:= pFbMultiZ^.P_nAdsPort,
+						nIndex:= cPiezoStrobDroplist9_12.nIndex, nSubIndex:= cPiezoStrobDroplist9_12.nSubIndex, 
+						nDataLength:= cPiezoStrobDroplist9_12.nLength, bExecute:= TRUE);								
+								
+		END_IF
+		IF NOT fbSdoWrite.bBusy THEN
+			nSendPauseCnt := 0;
+			bSendDroplist9_12Flag := TRUE;
+			bSendDroplist9_12 := FALSE;
+			IF fbSdoWrite.bError THEN
+				stError.Cmd := 0;
+				stError.ObjectId := nObjectID;
+				fbSdoWrite(bExecute:= FALSE);
+				RETURN;
+			END_IF
+			fbSdoWrite(bExecute:= FALSE);
+		END_IF
+	ELSE
+		IF bNewDroplist9_12 THEN
+			bNewDroplist9_12 := FALSE;
+			bSendDroplist9_12 := TRUE;
+		END_IF			
+	END_IF
+	
+	IF bSendDroplist13_16 THEN
+		IF bSendDroplist13_16Flag XOR fbSdoWrite.bBusy THEN
+			bSendDroplist13_16Flag := FALSE;
+			pFbMultiZ^.stStrobTrigger.aDroplist := aDroplist; 
+			MEMCPY(ADR(fbSdoWrite.nData),ADR(pFbMultiZ^.stStrobTrigger.aDroplist[13]),4);
+			fbSdoWrite(sADSNetID:= pFbMultiZ^.P_sAdsNetId, nPortNr:= pFbMultiZ^.P_nAdsPort,
+						nIndex:= cPiezoStrobDroplist13_16.nIndex, nSubIndex:= cPiezoStrobDroplist13_16.nSubIndex, 
+						nDataLength:= cPiezoStrobDroplist13_16.nLength, bExecute:= TRUE);
+		END_IF
+		IF NOT fbSdoWrite.bBusy THEN
+			nSendPauseCnt := 0;
+			bSendDroplist13_16Flag := TRUE;
+			bSendDroplist13_16 := FALSE;
+			IF fbSdoWrite.bError THEN
+				stError.Cmd := 0;
+				stError.ObjectId := nObjectID;
+				fbSdoWrite(bExecute:= FALSE);
+				RETURN;
+			END_IF
+			fbSdoWrite(bExecute:= FALSE);
+		END_IF
+	ELSE
+		IF bNewDroplist13_16 THEN
+			bNewDroplist13_16 := FALSE;
+			bSendDroplist13_16 := TRUE;
+		END_IF		
+	END_IF
+END_IF
+
+//Prozessdaten aktualisieren
+stProcessData.nObjId := nObjectID;
+stProcessData.n32Data[0] := BOOL_TO_DINT(bIsInit);
+stProcessData.n32Data[1] := eCurrentState;
+stProcessData.n32Data[2] := stError.ErrorId;
+
+aObjProcData[nNotifyId] := stProcessData;]]></ST>
+    </Implementation>
+    <Action Name="A_StrobTest" Id="{1d1358a1-cf62-47c1-b365-6583864f7149}">
+      <Implementation>
+        <ST><![CDATA[CASE nStateA_StrobTest OF
+	0:	//Einschalten
+		IF bSendStrobTestFlag XOR fbSdoWrite.bBusy THEN
+			bSendStrobTestFlag := FALSE;
+			pFbMultiZ^.stStrobTrigger.bTest := TRUE;
+			//fbMultiZSendSdoVar(pFbMultiZ:= pFbMultiZ, eSdoVariType:= E_MzSdoVariType.VARITYPE_PiezoStrobTest, bExecute:= TRUE);
+			fbSdoWrite(sADSNetID:= pFbMultiZ^.P_sAdsNetId, nPortNr:= pFbMultiZ^.P_nAdsPort,
+					nIndex:= cPiezoStrobTest.nIndex, nSubIndex:= cPiezoStrobTest.nSubIndex, 
+					nDataLength:= cPiezoStrobTest.nLength, nData:= 1, bExecute:= TRUE);
+		END_IF
+
+		IF NOT fbSdoWrite.bBusy THEN
+			bSendStrobTestFlag := TRUE;
+			IF fbSdoWrite.bError THEN
+				stError.ErrorId := fbSdoWrite.nAdsErrorId;
+				stError.POUState := nStateA_StrobTest;
+				nStateA_StrobTest := 99;
+			ELSE
+				nStateA_StrobTest := 1;	
+			END_IF
+			fbSdoWrite(bExecute:= FALSE);
+		END_IF
+		
+	1:	//Warten auf Auschaltbefehl
+		IF NOT bStrobTestCtrl THEN
+			IF bSendStrobTestFlag XOR fbSdoWrite.bBusy THEN
+				bSendStrobTestFlag := FALSE;
+				pFbMultiZ^.stStrobTrigger.bTest := FALSE;
+				//fbMultiZSendSdoVar(pFbMultiZ:= pFbMultiZ, eSdoVariType:= E_MzSdoVariType.VARITYPE_PiezoStrobTest, bExecute:= TRUE);
+				fbSdoWrite(sADSNetID:= pFbMultiZ^.P_sAdsNetId, nPortNr:= pFbMultiZ^.P_nAdsPort,
+						nIndex:= cPiezoStrobTest.nIndex, nSubIndex:= cPiezoStrobTest.nSubIndex, 
+						nDataLength:= cPiezoStrobTest.nLength, nData:= 0, bExecute:= TRUE);
+			END_IF
+			
+			IF NOT fbSdoWrite.bBusy THEN
+				bSendStrobTestFlag := TRUE;
+				IF fbSdoWrite.bError THEN
+					stError.ErrorId := fbSdoWrite.nAdsErrorId;
+					stError.POUState := nStateA_StrobTest;
+					nStateA_StrobTest := 99;
+				ELSE
+					nStateA_StrobTest := 80;	
+				END_IF
+				fbSdoWrite(bExecute:= FALSE);
+			END_IF
+		END_IF
+
+	70:	//Abbrechen
+		IF NOT bSendStrobTestFlag THEN	//letzte SDO-Send ist noch nicht abgearbeitet
+			fbSdoWrite(bExecute:= FALSE);
+		END_IF
+		bSendStrobTestFlag := TRUE;
+		nStateA_StrobTest := 71;
+		
+	71:	//Ausschaltbefehl senden
+		IF bSendStrobTestFlag XOR fbSdoWrite.bBusy THEN
+			bSendStrobTestFlag := FALSE;
+			pFbMultiZ^.stStrobTrigger.bTest := FALSE;
+			//fbMultiZSendSdoVar(pFbMultiZ:= pFbMultiZ, eSdoVariType:= E_MzSdoVariType.VARITYPE_PiezoStrobTest, bExecute:= TRUE);
+			fbSdoWrite(sADSNetID:= pFbMultiZ^.P_sAdsNetId, nPortNr:= pFbMultiZ^.P_nAdsPort,
+					nIndex:= cPiezoStrobTest.nIndex, nSubIndex:= cPiezoStrobTest.nSubIndex, 
+					nDataLength:= cPiezoStrobTest.nLength, nData:= 0, bExecute:= TRUE);
+			
+		END_IF
+		IF NOT fbSdoWrite.bBusy THEN
+			bSendStrobTestFlag := TRUE;
+			IF fbSdoWrite.bError THEN
+				stError.ErrorId := fbSdoWrite.nAdsErrorId;
+				stError.POUState := nStateA_StrobTest;
+				nStateA_StrobTest := 99;
+			ELSE
+				nStateA_StrobTest := 80;	
+			END_IF
+			fbSdoWrite(bExecute:= FALSE);
+		END_IF	
+END_CASE
+
+//Errorhandling
+IF nStateA_StrobTest = 99 THEN
+	stError.Cmd := E_Action.ACTION_StrobTest;
+	stError.POUAction := E_POUACT.POUACT_A_StrobTest;
+	fbErrorList.M_Add(stError);
+END_IF]]></ST>
+      </Implementation>
+    </Action>
+    <Method Name="FB_init" Id="{4d055f30-a9da-4ba9-a447-8796df9509ef}">
+      <Declaration><![CDATA[METHOD FB_init : BOOL
+VAR_INPUT
+	bInitRetains : BOOL; // if TRUE, the retain variables are initialized (warm start / cold start)
+	bInCopyCode : BOOL;  // if TRUE, the instance afterwards gets moved into the copy code (online change)
+END_VAR
+]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[eObjectType := E_ObjectType.OBJECTTYPE_Stroboscope;
+eObjectGroup := E_ObjectGroup.OBJECTGROUP_Target OR E_ObjectGroup.OBJECTGROUP_Device;]]></ST>
+      </Implementation>
+    </Method>
+    <Method Name="M_CancelAction" Id="{452fe4d9-ec75-4c97-ba9b-3f44274f3cbc}">
+      <Declaration><![CDATA[METHOD M_CancelAction
+VAR_INPUT
+	eAction : E_Action;
+END_VAR
+]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[IF eAction = E_Action.ACTION_StrobTest THEN
+	IF bStrobTest AND nStateA_StrobTest < 70 THEN
+		nStateA_StrobTest := 70;
+	END_IF
+END_IF]]></ST>
+      </Implementation>
+    </Method>
+    <Method Name="M_CheckAction" Id="{c615c787-4387-42fc-a813-2ddbe199134b}">
+      <Declaration><![CDATA[METHOD M_CheckAction : ERRORID
+VAR_INPUT
+	refActionData 	: REFERENCE TO ST_ActionData;
+	pCorrelObject	: POINTER TO FB_Object;
+END_VAR
+]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[IF refActionData.eAction = E_Action.ACTION_TeachTarget THEN
+	IF NOT DINT_TO_UINT(refActionData.aParams[1]) = E_TargetRef.TARGETREF_SpecPoint AND refActionData.aParams[2] = 1 THEN
+		M_CheckAction := E_ErrorIdCmd.ERRORID_InvalidTargetPointRef;
+	END_IF
+END_IF]]></ST>
+      </Implementation>
+    </Method>
+    <Method Name="M_ExeAction" Id="{49bd92f0-2cf0-41de-8480-0d70b3e90688}">
+      <Declaration><![CDATA[METHOD M_ExeAction : ERRORID
+VAR_INPUT
+	refActionData : REFERENCE TO ST_ActionData;	
+END_VAR
+]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[IF refActionData.eAction = E_Action.ACTION_Init THEN
+	bIsInit := TRUE;
+	RETURN;
+ELSIF 
+	refActionData.eAction = E_Action.ACTION_StrobTest THEN
+	bStrobTestCtrl := refActionData.aParams[1].0;
+	//In Action nur treten, wenn:
+	IF NOT bStrobTest AND bStrobTestCtrl THEN
+		bStrobTest := TRUE;
+		bBusy := TRUE;
+		eCurrentState := E_MachineState.MACHINESTATE_Active;
+	END_IF
+ELSIF
+	refActionData.eAction = E_Action.ACTION_Stop THEN
+	IF bStrobTest THEN
+		nStateA_StrobTest := 70;
+	END_IF
+END_IF]]></ST>
+      </Implementation>
+    </Method>
+    <Method Name="M_GetActionBusy" Id="{4e8dc973-df30-4b16-b918-70e169b39fde}">
+      <Declaration><![CDATA[METHOD M_GetActionBusy : BOOL
+VAR_INPUT
+	eAction : E_Action;
+END_VAR
+]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[IF eAction = E_Action.ACTION_StrobTest THEN
+	M_GetActionBusy := bStrobTest;
+END_IF]]></ST>
+      </Implementation>
+    </Method>
+    <Method Name="M_GetAllProps" Id="{31350b49-f64f-4245-8974-1525e86adeb4}">
+      <Declaration><![CDATA[METHOD M_GetAllProps : ERRORID
+VAR_INPUT
+	refCmdData : REFERENCE TO  ST_CmdData;
+END_VAR
+
+VAR
+	pData	: POINTER TO ARRAY[1..16] OF USINT;
+END_VAR]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[SUPER^.M_GetAllProps(refCmdData); 
+nCurrentPropIndex := nCurrentPropIndex + 1;
+refCmdData.n32Data[nCurrentPropIndex] := nMultiZNr;
+nCurrentPropIndex := nCurrentPropIndex + 1;
+refCmdData.n32Data[nCurrentPropIndex] := nCamDelay;
+nCurrentPropIndex := nCurrentPropIndex + 1;
+refCmdData.n32Data[nCurrentPropIndex] := nStrobDelay;
+nCurrentPropIndex := nCurrentPropIndex + 1;
+refCmdData.n32Data[nCurrentPropIndex] := nStrobDelay2;
+//Droplist aus aDroplist nach "refCmdData.n32Data[16]" bis "refCmdData.n32Data[19]" übertragen
+nCurrentPropIndex := nCurrentPropIndex + 1;
+pData := ADR(refCmdData.n32Data[nCurrentPropIndex]);
+pData^ := aDroplist;
+nCurrentPropIndex := nCurrentPropIndex + 4;
+refCmdData.n32Data[nCurrentPropIndex] := nGCodeTargetNr;]]></ST>
+      </Implementation>
+    </Method>
+    <Method Name="M_SetAllProps" Id="{29a74dae-6a6f-4831-ba17-2185332b0791}">
+      <Declaration><![CDATA[METHOD M_SetAllProps : ERRORID
+VAR_INPUT
+	refCmdData : REFERENCE TO  ST_CmdData;
+END_VAR
+
+VAR
+	pData	: POINTER TO ARRAY[1..16] OF USINT;
+END_VAR]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[M_SetAllProps := SUPER^.M_SetAllProps(refCmdData);
+
+IF M_SetAllProps > 0 THEN
+	RETURN;
+END_IF
+
+nCurrentPropIndex := nCurrentPropIndex + 1;
+nMultiZNr := DINT_TO_USINT(refCmdData.n32Data[nCurrentPropIndex]);
+
+pFbMultiZ := ADR(aFbMultiZRef[nMultiZNr]);
+nCurrentPropIndex := nCurrentPropIndex + 1;
+nCamDelay := DINT_TO_UINT(refCmdData.n32Data[nCurrentPropIndex]);
+bNewCamDelay := TRUE;
+nCurrentPropIndex := nCurrentPropIndex + 1;
+nStrobDelay := DINT_TO_UINT(refCmdData.n32Data[nCurrentPropIndex]);
+bNewStrobDelay := TRUE;
+nCurrentPropIndex := nCurrentPropIndex + 1;
+nStrobDelay2 := DINT_TO_UINT(refCmdData.n32Data[nCurrentPropIndex]);
+bNewStrobDelay2 := TRUE;
+
+//Droplist aus "refCmdData.n32Data[16]" bis "refCmdData.n32Data[19]" nach aDroplist übertragen
+nCurrentPropIndex := nCurrentPropIndex + 1;
+pData := ADR(refCmdData.n32Data[nCurrentPropIndex]);
+aDroplist := pData^;
+bNewDroplist1_4 := TRUE;
+bNewDroplist5_8  := TRUE;
+bNewDroplist9_12 := TRUE;
+bNewDroplist13_16  := TRUE; 
+nCurrentPropIndex := nCurrentPropIndex + 4;
+nGCodeTargetNr := DINT_TO_UINT(refCmdData.n32Data[nCurrentPropIndex]);
+nNoOfProps := nCurrentPropIndex + 1;]]></ST>
+      </Implementation>
+    </Method>
+    <Method Name="M_SetSingleProp" Id="{4bb036df-4fb2-49c2-b72e-d2a41a1155c0}">
+      <Declaration><![CDATA[METHOD M_SetSingleProp : ERRORID
+VAR_INPUT
+	refCmdData : REFERENCE TO  ST_CmdData;
+END_VAR
+VAR
+	pSource			: POINTER TO ARRAY[1..4] OF USINT;
+	pDestination	: POINTER TO ARRAY[1..4] OF USINT;
+END_VAR
+]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[IF (nSpecPropIndex + 4) = refCmdData.aHeader[1] THEN
+	M_SetSingleProp := E_ErrorIdCmd.ERRORID_InvalidProperty;//MultiZNr Triiger darf nicht verändert werden
+ELSIF (nSpecPropIndex + 5) = refCmdData.aHeader[1] THEN
+	nCamDelay := DINT_TO_UINT(refCmdData.n32Data[0]);
+	bNewCamDelay := TRUE;	
+ELSIF (nSpecPropIndex + 6) = refCmdData.aHeader[1] THEN
+	nStrobDelay := DINT_TO_UINT(refCmdData.n32Data[0]);
+	bNewStrobDelay := TRUE;		
+ELSIF (nSpecPropIndex + 7) = refCmdData.aHeader[1] THEN
+	nStrobDelay2 := DINT_TO_UINT(refCmdData.n32Data[0]);
+	bNewStrobDelay2 := TRUE;	
+ELSIF (nSpecPropIndex + 8) = refCmdData.aHeader[1] THEN
+	pSource := ADR(refCmdData.n32Data[0]);
+	pDestination := ADR(aDroplist[1]);
+	pDestination^ := pSource^;	
+ELSIF (nSpecPropIndex + 9) = refCmdData.aHeader[1] THEN
+	pSource := ADR(refCmdData.n32Data[0]);
+	pDestination := ADR(aDroplist[5]);
+	pDestination^ := pSource^;	
+ELSIF (nSpecPropIndex + 10) = refCmdData.aHeader[1] THEN
+	pSource := ADR(refCmdData.n32Data[0]);
+	pDestination := ADR(aDroplist[9]);
+	pDestination^ := pSource^;
+ELSIF (nSpecPropIndex + 11) = refCmdData.aHeader[1] THEN
+	pSource := ADR(refCmdData.n32Data[0]);
+	pDestination := ADR(aDroplist[13]);
+	pDestination^ := pSource^;		
+ELSE
+	M_SetSingleProp := SUPER^.M_SetSingleProp(refCmdData);
+END_IF]]></ST>
+      </Implementation>
+    </Method>
+    <Method Name="M_Stop" Id="{7f5570c8-c3ae-4d6a-a22b-2bfc6f2505cc}">
+      <Declaration><![CDATA[METHOD M_Stop : ERRORID
+VAR_INPUT
+END_VAR
+]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[IF nStateA_StrobTest = 1 THEN
+ 	nStateA_StrobTest := 70;
+END_IF]]></ST>
+      </Implementation>
+    </Method>
+    <Property Name="P_nGCodeTargetNr" Id="{b43ebaa4-3200-41b0-b5d5-3c7a28122223}">
+      <Declaration><![CDATA[PROPERTY P_nGCodeTargetNr : UINT]]></Declaration>
+      <Get Name="Get" Id="{8a97692b-30d8-46bd-8f8f-c2459e2b0262}">
+        <Declaration><![CDATA[VAR
+END_VAR
+]]></Declaration>
+        <Implementation>
+          <ST><![CDATA[P_nGCodeTargetNr := nGCodeTargetNr;]]></ST>
+        </Implementation>
+      </Get>
+    </Property>
+    <LineIds Name="FB_Stroboscope">
+      <LineId Id="3" Count="237" />
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="FB_Stroboscope.A_StrobTest">
+      <LineId Id="2" Count="81" />
+      <LineId Id="1" Count="0" />
+    </LineIds>
+    <LineIds Name="FB_Stroboscope.FB_init">
+      <LineId Id="7" Count="1" />
+    </LineIds>
+    <LineIds Name="FB_Stroboscope.M_CancelAction">
+      <LineId Id="3" Count="3" />
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="FB_Stroboscope.M_CheckAction">
+      <LineId Id="3" Count="3" />
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="FB_Stroboscope.M_ExeAction">
+      <LineId Id="3" Count="16" />
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="FB_Stroboscope.M_GetActionBusy">
+      <LineId Id="3" Count="1" />
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="FB_Stroboscope.M_GetAllProps">
+      <LineId Id="3" Count="0" />
+      <LineId Id="13" Count="10" />
+      <LineId Id="2" Count="0" />
+      <LineId Id="32" Count="0" />
+      <LineId Id="31" Count="0" />
+    </LineIds>
+    <LineIds Name="FB_Stroboscope.M_SetAllProps">
+      <LineId Id="3" Count="5" />
+      <LineId Id="18" Count="22" />
+      <LineId Id="48" Count="0" />
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="FB_Stroboscope.M_SetSingleProp">
+      <LineId Id="11" Count="28" />
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="FB_Stroboscope.M_Stop">
+      <LineId Id="3" Count="1" />
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="FB_Stroboscope.P_nGCodeTargetNr.Get">
+      <LineId Id="2" Count="0" />
+    </LineIds>
+  </POU>
+</TcPlcObject>

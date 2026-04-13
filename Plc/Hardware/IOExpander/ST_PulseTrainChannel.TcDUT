@@ -1,0 +1,16 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<TcPlcObject Version="1.1.0.1" ProductVersion="3.1.4020.12">
+  <DUT Name="ST_PulseTrainChannel" Id="{ceeb6a7a-63ff-4fcc-80e3-ac6a73b816fd}">
+    <Declaration><![CDATA[TYPE ST_PulseTrainChannel :
+STRUCT
+	nPeriod AT %Q* : UINT;
+	nPulse AT %Q* : UINT;
+	nNoOfPulses AT %Q* : UINT;
+	nCtrl AT %Q* : USINT;
+	nEnabled AT %Q* : USINT := 1;
+	nState AT %I* : USINT;
+END_STRUCT
+END_TYPE
+]]></Declaration>
+  </DUT>
+</TcPlcObject>

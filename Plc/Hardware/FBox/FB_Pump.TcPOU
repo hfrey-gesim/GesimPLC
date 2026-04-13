@@ -1,0 +1,110 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<TcPlcObject Version="1.1.0.1" ProductVersion="3.1.4020.6">
+  <POU Name="FB_Pump" Id="{6a5a5d39-6556-4708-b72c-bd2317235676}" SpecialFunc="None">
+    <Declaration><![CDATA[FUNCTION_BLOCK FB_Pump
+VAR_INPUT
+END_VAR
+VAR_OUTPUT
+END_VAR
+VAR
+	rStartSpeed		: UINT;		//Startdrehzahl 0..100%
+	rRatedSpeed		: UINT;		//Nenndrehzahl 0..100%
+	tStartDelay		: TIME;		//Delay Startdrehzahl -> Nenndrehzahl
+	timer			: TON;		
+	bIsOn			: BOOL;
+	//Ausgänge für Geräteverknüpfung
+	bDigiOut	 	AT %Q* : BOOL;		//Standardpumpe EIN/AUS
+	nPWMValue 		AT %Q* : UINT;	//PWM für Drehzahl
+END_VAR
+]]></Declaration>
+    <Implementation>
+      <ST><![CDATA[]]></ST>
+    </Implementation>
+    <Method Name="M_On" Id="{11b885ac-9d26-47b2-b01f-bba258325c54}">
+      <Declaration><![CDATA[METHOD M_On : BOOL
+VAR_INPUT
+END_VAR
+]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[bDigiOut := TRUE;
+IF tStartDelay > T#0S AND NOT bIsOn THEN
+	nPWMValue := REAL_TO_UINT(32767.0 / 100 * rStartSpeed);
+	timer(IN:=TRUE,PT:= tStartDelay);
+	IF timer.Q THEN
+		timer(IN:=FALSE);
+		nPWMValue := REAL_TO_UINT(32767.0 / 100 * rRatedSpeed);
+		M_On := TRUE;	
+	END_IF
+ELSE
+	nPWMValue := REAL_TO_UINT(32767.0 / 100 * rRatedSpeed);
+	M_On := TRUE;
+	bIsOn := TRUE;
+END_IF]]></ST>
+      </Implementation>
+    </Method>
+    <Property Name="P_bIsOn" Id="{18eeca7b-b384-433b-952c-d33672c388e9}">
+      <Declaration><![CDATA[PROPERTY P_bIsOn : BOOL]]></Declaration>
+      <Get Name="Get" Id="{f5a00200-f941-4414-a47d-b93dbecdeb0a}">
+        <Declaration><![CDATA[VAR
+END_VAR
+]]></Declaration>
+        <Implementation>
+          <ST><![CDATA[P_bIsOn := bDigiOut;]]></ST>
+        </Implementation>
+      </Get>
+    </Property>
+    <Property Name="P_nStartSpeed" Id="{7c1a9499-a688-45ba-92d8-d0e76ae6731e}">
+      <Declaration><![CDATA[PROPERTY P_nStartSpeed : USINT]]></Declaration>
+      <Set Name="Set" Id="{294075a5-b959-440d-8cf6-141d6cf9750d}">
+        <Declaration><![CDATA[VAR
+END_VAR
+]]></Declaration>
+        <Implementation>
+          <ST><![CDATA[IF P_nStartSpeed <= 100 THEN
+	rStartSpeed := P_nStartSpeed; 
+ELSE
+	rStartSpeed := 100;
+END_IF]]></ST>
+        </Implementation>
+      </Set>
+    </Property>
+    <Property Name="P_nRatedSpeed" Id="{8556d0b7-6163-4ace-8e41-8cf29a249619}">
+      <Declaration><![CDATA[PROPERTY P_nRatedSpeed : USINT]]></Declaration>
+      <Set Name="Set" Id="{f6cd64ed-d870-4d99-adcd-2727a476a648}">
+        <Declaration><![CDATA[VAR
+END_VAR
+]]></Declaration>
+        <Implementation>
+          <ST><![CDATA[IF P_nRatedSpeed <= 100 THEN
+	rRatedSpeed := P_nRatedSpeed; 
+ELSE
+	rRatedSpeed := 100;
+END_IF]]></ST>
+        </Implementation>
+      </Set>
+    </Property>
+    <Property Name="P_nDelay" Id="{d182ac0d-3f99-4ab8-9423-8a9206fd19af}">
+      <Declaration><![CDATA[PROPERTY P_nDelay : UINT]]></Declaration>
+      <Set Name="Set" Id="{6f3554b7-9c8f-4430-bbdf-06142a308e2c}">
+        <Declaration><![CDATA[VAR
+END_VAR
+]]></Declaration>
+        <Implementation>
+          <ST><![CDATA[tStartDelay := UINT_TO_TIME(P_nDelay);]]></ST>
+        </Implementation>
+      </Set>
+    </Property>
+    <Method Name="M_Off" Id="{f2ede433-4556-404c-a985-dd6f1d73cd7c}">
+      <Declaration><![CDATA[METHOD M_Off
+VAR_INPUT
+END_VAR
+]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[bDigiOut := FALSE;
+nPWMValue := 0;
+timer(IN:=FALSE);
+bIsOn := FALSE;]]></ST>
+      </Implementation>
+    </Method>
+  </POU>
+</TcPlcObject>

@@ -1,0 +1,19 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<TcPlcObject Version="1.1.0.1" ProductVersion="3.1.4024.6">
+  <DUT Name="E_Unitstat_Command" Id="{3ff01c07-a560-476f-bafa-0a3ebdacc590}">
+    <Declaration><![CDATA[{attribute 'qualified_only'}
+{attribute 'strict'}
+TYPE E_Unitstat_Command :
+(
+	Get_TempActualIntern,
+	Get_TempActualExtern,
+	Get_TempSetPoint,
+	Get_Status,
+	Set_TempSetPoint,
+	Start_TempControl,
+	Stop_TempControl
+)USINT;
+END_TYPE
+]]></Declaration>
+  </DUT>
+</TcPlcObject>

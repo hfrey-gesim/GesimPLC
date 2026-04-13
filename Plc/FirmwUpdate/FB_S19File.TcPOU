@@ -1,0 +1,460 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<TcPlcObject Version="1.1.0.1" ProductVersion="3.1.4020.12">
+  <POU Name="FB_S19File" Id="{b9981513-bfca-4c28-98fd-d41fb82b5e5f}" SpecialFunc="None">
+    <Declaration><![CDATA[FUNCTION_BLOCK FB_S19File
+VAR_INPUT
+	sFileName	: STRING;
+	bExecute	: BOOL;
+END_VAR
+VAR_OUTPUT
+	bBusy : BOOL;
+	bError : BOOL;
+	nErrorId : ERRORID;
+END_VAR
+VAR
+	fbFileOpen	: FB_FileOpen;
+	fbFileClose : FB_FileClose;
+	fbFileRead  : FB_FileRead;
+	fbFileSeek	: FB_FileSeek;
+	nFileHandle	: UINT;
+	
+	
+	bStart : R_TRIG;
+	nStateA_OpenFile	: USINT;
+	nStateA_CloseFile	: USINT;
+	
+	bIsOpen	: BOOL;
+
+	aBuffer		: ARRAY[1..4700] OF BYTE;
+	nRecord		: UINT;
+	fbS19Record	: FB_S19Record;
+	
+	dwAddress			: DWORD;
+	dwStartAddress 		: DWORD;
+	dwLastAddress 		: DWORD;
+	nNoOfTotalBytes 	: UDINT;
+	nFirstBlockSize 	: UDINT;
+	n256Blocks 			: UDINT;
+	nFirstDataLength 	: USINT;
+	i 					: USINT;
+	
+	nActIndex			: UINT;	
+	
+	
+	//Action: A_FitProgLine
+	nStateA_FitProgLine	: USINT;
+	nStateA_FitProgLine1: USINT;
+	aData 				: ARRAY[0..7] OF USINT;
+	nBytesToSend 		: USINT;
+	
+	nWriteBytesLine		: USINT;
+	nWriteBytesBlock	: UINT;
+	nWriteBytesTotal	: UDINT;
+	bProgLineDone		: BOOL;
+
+END_VAR
+]]></Declaration>
+    <Implementation>
+      <ST><![CDATA[]]></ST>
+    </Implementation>
+    <Property Name="P_nBytesToWrite" Id="{0602d63f-4210-4105-a830-7c4f90457738}">
+      <Declaration><![CDATA[PROPERTY P_nBytesToWrite : UDINT]]></Declaration>
+      <Get Name="Get" Id="{aafa03e5-04bb-4ffd-b83b-05d82596d918}">
+        <Declaration><![CDATA[VAR
+END_VAR
+]]></Declaration>
+        <Implementation>
+          <ST><![CDATA[P_nBytesToWrite := nNoOfTotalBytes;]]></ST>
+        </Implementation>
+      </Get>
+    </Property>
+    <Action Name="A_CloseFile" Id="{3ae66876-7dff-4a19-8380-f06607777fa1}">
+      <Implementation>
+        <ST><![CDATA[IF bExecute THEN
+	IF nFileHandle = 0 THEN
+		RETURN;
+	END_IF
+	bBusy := TRUE;
+	fbFileClose(hFile:= nFileHandle, bExecute:= TRUE);
+	IF NOT fbFileClose.bBusy THEN
+		fbFileClose(bExecute:= FALSE);
+		bIsOpen := FALSE;
+		bBusy := FALSE;
+	END_IF
+END_IF]]></ST>
+      </Implementation>
+    </Action>
+    <Method Name="M_GetProgLine" Id="{5ccd1145-8b3a-422b-a8c8-16509a177f90}">
+      <Declaration><![CDATA[METHOD M_GetProgLine : USINT //Bytes
+VAR_INPUT
+	pData	: POINTER TO ARRAY[0..7] OF USINT;
+END_VAR]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[MEMCPY(pData,ADR(aData),8);
+M_GetProgLine := nBytesToSend;]]></ST>
+      </Implementation>
+    </Method>
+    <Method Name="M_GetStartAdress" Id="{7b73ad8c-81dd-4953-96ad-8f3551ce9821}">
+      <Declaration><![CDATA[METHOD M_GetStartAdress
+VAR_INPUT
+	pData	: POINTER TO ARRAY[0..7] OF USINT;
+END_VAR]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[MEMCPY(pData,ADR(dwStartAddress),4);]]></ST>
+      </Implementation>
+    </Method>
+    <Property Name="P_nWrittenBytes" Id="{8a89da38-7094-4327-b435-c8a9f80ab007}">
+      <Declaration><![CDATA[PROPERTY P_nWrittenBytes : UDINT]]></Declaration>
+      <Get Name="Get" Id="{30e01e2b-2328-4001-bbca-aa2be3477c3c}">
+        <Declaration><![CDATA[VAR
+END_VAR
+]]></Declaration>
+        <Implementation>
+          <ST><![CDATA[P_nWrittenBytes := nWriteBytesTotal;]]></ST>
+        </Implementation>
+      </Get>
+    </Property>
+    <Method Name="M_GetNoOfTotalBytes" Id="{a9b1601b-b983-4b33-831a-dd3b6a519290}">
+      <Declaration><![CDATA[METHOD M_GetNoOfTotalBytes
+VAR_INPUT
+	pData	: POINTER TO ARRAY[0..7] OF USINT;
+END_VAR
+]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[IF pData > 0 THEN
+	MEMCPY(pData,ADR(nNoOfTotalBytes),4);
+END_IF]]></ST>
+      </Implementation>
+    </Method>
+    <Property Name="P_bProgLineDone" Id="{d5df4147-5cdb-42e9-be3f-99b9ff498d5f}">
+      <Declaration><![CDATA[PROPERTY P_bProgLineDone : BOOL]]></Declaration>
+      <Get Name="Get" Id="{d10d0da0-15f9-4e04-b8e9-6e2032b200b7}">
+        <Declaration><![CDATA[VAR
+END_VAR
+]]></Declaration>
+        <Implementation>
+          <ST><![CDATA[P_bProgLineDone := nStateA_FitProgLine1 = 80;]]></ST>
+        </Implementation>
+      </Get>
+    </Property>
+    <Action Name="A_OpenFile" Id="{e9e85218-ec7a-44f6-873e-b90da5b79689}">
+      <Implementation>
+        <ST><![CDATA[IF bExecute THEN
+	CASE nStateA_OpenFile OF
+		0:	//Open File
+			IF bIsOpen THEN
+				bError := TRUE;
+				nErrorId := E_ErrorIdCan.ERRORID_FileAlreadyOpened;
+				RETURN;
+			END_IF
+			bBusy := TRUE;
+			fbFileOpen(sPathName:= sFileName, nMode:= FOPEN_MODEREAD OR FOPEN_MODETEXT, bExecute:= TRUE, tTimeout:= T#10S);
+			IF NOT fbFileOpen.bBusy THEN
+				IF fbFileOpen.bError THEN
+					nStateA_OpenFile := 99;
+					nErrorId := UDINT_TO_UINT(fbFileOpen.nErrId);
+				ELSE
+					nStateA_OpenFile := 1;
+					nFileHandle := fbFileOpen.hFile;
+					nRecord := 0;
+				END_IF
+				fbFileOpen(bExecute:= FALSE);
+			END_IF
+			
+		1:	//Blockweise 100 Zeilen einlesen
+			fbFileRead(hFile:= nFileHandle,	pReadBuff:= ADR(aBuffer), cbReadLen:= SIZEOF(aBuffer), bExecute:= TRUE);
+			IF NOT fbFileRead.bBusy THEN
+				IF fbFileRead.bError THEN
+					nStateA_OpenFile := 99;
+				ELSE
+					nActIndex := 0;
+					REPEAT
+						nActIndex := nActIndex + 1;
+						fbS19Record(pBuffer:= ADR(aBuffer), nStartIndex:= nActIndex, nEndIndex=> nActIndex);
+						CASE fbS19Record.eState OF
+							E_S19RecordState.Valid:
+								nRecord := nRecord + 1;
+								IF nRecord = 1 THEN
+									dwStartAddress := fbS19Record.P_dwAdress;
+								END_IF
+								dwLastAddress := fbS19Record.P_dwAdress;
+							E_S19RecordState.BlockEnd:
+								nNoOfTotalBytes := (dwLastAddress - dwStartAddress + fbS19Record.P_nNoOfDataBytes);
+								nFirstBlockSize := nNoOfTotalBytes MOD 256;
+								n256Blocks := (nNoOfTotalBytes - nFirstBlockSize) / 256;
+								nFirstDataLength := UDINT_TO_USINT(nFirstBlockSize MOD 7);
+								nStateA_OpenFile := 2;
+								EXIT;
+							E_S19RecordState.NotComplete:
+								//dürfte eingentlich nicht eintreten
+								nErrorId := E_ErrorIdCan.ERRORID_FirmwFileCorrupt;
+								nStateA_OpenFile := 99;
+								EXIT;
+							E_S19RecordState.CRC_Error:
+								nErrorId := E_ErrorIdCan.ERRORID_FirmwFileCRCError;
+								nStateA_OpenFile := 99;
+								EXIT;
+							E_S19RecordState.Line_Error:
+								nErrorId := E_ErrorIdCan.ERRORID_FirmwFileLineError;
+								nStateA_OpenFile := 99;
+								EXIT;
+							E_S19RecordState.Undefined:
+								nStateA_OpenFile := 99;
+								EXIT;
+						END_CASE
+					UNTIL fbS19Record.bEndOfBuffer
+					END_REPEAT
+				END_IF
+				IF fbFileRead.bEOF THEN
+					nErrorId := E_ErrorIdCan.ERRORID_FirmwFileEOF;
+					nStateA_OpenFile := 99;
+				END_IF
+				MEMSET(ADR(aBuffer),0,SIZEOF(aBuffer));
+				fbFileRead(bExecute:= FALSE);
+			END_IF
+		
+		2:	//Datei-Zeiger wieder auf "0" stellen
+			fbFileSeek(hFile:= nFileHandle,	nSeekPos:= 0, bExecute:= TRUE);
+			IF NOT fbFileSeek.bBusy THEN
+				fbFileSeek(bExecute:= FALSE);
+				bIsOpen := TRUE;
+				nStateA_OpenFile := 80;
+				bBusy := FALSE;
+			END_IF
+	END_CASE
+	
+	IF nStateA_OpenFile = 99 THEN
+		bError := TRUE;
+		bBusy := FALSE;
+		fbFileClose(hFile:= nFileHandle, bExecute:= TRUE);
+		fbFileClose(hFile:= nFileHandle, bExecute:= FALSE);	
+	END_IF
+	
+ELSE
+	bError := FALSE;
+	nErrorId := 0;
+	nStateA_OpenFile := 0;
+END_IF]]></ST>
+      </Implementation>
+    </Action>
+    <Action Name="A_FitProgLine" Id="{f4900524-a301-4230-97ff-ada944661373}">
+      <Implementation>
+        <ST><![CDATA[bStart(CLK:= bExecute);
+IF bStart.Q AND nStateA_FitProgLine = 0 THEN
+	nStateA_FitProgLine := 1;
+	nStateA_FitProgLine1 := 0;
+	fbS19Record.M_Clear();
+	nWriteBytesLine	 := 1;
+	nWriteBytesBlock := 0;
+	nWriteBytesTotal := 0;
+END_IF
+
+IF nStateA_FitProgLine = 1 THEN	//nächsten Block in den Buffer laden
+	bBusy := TRUE;
+	fbFileRead(hFile:= nFileHandle,	pReadBuff:= ADR(aBuffer), cbReadLen:= SIZEOF(aBuffer), bExecute:= TRUE);
+	IF NOT fbFileRead.bBusy THEN
+		IF fbFileRead.bError THEN
+			nStateA_FitProgLine := 99;
+		ELSE
+			nStateA_FitProgLine := 2;
+		END_IF
+		fbFileRead(bExecute:= FALSE);
+		nActIndex := 0;
+	END_IF
+END_IF
+
+IF nStateA_FitProgLine = 2 THEN	//nächste Programmzeile zusammensetzen
+	IF fbS19Record.P_dwAdress = 0 THEN	//Record füllen
+		IF fbS19Record.bEndOfBuffer THEN
+			fbS19Record.M_Clear();
+			nStateA_FitProgLine := 1;	//nächsten Block einlesen
+			bBusy := TRUE;
+			RETURN;
+		END_IF		
+		nActIndex := nActIndex + 1;
+		fbS19Record(pBuffer:= ADR(aBuffer), nStartIndex:= nActIndex, nEndIndex=> nActIndex);
+	END_IF
+	
+	CASE nStateA_FitProgLine1 OF
+		0:	//MTA für ersten Block
+			MEMSET(ADR(aData),0,7);
+			aData[0] := 16#F6;	//XCP-Command: SET_MTA
+			MEMCPY(ADR(aData[4]),ADR(dwStartAddress),4);
+			nBytesToSend := 8;
+			
+			bBusy := FALSE;
+			nStateA_FitProgLine1 := 1;
+
+		1:	//erste Programmzeile erster Block
+			bBusy := FALSE;
+			IF nFirstDataLength = 0 THEN	//Voller Datensatz mit 7 Bytes
+				aData[0] := 16#C9;
+				FOR nWriteBytesLine := nWriteBytesLine TO 7 BY 1 DO
+					IF fbS19Record.P_dwAdress > 0 THEN
+						aData[nWriteBytesLine] := fbS19Record.M_GetDataByte();
+						nWriteBytesBlock := nWriteBytesBlock + 1;
+						nWriteBytesTotal := nWriteBytesTotal + 1;
+					ELSE
+						bBusy := TRUE;
+						EXIT;
+					END_IF
+				END_FOR
+				nBytesToSend := 8;
+			ELSE
+				MEMSET(ADR(aData),0,7);
+				aData[0] := 16#D0;
+				aData[1] := nFirstDataLength;
+				FOR nWriteBytesLine := nWriteBytesLine TO nFirstDataLength BY 1 DO
+					IF fbS19Record.P_dwAdress > 0 THEN
+						aData[nWriteBytesLine + 1] := fbS19Record.M_GetDataByte();
+						nWriteBytesBlock := nWriteBytesBlock + 1;
+						nWriteBytesTotal := nWriteBytesTotal + 1;
+					ELSE
+						bBusy := TRUE;
+						EXIT;
+					END_IF
+				END_FOR
+				nBytesToSend := nFirstDataLength + 2;
+			END_IF
+			
+			IF nFirstBlockSize < 7 THEN
+				nStateA_FitProgLine1 := 3;
+			ELSE
+				nStateA_FitProgLine1 := 2;
+			END_IF			
+			
+			(*IF NOT bBusy THEN
+				nStateA_FitProgLine1 := 2;
+			END_IF*)
+		
+		2:	//restliche Programmzeilen erster Block
+			bBusy := FALSE;
+			aData[0] := 16#C9;	//XCP-Command: PROGRAM
+			FOR nWriteBytesLine := nWriteBytesLine TO 7 BY 1 DO
+				IF fbS19Record.P_dwAdress > 0 THEN
+					aData[nWriteBytesLine] := fbS19Record.M_GetDataByte();
+					nWriteBytesBlock := nWriteBytesBlock + 1;
+					nWriteBytesTotal := nWriteBytesTotal + 1;
+				ELSE
+					bBusy := TRUE;
+					EXIT;
+				END_IF
+			END_FOR
+			nBytesToSend := 8;
+			//Wann ist der erste Block voll?
+			IF nWriteBytesBlock = nFirstBlockSize THEN
+				nStateA_FitProgLine1 := 3;
+			ELSIF nWriteBytesTotal = nNoOfTotalBytes THEN
+				nStateA_FitProgLine := 80;
+			END_IF
+		
+		3:	//MTA für 256Byte-Blöcke
+			MEMSET(ADR(aData),0,7);
+			bBusy := TRUE;
+			IF fbS19Record.P_dwAdress > 0 THEN
+				aData[0] := 16#F6;	//XCP-Command: SET_MTA
+				dwAddress := fbS19Record.P_dwAdress;
+				MEMCPY(ADR(aData[4]),ADR(dwAddress),4);
+				nBytesToSend := 8;
+				bBusy := FALSE;
+				nWriteBytesBlock := 0;
+				nStateA_FitProgLine1 := 4;
+			END_IF
+			
+		4:	//erste Programmzeile 256Byte-Blöcke
+			bBusy := FALSE;
+			aData[0] := 16#D0;
+			aData[1] := 4;  //immer 4 Byte
+			aData[6] := 0;
+			aData[7] := 0;
+			FOR nWriteBytesLine := nWriteBytesLine TO 4 BY 1 DO
+				IF fbS19Record.P_dwAdress > 0 THEN
+					aData[nWriteBytesLine + 1] := fbS19Record.M_GetDataByte();
+					nWriteBytesBlock := nWriteBytesBlock + 1;
+					nWriteBytesTotal := nWriteBytesTotal + 1;
+				ELSE
+					bBusy := TRUE;
+					EXIT;
+				END_IF
+			END_FOR
+			nBytesToSend := 6;
+			IF NOT bBusy THEN
+				nStateA_FitProgLine1 := 5;
+			END_IF
+			
+		5:	//restliche Programmzeilen 256Byte-Blöcke
+			dwAddress := fbS19Record.P_dwAdress;
+			IF dwAddress >= 16#08004C70 THEN
+				dwAddress := dwAddress;
+			END_IF
+			bBusy := FALSE;
+			aData[0] := 16#C9;	//XCP-Command: PROGRAM
+			IF nWriteBytesTotal = 195 THEN
+				nWriteBytesTotal := nWriteBytesTotal;
+			END_IF
+			FOR nWriteBytesLine := nWriteBytesLine TO 7 BY 1 DO
+				IF fbS19Record.P_dwAdress > 0 THEN
+					aData[nWriteBytesLine] := fbS19Record.M_GetDataByte();
+					nWriteBytesBlock := nWriteBytesBlock + 1;
+					nWriteBytesTotal := nWriteBytesTotal + 1;
+				ELSE
+					bBusy := TRUE;
+					EXIT;
+				END_IF
+			END_FOR
+			nBytesToSend := 8;
+			//Wann ist Block voll?
+			IF nWriteBytesTotal = nNoOfTotalBytes THEN	//Ready!!
+				nStateA_FitProgLine := 0;
+				nStateA_FitProgLine1 := 80;
+			ELSIF nWriteBytesBlock = 256 THEN
+				nWriteBytesBlock := 0;
+				nStateA_FitProgLine1 := 3;
+			END_IF
+	END_CASE
+END_IF
+
+IF NOT bBusy THEN
+	nWriteBytesLine := 1;
+END_IF]]></ST>
+      </Implementation>
+    </Action>
+    <LineIds Name="FB_S19File">
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="FB_S19File.P_nBytesToWrite.Get">
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="FB_S19File.A_CloseFile">
+      <LineId Id="2" Count="10" />
+      <LineId Id="1" Count="0" />
+    </LineIds>
+    <LineIds Name="FB_S19File.M_GetProgLine">
+      <LineId Id="3" Count="0" />
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="FB_S19File.M_GetStartAdress">
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="FB_S19File.P_nWrittenBytes.Get">
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="FB_S19File.M_GetNoOfTotalBytes">
+      <LineId Id="3" Count="1" />
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="FB_S19File.P_bProgLineDone.Get">
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="FB_S19File.A_OpenFile">
+      <LineId Id="2" Count="94" />
+      <LineId Id="1" Count="0" />
+    </LineIds>
+    <LineIds Name="FB_S19File.A_FitProgLine">
+      <LineId Id="2" Count="75" />
+      <LineId Id="173" Count="5" />
+      <LineId Id="78" Count="94" />
+      <LineId Id="1" Count="0" />
+    </LineIds>
+  </POU>
+</TcPlcObject>

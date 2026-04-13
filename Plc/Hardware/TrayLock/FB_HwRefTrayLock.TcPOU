@@ -1,0 +1,47 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<TcPlcObject Version="1.1.0.1">
+  <POU Name="FB_HwRefTrayLock" Id="{3eb50bb5-ff53-4ec5-93e8-e5a853092110}" SpecialFunc="None">
+    <Declaration><![CDATA[FUNCTION_BLOCK FB_HwRefTrayLock
+VAR_INPUT
+	bLock  			AT %Q* : BOOL;
+	bUnlock  		AT %Q* : BOOL;
+	bDisableHeater 	AT %Q* : BOOL;
+END_VAR
+VAR_OUTPUT
+	bLocked			AT %I* : BOOL;
+	bUnlocked		AT %I* : BOOL;
+	eCurrentState : E_LockState;
+END_VAR
+VAR
+END_VAR
+]]></Declaration>
+    <Implementation>
+      <ST><![CDATA[IF bLocked THEN
+	eCurrentState := E_LockState.Locked;
+ELSIF bUnlocked THEN
+	eCurrentState := E_LockState.Unlocked;
+ELSE
+	eCurrentState := E_LockState.UNDEFINIED;
+END_IF]]></ST>
+    </Implementation>
+    <Property Name="P_bFeedback" Id="{c5d9e6ae-98c4-4f67-b4fb-c92036690f22}">
+      <Declaration><![CDATA[PROPERTY P_bFeedback : BOOL]]></Declaration>
+      <Get Name="Get" Id="{10ddd09c-1001-45a2-bc7e-3a657ad3aa4b}">
+        <Declaration><![CDATA[VAR
+END_VAR
+]]></Declaration>
+        <Implementation>
+          <ST><![CDATA[P_bFeedback := F_GetMappingStatus(ADR(bLocked), SIZEOF(bLocked)) = EPlcMappingStatus.MS_Partial AND 
+				F_GetMappingStatus(ADR(bUnlocked), SIZEOF(bUnlocked)) = EPlcMappingStatus.MS_Partial;]]></ST>
+        </Implementation>
+      </Get>
+    </Property>
+    <LineIds Name="FB_HwRefTrayLock">
+      <LineId Id="145" Count="6" />
+    </LineIds>
+    <LineIds Name="FB_HwRefTrayLock.P_bFeedback.Get">
+      <LineId Id="9" Count="0" />
+      <LineId Id="6" Count="0" />
+    </LineIds>
+  </POU>
+</TcPlcObject>

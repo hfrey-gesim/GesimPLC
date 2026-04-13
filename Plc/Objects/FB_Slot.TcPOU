@@ -1,0 +1,221 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<TcPlcObject Version="1.1.0.1" ProductVersion="3.1.4020.12">
+  <POU Name="FB_Slot" Id="{e24cb34c-9386-4766-bfb6-60ee8362a2de}" SpecialFunc="None">
+    <Declaration><![CDATA[{attribute 'enable_dynamic_creation'}
+FUNCTION_BLOCK FB_Slot
+VAR_INPUT
+END_VAR
+VAR_OUTPUT
+END_VAR
+VAR
+	pOwner	: POINTER TO FB_Object;
+	pChild	: POINTER TO FB_Object;
+	nNr		: UINT;
+	stRelPos: ST_3DPoint;
+END_VAR
+]]></Declaration>
+    <Implementation>
+      <ST><![CDATA[]]></ST>
+    </Implementation>
+    <Method Name="FB_init" Id="{21833cee-547c-4a11-aa16-b4eb0d1e6b45}">
+      <Declaration><![CDATA[METHOD FB_init : BOOL
+VAR_INPUT
+	bInitRetains : BOOL; // if TRUE, the retain variables are initialized (warm start / cold start)
+	bInCopyCode : BOOL;  // if TRUE, the instance afterwards gets moved into the copy code (online change)
+	pOwner		: POINTER TO FB_Object;
+END_VAR
+]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[THIS^.pOwner := pOwner;]]></ST>
+      </Implementation>
+    </Method>
+    <Property Name="P_nNr" Id="{3c4bd464-9797-42b2-8074-0b1f4a6bf0c1}">
+      <Declaration><![CDATA[PROPERTY P_nNr : UINT]]></Declaration>
+      <Get Name="Get" Id="{5adfd437-6017-4f7c-a710-e0c96a476711}">
+        <Declaration><![CDATA[VAR
+END_VAR
+]]></Declaration>
+        <Implementation>
+          <ST><![CDATA[P_nNr := nNr;]]></ST>
+        </Implementation>
+      </Get>
+      <Set Name="Set" Id="{ce30d8d9-5fb5-4a5f-82bf-9d1ad5166f88}">
+        <Declaration><![CDATA[VAR
+END_VAR
+]]></Declaration>
+        <Implementation>
+          <ST><![CDATA[nNr := P_nNr;]]></ST>
+        </Implementation>
+      </Set>
+    </Property>
+    <Property Name="P_rRelPosY" Id="{4fac106b-7284-471c-a554-cd2189e97c22}">
+      <Declaration><![CDATA[PROPERTY P_rRelPosY : REAL]]></Declaration>
+      <Set Name="Set" Id="{a8a33bc6-db5f-4610-8ca0-9f7d9c329ae4}">
+        <Declaration><![CDATA[VAR
+END_VAR
+]]></Declaration>
+        <Implementation>
+          <ST><![CDATA[stRelPos.Y := P_rRelPosY;]]></ST>
+        </Implementation>
+      </Set>
+      <Get Name="Get" Id="{ac969bc0-fd7e-47db-8206-969126257610}">
+        <Declaration><![CDATA[VAR
+END_VAR
+]]></Declaration>
+        <Implementation>
+          <ST><![CDATA[P_rRelPosY := stRelPos.Y;]]></ST>
+        </Implementation>
+      </Get>
+    </Property>
+    <Property Name="P_rRelPosX" Id="{8cddccde-f83e-4541-a409-9cb93abf12e2}">
+      <Declaration><![CDATA[PROPERTY P_rRelPosX : REAL]]></Declaration>
+      <Set Name="Set" Id="{6dbeea8b-4fd4-49d1-a79c-6d298e9967ac}">
+        <Declaration><![CDATA[VAR
+END_VAR
+]]></Declaration>
+        <Implementation>
+          <ST><![CDATA[stRelPos.X := P_rRelPosX;]]></ST>
+        </Implementation>
+      </Set>
+      <Get Name="Get" Id="{a7a910bc-f35d-430d-a1f2-c71783120de4}">
+        <Declaration><![CDATA[VAR
+END_VAR
+]]></Declaration>
+        <Implementation>
+          <ST><![CDATA[P_rRelPosX := stRelPos.X;]]></ST>
+        </Implementation>
+      </Get>
+    </Property>
+    <Property Name="P_pChild" Id="{93479887-06f8-4ab7-b41f-f57687cb48d7}">
+      <Declaration><![CDATA[PROPERTY P_pChild : POINTER TO FB_Object]]></Declaration>
+      <Get Name="Get" Id="{67275c62-6da1-43ed-a7ea-4d4128620b4d}">
+        <Declaration><![CDATA[VAR
+END_VAR
+]]></Declaration>
+        <Implementation>
+          <ST><![CDATA[P_pChild := pChild;]]></ST>
+        </Implementation>
+      </Get>
+      <Set Name="Set" Id="{dcf65487-7f25-45ce-b851-b37dc11d831d}">
+        <Declaration><![CDATA[VAR
+END_VAR
+]]></Declaration>
+        <Implementation>
+          <ST><![CDATA[pChild := P_pChild;]]></ST>
+        </Implementation>
+      </Set>
+    </Property>
+    <Property Name="P_stRelPos" Id="{d4d3907d-3b0e-47d3-bc09-1ecaffc4d877}">
+      <Declaration><![CDATA[PROPERTY P_stRelPos : ST_3DPoint]]></Declaration>
+      <Set Name="Set" Id="{1eea22a1-ea64-4c59-8c9c-1e1d731f6588}">
+        <Declaration><![CDATA[VAR
+END_VAR
+]]></Declaration>
+        <Implementation>
+          <ST><![CDATA[stRelPos := P_stRelPos;]]></ST>
+        </Implementation>
+      </Set>
+      <Get Name="Get" Id="{6c631d4a-31eb-4aa7-a318-fe904d96035c}">
+        <Declaration><![CDATA[VAR
+END_VAR
+]]></Declaration>
+        <Implementation>
+          <ST><![CDATA[P_stRelPos := stRelPos;]]></ST>
+        </Implementation>
+      </Get>
+    </Property>
+    <Property Name="P_stAbsPos" Id="{e157931f-30ac-4d87-b06c-fc63af0ada22}">
+      <Declaration><![CDATA[PROPERTY P_stAbsPos : ST_3DPoint]]></Declaration>
+      <Get Name="Get" Id="{cf361eac-e23e-4bb8-8d72-954df8946a24}">
+        <Declaration><![CDATA[VAR
+	stTemp : ST_3DPoint;
+	pMzTool: POINTER TO FB_MzTool;
+	pTarget: POINTER TO FB_TargetBase;
+END_VAR
+]]></Declaration>
+        <Implementation>
+          <ST><![CDATA[IF pOwner^.P_eObjectType = E_ObjectType.OBJECTTYPE_MZHead THEN
+	pMzTool := pOwner;
+	stTemp := pMzTool^.P_stAbsPosTotal;
+	stTemp.X := stTemp.X + stRelPos.X;
+	stTemp.Y := stTemp.Y + stRelPos.Y;
+	P_stAbsPos := stTemp;
+ELSIF pOwner^.M_bIsGroup(E_ObjectGroup.OBJECTGROUP_MzTool) THEN
+	pMzTool := pOwner;
+	P_stAbsPos := F_Add3DPoints(stRelPos, pMzTool^.P_stAbsPosPhysExclPiece);
+ELSIF pOwner^.M_bIsGroup(E_ObjectGroup.OBJECTGROUP_Target) THEN
+	pTarget := pOwner;
+	P_stAbsPos := F_Add3DPoints(stRelPos, pTarget^.P_stAbsPosLB);
+END_IF]]></ST>
+        </Implementation>
+      </Get>
+    </Property>
+    <Property Name="P_rRelPosZ" Id="{ece4cbd0-3458-4d91-b82a-13eb847fdbe9}">
+      <Declaration><![CDATA[PROPERTY P_rRelPosZ : REAL]]></Declaration>
+      <Get Name="Get" Id="{86eb722c-0f42-47b6-a9af-0e403a30b481}">
+        <Declaration><![CDATA[VAR
+END_VAR
+]]></Declaration>
+        <Implementation>
+          <ST><![CDATA[P_rRelPosZ := stRelPos.Z;]]></ST>
+        </Implementation>
+      </Get>
+      <Set Name="Set" Id="{b7d736de-7559-49cd-8bbb-3848b5f6bd0f}">
+        <Declaration><![CDATA[VAR
+END_VAR
+]]></Declaration>
+        <Implementation>
+          <ST><![CDATA[stRelPos.Z := P_rRelPosZ;]]></ST>
+        </Implementation>
+      </Set>
+    </Property>
+    <LineIds Name="FB_Slot">
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="FB_Slot.FB_init">
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="FB_Slot.P_nNr.Get">
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="FB_Slot.P_nNr.Set">
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="FB_Slot.P_rRelPosY.Set">
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="FB_Slot.P_rRelPosY.Get">
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="FB_Slot.P_rRelPosX.Set">
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="FB_Slot.P_rRelPosX.Get">
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="FB_Slot.P_pChild.Get">
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="FB_Slot.P_pChild.Set">
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="FB_Slot.P_stRelPos.Set">
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="FB_Slot.P_stRelPos.Get">
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="FB_Slot.P_stAbsPos.Get">
+      <LineId Id="3" Count="0" />
+      <LineId Id="20" Count="0" />
+      <LineId Id="5" Count="9" />
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="FB_Slot.P_rRelPosZ.Get">
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="FB_Slot.P_rRelPosZ.Set">
+      <LineId Id="2" Count="0" />
+    </LineIds>
+  </POU>
+</TcPlcObject>

@@ -1,0 +1,566 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<TcPlcObject Version="1.1.0.1" ProductVersion="3.1.4022.12">
+  <POU Name="FB_HighVoltSupply" Id="{ea8f4d89-fbc6-471e-b2ba-67b32ca57e1f}" SpecialFunc="None">
+    <Declaration><![CDATA[FUNCTION_BLOCK FB_HighVoltSupply
+VAR_INPUT
+	nAnalogInVoltage	AT %I* : INT;	//muss mit Analogklemme verknüpft werden
+	nAnalogInCurrent	AT %I* : INT;	//muss mit Analogklemme verknüpft werden
+	bSafeVoltage		AT %I* : BOOL;	//Spannungsfreiheit
+	bHVPSAvailable		AT %I* : BOOL;	//HVPS angesteckt und eingeschalten
+END_VAR
+VAR_OUTPUT
+	nAnalogOutVoltage	AT %Q* : INT;	//muss mit Analogklemme verknüpft werden
+	nAnalogOutCurrent	AT %Q* : INT;	//muss mit Analogklemme verknüpft werden
+	bDigiOutVoltage1	AT %Q* : BOOL := TRUE;
+	bDigiOutVoltage2	AT %Q* : BOOL := TRUE;
+END_VAR
+VAR
+	nCurrentChannel	: USINT;
+END_VAR
+
+VAR PERSISTENT
+	rMinVoltage		: REAL;
+	rMaxVoltage		: REAL;
+	rMinVoltageCV	: REAL;
+	rMaxVoltageCV	: REAL;
+	rMinVoltageMV	: REAL;
+	rMaxVoltageMV	: REAL;
+	rMinCurrent		: REAL;
+	rMaxCurrent		: REAL;
+	rMinCurrentCV	: REAL;
+	rMaxCurrentCV	: REAL;
+	rMinCurrentMV	: REAL;
+	rMaxCurrentMV	: REAL;
+	bLegacy			: BOOL;
+END_VAR
+
+VAR CONSTANT
+	cVoltageMax		: REAL := 30000;	//maximal einstellbare Spannung in V
+	cCurrentMax		: REAL := 30000;	//maximal einstellbarer Strom in µA (max 30µA bzw max 300µA
+END_VAR
+]]></Declaration>
+    <Implementation>
+      <ST><![CDATA[IF fbSafety.bEmergencyStop THEN
+	bDigiOutVoltage1 := bDigiOutVoltage2 := TRUE;
+END_IF
+]]></ST>
+    </Implementation>
+    <Property Name="P_nMinVoltageCV" Id="{0d9ec809-0fb6-4dfd-837b-8ea469c40e56}">
+      <Declaration><![CDATA[PROPERTY P_nMinVoltageCV : DINT]]></Declaration>
+      <Set Name="Set" Id="{aba540fe-7dbd-48ac-b797-f60967a2a84a}">
+        <Declaration><![CDATA[VAR
+END_VAR
+]]></Declaration>
+        <Implementation>
+          <ST><![CDATA[rMinVoltageCV := DINT_TO_REAL(P_nMinVoltageCV);
+fbSettings.M_WritePersData();]]></ST>
+        </Implementation>
+      </Set>
+      <Get Name="Get" Id="{cd213600-ad08-4b4c-83cc-f9259b085503}">
+        <Declaration><![CDATA[VAR
+END_VAR
+]]></Declaration>
+        <Implementation>
+          <ST><![CDATA[P_nMinVoltageCV := REAL_TO_DINT(rMinVoltageCV);]]></ST>
+        </Implementation>
+      </Get>
+    </Property>
+    <Property Name="P_nMaxVoltageMV" Id="{39fe7a65-ad02-432c-929d-d18aef1d76c1}">
+      <Declaration><![CDATA[PROPERTY P_nMaxVoltageMV : DINT]]></Declaration>
+      <Set Name="Set" Id="{06da0bef-6c77-4092-b24b-24ab48c9d949}">
+        <Declaration><![CDATA[VAR
+END_VAR
+]]></Declaration>
+        <Implementation>
+          <ST><![CDATA[rMaxVoltageMV := DINT_TO_REAL(P_nMaxVoltageMV);
+fbSettings.M_WritePersData();]]></ST>
+        </Implementation>
+      </Set>
+      <Get Name="Get" Id="{c514a6d3-5647-4191-b64d-caa9079093d4}">
+        <Declaration><![CDATA[VAR
+END_VAR
+]]></Declaration>
+        <Implementation>
+          <ST><![CDATA[P_nMaxVoltageMV := REAL_TO_DINT(rMaxVoltageMV);]]></ST>
+        </Implementation>
+      </Get>
+    </Property>
+    <Property Name="P_nMinCurrentMV" Id="{4bdf4cb0-d6d5-4448-836d-50cd4110717d}">
+      <Declaration><![CDATA[PROPERTY P_nMinCurrentMV : DINT]]></Declaration>
+      <Get Name="Get" Id="{a0943ac5-59fe-4be8-ba0a-600c79d8414d}">
+        <Declaration><![CDATA[VAR
+END_VAR
+]]></Declaration>
+        <Implementation>
+          <ST><![CDATA[P_nMinCurrentMV := REAL_TO_DINT(rMinCurrentMV);]]></ST>
+        </Implementation>
+      </Get>
+      <Set Name="Set" Id="{e111e375-ecf7-47b2-8aea-3379dcd6aa64}">
+        <Declaration><![CDATA[VAR
+END_VAR
+]]></Declaration>
+        <Implementation>
+          <ST><![CDATA[rMinCurrentMV := DINT_TO_REAL(P_nMinCurrentMV);
+fbSettings.M_WritePersData();]]></ST>
+        </Implementation>
+      </Set>
+    </Property>
+    <Method Name="M_SetVoltage" Id="{59c0b058-9bad-4737-8f40-dc5c0a498942}">
+      <Declaration><![CDATA[METHOD M_SetVoltage : INT
+VAR_INPUT
+	nValue : INT;
+END_VAR
+
+VAR
+	rAnaOut			: REAL;
+END_VAR]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[rAnaOut := F_YFuncX(rxMin:= rMinVoltage,
+					rxMax:= rMaxVoltage,
+					ryMin:= rMinVoltageCV,
+					ryMax:= rMaxVoltageCV,
+					rx:= nValue) * 32767.0 / 10000.0;
+
+nAnalogOutVoltage := REAL_TO_INT(rAnaOut);]]></ST>
+      </Implementation>
+    </Method>
+    <Property Name="P_nMaxCurrentMV" Id="{5be0df8d-fd9d-4150-bfb5-a45fa9569c2e}">
+      <Declaration><![CDATA[PROPERTY P_nMaxCurrentMV : DINT]]></Declaration>
+      <Get Name="Get" Id="{3083380a-2f98-4cfa-9452-0dafb2fe0945}">
+        <Declaration><![CDATA[VAR
+END_VAR
+]]></Declaration>
+        <Implementation>
+          <ST><![CDATA[P_nMaxCurrentMV := REAL_TO_DINT(rMaxCurrentMV);]]></ST>
+        </Implementation>
+      </Get>
+      <Set Name="Set" Id="{f82b1f74-e606-44cb-abe5-a7222b864c7f}">
+        <Declaration><![CDATA[VAR
+END_VAR
+]]></Declaration>
+        <Implementation>
+          <ST><![CDATA[rMaxCurrentMV := DINT_TO_REAL(P_nMaxCurrentMV);
+fbSettings.M_WritePersData();]]></ST>
+        </Implementation>
+      </Set>
+    </Property>
+    <Property Name="P_nMaxCurrent" Id="{69882bf2-879c-4c56-b2b4-85f580239562}">
+      <Declaration><![CDATA[PROPERTY P_nMaxCurrent : DINT]]></Declaration>
+      <Set Name="Set" Id="{3a6e86ca-5bc3-4d48-99c7-a113d9272749}">
+        <Declaration><![CDATA[VAR
+END_VAR
+]]></Declaration>
+        <Implementation>
+          <ST><![CDATA[rMaxCurrent := DINT_TO_REAL(P_nMaxCurrent);
+fbSettings.M_WritePersData();]]></ST>
+        </Implementation>
+      </Set>
+      <Get Name="Get" Id="{e4551669-8dcb-4c57-acaf-d55c160b1dc5}">
+        <Declaration><![CDATA[VAR
+END_VAR
+]]></Declaration>
+        <Implementation>
+          <ST><![CDATA[P_nMaxCurrent := REAL_TO_DINT(rMaxCurrent);]]></ST>
+        </Implementation>
+      </Get>
+    </Property>
+    <Method Name="M_SwitchVoltage" Id="{6e522ad5-fd71-45f5-8b10-7582f20c1db2}">
+      <Declaration><![CDATA[METHOD M_SwitchVoltage
+VAR_INPUT
+	nChannel : USINT;
+	bOn : BOOL;
+END_VAR]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[nCurrentChannel := nChannel;
+IF bOn THEN
+	pFbSafety^.M_MesBoxOn();
+END_IF
+IF nChannel = 1 THEN
+	bDigiOutVoltage1 := NOT bOn;
+	bDigiOutVoltage2 := TRUE;
+ELSIF nChannel = 2 THEN
+	bDigiOutVoltage1 := TRUE;
+	bDigiOutVoltage2 := NOT bOn;
+ELSE
+	RETURN;
+END_IF]]></ST>
+      </Implementation>
+    </Method>
+    <Property Name="P_nMinCurrentCV" Id="{7e0f84bf-19b4-4e56-9418-002216abfa8e}">
+      <Declaration><![CDATA[PROPERTY P_nMinCurrentCV : DINT]]></Declaration>
+      <Set Name="Set" Id="{58378932-fb59-48b5-b5bc-9f030b412720}">
+        <Declaration><![CDATA[VAR
+END_VAR
+]]></Declaration>
+        <Implementation>
+          <ST><![CDATA[rMinCurrentCV := DINT_TO_REAL(P_nMinCurrentCV);
+fbSettings.M_WritePersData();]]></ST>
+        </Implementation>
+      </Set>
+      <Get Name="Get" Id="{f5bc5dc0-d664-45b9-aa72-454f9774fc4d}">
+        <Declaration><![CDATA[VAR
+END_VAR
+]]></Declaration>
+        <Implementation>
+          <ST><![CDATA[P_nMinCurrentCV := REAL_TO_DINT(rMinCurrentCV);]]></ST>
+        </Implementation>
+      </Get>
+    </Property>
+    <Property Name="P_nMaxCurrentCV" Id="{9131b781-e4dc-47ab-bfaa-0262b6ca08ee}">
+      <Declaration><![CDATA[PROPERTY P_nMaxCurrentCV : DINT]]></Declaration>
+      <Set Name="Set" Id="{d40edc3b-7b73-4770-bf7f-9996e2cc1f1f}">
+        <Declaration><![CDATA[VAR
+END_VAR
+]]></Declaration>
+        <Implementation>
+          <ST><![CDATA[rMaxCurrentCV := DINT_TO_REAL(P_nMaxCurrentCV);
+fbSettings.M_WritePersData();]]></ST>
+        </Implementation>
+      </Set>
+      <Get Name="Get" Id="{def9782c-ab99-4214-ad10-aad0e0cb9075}">
+        <Declaration><![CDATA[VAR
+END_VAR
+]]></Declaration>
+        <Implementation>
+          <ST><![CDATA[P_nMaxCurrentCV := REAL_TO_DINT(rMaxCurrentCV);]]></ST>
+        </Implementation>
+      </Get>
+    </Property>
+    <Property Name="P_nMinCurrent" Id="{95ffd77a-fee8-43bb-a1a7-6dc77eb8a569}">
+      <Declaration><![CDATA[PROPERTY P_nMinCurrent : DINT]]></Declaration>
+      <Set Name="Set" Id="{622abe3a-3dd6-4323-89fa-eca233cf4eb8}">
+        <Declaration><![CDATA[VAR
+END_VAR
+]]></Declaration>
+        <Implementation>
+          <ST><![CDATA[rMinCurrent := DINT_TO_REAL(P_nMinCurrent);
+fbSettings.M_WritePersData();]]></ST>
+        </Implementation>
+      </Set>
+      <Get Name="Get" Id="{70389d03-c507-411c-97af-848bb640e804}">
+        <Declaration><![CDATA[VAR
+END_VAR
+]]></Declaration>
+        <Implementation>
+          <ST><![CDATA[P_nMinCurrent := REAL_TO_DINT(rMinCurrent);]]></ST>
+        </Implementation>
+      </Get>
+    </Property>
+    <Property Name="P_nMinVoltageMV" Id="{9c3f898e-f5a0-4cfc-81a7-2f81fa8e4fe1}">
+      <Declaration><![CDATA[PROPERTY P_nMinVoltageMV : DINT]]></Declaration>
+      <Get Name="Get" Id="{48f43604-996a-4f99-b4bd-34d10bc55d35}">
+        <Declaration><![CDATA[VAR
+END_VAR
+]]></Declaration>
+        <Implementation>
+          <ST><![CDATA[P_nMinVoltageMV := REAL_TO_DINT(rMinVoltageMV);]]></ST>
+        </Implementation>
+      </Get>
+      <Set Name="Set" Id="{731d8c67-1202-449d-abb7-c505afbd3657}">
+        <Declaration><![CDATA[VAR
+END_VAR
+]]></Declaration>
+        <Implementation>
+          <ST><![CDATA[rMinVoltageMV := DINT_TO_REAL(P_nMinVoltageMV);
+fbSettings.M_WritePersData();]]></ST>
+        </Implementation>
+      </Set>
+    </Property>
+    <Method Name="M_GetVoltageOk" Id="{9ee35ed6-f1f4-4fa6-8b2f-0ab5cee52c3a}">
+      <Declaration><![CDATA[METHOD M_GetVoltageOk : BOOL
+VAR_INPUT
+	nChannel : USINT;
+	nSetVoltage	: INT;
+	nTolerancePlus	: INT;
+	nToleranceMinus	: INT;	
+END_VAR
+
+VAR
+	nCurrentVoltage : DINT;
+END_VAR
+]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[nCurrentVoltage := M_GetVoltage();
+
+IF (nCurrentVoltage >= nSetVoltage - nToleranceMinus) AND (nCurrentVoltage <= nSetVoltage + nTolerancePlus)THEN
+	M_GetVoltageOk := TRUE;
+	RETURN;
+END_IF]]></ST>
+      </Implementation>
+    </Method>
+    <Method Name="M_GetVoltage" Id="{c08f74a7-f3d2-4e47-90f7-146febcf8499}">
+      <Declaration><![CDATA[METHOD M_GetVoltage : DINT
+VAR_INPUT
+END_VAR
+
+VAR
+	rAnaIn	: REAL;
+END_VAR]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[IF bHVPSAvailable THEN
+	//Bei der älteren Bauform wird die Spannung von Kanal2 über den zweiten analogen Eingang gemessen, was bei der neueren Bauform die Strommesung ist
+	IF bLegacy AND (nCurrentChannel = 2) THEN
+		rAnaIn := nAnalogInCurrent;
+	ELSE
+		rAnaIn := nAnalogInVoltage;
+	END_IF
+	
+	M_GetVoltage := REAL_TO_DINT(F_YFuncX(rxMin:= rMinVoltageMV,
+							rxMax:= rMaxVoltageMV,
+							ryMin:= rMinVoltage,
+							ryMax:= rMaxVoltage,
+							rx:= 10000.0 / 32767.0 * rAnaIn));
+END_IF
+
+]]></ST>
+      </Implementation>
+    </Method>
+    <Property Name="P_nMaxVoltageCV" Id="{c51afd8b-b19d-40ab-be05-4ed59e7a644e}">
+      <Declaration><![CDATA[PROPERTY P_nMaxVoltageCV : DINT]]></Declaration>
+      <Set Name="Set" Id="{b7380290-b74b-44c1-aaf7-b5427a71a8c0}">
+        <Declaration><![CDATA[VAR
+END_VAR
+]]></Declaration>
+        <Implementation>
+          <ST><![CDATA[rMaxVoltageCV := DINT_TO_REAL(P_nMaxVoltageCV);
+fbSettings.M_WritePersData();]]></ST>
+        </Implementation>
+      </Set>
+      <Get Name="Get" Id="{d1b1a8bc-0bbd-4e40-b2bd-923cc295015a}">
+        <Declaration><![CDATA[VAR
+END_VAR
+]]></Declaration>
+        <Implementation>
+          <ST><![CDATA[P_nMaxVoltageCV := REAL_TO_DINT(rMaxVoltageCV);]]></ST>
+        </Implementation>
+      </Get>
+    </Property>
+    <Method Name="M_GetCurrent" Id="{c63444a7-6c59-42a6-bedd-853486b57770}">
+      <Declaration><![CDATA[METHOD M_GetCurrent : DINT
+VAR_INPUT
+END_VAR
+
+VAR
+	rAnaIn	: REAL;
+END_VAR
+
+]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[//Bei älterer Bauform gibt es keine Strommessung
+IF bLegacy THEN
+	RETURN;
+END_IF
+IF bHVPSAvailable THEN
+	rAnaIn := nAnalogInCurrent;
+	M_GetCurrent := REAL_TO_DINT(F_YFuncX(rxMin:= rMinCurrentMV,
+										rxMax:= rMaxCurrentMV,
+										ryMin:= rMinCurrent,
+										ryMax:= rMaxCurrent,
+										rx:= 10000.0 / 32767.0 * rAnaIn) * 10.0); //Faktor 10.0 da in 10tel µA mit der
+																				  //GUI kommuniziert wird
+END_IF
+
+]]></ST>
+      </Implementation>
+    </Method>
+    <Property Name="P_bLegacy" Id="{cdb8bbcb-b400-484e-840c-52d532e8092e}">
+      <Declaration><![CDATA[PROPERTY P_bLegacy : BOOL]]></Declaration>
+      <Set Name="Set" Id="{51cadaa0-432d-486e-b6b6-51185265cd95}">
+        <Declaration><![CDATA[VAR
+END_VAR
+]]></Declaration>
+        <Implementation>
+          <ST><![CDATA[bLegacy := P_bLegacy;
+fbSettings.M_WritePersData();]]></ST>
+        </Implementation>
+      </Set>
+      <Get Name="Get" Id="{d17d789f-c5b8-4ac4-8db9-a0ec1306d436}">
+        <Declaration><![CDATA[VAR
+END_VAR
+]]></Declaration>
+        <Implementation>
+          <ST><![CDATA[P_bLegacy := bLegacy;]]></ST>
+        </Implementation>
+      </Get>
+    </Property>
+    <Method Name="M_SetCurrent" Id="{d6089e56-d5ad-4563-8d90-79b20d141023}">
+      <Declaration><![CDATA[METHOD M_SetCurrent : INT
+VAR_INPUT
+	nValue : UINT;
+END_VAR
+
+VAR
+	rAnaOut			: REAL;
+	rValue			: REAL;
+END_VAR]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[rValue := DINT_TO_REAL(nValue) / 10.0;
+rAnaOut := F_YFuncX(rxMin:= rMinCurrent,
+					rxMax:= rMaxCurrent,
+					ryMin:= rMinCurrentCV,
+					ryMax:= rMaxCurrentCV,
+					rx:= rValue) * 32767.0 / 10000.0;
+
+nAnalogOutCurrent := REAL_TO_INT(rAnaOut);]]></ST>
+      </Implementation>
+    </Method>
+    <Property Name="P_nMinVoltage" Id="{f5b17b38-4eea-4ef6-84b3-746158a28b1b}">
+      <Declaration><![CDATA[PROPERTY P_nMinVoltage : DINT]]></Declaration>
+      <Set Name="Set" Id="{3d09b4a0-00ed-4886-926b-8b29af5da181}">
+        <Declaration><![CDATA[VAR
+END_VAR
+]]></Declaration>
+        <Implementation>
+          <ST><![CDATA[rMinVoltage := DINT_TO_REAL(P_nMinVoltage);
+fbSettings.M_WritePersData();]]></ST>
+        </Implementation>
+      </Set>
+      <Get Name="Get" Id="{4a1f43d0-39a3-4a6c-92c5-984ba658fa99}">
+        <Declaration><![CDATA[VAR
+END_VAR
+]]></Declaration>
+        <Implementation>
+          <ST><![CDATA[P_nMinVoltage := REAL_TO_DINT(rMinVoltage);]]></ST>
+        </Implementation>
+      </Get>
+    </Property>
+    <Property Name="P_nMaxVoltage" Id="{fcf44376-7833-44b4-a91c-9d0999adaa16}">
+      <Declaration><![CDATA[PROPERTY P_nMaxVoltage : DINT]]></Declaration>
+      <Set Name="Set" Id="{d1121d2d-92e6-4b78-9952-461c2c74e378}">
+        <Declaration><![CDATA[VAR
+END_VAR
+]]></Declaration>
+        <Implementation>
+          <ST><![CDATA[rMaxVoltage := DINT_TO_REAL(P_nMaxVoltage);
+fbSettings.M_WritePersData();]]></ST>
+        </Implementation>
+      </Set>
+      <Get Name="Get" Id="{e8fe35dd-52ac-4fab-b933-0858b0b549c5}">
+        <Declaration><![CDATA[VAR
+END_VAR
+]]></Declaration>
+        <Implementation>
+          <ST><![CDATA[P_nMaxVoltage := REAL_TO_DINT(rMaxVoltage);]]></ST>
+        </Implementation>
+      </Get>
+    </Property>
+    <LineIds Name="FB_HighVoltSupply">
+      <LineId Id="44" Count="2" />
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="FB_HighVoltSupply.P_nMinVoltageCV.Set">
+      <LineId Id="3" Count="0" />
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="FB_HighVoltSupply.P_nMinVoltageCV.Get">
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="FB_HighVoltSupply.P_nMaxVoltageMV.Set">
+      <LineId Id="3" Count="0" />
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="FB_HighVoltSupply.P_nMaxVoltageMV.Get">
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="FB_HighVoltSupply.P_nMinCurrentMV.Get">
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="FB_HighVoltSupply.P_nMinCurrentMV.Set">
+      <LineId Id="3" Count="0" />
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="FB_HighVoltSupply.M_SetVoltage">
+      <LineId Id="3" Count="5" />
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="FB_HighVoltSupply.P_nMaxCurrentMV.Get">
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="FB_HighVoltSupply.P_nMaxCurrentMV.Set">
+      <LineId Id="3" Count="0" />
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="FB_HighVoltSupply.P_nMaxCurrent.Set">
+      <LineId Id="3" Count="0" />
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="FB_HighVoltSupply.P_nMaxCurrent.Get">
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="FB_HighVoltSupply.M_SwitchVoltage">
+      <LineId Id="15" Count="0" />
+      <LineId Id="20" Count="2" />
+      <LineId Id="3" Count="7" />
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="FB_HighVoltSupply.P_nMinCurrentCV.Set">
+      <LineId Id="3" Count="0" />
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="FB_HighVoltSupply.P_nMinCurrentCV.Get">
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="FB_HighVoltSupply.P_nMaxCurrentCV.Set">
+      <LineId Id="3" Count="0" />
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="FB_HighVoltSupply.P_nMaxCurrentCV.Get">
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="FB_HighVoltSupply.P_nMinCurrent.Set">
+      <LineId Id="3" Count="0" />
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="FB_HighVoltSupply.P_nMinCurrent.Get">
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="FB_HighVoltSupply.P_nMinVoltageMV.Get">
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="FB_HighVoltSupply.P_nMinVoltageMV.Set">
+      <LineId Id="3" Count="0" />
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="FB_HighVoltSupply.M_GetVoltageOk">
+      <LineId Id="3" Count="4" />
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="FB_HighVoltSupply.M_GetVoltage">
+      <LineId Id="18" Count="1" />
+      <LineId Id="24" Count="0" />
+      <LineId Id="27" Count="0" />
+      <LineId Id="23" Count="0" />
+      <LineId Id="21" Count="0" />
+      <LineId Id="3" Count="8" />
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="FB_HighVoltSupply.P_nMaxVoltageCV.Set">
+      <LineId Id="3" Count="0" />
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="FB_HighVoltSupply.P_nMaxVoltageCV.Get">
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="FB_HighVoltSupply.P_bLegacy.Set">
+      <LineId Id="3" Count="0" />
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="FB_HighVoltSupply.P_bLegacy.Get">
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="FB_HighVoltSupply.P_nMinVoltage.Set">
+      <LineId Id="3" Count="0" />
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="FB_HighVoltSupply.P_nMinVoltage.Get">
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="FB_HighVoltSupply.P_nMaxVoltage.Set">
+      <LineId Id="3" Count="0" />
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="FB_HighVoltSupply.P_nMaxVoltage.Get">
+      <LineId Id="2" Count="0" />
+    </LineIds>
+  </POU>
+</TcPlcObject>

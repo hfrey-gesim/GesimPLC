@@ -1,0 +1,131 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<TcPlcObject Version="1.1.0.1" ProductVersion="3.1.4022.18">
+  <POU Name="CoupleYY" Id="{ca2a1312-f8f8-4244-9bf6-d15e2ed14779}" SpecialFunc="None">
+    <Declaration><![CDATA[PROGRAM CoupleYY
+VAR_INPUT
+	bCouple : BOOL;
+	bExecute : BOOL;
+END_VAR
+VAR_OUTPUT
+	bBusy : BOOL;
+	bError : BOOL;
+	nErrorID : ERRORID;
+END_VAR
+VAR
+	nState : USINT;
+	fbMcGearIn	: Tc2_MC2.MC_GearIn;
+	fbMcGearOut	: Tc2_MC2.MC_GearOut;
+END_VAR
+]]></Declaration>
+    <Implementation>
+      <ST><![CDATA[//AxisRefY1 ist bei Plattform D immer unten
+//AxisRefY2 ist bei Plattform D immer oben
+//Grundsätzlich muss hier nicht überprüft werden, ob es Plattform C oder D ist, denn es würde ohnehin zu einem Fehler kommen
+IF bExecute THEN
+	IF nState = 0 THEN
+		//Status überprüfen
+		//1. Beide Achsen müssen initialisiert sein
+		//2. Beide Achsen dürfen nicht Busy oder im Error sein
+		IF AxisRefY1.Status.Error OR AxisRefY2.Status.Error OR AxisRefY1.Status.Moving OR AxisRefY2.Status.Moving THEN
+			bError := TRUE;
+			nErrorID := E_ErrorIdCmd.ERRORID_AxisStillBusy;
+			RETURN;
+		END_IF
+		IF NOT(AxisRefY1.Status.Homed AND AxisRefY2.Status.Homed) THEN
+			bError := TRUE;
+			nErrorID := E_ErrorIdCmd.ERRORID_DeviceNotInitialized;
+			RETURN;
+		END_IF
+		IF bCouple THEN	//Ankoppeln - Achse darf noch nicht gekoppelt sein
+			IF AxisRefY1.Status.Coupled THEN
+				bError := TRUE;
+				{warning 'Implement right ErrorID}
+				nErrorID := E_ErrorIdCmd.ERRORID_X2AxisNotCoupled;
+				RETURN;
+			END_IF
+			nState := 1;
+		ELSE //Auskopplen - Achse muss eingekoppelt sein
+			IF NOT AxisRefY1.Status.Coupled THEN
+				bError := TRUE;
+				{warning 'Implement right ErrorID}
+				nErrorID := E_ErrorIdCmd.ERRORID_X2AxisNotCoupled;
+				RETURN;
+			END_IF
+			nState := 2;
+		END_IF
+		bBusy := TRUE;
+	END_IF
+	
+	IF nState = 1 THEN	//Ankoppeln
+		fbMcGearIn(Master:= AxisRefY2, Slave:= AxisRefY1, Execute:= TRUE, RatioNumerator:= 1.0,	RatioDenominator:= 1);
+		IF NOT fbMcGearIn.Busy THEN
+			IF fbMcGearIn.Error THEN
+				bError := TRUE;
+				nErrorID := UDINT_TO_UINT(fbMcGearIn.ErrorID);
+				nState := 99;
+			END_IF
+			bBusy := FALSE;
+			fbMcGearIn(Master:= AxisRefY2, Slave:= AxisRefY1, Execute:= FALSE);
+		END_IF
+	ELSIF nState = 2 THEN //Abkoppeln
+		fbMcGearOut(Slave:= AxisRefY1, Execute:= TRUE);
+		IF NOT fbMcGearOut.Busy THEN
+			IF fbMcGearOut.Error THEN
+				bError := TRUE;
+				nErrorID := UDINT_TO_UINT(fbMcGearOut.ErrorID);
+				nState := 99;				
+			END_IF
+			bBusy := FALSE;
+			fbMcGearOut(Slave:= AxisRefY1, Execute:= FALSE);
+		END_IF
+	END_IF
+
+ELSE
+	nState := 0;
+	bBusy := FALSE;
+	bError := FALSE;
+	nErrorID	:= 0;
+END_IF
+]]></ST>
+    </Implementation>
+    <LineIds Name="CoupleYY">
+      <LineId Id="29" Count="2" />
+      <LineId Id="36" Count="0" />
+      <LineId Id="45" Count="0" />
+      <LineId Id="86" Count="19" />
+      <LineId Id="158" Count="0" />
+      <LineId Id="106" Count="6" />
+      <LineId Id="159" Count="0" />
+      <LineId Id="113" Count="0" />
+      <LineId Id="157" Count="0" />
+      <LineId Id="85" Count="0" />
+      <LineId Id="119" Count="0" />
+      <LineId Id="114" Count="0" />
+      <LineId Id="121" Count="0" />
+      <LineId Id="139" Count="0" />
+      <LineId Id="141" Count="0" />
+      <LineId Id="143" Count="0" />
+      <LineId Id="146" Count="1" />
+      <LineId Id="144" Count="0" />
+      <LineId Id="167" Count="0" />
+      <LineId Id="145" Count="0" />
+      <LineId Id="142" Count="0" />
+      <LineId Id="117" Count="0" />
+      <LineId Id="148" Count="2" />
+      <LineId Id="154" Count="1" />
+      <LineId Id="152" Count="1" />
+      <LineId Id="168" Count="0" />
+      <LineId Id="156" Count="0" />
+      <LineId Id="151" Count="0" />
+      <LineId Id="116" Count="0" />
+      <LineId Id="53" Count="0" />
+      <LineId Id="37" Count="0" />
+      <LineId Id="40" Count="0" />
+      <LineId Id="43" Count="0" />
+      <LineId Id="41" Count="0" />
+      <LineId Id="44" Count="0" />
+      <LineId Id="38" Count="0" />
+      <LineId Id="17" Count="0" />
+    </LineIds>
+  </POU>
+</TcPlcObject>

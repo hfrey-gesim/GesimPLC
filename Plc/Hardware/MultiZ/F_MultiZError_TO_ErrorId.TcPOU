@@ -1,0 +1,16 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<TcPlcObject Version="1.1.0.1" ProductVersion="3.1.0.25">
+  <POU Name="F_MultiZError_TO_ErrorId" Id="{b22e8449-3f00-4007-848b-d7c4a4fd90cb}">
+    <Declaration><![CDATA[FUNCTION F_MultiZError_TO_ErrorId : ERRORID
+VAR_INPUT
+	nErrorCode	: USINT;
+END_VAR
+VAR
+END_VAR
+]]></Declaration>
+    <Implementation>
+      <ST><![CDATA[F_MultiZError_TO_ErrorId := nErrorCode + 41727;]]></ST>
+    </Implementation>
+    <ObjectProperties />
+  </POU>
+</TcPlcObject>

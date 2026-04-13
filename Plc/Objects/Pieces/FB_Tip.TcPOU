@@ -1,0 +1,37 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<TcPlcObject Version="1.1.0.1" ProductVersion="3.1.4022.18">
+  <POU Name="FB_Tip" Id="{39632a61-f0af-4d18-8439-cae8f628b13e}" SpecialFunc="None">
+    <Declaration><![CDATA[{attribute 'enable_dynamic_creation'}
+FUNCTION_BLOCK FB_Tip EXTENDS FB_UsingPiece
+VAR_INPUT
+END_VAR
+VAR_OUTPUT
+END_VAR
+VAR
+END_VAR
+]]></Declaration>
+    <Implementation>
+      <ST><![CDATA[]]></ST>
+    </Implementation>
+    <Method Name="FB_init" Id="{3d03c01a-27be-480c-a35c-500e3e88f745}">
+      <Declaration><![CDATA[METHOD FB_init : BOOL
+VAR_INPUT
+	bInitRetains : BOOL; // if TRUE, the retain variables are initialized (warm start / cold start)
+	bInCopyCode : BOOL;  // if TRUE, the instance afterwards gets moved into the copy code (online change)
+END_VAR
+]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[bUsingPiece := TRUE;
+eObjectType := E_ObjectType.OBJECTTYPE_Tip;
+eObjectGroup := E_ObjectGroup.OBJECTGROUP_Piece;]]></ST>
+      </Implementation>
+    </Method>
+    <LineIds Name="FB_Tip">
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="FB_Tip.FB_init">
+      <LineId Id="2" Count="0" />
+      <LineId Id="8" Count="1" />
+    </LineIds>
+  </POU>
+</TcPlcObject>

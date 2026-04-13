@@ -1,0 +1,646 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<TcPlcObject Version="1.1.0.1" ProductVersion="3.1.4024.11">
+  <POU Name="FB_TipCleaner" Id="{5848c471-2187-4f0a-acad-bd9f3c1099cb}" SpecialFunc="None">
+    <Declaration><![CDATA[FUNCTION_BLOCK FB_TipCleaner EXTENDS FB_ActiveTarget
+VAR
+	eBasicAction		: E_Action;
+	eStripState			: E_OpClState;
+	
+	//Spec-Properties
+	stFirstPoint		: ST_3DPoint;	//FirstPoint und LastPoint ergeben eine Linie
+	stLastPoint			: ST_3DPoint;	//FirstPoint und LastPoint ergeben eine Linie
+	nIntermedPoints		: USINT;		//Anzahl der Punkte auf der von FirstPoint und LastPoint gebildeten Linie
+	
+	nClosedPos			: UINT;			//Verschlussposition
+	
+	//****************************************Aktionvariablen****************************************************
+	bActionLock			: ARRAY[50..150] OF BOOL;
+	
+	fbTipCleanerInit	: FB_TipCleanerInit;
+	
+	//Action: "OpenClose"
+	bOpenClose			: BOOL;
+	nStateA_OpenClose	: USINT;	//Statemachine von A_OpenClose();
+	nOpenCloseMode		: USINT;	//0=Open, 1=Close
+
+END_VAR
+
+VAR PERSISTENT
+	nCurrentPoint		: USINT;
+END_VAR
+]]></Declaration>
+    <Implementation>
+      <ST><![CDATA[IF bInitFB THEN
+	bInitFB := FALSE;
+	F_CreateLinkedListHnd( ADR( aNodes ), SIZEOF( aNodes ), hList );
+	//Fehlerstruktur vorausfüllen
+	stError.ObjectId := nObjectID;
+	stError.HardwareGrp := E_HardwareGrp.Nothing;
+	stError.POU := E_POU.POU_FB_TipCleaner;
+END_IF
+
+CASE eCurrentState OF
+	E_MachineState.MACHINESTATE_Active:
+		//BasicActions ausführen
+		IF bInit THEN	//Initialisieren
+			A_Init();
+			IF nStateA_Init >= 80 THEN
+				bIsInit := TRUE;
+				IF nStateA_Init >= 99 THEN
+					bError := TRUE;
+					bIsInit := FALSE;	
+				END_IF
+				bInit := FALSE;
+				nStateA_Init := 0;
+				M_RemoveListEntry(nSearchValue:= E_Action.ACTION_Init);
+			END_IF
+		END_IF
+		
+		IF bOpenClose THEN	//Backen auf/zu
+			A_OpenClose();
+			IF nStateA_OpenClose >= 80 THEN
+				IF nStateA_OpenClose >= 99 THEN
+					bError := TRUE;	
+				END_IF
+				bOpenClose := FALSE;
+				nStateA_OpenClose := 0;
+				M_RemoveListEntry(nSearchValue:= E_Action.ACTION_OpenClose);
+			END_IF
+		END_IF		
+
+		IF hList.nCount = 0 THEN
+			eCurrentState := E_MachineState.MACHINESTATE_Ready;
+		END_IF
+
+		IF bError  THEN
+			eCurrentState := E_MachineState.MACHINESTATE_Error;
+		END_IF		
+	
+	E_MachineState.MACHINESTATE_Reset:
+		A_Reset();
+		IF nStateA_Reset = 80 THEN
+			nStateA_Init := 0;
+			nStateA_OpenClose := 0;
+			nStateA_Stop := 0;
+			nStateA_Reset := 0;
+			bBusy := FALSE;
+			bError := FALSE;
+			bStopAllOnError := FALSE;
+			fbList.A_Reset(hList := hList);
+			MEMSET(ADR(bActionLock),0,SIZEOF(bActionLock));
+			nErrorId := 0;
+			stError.Cmd := 0;
+			stError.ErrorId := 0;
+			eCurrentState := E_MachineState.MACHINESTATE_Idle;
+		ELSIF
+			nStateA_Reset = 99 THEN
+			fbErrorList.M_Add(stError);
+			nStateA_Reset := 0;
+			bBusy := FALSE;
+			bError := TRUE;
+			eCurrentState := E_MachineState.MACHINESTATE_Error;			
+		END_IF
+	
+	E_MachineState.MACHINESTATE_Ready:
+		bBusy := FALSE;
+		eCurrentState := E_MachineState.MACHINESTATE_Idle;
+		
+	E_MachineState.MACHINESTATE_Error:
+		bBusy := FALSE;	
+	
+END_CASE
+
+//Prozessdaten aktualisieren
+stProcessData.nObjId := nObjectID;
+stProcessData.n32Data[0] := BOOL_TO_DINT(bIsInit);
+stProcessData.n32Data[1] := eCurrentState;
+stProcessData.n32Data[2] := stError.ErrorId;
+IF stTipCleanerRef.nCurrentPos = 0 THEN
+	eStripState := E_OpClState.Open;
+	stProcessData.n32Data[3] := E_OpClState.Open;
+ELSIF stTipCleanerRef.nCurrentPos = nClosedPos THEN
+		eStripState := E_OpClState.Closed;
+	stProcessData.n32Data[3] := E_OpClState.Closed;
+ELSE
+	eStripState := E_OpClState.UNDEFINED;
+	stProcessData.n32Data[3] := E_OpClState.UNDEFINED;
+END_IF
+
+stProcessData.n32Data[4] := nIntermedPoints + 2; //Konfigurierte Reinigungspositionen
+stProcessData.n32Data[5] := nCurrentPoint;	//verbrauchte Reinigungspositionen
+
+aObjProcData[nNotifyId] := stProcessData;
+]]></ST>
+    </Implementation>
+    <Action Name="A_Init" Id="{ea6d15e5-c033-443e-8926-d3329be9be78}">
+      <Implementation>
+        <ST><![CDATA[IF nStateA_Init = 0 THEN
+	bIsInit := FALSE;
+
+	IF bFlagA_Init XOR fbTipCleanerInit.bBusy  THEN
+		bFlagA_Init := FALSE;
+		fbTipCleanerInit(pstTipCleanerRef:= ADR(stTipCleanerRef), bExecute:= TRUE);
+	ELSE
+		RETURN;	//damit nachfolgende Zeilen nicht bearbeitet werden
+	END_IF		
+
+	IF NOT fbTipCleanerInit.bBusy THEN
+		IF fbTipCleanerInit.bError THEN
+			stError.ErrorId := fbTipCleanerInit.nErrorId;
+			stError.POUState := nStateA_Init;
+			nStateA_Init := 99;
+		ELSE
+			bFlagA_Init := TRUE;
+			nStateA_Init := 80;
+		END_IF
+		fbTipCleanerInit(pstTipCleanerRef:= ADR(stTipCleanerRef), bExecute:= FALSE);
+	END_IF
+END_IF
+
+//Errorhandling
+IF nStateA_Init = 99 THEN
+	stError.Cmd := E_Action.ACTION_Init;
+	stError.POUAction := E_POUACT.POUACT_A_Init;
+	fbErrorList.M_Add(stError);
+END_IF]]></ST>
+      </Implementation>
+    </Action>
+    <Action Name="A_OpenClose" Id="{2be9b38d-fb4c-4d97-a9be-a5d25b4a6f02}">
+      <Implementation>
+        <ST><![CDATA[stError.POUState := nStateA_OpenClose;
+
+IF stTipCleanerRef.nStatus.3 THEN	//Error
+	stError.ErrorId := E_ErrorIdCmd.ERRORID_DeviceInErrorState;
+	nStateA_OpenClose := 99;
+END_IF
+
+CASE nStateA_OpenClose OF
+	0:
+		IF nOpenCloseMode = 0 THEN	//Öffnen
+			stTipCleanerRef.nTargetPos := 0;
+		ELSE	//Schließen
+			stTipCleanerRef.nTargetPos := nClosedPos;
+		END_IF
+		
+		stTipCleanerRef.nControl := 31;
+		
+		IF stTipCleanerRef.nStatus.12 THEN	//Setpoint acknowledge
+			stTipCleanerRef.nControl := 15;
+			nStateA_OpenClose := 1;
+		END_IF
+		
+	1:	//Warten auf Target reached
+		IF stTipCleanerRef.nStatus.10 THEN	//Target reached
+			nStateA_OpenClose := 80;
+		END_IF
+		
+	70:	//Cancel
+		nStateA_OpenClose := 80;
+END_CASE
+
+//Errorhandling
+IF nStateA_OpenClose = 99 THEN
+	stError.Cmd := E_Action.ACTION_OpenClose;
+	stError.POUAction := E_POUACT.POUACT_A_OpenClose;
+	fbErrorList.M_Add(stError);
+END_IF]]></ST>
+      </Implementation>
+    </Action>
+    <Action Name="A_Reset" Id="{d7c4bc43-900b-4098-aa96-3476feabb9c4}">
+      <Implementation>
+        <ST><![CDATA[CASE nStateA_Reset OF
+	0:
+		nStateA_Reset := 80;
+END_CASE]]></ST>
+      </Implementation>
+    </Action>
+    <Method Name="FB_init" Id="{1b8610b6-0048-4624-8c8d-bd7f6d825b16}">
+      <Declaration><![CDATA[METHOD FB_init : BOOL
+VAR_INPUT
+	bInitRetains : BOOL; // if TRUE, the retain variables are initialized (warm start / cold start)
+	bInCopyCode : BOOL;  // if TRUE, the instance afterwards gets moved into the copy code (online change)
+END_VAR
+]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[eObjectType := E_ObjectType.OBJECTTYPE_TipCleaner;
+eObjectGroup := E_ObjectGroup.OBJECTGROUP_Target OR E_ObjectGroup.OBJECTGROUP_Device;]]></ST>
+      </Implementation>
+    </Method>
+    <Method Name="M_ChangeCleanMat" Id="{9165f25a-ebeb-4e78-9860-7eee8bc8c128}">
+      <Declaration><![CDATA[METHOD M_ChangeCleanMat
+VAR_INPUT
+END_VAR
+]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[nCurrentPoint := 0;]]></ST>
+      </Implementation>
+    </Method>
+    <Method Name="M_CheckAction" Id="{5c10b3ca-4abf-4cc0-8663-237491a6dff3}">
+      <Declaration><![CDATA[METHOD M_CheckAction : ERRORID
+VAR_INPUT
+	refActionData 	: REFERENCE TO ST_ActionData;
+	pCorrelObject	: POINTER TO FB_Object;
+END_VAR
+]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[IF NOT refActionData.eAction = E_Action.ACTION_MoveToTarget THEN
+	M_CheckAction := 8989;	
+END_IF
+]]></ST>
+      </Implementation>
+    </Method>
+    <Method Name="M_CheckProcDataType" Id="{30d6d93a-fc95-4253-89cf-0cb8b96c0058}">
+      <Declaration><![CDATA[METHOD M_CheckProcDataType : BOOL
+VAR_INPUT
+	eProcDataType : E_ProcDataType;
+END_VAR
+]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[]]></ST>
+      </Implementation>
+    </Method>
+    <Method Name="M_ExeAction" Id="{8f6f913a-793d-45fc-ac77-55821a0d5832}">
+      <Declaration><![CDATA[METHOD M_ExeAction : ERRORID
+VAR_INPUT
+	refActionData : REFERENCE TO ST_ActionData;	
+END_VAR
+]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[IF NOT (eCurrentState = E_MachineState.MACHINESTATE_Idle OR
+	eCurrentState = E_MachineState.MACHINESTATE_Active OR
+	eCurrentState = E_MachineState.MACHINESTATE_Ready) THEN
+	M_ExeAction := E_ErrorIdCmd.ERRORID_InvalidState;
+	RETURN;
+END_IF
+
+CASE refActionData.eAction OF
+	E_Action.ACTION_Init:
+		IF NOT bInit THEN
+			bInit := TRUE;
+			fbList.A_AddHeadValue(hList := hList, putValue:= E_Action.ACTION_Init);
+		ELSE
+			RETURN;
+		END_IF
+		
+	E_Action.ACTION_OpenClose:
+		IF NOT bOpenClose THEN
+			IF NOT bIsInit THEN
+				M_ExeAction := E_ErrorIdCmd.ERRORID_DeviceNotInitialized;  //Error
+				RETURN;
+			END_IF
+			nOpenCloseMode := DINT_TO_USINT(refActionData.aParams[1]);
+			fbList.A_AddHeadValue(hList := hList, putValue:= E_Action.ACTION_OpenClose);
+			bOpenClose := TRUE;
+		ELSE
+			RETURN;
+		END_IF
+		
+	E_Action.ACTION_Stop:
+		//Stop braucht nur ausgeführt werden, wenn irgendwas aktiv ist
+		fbList.A_AddHeadValue(hList := hList, putValue:= E_Action.ACTION_Stop);		
+	ELSE
+		M_ExeAction := E_ErrorIdCmd.ERRORID_InvalidAction;
+END_CASE
+bBusy := TRUE;
+eCurrentState := E_MachineState.MACHINESTATE_Active;]]></ST>
+      </Implementation>
+    </Method>
+    <Method Name="M_GetAbsPos" Id="{4ad993b3-74d8-4235-867a-dabc1b4000c4}">
+      <Declaration><![CDATA[METHOD M_GetAbsPos : ST_3DPoint
+VAR_INPUT
+	pChildPos	: POINTER TO ST_3DPoint;
+	eTargetRef 	: E_TargetRef;
+	nParam1		: UINT;
+ 	nParam2		: UINT;
+	nParam3		: USINT;
+	nZLevel		: USINT;
+END_VAR
+VAR_OUTPUT
+	nErrorId 	: ERRORID;
+	lrAngle		: LREAL;
+END_VAR
+VAR
+	stLocPosLB : ST_3DPoint;
+	rSpace	: REAL;
+END_VAR
+]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[IF eTargetRef = E_TargetRef.TARGETREF_SpecPoint THEN
+	stLocPosLB := P_stRelPosLB;
+	IF nParam1 = 1 THEN
+		stLocPosLB := F_Add3DPoints(stLocPosLB,stFirstPoint);
+	ELSIF nParam1 = 2 THEN
+		stLocPosLB := F_Add3DPoints(stLocPosLB,stLastPoint);
+	ELSE
+		nErrorId := E_ErrorIdCmd.ERRORID_InvalidTargetPointNr;
+		RETURN;
+	END_IF
+	M_GetAbsPos := pParentTarget^.M_GetAbsPos(pChildPos := ADR(stLocPosLB), eTargetRef:= E_TargetRef.TARGETREF_LeftBottom,
+												nParam1:= 0,
+												nParam2:= 0, nParam3:= 0,nZLevel:= 0,
+												lrAngle => lrAngle, nErrorId=> nErrorId);	
+ELSIF eTargetRef = E_TargetRef.TARGETREF_TwoDimArray THEN
+	//Checken ob gültiger Punkt
+	IF nParam1 = 0 OR nParam1 > (nIntermedPoints + 2) THEN
+		nErrorId := E_ErrorIdCmd.ERRORID_InvalidTargetPointCol;
+		RETURN;
+	END_IF
+	stLocPosLB := P_stRelPosLB;
+	//Ausrichtung in X oder Y?
+	IF stFirstPoint.Y = stLastPoint.Y THEN	//Ausrichtung in X
+		//X-Position berechnen
+		//Space(Zwischenräume zwischen den Punkten berechnen
+		rSpace := (stLastPoint.X - stFirstPoint.X) / (nIntermedPoints + 1); 
+		stLocPosLB.X := stLocPosLB.X + stFirstPoint.X + (nParam1 - 1) * rSpace;
+		//Y-Position berechenen
+		stLocPosLB.Y := stLocPosLB.Y + stFirstPoint.Y;
+	ELSIF stFirstPoint.X = stLastPoint.X THEN //Ausrichtung in Y
+		//X-Position berechnen
+		stLocPosLB.X := stLocPosLB.X + stFirstPoint.X;
+		//Y-Position berechenen
+		//Space(Zwischenräume zwischen den Punkten berechnen
+		rSpace := (stLastPoint.Y - stFirstPoint.Y) / (nIntermedPoints + 1);
+		stLocPosLB.Y := stLocPosLB.Y + stFirstPoint.Y + (nParam1 - 1) * rSpace;
+	ELSE
+		nErrorId := E_ErrorIdCmd.ERRORID_InvalidTargetPointCol;
+		RETURN;
+	END_IF
+	stLocPosLB.Z := stLocPosLB.Z + stFirstPoint.Z;
+	M_GetAbsPos := pParentTarget^.M_GetAbsPos(pChildPos := ADR(stLocPosLB), eTargetRef:= E_TargetRef.TARGETREF_LeftBottom,
+												nParam1:= 0,
+												nParam2:= 0, nParam3:= 0,nZLevel:= 0,
+												lrAngle => lrAngle, nErrorId=> nErrorId);	
+
+ELSE
+	M_GetAbsPos := SUPER^.M_GetAbsPos(pChildPos := pChildPos, eTargetRef:= eTargetRef,
+													nParam1:= nParam1,
+													nParam2:= nParam2, nParam3:= nParam3, nZLevel:= nZLevel,
+													lrAngle => lrAngle, nErrorId=> nErrorId);	
+END_IF]]></ST>
+      </Implementation>
+    </Method>
+    <Method Name="M_GetActionBusy" Id="{badd4775-c7aa-4893-a2be-60fa58d82b2b}">
+      <Declaration><![CDATA[METHOD M_GetActionBusy : BOOL
+VAR_INPUT
+	eAction : E_Action;
+END_VAR
+]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[getPosPtr := 0;(* start from first node element *)
+fbList.A_FindNext( hList := hList, putPosPtr := getPosPtr, putValue := eAction, getValue=>getValue, getPosPtr=>getPosPtr );
+IF fbList.bOk THEN	//Eintrag wurde gefunden, d.h. Action ist noch busy
+	M_GetActionBusy := TRUE;
+END_IF]]></ST>
+      </Implementation>
+    </Method>
+    <Method Name="M_GetAllProps" Id="{44d39143-29db-4aec-9126-4fe905230f5e}">
+      <Declaration><![CDATA[METHOD M_GetAllProps : ERRORID
+VAR_INPUT
+	refCmdData : REFERENCE TO  ST_CmdData;
+END_VAR
+]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[SUPER^.M_GetAllProps(refCmdData);
+nCurrentPropIndex := nCurrentPropIndex + 1;
+refCmdData.n32Data[nCurrentPropIndex] := REAL_TO_DINT(stFirstPoint.X);
+nCurrentPropIndex := nCurrentPropIndex + 1;
+refCmdData.n32Data[nCurrentPropIndex] := REAL_TO_DINT(stFirstPoint.Y);
+nCurrentPropIndex := nCurrentPropIndex + 1;
+refCmdData.n32Data[nCurrentPropIndex] := REAL_TO_DINT(stFirstPoint.Z);
+nCurrentPropIndex := nCurrentPropIndex + 1;
+refCmdData.n32Data[nCurrentPropIndex] := REAL_TO_DINT(stLastPoint.X);
+nCurrentPropIndex := nCurrentPropIndex + 1;
+refCmdData.n32Data[nCurrentPropIndex] := REAL_TO_DINT(stLastPoint.Y);
+nCurrentPropIndex := nCurrentPropIndex + 1;
+refCmdData.n32Data[nCurrentPropIndex] := nIntermedPoints;
+nCurrentPropIndex := nCurrentPropIndex + 1;
+refCmdData.n32Data[nCurrentPropIndex] := nClosedPos;
+
+]]></ST>
+      </Implementation>
+    </Method>
+    <Method Name="M_GetNextPointNr" Id="{efb29d39-696a-468c-8351-d8521fad03f6}">
+      <Declaration><![CDATA[METHOD M_GetNextPointNr : USINT
+VAR_INPUT
+END_VAR
+]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[IF (nCurrentPoint = (nIntermedPoints + 2)) OR (nCurrentPoint = 0) THEN
+	nCurrentPoint := 1;
+ELSE
+	nCurrentPoint := nCurrentPoint + 1;
+END_IF
+M_GetNextPointNr := nCurrentPoint;]]></ST>
+      </Implementation>
+    </Method>
+    <Method Name="M_GetProcData" Id="{afe70b34-47dd-4937-8e06-c4229c0eb0ec}">
+      <Declaration><![CDATA[METHOD M_GetProcData : DINT
+VAR_INPUT
+	eProcDataType : E_ProcDataType;
+END_VAR
+]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[]]></ST>
+      </Implementation>
+    </Method>
+    <Method Name="M_RemoveListEntry" Id="{4935eb13-86bc-4e52-b169-3e90d48688ba}">
+      <Declaration><![CDATA[METHOD M_RemoveListEntry : BOOL
+VAR_INPUT
+	nSearchValue	: E_Action;
+END_VAR
+]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[getPosPtr := 0;(* start from first node element *)
+fbList.A_FindNext( hList := hList, putPosPtr := getPosPtr, putValue := nSearchValue, getValue=>getValue, getPosPtr=>getPosPtr );
+IF fbList.bOk THEN	//Eintrag wurde gefunden
+	fbList.A_RemoveValueAtPosPtr(hList:= hList,	putPosPtr:= getPosPtr);
+	IF fbList.bOk THEN
+		M_RemoveListEntry := TRUE;
+	END_IF
+END_IF
+]]></ST>
+      </Implementation>
+    </Method>
+    <Method Name="M_SetAllProps" Id="{4b02e04c-ca85-456e-8ed7-dc0cbcdf20a2}">
+      <Declaration><![CDATA[METHOD M_SetAllProps : ERRORID
+VAR_INPUT
+	refCmdData : REFERENCE TO  ST_CmdData;
+END_VAR
+]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[M_SetAllProps := SUPER^.M_SetAllProps(refCmdData);
+
+IF M_SetAllProps > 0 THEN
+	RETURN;
+END_IF
+
+nCurrentPropIndex := nCurrentPropIndex + 1;
+nSpecPropIndex := nCurrentPropIndex;
+stFirstPoint.X := DINT_TO_REAL(refCmdData.n32Data[nCurrentPropIndex]);
+nCurrentPropIndex := nCurrentPropIndex + 1;
+stFirstPoint.Y := DINT_TO_REAL(refCmdData.n32Data[nCurrentPropIndex]);
+nCurrentPropIndex := nCurrentPropIndex + 1;
+stFirstPoint.Z := DINT_TO_REAL(refCmdData.n32Data[nCurrentPropIndex]);
+nCurrentPropIndex := nCurrentPropIndex + 1; 
+stLastPoint.X := DINT_TO_REAL(refCmdData.n32Data[nCurrentPropIndex]);
+nCurrentPropIndex := nCurrentPropIndex + 1;
+stLastPoint.Y := DINT_TO_REAL(refCmdData.n32Data[nCurrentPropIndex]);
+stLastPoint.Z := stFirstPoint.Z;
+nCurrentPropIndex := nCurrentPropIndex + 1;
+nIntermedPoints := DINT_TO_USINT(refCmdData.n32Data[nCurrentPropIndex]);
+nCurrentPropIndex := nCurrentPropIndex + 1;
+nClosedPos := DINT_TO_UINT(refCmdData.n32Data[nCurrentPropIndex]);
+
+nNoOfProps := nCurrentPropIndex + 1;
+
+
+]]></ST>
+      </Implementation>
+    </Method>
+    <Method Name="M_SetSingleProp" Id="{0424651f-dddf-4f12-be4a-214a2a1af621}">
+      <Declaration><![CDATA[METHOD M_SetSingleProp : ERRORID
+VAR_INPUT
+	refCmdData : REFERENCE TO  ST_CmdData;
+END_VAR
+]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[IF nSpecPropIndex = refCmdData.aHeader[1] THEN
+	stFirstPoint.X := DINT_TO_REAL(refCmdData.n32Data[0]);
+ELSIF (nSpecPropIndex + 1) = refCmdData.aHeader[1] THEN
+	stFirstPoint.Y := DINT_TO_REAL(refCmdData.n32Data[0]);
+ELSIF (nSpecPropIndex + 2) = refCmdData.aHeader[1] THEN
+	stFirstPoint.Z := DINT_TO_REAL(refCmdData.n32Data[0]);
+ELSIF (nSpecPropIndex + 3) = refCmdData.aHeader[1] THEN
+	stLastPoint.X := DINT_TO_REAL(refCmdData.n32Data[0]);
+ELSIF (nSpecPropIndex + 4) = refCmdData.aHeader[1] THEN
+	stLastPoint.Y := DINT_TO_REAL(refCmdData.n32Data[0]);
+ELSIF (nSpecPropIndex + 5) = refCmdData.aHeader[1] THEN
+	nIntermedPoints := DINT_TO_USINT(refCmdData.n32Data[0]);
+ELSIF (nSpecPropIndex + 6) = refCmdData.aHeader[1] THEN
+	nClosedPos := DINT_TO_UINT(refCmdData.n32Data[0]);	
+ELSE
+	M_SetSingleProp := SUPER^.M_SetSingleProp(refCmdData);
+END_IF]]></ST>
+      </Implementation>
+    </Method>
+    <Method Name="M_Stop" Id="{d1715c7c-32c1-403a-b93e-02ab37b58fd8}">
+      <Declaration><![CDATA[METHOD M_Stop : ERRORID
+VAR_INPUT
+END_VAR
+]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[IF bOpenClose THEN
+	nStateA_OpenClose := 70;
+END_IF]]></ST>
+      </Implementation>
+    </Method>
+    <Property Name="P_eStripState" Id="{83619349-1027-4fa7-a093-5e4f9682f980}">
+      <Declaration><![CDATA[PROPERTY P_eStripState : E_OpClState]]></Declaration>
+      <Get Name="Get" Id="{e4ef425d-77bc-4f2f-bee8-076456096cb2}">
+        <Declaration><![CDATA[VAR
+END_VAR
+]]></Declaration>
+        <Implementation>
+          <ST><![CDATA[P_eStripState := eStripState;]]></ST>
+        </Implementation>
+      </Get>
+    </Property>
+    <LineIds Name="FB_TipCleaner">
+      <LineId Id="130" Count="99" />
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="FB_TipCleaner.A_Init">
+      <LineId Id="2" Count="27" />
+      <LineId Id="1" Count="0" />
+    </LineIds>
+    <LineIds Name="FB_TipCleaner.A_OpenClose">
+      <LineId Id="38" Count="35" />
+      <LineId Id="1" Count="0" />
+    </LineIds>
+    <LineIds Name="FB_TipCleaner.A_Reset">
+      <LineId Id="2" Count="2" />
+      <LineId Id="1" Count="0" />
+    </LineIds>
+    <LineIds Name="FB_TipCleaner.FB_init">
+      <LineId Id="7" Count="1" />
+    </LineIds>
+    <LineIds Name="FB_TipCleaner.M_ChangeCleanMat">
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="FB_TipCleaner.M_CheckAction">
+      <LineId Id="3" Count="2" />
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="FB_TipCleaner.M_CheckProcDataType">
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="FB_TipCleaner.M_ExeAction">
+      <LineId Id="43" Count="35" />
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="FB_TipCleaner.M_GetAbsPos">
+      <LineId Id="18" Count="0" />
+      <LineId Id="30" Count="11" />
+      <LineId Id="21" Count="1" />
+      <LineId Id="24" Count="0" />
+      <LineId Id="43" Count="2" />
+      <LineId Id="42" Count="0" />
+      <LineId Id="46" Count="1" />
+      <LineId Id="55" Count="0" />
+      <LineId Id="64" Count="1" />
+      <LineId Id="58" Count="0" />
+      <LineId Id="67" Count="2" />
+      <LineId Id="59" Count="0" />
+      <LineId Id="56" Count="0" />
+      <LineId Id="70" Count="0" />
+      <LineId Id="74" Count="2" />
+      <LineId Id="71" Count="0" />
+      <LineId Id="60" Count="0" />
+      <LineId Id="62" Count="0" />
+      <LineId Id="61" Count="0" />
+      <LineId Id="57" Count="0" />
+      <LineId Id="48" Count="0" />
+      <LineId Id="77" Count="2" />
+      <LineId Id="50" Count="0" />
+      <LineId Id="80" Count="0" />
+      <LineId Id="19" Count="0" />
+      <LineId Id="27" Count="2" />
+      <LineId Id="26" Count="0" />
+      <LineId Id="20" Count="0" />
+    </LineIds>
+    <LineIds Name="FB_TipCleaner.M_GetActionBusy">
+      <LineId Id="3" Count="3" />
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="FB_TipCleaner.M_GetAllProps">
+      <LineId Id="3" Count="15" />
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="FB_TipCleaner.M_GetNextPointNr">
+      <LineId Id="3" Count="4" />
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="FB_TipCleaner.M_GetProcData">
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="FB_TipCleaner.M_RemoveListEntry">
+      <LineId Id="3" Count="7" />
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="FB_TipCleaner.M_SetAllProps">
+      <LineId Id="3" Count="25" />
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="FB_TipCleaner.M_SetSingleProp">
+      <LineId Id="3" Count="15" />
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="FB_TipCleaner.M_Stop">
+      <LineId Id="3" Count="1" />
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="FB_TipCleaner.P_eStripState.Get">
+      <LineId Id="2" Count="0" />
+    </LineIds>
+  </POU>
+</TcPlcObject>

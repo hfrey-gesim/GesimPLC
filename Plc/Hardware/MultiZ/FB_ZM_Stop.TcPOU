@@ -1,0 +1,85 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<TcPlcObject Version="1.1.0.1" ProductVersion="3.1.4020.6">
+  <POU Name="FB_ZM_Stop" Id="{7b111ad5-c778-4f90-b941-7becc8bd81a0}" SpecialFunc="None">
+    <Declaration><![CDATA[FUNCTION_BLOCK FB_ZM_Stop
+VAR_INPUT
+	bExecute		: BOOL;
+	pFbZAxisRef		: POINTER TO FB_ZAxisRef;
+END_VAR
+
+VAR_OUTPUT
+	bBusy			: BOOL;
+	bError			: BOOL;
+	nErrorID		: ERRORID;
+END_VAR
+
+VAR
+	nState				: USINT;
+	timeOut				: TON;
+	nCurrentPosition	: REAL;
+	//bFlagGetPosition 	: BOOL := TRUE;
+	//fbMultiZReadSdoVar	: FB_MultiZReadSdoVar;
+END_VAR
+]]></Declaration>
+    <Implementation>
+      <ST><![CDATA[IF bExecute THEN
+	IF pFbZAxisRef = 0 THEN
+		nErrorId := E_ErrorIdMultiZ.ERRORID_InvalidZChannel;
+		bError := TRUE;
+		nState := 99;	//go in errorstate		
+		RETURN;
+	END_IF
+	
+	IF pFbZAxisRef^.stInput.nStatus.3 THEN //Error
+		pFbZAxisRef^.stStatus.bError := TRUE;
+		pFbZAxisRef^.stOutput.nMode := 0;
+		pFbZAxisRef^.stOutput.nCtrl := 0;
+		timeOut(IN:= FALSE);
+		nErrorID := F_MultiZError_TO_ErrorId(pFbZAxisRef^.stInput.nError);
+		bBusy := FALSE;
+		bError := TRUE;
+		nState := 99;	//go in errorstate
+		RETURN;
+	END_IF
+
+	IF timeOut.Q THEN
+		timeOut(IN:= FALSE);
+		bError := TRUE;
+		bBusy := FALSE;
+		pFbZAxisRef^.stStatus.bError := TRUE;
+		pFbZAxisRef^.stOutput.nMode := 0;
+		pFbZAxisRef^.stOutput.nCtrl := 0;
+		nErrorId := E_ErrorIdMultiZ.ERRORID_ToWaitStop;
+		nState := 99;	//go in errorstate
+		RETURN;
+	END_IF		
+
+	CASE nState OF		
+		0:	bBusy := TRUE;	
+			pFbZAxisRef^.stStatus.bCmdAborted := TRUE;
+			//Stoppen	
+			pFbZAxisRef^.stOutput.nCtrl.1 := TRUE;	//Stopbit setzen
+			nState := 1;
+			
+		1:	//Stopbit gesetzt?
+			IF pFbZAxisRef^.stInput.nStatus.2 THEN
+				timeOut(IN:= FALSE);
+				pFbZAxisRef^.stOutput.nMode := 0;
+				pFbZAxisRef^.stOutput.nCtrl.1 := FALSE;	//Stopbit zurücksetzen
+				pFbZAxisRef^.stOutput.nCtrl.0 := FALSE;	//Fahrauftrag zurücksetzen
+				nState := 80;
+				bBusy := FALSE;
+			ELSE
+				timeOut(IN:= TRUE, PT:=T#1000MS);	//Timer für Timeout starten
+			END_IF
+	END_CASE
+ELSE
+	nState := 0;
+	bBusy := FALSE;
+	timeOut(IN:= FALSE);
+	bError := FALSE;
+	nErrorID := 0;
+END_IF]]></ST>
+    </Implementation>
+  </POU>
+</TcPlcObject>

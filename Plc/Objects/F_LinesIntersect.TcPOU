@@ -1,0 +1,30 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<TcPlcObject Version="1.1.0.1" ProductVersion="3.1.4020.12">
+  <POU Name="F_LinesIntersect" Id="{b5b7abbe-b6e1-4ed6-b28b-93e088d987dc}" SpecialFunc="None">
+    <Declaration><![CDATA[FUNCTION F_LinesIntersect : BOOL
+VAR_INPUT
+	stLine1 : St_Line;
+	stLine2 : St_Line;
+END_VAR
+VAR
+END_VAR
+]]></Declaration>
+    <Implementation>
+      <ST><![CDATA[F_LinesIntersect := 
+(stLine1.X1 < stLine2.X1) AND 
+(stLine1.X2 > stLine2.X1) AND
+(stLine1.Y1 > stLine2.Y1) AND
+(stLine1.Y1 < stLine2.Y2)
+OR 
+(stLine2.X1 < stLine1.X1) AND 
+(stLine2.X2 > stLine1.X1) AND
+(stLine2.Y1 > stLine1.Y1) AND
+(stLine2.Y1 < stLine1.Y2);]]></ST>
+    </Implementation>
+    <LineIds Name="F_LinesIntersect">
+      <LineId Id="76" Count="3" />
+      <LineId Id="87" Count="4" />
+      <LineId Id="7" Count="0" />
+    </LineIds>
+  </POU>
+</TcPlcObject>

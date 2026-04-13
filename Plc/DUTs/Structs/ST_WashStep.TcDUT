@@ -1,0 +1,16 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<TcPlcObject Version="1.1.0.1" ProductVersion="3.1.0.25">
+  <DUT Name="ST_WashStep" Id="{7c9d12a5-b5d9-40dd-aa27-afb0c48e41df}">
+    <Declaration><![CDATA[TYPE ST_WashStep :
+STRUCT
+	eMode : E_WashMode;
+	nParam1 : DINT;
+	nParam2 : DINT;
+	nParam3 : DINT;
+	nParam4 : DINT;
+END_STRUCT
+END_TYPE
+]]></Declaration>
+    <ObjectProperties />
+  </DUT>
+</TcPlcObject>

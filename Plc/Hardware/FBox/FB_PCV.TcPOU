@@ -1,0 +1,111 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<TcPlcObject Version="1.1.0.1">
+  <POU Name="FB_PCV" Id="{74f59eec-ed0d-4676-9e92-6ecaab4452d6}" SpecialFunc="None">
+    <Declaration><![CDATA[FUNCTION_BLOCK FB_PCV
+VAR_INPUT
+END_VAR
+VAR_OUTPUT
+	bError : BOOL;
+	nErrorId : ERRORID;
+END_VAR
+VAR
+	bFill		: BOOL;
+	tmrTimeout	: TON;
+	bSensor		AT %I* : BOOL; 	//Verknüpfung mit Füllstandssensor
+	bDigiOut 	AT %Q* : BOOL; 	//Verknüpfung muss mit Pumpe und StopVentil erfolgen
+	bPneuValve	AT %Q* : BOOL;	//Verknüpfung mit Pneumatikventil (nur bei SolenoidPip)	
+END_VAR
+
+]]></Declaration>
+    <Implementation>
+      <ST><![CDATA[IF bSensor AND bFill THEN
+	{IF defined(variable:cLiquidBottleNrPCV)}
+	IF NOT aSensSysLiquidBottle[cLiquidBottleNrPCV] THEN //kein Systemwasser vorhanden
+		bError := TRUE;
+		nErrorId := E_ErrorIdCmd.ERRORID_LiquidBottleEmpty;
+	END_IF
+	{ELSE}
+	IF NOT aSensSysLiquidBottle[1] THEN //kein Systemwasser vorhanden
+		bError := TRUE;
+		nErrorId := E_ErrorIdCmd.ERRORID_LiquidBottleEmpty;
+	END_IF	
+	{END_IF}
+
+	IF NOT bError AND bFill THEN
+		tmrTimeout(IN:= TRUE, PT:=T#1M);
+		bDigiOut := TRUE;
+	ELSE
+		tmrTimeout(IN:= FALSE);
+		bDigiOut := FALSE;	
+	END_IF
+
+	bFill := FALSE;
+ELSE
+	tmrTimeout(IN:= FALSE);
+	bDigiOut := FALSE;	
+	tmrTimeout(IN:= FALSE);
+END_IF
+
+IF tmrTimeout.Q THEN
+	bError := TRUE;
+	nErrorId := E_ErrorIdCmd.ERRORID_TimeOutFillPCV;
+	bDigiOut := FALSE;
+END_IF]]></ST>
+    </Implementation>
+    <Method Name="M_Fill" Id="{54c8a2c6-8d9c-4e59-9062-1c031fc9e14c}">
+      <Declaration><![CDATA[METHOD M_Fill
+VAR_INPUT
+END_VAR
+]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[bFill := TRUE;]]></ST>
+      </Implementation>
+    </Method>
+    <Method Name="M_Reset" Id="{2484b465-5156-4f36-a325-b40c1a4d3f8f}">
+      <Declaration><![CDATA[METHOD M_Reset
+VAR_INPUT
+END_VAR
+]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[bError := FALSE;]]></ST>
+      </Implementation>
+    </Method>
+    <Method Name="M_SwitchPneuValve" Id="{7996a399-e240-4868-b9ee-646a613b2001}">
+      <Declaration><![CDATA[METHOD M_SwitchPneuValve
+VAR_INPUT
+	bOn : BOOL;
+END_VAR
+]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[bPneuValve := bOn;]]></ST>
+      </Implementation>
+    </Method>
+    <Property Name="P_bPneuValve" Id="{446d3dd3-cd47-4d4e-abda-4ee30bc6917d}">
+      <Declaration><![CDATA[PROPERTY P_bPneuValve : BOOL]]></Declaration>
+      <Get Name="Get" Id="{c7a289da-8557-48a2-bf86-f3bae11b3d3b}">
+        <Declaration><![CDATA[VAR
+END_VAR
+]]></Declaration>
+        <Implementation>
+          <ST><![CDATA[P_bPneuValve := bPneuValve;]]></ST>
+        </Implementation>
+      </Get>
+    </Property>
+    <LineIds Name="FB_PCV">
+      <LineId Id="43" Count="31" />
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="FB_PCV.M_Fill">
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="FB_PCV.M_Reset">
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="FB_PCV.M_SwitchPneuValve">
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="FB_PCV.P_bPneuValve.Get">
+      <LineId Id="2" Count="0" />
+    </LineIds>
+  </POU>
+</TcPlcObject>

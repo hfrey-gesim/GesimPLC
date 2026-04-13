@@ -1,0 +1,199 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<TcPlcObject Version="1.1.0.1" ProductVersion="3.1.4022.18">
+  <POU Name="FB_Workplate" Id="{5f9e774b-fbeb-4995-af82-5e1c4a7d3ee5}" SpecialFunc="None">
+    <Declaration><![CDATA[FUNCTION_BLOCK FB_Workplate EXTENDS FB_SlotTarget
+VAR_INPUT
+END_VAR
+VAR_OUTPUT
+END_VAR
+VAR
+	rCollHeight			: REAL;
+	bCalcCollHeight		: BOOL;
+	iter				: FB_ObjCollectIteratorDeep;
+	pTarget				: POINTER TO FB_TargetBase;
+	stAbsPosCenter		: ST_3DPoint;
+	fbRectangle			: FB_Rectangle;
+	nParentSlotNr		: UINT;		//Workplate befindet sich zwar an keinem Slot, aber virtuell in der GUI (am Root)
+END_VAR
+]]></Declaration>
+    <Implementation>
+      <ST><![CDATA[IF bCalcCollHeight THEN
+	bCalcCollHeight := FALSE;
+	fbRectangle(X1:=0.0, Y1:=0.0, X2:=stDimension.Width, Y2:=stDimension.Depth);
+	pTarget := M_GetHighestTarget(fbRectAngle,0.0);
+	IF pTarget > 0 THEN
+		IF pTarget^.P_rAbsFreeHeight > P_rAbsFreeHeight THEN
+			rCollHeight := pTarget^.P_rAbsFreeHeight + 1000.0;
+		ELSE
+			rCollHeight := P_rAbsFreeHeight + 1000.0;
+		END_IF
+	ELSE
+		rCollHeight := P_rAbsFreeHeight + 1000.0;
+	END_IF
+END_IF]]></ST>
+    </Implementation>
+    <Method Name="FB_init" Id="{4647c8d4-1292-4106-a7ef-22cd432239e1}">
+      <Declaration><![CDATA[METHOD FB_init : BOOL
+VAR_INPUT
+	bInitRetains : BOOL; // if TRUE, the retain variables are initialized (warm start / cold start)
+	bInCopyCode : BOOL;  // if TRUE, the instance afterwards gets moved into the copy code (online change)
+END_VAR
+]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[eObjectType := E_ObjectType.OBJECTTYPE_Workplate;
+eObjectGroup := E_ObjectGroup.OBJECTGROUP_Target;]]></ST>
+      </Implementation>
+    </Method>
+    <Method Name="M_AddChild" Id="{0c363073-83ab-4c55-b772-9e45e35f773d}">
+      <Declaration><![CDATA[METHOD M_AddChild : ERRORID
+VAR_INPUT
+	pObject : POINTER TO FB_Object;
+	nSlotNr	: UINT;
+	nIndex 	: INT;
+END_VAR
+]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[//Kann alle Targets aufnehmen
+IF pObject > 0 THEN
+	IF pObject^.M_bIsGroup(E_ObjectGroup.OBJECTGROUP_Target) THEN
+		M_AddChild := SUPER^.M_AddChild(pObject,nSlotNr,nIndex);
+	ELSE
+		M_AddChild := E_ErrorIdObjMgmt.ERRORID_InvalidParentObject;
+	END_IF
+ELSE
+	M_AddChild := E_ErrorIdObjMgmt.ERRORID_InvalidParentObject;
+END_IF]]></ST>
+      </Implementation>
+    </Method>
+    <Method Name="M_ClearAllProps" Id="{29e69567-d46b-4d41-afc8-0ab8ddbf98db}">
+      <Declaration><![CDATA[METHOD M_ClearAllProps
+VAR_INPUT
+	bIgnoreParent : BOOL; //Es wird das gesamte OD gelöscht. -> Zeiger auf Parent nicht mehr gültig!
+END_VAR
+]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[SUPER^.M_ClearAllProps(bIgnoreParent);
+rCollHeight := 0;]]></ST>
+      </Implementation>
+    </Method>
+    <Method Name="M_GetAllProps" Id="{d59b6009-164c-4995-b4ae-ddf127d5601a}">
+      <Declaration><![CDATA[METHOD M_GetAllProps : ERRORID
+VAR_INPUT
+	refCmdData : REFERENCE TO  ST_CmdData;
+END_VAR]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[SUPER^.M_GetAllProps(refCmdData);
+
+refCmdData.n32Data[1] := nParentSlotNr;]]></ST>
+      </Implementation>
+    </Method>
+    <Method Name="M_SetAllProps" Id="{26c005d3-d78c-4d2b-aba3-7ba86939f4b1}">
+      <Declaration><![CDATA[METHOD M_SetAllProps : ERRORID
+VAR_INPUT
+	refCmdData : REFERENCE TO  ST_CmdData;
+END_VAR]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[M_SetAllProps := SUPER^.M_SetAllProps(refCmdData);
+IF M_SetAllProps > 0 THEN
+	RETURN;
+END_IF
+
+nParentSlotNr := DINT_TO_UINT(refCmdData.n32Data[1]);]]></ST>
+      </Implementation>
+    </Method>
+    <Property Name="P_bCalcCollisHeight" Id="{19baa40b-2a28-4e28-a903-c6b8eea972b9}">
+      <Declaration><![CDATA[PROPERTY P_bCalcCollisHeight : BOOL]]></Declaration>
+      <Set Name="Set" Id="{c69c5f60-f7ea-4eeb-abee-f118c10ce474}">
+        <Declaration><![CDATA[VAR
+END_VAR
+]]></Declaration>
+        <Implementation>
+          <ST><![CDATA[bCalcCollHeight := P_bCalcCollisHeight;]]></ST>
+        </Implementation>
+      </Set>
+    </Property>
+    <Property Name="P_nParentSlotNr" Id="{5df26b9f-f086-4a45-9a77-f46a438b4b62}">
+      <Declaration><![CDATA[PROPERTY P_nParentSlotNr : UINT]]></Declaration>
+      <Get Name="Get" Id="{a8373210-5c56-4652-97b7-5ee889a47b0f}">
+        <Declaration><![CDATA[VAR
+END_VAR
+]]></Declaration>
+        <Implementation>
+          <ST><![CDATA[P_nParentSlotNr := nParentSlotNr;]]></ST>
+        </Implementation>
+      </Get>
+    </Property>
+    <Property Name="P_rCollHeight" Id="{48f2e55f-e824-44ea-9881-1c197cd65386}">
+      <Declaration><![CDATA[PROPERTY P_rCollHeight : REAL]]></Declaration>
+      <Get Name="Get" Id="{ea52a64a-f421-4ff9-a8a5-b84eb602ccf4}">
+        <Declaration><![CDATA[VAR
+END_VAR
+]]></Declaration>
+        <Implementation>
+          <ST><![CDATA[P_rCollHeight := rCollHeight;]]></ST>
+        </Implementation>
+      </Get>
+      <Set Name="Set" Id="{c4274f4d-2da8-47dd-87de-6d26508ff102}">
+        <Declaration><![CDATA[VAR
+END_VAR
+]]></Declaration>
+        <Implementation>
+          <ST><![CDATA[rCollHeight := P_rCollHeight;]]></ST>
+        </Implementation>
+      </Set>
+    </Property>
+    <LineIds Name="FB_Workplate">
+      <LineId Id="13" Count="0" />
+      <LineId Id="21" Count="1" />
+      <LineId Id="15" Count="0" />
+      <LineId Id="23" Count="0" />
+      <LineId Id="27" Count="0" />
+      <LineId Id="29" Count="1" />
+      <LineId Id="28" Count="0" />
+      <LineId Id="25" Count="1" />
+      <LineId Id="24" Count="0" />
+      <LineId Id="16" Count="0" />
+      <LineId Id="9" Count="0" />
+    </LineIds>
+    <LineIds Name="FB_Workplate.FB_init">
+      <LineId Id="7" Count="1" />
+    </LineIds>
+    <LineIds Name="FB_Workplate.M_AddChild">
+      <LineId Id="19" Count="0" />
+      <LineId Id="9" Count="0" />
+      <LineId Id="22" Count="0" />
+      <LineId Id="20" Count="0" />
+      <LineId Id="18" Count="0" />
+      <LineId Id="15" Count="0" />
+      <LineId Id="11" Count="0" />
+      <LineId Id="13" Count="0" />
+      <LineId Id="12" Count="0" />
+      <LineId Id="5" Count="0" />
+    </LineIds>
+    <LineIds Name="FB_Workplate.M_ClearAllProps">
+      <LineId Id="6" Count="0" />
+      <LineId Id="5" Count="0" />
+    </LineIds>
+    <LineIds Name="FB_Workplate.M_GetAllProps">
+      <LineId Id="12" Count="2" />
+    </LineIds>
+    <LineIds Name="FB_Workplate.M_SetAllProps">
+      <LineId Id="13" Count="2" />
+      <LineId Id="12" Count="0" />
+      <LineId Id="17" Count="0" />
+      <LineId Id="16" Count="0" />
+    </LineIds>
+    <LineIds Name="FB_Workplate.P_bCalcCollisHeight.Set">
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="FB_Workplate.P_nParentSlotNr.Get">
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="FB_Workplate.P_rCollHeight.Get">
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="FB_Workplate.P_rCollHeight.Set">
+      <LineId Id="2" Count="0" />
+    </LineIds>
+  </POU>
+</TcPlcObject>

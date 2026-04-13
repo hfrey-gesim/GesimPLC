@@ -1,0 +1,236 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<TcPlcObject Version="1.1.0.1" ProductVersion="3.1.4022.18">
+  <POU Name="FB_OM_Init" Id="{464531e0-6ecc-43c2-91ab-462fdf6350e6}" SpecialFunc="None">
+    <Declaration><![CDATA[FUNCTION_BLOCK FB_OM_Init
+VAR_INPUT
+END_VAR
+VAR_OUTPUT
+	eCurrentState : E_MachineState := E_MachineState.MACHINESTATE_Idle;
+END_VAR
+VAR
+	stActionData 	: ST_ActionData := (eAction := E_Action.ACTION_Init);
+	i				: UINT;	
+	stError 		: ST_Error;
+	nStateA_Reset 	: USINT;
+	timeout 		: TON;	
+END_VAR
+]]></Declaration>
+    <Implementation>
+      <ST><![CDATA[CASE eCurrentState OF
+	E_MachineState.MACHINESTATE_Idle:
+		//Auf Fehler der Hardware reagieren
+		IF PerformHardware.bError THEN
+			eCurrentState := E_MachineState.MACHINESTATE_Error;
+		END_IF
+	E_MachineState.MACHINESTATE_Active:
+		eCurrentState := ActionDispacher.eCurrentState;
+	E_MachineState.MACHINESTATE_Cancel:
+		ActionDispacher.M_StopAll();
+		eCurrentState := ActionDispacher.eCurrentState;
+	E_MachineState.MACHINESTATE_Canceled:
+		eCurrentState := ActionDispacher.eCurrentState;
+	E_MachineState.MACHINESTATE_Reset:
+		A_Reset();
+	E_MachineState.MACHINESTATE_Error:
+		//Do Nothing		
+END_CASE]]></ST>
+    </Implementation>
+    <Action Name="A_Reset" Id="{eaaee52f-2d17-4649-8948-0e7b79d113e6}">
+      <Implementation>
+        <ST><![CDATA[IF nStateA_Reset = 0 THEN
+	//ActionDispacher zurücksetzen (Hier werden auch die Devices zurückgesetzt
+	ActionDispacher.M_Reset();
+	//Hardware zurücksetzen
+	PerformHardware.A_ResetError();
+	//PCV zurücksetzen
+	timeout(IN:= FALSE);
+	nStateA_Reset := 1;
+ELSIF nStateA_Reset = 1 THEN
+	nStateA_Reset := 2;
+	timeout(IN:= TRUE, PT:=T#20S);
+	//Warten, bis alles zurückgesetzt
+	IF ActionDispacher.eCurrentState <> E_MachineState.MACHINESTATE_Idle THEN
+		nStateA_Reset := 1; 		
+	END_IF
+	IF PerformHardware.bError THEN
+		PerformHardware.A_ResetError();
+		nStateA_Reset := 1;
+	END_IF
+	IF timeout.Q THEN
+		eCurrentState := E_MachineState.MACHINESTATE_Error;
+		nStateA_Reset := 0;
+	END_IF
+ELSIF nStateA_Reset = 2 THEN
+	//Checken, ob MzBase komplett resettet wurde -> Aktivierung der KOnfiguration erforderlich
+	FOR i:= 1 TO cMaxMzHeads BY 1 DO
+		IF aFbMultiZRef[i].P_bMzBaseRestarted THEN
+			fbConfiguration.M_Deactivate();
+		END_IF
+	END_FOR
+	
+	IF fbConfiguration.P_bActivated THEN
+		eCurrentState := E_MachineState.MACHINESTATE_Idle;
+		nStateA_Reset := 0;
+	ELSE
+		nStateA_Reset := 3;
+	END_IF
+ELSIF nStateA_Reset = 3 THEN //Konfiguration wieder aktivieren
+	fbConfiguration.A_Activate(bExecute:= TRUE);
+	IF NOT fbConfiguration.bBusy THEN
+		IF fbConfiguration.bError THEN
+			eCurrentState := E_MachineState.MACHINESTATE_Error;
+			fbErrorList.M_Add(stError);
+		ELSE
+			eCurrentState := E_MachineState.MACHINESTATE_Idle;
+		END_IF
+		nStateA_Reset := 0;
+		fbConfiguration.A_Activate(bExecute:= FALSE);
+	END_IF
+END_IF]]></ST>
+      </Implementation>
+    </Action>
+    <Method Name="M_Cancel" Id="{3ada1497-6e06-4cdd-8de7-235baa390b17}">
+      <Declaration><![CDATA[METHOD M_Cancel : ERRORID
+VAR_INPUT
+END_VAR
+VAR
+END_VAR]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[IF eCurrentState = E_MachineState.MACHINESTATE_Active THEN	//auf Cancel-Kommando braucht nur im Actice-State reagiert werden
+	ActionDispacher.M_StopAll();
+END_IF]]></ST>
+      </Implementation>
+    </Method>
+    <Method Name="M_ExeAction" Id="{f80d9c9f-4aa6-4700-be5d-32b19321f8d2}">
+      <Declaration><![CDATA[METHOD M_ExeAction : ST_Error
+VAR_INPUT
+	refData : REFERENCE TO ARRAY[0..39] OF DINT;
+END_VAR
+
+VAR
+	i				: UINT;
+	bInitAllObjects : BOOL;
+	iter			: FB_ObjCollectIterator;
+END_VAR]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[M_ExeAction.Cmd := E_Action.ACTION_Init;
+
+//Start der Initialisierung nur in "Idle" möglich
+IF NOT (eCurrentState = E_MachineState.MACHINESTATE_Idle) THEN
+	M_ExeAction.ErrorId := E_ErrorIdCmd.ERRORID_InvalidState;
+	RETURN;
+ELSE
+	
+	stActionData.aParams[1] := refData[0];
+	
+	IF NOT stActionData.eAction = E_Action.ACTION_Init THEN
+		RETURN;
+	END_IF
+	
+	bInitAllObjects := TRUE;
+	
+	FOR i:= 1 TO 39 BY 1 DO
+		IF refData[i] > 0 THEN
+			IF refData[i] <= fbObjectDirectory.nCntObject THEN	//gültiges Object?
+				IF NOT fbObjectDirectory.M_ObjIsDevice(DINT_TO_UINT(refData[i])) THEN
+					M_ExeAction.ObjectId := DINT_TO_UINT(refData[i]);
+					M_ExeAction.ErrorId := E_ErrorIdObjMgmt.ERRORID_IsNoDevice;	//Error: Object ist kein Device			
+				END_IF
+			ELSE
+				M_ExeAction.ObjectId := DINT_TO_UINT(refData[i]);
+				M_ExeAction.ErrorId := E_ErrorIdCmd.ERRORID_ObjectNotExists;	//Error: Object existiert nicht
+				RETURN;
+			END_IF
+			bInitAllObjects := FALSE;
+		END_IF
+	END_FOR
+	
+	IF bInitAllObjects THEN	//Alle Devices initialisieren
+		fbObjectDirectory.P_pDeviceCollection^.M_GetIterator(iter);
+		WHILE iter.pNode > 0 AND_THEN iter.pNode^.P_pObject > 0 DO
+			//Falls ein Diluter initialisiert wird, muss das eventuell vorhandene Pneumatikventil am PCV ausgeschalten werden
+			//Das Pneumatikventil existiert nur bei Versionen mit SolenoidPip,welche zum Dispensen Druck über das PCV bezieht
+				IF iter.pNode^.P_pObject^.P_eObjectType = E_ObjectType.OBJECTTYPE_Diluter THEN
+				fbPCV.M_SwitchPneuValve(FALSE);
+			END_IF
+			stActionData.nObject := iter.pNode^.P_pObject^.P_nObjectID;
+			M_ExeAction.ObjectId := iter.pNode^.P_pObject^.P_nObjectID;
+			M_ExeAction.ErrorId := ActionDispacher.M_ExeAction(stActionData, TRUE);
+			IF M_ExeAction.ErrorId > 0 THEN
+				RETURN;
+			END_IF				
+			iter.M_Increment();
+		END_WHILE
+	ELSE	//nur in "aObjectId" angegebene Devices initialisieren
+		FOR i:= 1 TO 39 BY 1 DO
+			IF refData[i] > 0 THEN
+				//Falls ein Diluter initialisiert wird, muss das eventuell vorhandene Pneumatikventil am PCV ausgeschalten werden
+				//Das Pneumatikventil existiert nur bei Versionen mit SolenoidPip,welche zum Dispensen Druck über das PCV bezieht
+				stActionData.nObject := DINT_TO_UINT(refData[i]);
+				IF fbObjectDirectory.M_GetObjType(stActionData.nObject) = E_ObjectType.OBJECTTYPE_Diluter THEN
+					fbPCV.M_SwitchPneuValve(FALSE);
+				END_IF
+				M_ExeAction.ObjectId := stActionData.nObject;
+				M_ExeAction.ErrorId := ActionDispacher.M_ExeAction(stActionData, TRUE);
+				IF M_ExeAction.ErrorId > 0 THEN
+					RETURN;
+				END_IF				
+			END_IF
+		END_FOR
+	END_IF
+	eCurrentState := E_MachineState.MACHINESTATE_Active;
+END_IF]]></ST>
+      </Implementation>
+    </Method>
+    <Method Name="M_ResetError" Id="{636e035e-0c2f-4033-b7c3-975531df381f}">
+      <Declaration><![CDATA[METHOD M_ResetError
+VAR_INPUT
+END_VAR
+]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[IF eCurrentState = E_MachineState.MACHINESTATE_Error THEN 
+	eCurrentState := E_MachineState.MACHINESTATE_Reset;
+END_IF]]></ST>
+      </Implementation>
+    </Method>
+    <LineIds Name="FB_OM_Init">
+      <LineId Id="3" Count="16" />
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="FB_OM_Init.A_Reset">
+      <LineId Id="2" Count="15" />
+      <LineId Id="50" Count="0" />
+      <LineId Id="18" Count="31" />
+      <LineId Id="1" Count="0" />
+    </LineIds>
+    <LineIds Name="FB_OM_Init.M_Cancel">
+      <LineId Id="3" Count="1" />
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="FB_OM_Init.M_ExeAction">
+      <LineId Id="3" Count="17" />
+      <LineId Id="91" Count="1" />
+      <LineId Id="94" Count="0" />
+      <LineId Id="93" Count="0" />
+      <LineId Id="21" Count="0" />
+      <LineId Id="27" Count="8" />
+      <LineId Id="96" Count="1" />
+      <LineId Id="100" Count="0" />
+      <LineId Id="103" Count="1" />
+      <LineId Id="107" Count="1" />
+      <LineId Id="116" Count="6" />
+      <LineId Id="99" Count="0" />
+      <LineId Id="36" Count="0" />
+      <LineId Id="46" Count="7" />
+      <LineId Id="76" Count="0" />
+      <LineId Id="54" Count="0" />
+      <LineId Id="77" Count="2" />
+      <LineId Id="55" Count="4" />
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="FB_OM_Init.M_ResetError">
+      <LineId Id="3" Count="1" />
+      <LineId Id="2" Count="0" />
+    </LineIds>
+  </POU>
+</TcPlcObject>

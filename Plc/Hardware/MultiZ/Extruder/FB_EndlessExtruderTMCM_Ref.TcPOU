@@ -1,0 +1,126 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<TcPlcObject Version="1.1.0.1" ProductVersion="3.1.4024.11">
+  <POU Name="FB_EndlessExtruderTMCM_Ref" Id="{7295e60e-54b6-4fec-85c4-5c7e28d7ec40}" SpecialFunc="None">
+    <Declaration><![CDATA[FUNCTION_BLOCK FB_EndlessExtruderTMCM_Ref EXTENDS FB_ExtruderRef
+VAR_INPUT
+END_VAR
+VAR
+	pHwRefTMCM1140 	: POINTER TO FB_HwRefTMCM1140;
+	eTriggerOutput	: E_TriggerOutput;
+	nTriggerChannel	: USINT;	
+END_VAR
+VAR_OUTPUT
+END_VAR
+]]></Declaration>
+    <Implementation>
+      <ST><![CDATA[]]></ST>
+    </Implementation>
+    <Method Name="FB_init" Id="{a8ae3470-e4bf-403a-9f75-c3ef8fbeb2bc}">
+      <Declaration><![CDATA[METHOD FB_init : BOOL
+VAR_INPUT
+	bInitRetains 	: BOOL; // if TRUE, the retain variables are initialized (warm start / cold start)
+	bInCopyCode 	: BOOL;  // if TRUE, the instance afterwards gets moved into the copy code (online change)
+	pHwRefTMCM1140 	: POINTER TO FB_HwRefTMCM1140;
+	//eTriggerOutput	: E_TriggerOutput;
+	//nTriggerChannel	: USINT;
+END_VAR
+]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[THIS^.pHwRefTMCM1140 := pHwRefTMCM1140;
+//THIS^.eTriggerOutput := eTriggerOutput;
+//THIS^.nTriggerChannel := nTriggerChannel;]]></ST>
+      </Implementation>
+    </Method>
+    <Property Name="P_bError" Id="{17a7ec3e-2970-483d-97a8-a2c4452afadf}">
+      <Declaration><![CDATA[PROPERTY P_bError : BOOL]]></Declaration>
+      <Get Name="Get" Id="{9e961f29-d2b6-47bf-89e2-9455c3c8160e}">
+        <Declaration><![CDATA[VAR
+END_VAR
+]]></Declaration>
+        <Implementation>
+          <ST><![CDATA[]]></ST>
+        </Implementation>
+      </Get>
+    </Property>
+    <Property Name="P_bIsActive" Id="{840c16fa-c4bd-4e8e-ae7b-8e86bddb17b8}">
+      <Declaration><![CDATA[PROPERTY P_bIsActive : BOOL]]></Declaration>
+      <Get Name="Get" Id="{cebe5ff6-a67f-4eed-8d8b-08ad259440f8}">
+        <Declaration><![CDATA[VAR
+END_VAR
+]]></Declaration>
+        <Implementation>
+          <ST><![CDATA[]]></ST>
+        </Implementation>
+      </Get>
+    </Property>
+    <Property Name="P_bIsLocked" Id="{f67ba6a1-ddfb-4f90-ad6c-08f467464dfb}">
+      <Declaration><![CDATA[PROPERTY P_bIsLocked : BOOL]]></Declaration>
+      <Get Name="Get" Id="{e2802494-1fc0-4882-b46d-fdfa69fc691d}">
+        <Declaration><![CDATA[VAR
+END_VAR
+]]></Declaration>
+        <Implementation>
+          <ST><![CDATA[P_bIsLocked := TRUE;]]></ST>
+        </Implementation>
+      </Get>
+    </Property>
+    <Property Name="P_eTriggerOutput" Id="{6a3263d0-eaf8-4701-8cb6-33669840ab00}">
+      <Declaration><![CDATA[PROPERTY P_eTriggerOutput : E_TriggerOutput]]></Declaration>
+      <Get Name="Get" Id="{7fc66a21-02a1-4dac-83d3-498502d450ad}">
+        <Declaration><![CDATA[VAR
+END_VAR
+]]></Declaration>
+        <Implementation>
+          <ST><![CDATA[P_eTriggerOutput := eTriggerOutput;]]></ST>
+        </Implementation>
+      </Get>
+    </Property>
+    <Property Name="P_nTriggerChannel" Id="{ed2eed39-265a-4ef0-8e24-6d43b8bbee1e}">
+      <Declaration><![CDATA[PROPERTY P_nTriggerChannel : USINT]]></Declaration>
+      <Get Name="Get" Id="{78515e3b-f0c7-4fba-9723-c2de4087d385}">
+        <Declaration><![CDATA[VAR
+END_VAR
+]]></Declaration>
+        <Implementation>
+          <ST><![CDATA[P_nTriggerChannel := nTriggerChannel;]]></ST>
+        </Implementation>
+      </Get>
+    </Property>
+    <Property Name="P_pHwRefTMCM1140" Id="{d421782e-1f55-42de-9c30-62d838764e54}">
+      <Declaration><![CDATA[PROPERTY P_pHwRefTMCM1140 : POINTER TO FB_HwRefTMCM1140]]></Declaration>
+      <Get Name="Get" Id="{704de267-9e18-499f-8a04-9de68f37d650}">
+        <Declaration><![CDATA[VAR
+END_VAR
+]]></Declaration>
+        <Implementation>
+          <ST><![CDATA[P_pHwRefTMCM1140 := pHwRefTMCM1140;]]></ST>
+        </Implementation>
+      </Get>
+    </Property>
+    <LineIds Name="FB_EndlessExtruderTMCM_Ref">
+      <LineId Id="9" Count="0" />
+    </LineIds>
+    <LineIds Name="FB_EndlessExtruderTMCM_Ref.FB_init">
+      <LineId Id="7" Count="0" />
+      <LineId Id="16" Count="1" />
+    </LineIds>
+    <LineIds Name="FB_EndlessExtruderTMCM_Ref.P_bError.Get">
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="FB_EndlessExtruderTMCM_Ref.P_bIsActive.Get">
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="FB_EndlessExtruderTMCM_Ref.P_bIsLocked.Get">
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="FB_EndlessExtruderTMCM_Ref.P_eTriggerOutput.Get">
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="FB_EndlessExtruderTMCM_Ref.P_nTriggerChannel.Get">
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="FB_EndlessExtruderTMCM_Ref.P_pHwRefTMCM1140.Get">
+      <LineId Id="2" Count="0" />
+    </LineIds>
+  </POU>
+</TcPlcObject>

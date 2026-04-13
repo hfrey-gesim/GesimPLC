@@ -1,0 +1,135 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<TcPlcObject Version="1.1.0.1" ProductVersion="3.1.4022.10">
+  <POU Name="FB_HwModule" Id="{151b4dca-e858-44b2-a722-4a4d4931cf5e}" SpecialFunc="None">
+    <Declaration><![CDATA[FUNCTION_BLOCK FB_HwModule
+VAR_INPUT
+END_VAR
+VAR_OUTPUT
+END_VAR
+VAR
+	stHardwareId : ST_HardwareId;
+	bBusy : BOOL;
+	bError : BOOL;
+	stError : ST_Error;
+END_VAR
+]]></Declaration>
+    <Implementation>
+      <ST><![CDATA[]]></ST>
+    </Implementation>
+    <Method Name="M_GetHwInfo" Id="{aacf537f-c2a3-45d5-8d0c-38e3e45704dd}">
+      <Declaration><![CDATA[METHOD M_GetHwInfo : ST_HardwareInfo
+VAR_INPUT
+END_VAR
+
+VAR
+	nHwId : UDINT;
+END_VAR]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[nHwId := SHL(UINT_TO_UDINT(stHardwareId.eGroup),16);
+nHwId := nHwId OR (SHL(UINT_TO_UDINT(stHardwareId.nParentItem),8));
+nHwId := nHwId OR stHardwareId.nItem;
+M_GetHwInfo.nHwId := nHwId;]]></ST>
+      </Implementation>
+    </Method>
+    <Method Name="M_Reset" Id="{87b8d77e-bb50-4562-8dee-a6cc9e705e21}">
+      <Declaration><![CDATA[METHOD M_Reset
+VAR_INPUT
+END_VAR
+]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[]]></ST>
+      </Implementation>
+    </Method>
+    <Property Name="P_bBusy" Id="{16a8a61d-c097-4af6-bbf3-01065605f1bd}">
+      <Declaration><![CDATA[PROPERTY P_bBusy : BOOL]]></Declaration>
+      <Get Name="Get" Id="{6d716fdf-22a4-4fdb-b0b9-fb5ad40fa00f}">
+        <Declaration><![CDATA[VAR
+END_VAR
+]]></Declaration>
+        <Implementation>
+          <ST><![CDATA[P_bBusy := bBusy;]]></ST>
+        </Implementation>
+      </Get>
+    </Property>
+    <Property Name="P_bError" Id="{3aeb50aa-f1fc-494f-9cef-837f51f4a155}">
+      <Declaration><![CDATA[PROPERTY P_bError : BOOL]]></Declaration>
+      <Get Name="Get" Id="{3f3cf82c-8176-484c-b44e-102e63603a2a}">
+        <Declaration><![CDATA[VAR
+END_VAR
+]]></Declaration>
+        <Implementation>
+          <ST><![CDATA[P_bError := bError;]]></ST>
+        </Implementation>
+      </Get>
+    </Property>
+    <Property Name="P_eHardwareGrp" Id="{479e2b5d-f5d6-41fb-a80c-f1a55e50c66b}">
+      <Declaration><![CDATA[PROPERTY P_eHardwareGrp : E_HardwareGrp]]></Declaration>
+      <Get Name="Get" Id="{3173f508-aa30-4293-8813-b8c03b746ee1}">
+        <Declaration><![CDATA[VAR
+END_VAR
+]]></Declaration>
+        <Implementation>
+          <ST><![CDATA[P_eHardwareGrp := stHardwareId.eGroup;]]></ST>
+        </Implementation>
+      </Get>
+    </Property>
+    <Property Name="P_stError" Id="{39aad715-953d-46c0-b66f-646dd2200afe}">
+      <Declaration><![CDATA[PROPERTY P_stError : ST_Error]]></Declaration>
+      <Get Name="Get" Id="{f168966a-20d4-4a73-8aa5-dedab4c6821c}">
+        <Declaration><![CDATA[VAR
+END_VAR
+]]></Declaration>
+        <Implementation>
+          <ST><![CDATA[P_stError := stError;]]></ST>
+        </Implementation>
+      </Get>
+    </Property>
+    <Property Name="P_stHardwareId" Id="{6e4629b3-db27-476c-bb33-592e266fe2ac}">
+      <Declaration><![CDATA[PROPERTY P_stHardwareId : ST_HardwareId]]></Declaration>
+      <Get Name="Get" Id="{bb5a3a70-e773-49cb-ae5c-34dc4d9a0a09}">
+        <Declaration><![CDATA[VAR
+END_VAR
+]]></Declaration>
+        <Implementation>
+          <ST><![CDATA[P_stHardwareId := stHardwareId;]]></ST>
+        </Implementation>
+      </Get>
+      <Set Name="Set" Id="{a9ab0989-605e-44bb-bc2d-b5fd9d652b94}">
+        <Declaration><![CDATA[VAR
+END_VAR
+]]></Declaration>
+        <Implementation>
+          <ST><![CDATA[stHardwareId := P_stHardwareId;]]></ST>
+        </Implementation>
+      </Set>
+    </Property>
+    <LineIds Name="FB_HwModule">
+      <LineId Id="9" Count="0" />
+    </LineIds>
+    <LineIds Name="FB_HwModule.M_GetHwInfo">
+      <LineId Id="5" Count="0" />
+      <LineId Id="9" Count="2" />
+    </LineIds>
+    <LineIds Name="FB_HwModule.M_Reset">
+      <LineId Id="5" Count="0" />
+    </LineIds>
+    <LineIds Name="FB_HwModule.P_bBusy.Get">
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="FB_HwModule.P_bError.Get">
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="FB_HwModule.P_eHardwareGrp.Get">
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="FB_HwModule.P_stError.Get">
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="FB_HwModule.P_stHardwareId.Get">
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="FB_HwModule.P_stHardwareId.Set">
+      <LineId Id="2" Count="0" />
+    </LineIds>
+  </POU>
+</TcPlcObject>

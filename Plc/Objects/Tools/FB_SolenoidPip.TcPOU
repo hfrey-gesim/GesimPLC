@@ -1,0 +1,1500 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<TcPlcObject Version="1.1.0.1" ProductVersion="3.1.4024.9">
+  <POU Name="FB_SolenoidPip" Id="{ea957eae-3282-412d-9c97-295eff17b915}" SpecialFunc="None">
+    <Declaration><![CDATA[FUNCTION_BLOCK FB_SolenoidPip EXTENDS FB_GCodeTool IMPLEMENTS I_UsingDryPad
+VAR_INPUT
+END_VAR
+VAR_OUTPUT
+END_VAR
+VAR
+	//Specproperties
+	nDiluterObjId		: UINT;
+	pDiluter			: POINTER TO FB_Diluter;
+	pPneuChannelPress	: POINTER TO FB_PneuChannelRef;
+	
+	nFrequency			: UINT;
+	nPulse				: UINT;
+	//PrePeakTime wird direkt in pPiezoRef gespeichert
+	
+	rAspFrequSweepStart		: REAL;
+	rAspFrequSweepEnd 		: REAL;
+	rAspFrequSweepTime		: REAL;
+	nAspiratePulse			: UINT;
+	
+	rDispFrequSweepStart	: REAL;
+	rDispFrequSweepEnd 		: REAL;
+	rDispFrequSweepTime		: REAL;
+	nDispensePulse			: UINT;
+		
+	nDrypadArea				: USINT;
+	tDryTime				: TIME;
+	pFbPiezoRef				: POINTER TO FB_PiezoRef;
+	fbPiezoControl			: FB_PiezoControl;
+	
+	//****************************************Aktionvariablen****************************************************
+	
+	stActionDataSpec	: ST_ActionData;
+	
+	//Sweep
+	rFrequStep			: REAL;
+	//rFrequStart			: REAL;
+	rFrequNew			: REAL;
+	rSweepSteps			: REAL;
+	rCurrentSweepStep	: REAL;
+	
+	
+	//Action: "InitTool"
+	bInitTool			: BOOL;
+	nStateA_InitTool	: USINT;	
+	
+	//Action: "Aspirate"
+	bAspirate			: BOOL;
+	nStateA_Aspirate	: USINT;
+	nQuantity			: DINT;
+	nFlow				: DINT;
+	
+	//Action: "Dispense"
+	bDispense			: BOOL;
+	nStateA_Dispense	: USINT;
+
+	//Action: "DispensePiezo"
+	bDispensePiezo			: BOOL;
+	nStateA_DispensePiezo	: USINT;
+	nDrops					: UINT;
+	bDispensePiezoStart		: BOOL;
+	bStroboskopeOn			: BOOL;
+	bSetDropsFlag			: BOOL := TRUE;	
+	nTestResult				: UDINT;	//wird beim PiezoTest durch InteractResponse Arg1 geschrieben bzw. bei Start des Tests zurückgesetzt
+	
+	//Action: "MoveDilValve"
+	bDilMoveValve			: BOOL;
+	nStateA_DilMoveValve	: USINT;
+	
+	//Action: "SetPressure"
+	bSetPress			: BOOL;
+	fbSetPress			: FB_SetPressure;
+	
+	//Action: "SwitchPressure"
+	eSwitchPressCtrl	: E_PressCtrl;
+	
+END_VAR
+]]></Declaration>
+    <Implementation>
+      <ST><![CDATA[fbPiezoControl(pFbPiezoRef:= pFbPiezoRef);
+
+IF eCurrentState = E_MachineState.MACHINESTATE_Active THEN
+	
+	IF bInitTool THEN
+		A_InitTool();
+		IF nStateA_InitTool >= 80 THEN
+			IF nStateA_InitTool >= 99 THEN
+				bError := TRUE;
+			END_IF
+			bInitTool := FALSE;
+			nStateA_InitTool := 0;
+			M_RemoveListEntry(nSearchValue:= E_Action.ACTION_Init);
+		END_IF		
+	END_IF
+
+	IF bAspirate THEN
+		A_Aspirate();
+		IF nStateA_Aspirate >= 80 THEN
+			IF nStateA_Aspirate >= 99 THEN
+				bError := TRUE;	
+			END_IF
+			bAspirate := FALSE;
+			nStateA_Aspirate := 0;
+			M_RemoveListEntry(nSearchValue:= E_Action.ACTION_Aspirate);
+		END_IF
+	END_IF
+
+	IF bDispense THEN
+		A_Dispense();
+		IF nStateA_Dispense >= 80 THEN
+			IF nStateA_Dispense >= 99 THEN
+				bError := TRUE;	
+			END_IF
+			bDispense := FALSE;
+			nStateA_Dispense := 0;
+			M_RemoveListEntry(nSearchValue:= E_Action.ACTION_Dispense);
+		END_IF
+	END_IF
+	
+	IF bDispensePiezo THEN
+		A_DispenseDrops();
+		IF nStateA_DispensePiezo >= 80 THEN
+			IF nStateA_DispensePiezo >= 99 THEN
+				bError := TRUE;			
+			END_IF
+			bDispensePiezo := FALSE;
+			nStateA_DispensePiezo := 0;
+			M_RemoveListEntry(nSearchValue:= E_Action.ACTION_DispenseDrops);
+		END_IF
+	END_IF
+	
+	IF bDilMoveValve THEN
+		A_DilMoveValve();
+		IF nStateA_DilMoveValve >= 80 THEN
+			IF nStateA_DilMoveValve >= 99 THEN
+				bError := TRUE;			
+			END_IF
+			bDilMoveValve := FALSE;
+			nStateA_DilMoveValve := 0;
+			M_RemoveListEntry(nSearchValue:= E_Action.ACTION_DilMoveValve);
+		END_IF
+	END_IF
+END_IF
+
+SUPER^();	//FB_MzTool aufrufen
+
+//Prozessdaten aktualisieren
+IF pFbPiezoRef > 0 THEN
+	stProcessData.n32Data[7] := UDINT_TO_DINT(nTestResult);
+	stProcessData.n32Data[8] := BOOL_TO_DINT(pFbPiezoRef^.pToolState^.0);
+END_IF
+
+IF pPneuChannelPress > 0 THEN
+	stProcessData.n32Data[9] := pPneuChannelPress^.P_nCurrentPressure;
+END_IF
+
+stProcessData.n32Data[10] :=	BOOL_TO_DINT(fbPCV.P_bPneuValve);
+
+aObjProcData[nNotifyId] := stProcessData;]]></ST>
+    </Implementation>
+    <Action Name="A_Aspirate" Id="{6ef63241-27df-460a-9525-76659c129440}">
+      <Implementation>
+        <ST><![CDATA[IF pDiluter^.P_bError THEN
+	stError.ErrorId := pDiluter^.P_nErrorId;
+	stError.POUState := nStateA_Aspirate;
+	nStateA_Aspirate := 99;
+END_IF
+
+CASE nStateA_Aspirate OF
+	0:	//Solenoid mit Startparametern starten und Diluter starten
+		MEMSET(ADR(stActionDataSpec),0,SIZEOF(stActionDataSpec));
+		stActionDataSpec.eAction := E_Action.ACTION_DilPump;
+		stActionDataSpec.aParams[1] := E_DilPumpMode.MODE_Suck;
+		stActionDataSpec.aParams[2] := nQuantity; 
+		stActionDataSpec.aParams[3] := nFlow;
+		
+		//fbPCV.M_SwitchPneuValve(FALSE);
+		
+		stError.ErrorId := pDiluter^.M_ExeAction(stActionDataSpec);
+		IF stError.ErrorId > 0 THEN
+			stError.POUState := nStateA_Aspirate;
+			nStateA_Aspirate := 99;
+		ELSE
+			rAspFrequSweepTime := DINT_TO_REAL(nQuantity) / DINT_TO_REAL(nFlow) * 1000.0;
+			rSweepSteps := rAspFrequSweepTime / 10.0; //10ms per Zyklus
+			rFrequStep := (rAspFrequSweepEnd - rAspFrequSweepStart) / rSweepSteps;
+			rFrequNew := rAspFrequSweepStart; 
+			fbPiezoControl.P_nFrequency := REAL_TO_UINT(rAspFrequSweepStart);
+			fbPiezoControl.P_nPulse := nAspiratePulse;
+			fbPiezoControl.P_nDrops := 0;
+			fbPiezoControl.M_StartStop(TRUE);
+			rCurrentSweepStep := 0.0;
+			nStateA_Aspirate := 1;
+		END_IF
+		
+	1:	//Warten bis Aspiration fertig
+		IF NOT pDiluter^.M_GetActionBusy(E_Action.ACTION_DilPump) THEN
+			fbPiezoControl.M_StartStop(FALSE);
+			//Originalparameter senden, damit keine Zeit beim DispenseDrops verloren geht
+			fbPiezoControl.P_nFrequency := nFrequency;
+			fbPiezoControl.P_nPulse := nPulse;
+			nStateA_Aspirate := 80;
+		ELSE
+			//Frequenz anpassen
+			rCurrentSweepStep := rCurrentSweepStep + 1.0;
+			IF rCurrentSweepStep < rSweepSteps THEN
+				rFrequNew := rFrequNew + rFrequStep;
+			ELSE
+				rFrequNew := rAspFrequSweepEnd;
+			END_IF
+			fbPiezoControl.P_nFrequency := REAL_TO_UINT(rFrequNew);
+		END_IF
+		
+	70:	//Abbrechen
+		MEMSET(ADR(stActionDataSpec),0,SIZEOF(stActionDataSpec));
+		stActionDataSpec.eAction := E_Action.ACTION_Stop;
+		pDiluter^.M_ExeAction(stActionDataSpec);
+		fbPiezoControl.M_StartStop(FALSE);
+		nStateA_Aspirate := 71;
+		
+	71:	//Abbrechen
+		IF NOT pDiluter^.P_bBusy THEN
+			nStateA_Aspirate := 80;
+		END_IF
+END_CASE
+
+//Errorhandling
+IF nStateA_Aspirate = 99 THEN
+	stError.Cmd := E_Action.ACTION_Aspirate;
+	stError.POU := E_POU.POU_FB_PiezoPip;
+	stError.POUAction := E_POUACT.POUACT_A_Aspirate;
+	fbErrorList.M_Add(stError);
+END_IF]]></ST>
+      </Implementation>
+    </Action>
+    <Action Name="A_DilMoveValve" Id="{d71c0d9f-3fa6-42de-97b5-4d62a88d7be2}">
+      <Implementation>
+        <ST><![CDATA[stError.POUState := nStateA_DilMoveValve;
+IF pDiluter^.P_bError THEN
+	stError.ErrorId := pDiluter^.P_nErrorId;
+	nStateA_DilMoveValve := 99;
+END_IF
+
+IF nStateA_DilMoveValve = 0 THEN
+	IF NOT pDiluter^.M_GetActionBusy(E_Action.ACTION_DilMoveValve) THEN
+		nStateA_DilMoveValve := 80;
+	END_IF
+END_IF
+
+//Errorhandling
+IF nStateA_DilMoveValve = 99 THEN
+	stError.Cmd := E_Action.ACTION_DilMoveValve;
+	stError.POU := E_POU.POU_FB_PiezoPip;
+	stError.POUAction := E_POUACT.POUACT_A_MoveValve;
+	fbErrorList.M_Add(stError);
+END_IF]]></ST>
+      </Implementation>
+    </Action>
+    <Action Name="A_Dispense" Id="{ca16f970-2269-4564-bc05-62bf78b483d0}">
+      <Implementation>
+        <ST><![CDATA[IF pDiluter^.P_bError THEN
+	stError.ErrorId := pDiluter^.P_nErrorId;
+	stError.POUState := nStateA_Dispense;
+	nStateA_Dispense := 99;
+END_IF
+
+CASE nStateA_Dispense OF
+	0:	fbPiezoControl.P_nDrops := 0;
+		nStateA_Dispense := 1;
+
+	1:	MEMSET(ADR(stActionDataSpec),0,SIZEOF(stActionDataSpec));
+		stActionDataSpec.eAction := E_Action.ACTION_DilPump;
+		stActionDataSpec.aParams[1] := E_DilPumpMode.MODE_Press;
+		stActionDataSpec.aParams[2] := nQuantity; 
+		stActionDataSpec.aParams[3] := nFlow;
+		
+		//fbPCV.M_SwitchPneuValve(FALSE);
+		
+		stError.ErrorId := pDiluter^.M_ExeAction(stActionDataSpec);
+		IF stError.ErrorId > 0 THEN
+			stError.POUState := nStateA_Dispense;
+			nStateA_Dispense := 99;
+		ELSE
+			rDispFrequSweepTime := DINT_TO_REAL(nQuantity) / DINT_TO_REAL(nFlow) * 1000.0;
+			rSweepSteps := rDispFrequSweepTime / 10.0; //10ms per Zyklus
+			rFrequStep := (rDispFrequSweepEnd - rDispFrequSweepStart) / rSweepSteps;
+			rFrequNew := rDispFrequSweepStart; 
+			fbPiezoControl.P_nFrequency := REAL_TO_UINT(rDispFrequSweepStart);
+			fbPiezoControl.P_nPulse := nDispensePulse;
+			fbPiezoControl.M_StartStop(TRUE);
+			rCurrentSweepStep := 0.0;
+			nStateA_Dispense := 2;	
+		END_IF
+		
+	2:	//Warten bis Dispensen fertig
+		IF NOT pDiluter^.M_GetActionBusy(E_Action.ACTION_DilPump) THEN
+			fbPiezoControl.M_StartStop(FALSE);
+			//Originalparameter senden, damit keine Zeit beim DispenseDrops verloren geht
+			fbPiezoControl.P_nFrequency := nFrequency;
+			fbPiezoControl.P_nPulse := nPulse;			
+			nStateA_Dispense := 80;
+		ELSE
+			//Frequenz anpassen
+			rCurrentSweepStep := rCurrentSweepStep + 1.0;
+			IF rCurrentSweepStep < rSweepSteps THEN
+				rFrequNew := rFrequNew + rFrequStep;
+			ELSE
+				rFrequNew := rDispFrequSweepEnd;
+			END_IF
+			fbPiezoControl.P_nFrequency := REAL_TO_UINT(rFrequNew);
+		END_IF
+		
+	70:	//Abbrechen
+		MEMSET(ADR(stActionDataSpec),0,SIZEOF(stActionDataSpec));
+		stActionDataSpec.eAction := E_Action.ACTION_Stop;
+		pDiluter^.M_ExeAction(stActionDataSpec);
+		fbPiezoControl.M_StartStop(FALSE);		
+		nStateA_Dispense := 71;
+		
+	71:	
+		IF NOT pDiluter^.P_bBusy THEN
+			nStateA_Dispense := 80;
+		END_IF
+		
+END_CASE
+
+//Errorhandling
+IF nStateA_Dispense = 99 THEN
+	stError.Cmd := E_Action.ACTION_Dispense;
+	stError.POU := E_POU.POU_FB_PiezoPip;
+	stError.POUAction := E_POUACT.POUACT_A_Dispense;
+	fbErrorList.M_Add(stError);
+END_IF]]></ST>
+      </Implementation>
+    </Action>
+    <Action Name="A_DispenseDrops" Id="{568775ad-cd3d-454f-87ef-ae72df3a79e1}">
+      <Implementation>
+        <ST><![CDATA[CASE nStateA_DispensePiezo OF
+	0:	//Wenn Diluter nicht auf Bypass, dann auf Bypass stellen
+		IF pDiluter^.P_nCurValvePos <> 3 THEN
+			MEMSET(ADR(stActionDataSpec),0,SIZEOF(stActionDataSpec));
+			stActionDataSpec.eAction := E_Action.ACTION_DilMoveValve;
+			stActionDataSpec.aParams[1] := 3;
+			stError.ErrorId := pDiluter^.M_ExeAction(stActionDataSpec);
+			IF stError.ErrorId > 0 THEN
+				stError.POUState := nStateA_DispensePiezo;
+				nStateA_DispensePiezo := 99;
+			ELSE
+				nStateA_DispensePiezo := 1;
+			END_IF
+		ELSE
+			nStateA_DispensePiezo := 1;
+		END_IF
+		
+		//Druck auf PCV geben
+		fbPCV.M_SwitchPneuValve(TRUE);
+	
+	1:	//Warten, bis Diluter fertig und Drops übertragen
+		IF pDiluter^.P_bError THEN
+			stError.ErrorId := pDiluter^.P_nErrorId;	
+			stError.POUState := nStateA_DispensePiezo;
+			nStateA_DispensePiezo := 99;
+		ELSE
+			//Dispensen erst starten, nachdem alle Parameter gesendet
+			IF (NOT pDiluter^.M_GetActionBusy(E_Action.ACTION_DilMoveValve)) AND NOT (fbPiezoControl.P_bIsSending) THEN
+				fbPiezoControl.M_StartStop(bDispensePiezoStart); //Piezo starten
+				nStateA_DispensePiezo := 2;
+			END_IF
+		END_IF
+		
+	2: 	//Warten bis Piezo fertig
+		IF NOT fbPiezoControl.bBusy THEN
+			nStateA_DispensePiezo := 80;	
+		END_IF
+		
+		IF fbPiezoControl.bError THEN
+			stError.ErrorId := fbPiezoControl.nErrorId;
+			stError.POUState := nStateA_DispensePiezo;
+			nStateA_DispensePiezo := 99;
+		END_IF
+		
+	70:	//Abbrechen
+		fbPiezoControl.M_StartStop(FALSE);
+		nStateA_DispensePiezo := 80;		
+ END_CASE
+
+//Errorhandling
+IF nStateA_DispensePiezo = 99 THEN
+	stError.Cmd := E_Action.ACTION_DispenseDrops;
+	stError.POU := E_POU.POU_FB_PiezoPip;
+	stError.POUAction := E_POUACT.POUACT_A_DispensePiezo;
+	fbErrorList.M_Add(stError);
+END_IF]]></ST>
+      </Implementation>
+    </Action>
+    <Action Name="A_InitTool" Id="{87e18a19-b92f-4f08-974d-36bfdbfbfb02}">
+      <Implementation>
+        <ST><![CDATA[IF nStateA_InitTool = 0 THEN
+	pFbPiezoRef^.P_eDispenserMode := E_DispenserMode.MODE_Solenoid;
+	fbPiezoControl.M_Init();
+	bInitToolOk := TRUE;
+	nStateA_InitTool := 80;
+END_IF]]></ST>
+      </Implementation>
+    </Action>
+    <Action Name="A_Reset" Id="{865182e7-9b14-433c-a79d-94db790aceda}">
+      <Implementation>
+        <ST><![CDATA[//Ist noch eine Aktion aktiv?
+IF nStateA_ResetSpec = 0 THEN 
+	IF bAspirate THEN
+		bAspirate := FALSE;
+		nStateA_Aspirate := 0;
+	END_IF
+
+	IF bDispense THEN
+		bDispense := FALSE;
+		nStateA_Dispense := 0;
+	END_IF
+
+	IF bDispensePiezo THEN
+		bDispensePiezo := FALSE;
+		nStateA_DispensePiezo := 0;
+	END_IF
+	
+	IF bSetPress THEN
+		bSetPress := FALSE;
+		fbSetPress(bExecute:= FALSE, pPneuChannelRef:= pPneuChannelPress);
+	END_IF
+
+	nStateA_ResetSpec := 80;
+END_IF
+
+SUPER^.A_Reset();]]></ST>
+      </Implementation>
+    </Action>
+    <Action Name="A_Stop" Id="{341cf6e1-73fb-459a-91be-63f839a59a94}">
+      <Implementation>
+        <ST><![CDATA[IF nStateA_Stop = 0 THEN
+
+	IF bSetPress THEN
+		fbSetPress(bExecute:= FALSE, pPneuChannelRef:= pPneuChannelPress);
+	END_IF
+	
+	IF bAspirate AND nStateA_Aspirate < 70 THEN
+		nStateA_Aspirate := 70;
+	END_IF
+
+	IF bDispense AND nStateA_Dispense < 70 THEN
+		nStateA_Dispense := 70;
+	END_IF
+
+	IF bDispensePiezo AND nStateA_DispensePiezo < 70 THEN
+		nStateA_DispensePiezo := 70;
+	END_IF
+	
+	nStateA_Stop := 1;
+END_IF
+
+SUPER^.A_Stop();]]></ST>
+      </Implementation>
+    </Action>
+    <Method Name="FB_init" Id="{90a9ef84-1f4e-449b-9e36-d669a62c1f05}">
+      <Declaration><![CDATA[METHOD FB_init : BOOL
+VAR_INPUT
+	bInitRetains : BOOL; // if TRUE, the retain variables are initialized (warm start / cold start)
+	bInCopyCode : BOOL;  // if TRUE, the instance afterwards gets moved into the copy code (online change)
+END_VAR
+]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[eObjectType := E_ObjectType.OBJECTTYPE_SolenoidPip;
+eObjectGroup := E_ObjectGroup.OBJECTGROUP_MzTool OR E_ObjectGroup.OBJECTGROUP_Device;]]></ST>
+      </Implementation>
+    </Method>
+    <Method Name="M_AddChild" Id="{c997739e-0a2b-4318-9611-71f74b0275fd}">
+      <Declaration><![CDATA[METHOD M_AddChild : ERRORID
+VAR_INPUT
+	pObject : POINTER TO FB_Object;
+	nSlotNr	: UINT;
+	nIndex 	: INT;
+END_VAR
+]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[//Kann keine Objekte aufnehmen
+M_AddChild := E_ErrorIdObjMgmt.ERRORID_ObjectCanNotTakeChilds;
+]]></ST>
+      </Implementation>
+    </Method>
+    <Method Name="M_CancelAction" Id="{1750ede0-f2b3-4e05-bfae-d45a69782119}">
+      <Declaration><![CDATA[METHOD M_CancelAction
+VAR_INPUT
+	eAction : E_Action;
+END_VAR
+]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[CASE eAction OF
+	E_Action.ACTION_Aspirate:
+		IF bAspirate AND nStateA_Aspirate < 70 THEN
+			nStateA_Aspirate := 70;
+		END_IF
+	E_Action.ACTION_Dispense:
+		IF bDispense AND nStateA_Dispense < 70 THEN
+			nStateA_Dispense := 70;
+		END_IF
+	E_Action.ACTION_DispenseDrops:
+		IF bDispensePiezo AND nStateA_DispensePiezo < 70 THEN
+			nStateA_DispensePiezo := 70;
+		END_IF
+	E_Action.ACTION_SetPressure:
+		IF bSetPress THEN
+			fbSetPress(bExecute:= FALSE, pPneuChannelRef:= pPneuChannelPress);
+		END_IF
+ELSE
+	SUPER^.M_CancelAction(eAction);
+END_CASE]]></ST>
+      </Implementation>
+    </Method>
+    <Method Name="M_CheckAction" Id="{eef1f522-00d9-496c-a016-1b4952e8dabf}">
+      <Declaration><![CDATA[METHOD M_CheckAction : ERRORID
+VAR_INPUT
+	refActionData 	: REFERENCE TO ST_ActionData;
+	pCorrelObject	: POINTER TO FB_Object;
+END_VAR
+
+VAR
+	pTarget : POINTER TO FB_TargetBase;
+	pRack	: POINTER TO FB_Rack;
+	pSlot	: POINTER TO FB_PieceSlot;		
+END_VAR]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[CASE refActionData.eAction OF
+	E_Action.ACTION_Dispense, //BasicAction für ActionOnArray
+	E_Action.ACTION_Aspirate, //BasicAction für ActionOnArray
+	E_Action.ACTION_DispenseDrops, //BasicAction für ActionOnArray
+	E_Action.ACTION_DispenseTest,
+	E_Action.ACTION_GetPipSample,
+	E_Action.ACTION_MeasureTool,
+	E_Action.ACTION_TeachTarget:
+		RETURN;
+	E_Action.ACTION_WashTool:
+		//Washmode checken
+		IF refActionData.aParams[2] = E_WashMode.MODE_WashInside THEN
+			M_CheckAction := M_CheckBottles();
+		ELSIF refActionData.aParams[2] = E_WashMode.MODE_WashOutside THEN
+			;
+		ELSIF refActionData.aParams[2] = E_WashMode.MODE_WashInOutside THEN
+			M_CheckAction := M_CheckBottles();
+		ELSIF refActionData.aParams[2] = E_WashMode.MODE_DryOutside THEN
+			;
+		ELSE
+			M_CheckAction := E_ErrorIdCmd.ERRORID_InvalidWashMode;	
+		END_IF
+	E_Action.ACTION_InsertTool:
+		//SolenoidPip darf nur in offene Vials oder Fliptubes eintauchen
+		//-> Target muss also ein VialRack sein (Reaktor nicht möglich, da Pip nicht von der Tiefe hinein passt)
+		pTarget := pCorrelObject;
+		IF pTarget > 0 THEN
+			IF (pTarget^.P_eObjectGroup AND E_ObjectGroup.OBJECTGROUP_Rack) = E_ObjectGroup.OBJECTGROUP_Rack THEN
+				pRack := pTarget;
+				pSlot := pRack^.M_GetSlot(DINT_TO_UINT(refActionData.aParams[2]));
+				IF pSlot > 0 THEN
+					IF pSlot^.P_pPiece = 0 THEN
+						M_CheckAction := E_ErrorIdCmd.ERRORID_NoPieceInSlot;
+						RETURN;
+					ELSIF NOT (pSlot^.P_pPiece^.P_eObjectType = E_ObjectType.OBJECTTYPE_Vial OR pSlot^.P_pPiece^.P_eObjectType = E_ObjectType.OBJECTTYPE_FlipTube) THEN
+						M_CheckAction := E_ErrorIdCmd.ERRORID_InvalidPieceType;
+					END_IF
+				ELSE
+					M_CheckAction := E_ErrorIdCmd.ERRORID_InvalidTargetSlot;
+					RETURN;
+				END_IF	
+			ELSE
+				M_CheckAction := E_ErrorIdCmd.ERRORID_UnsuitableTarget;	
+			END_IF
+		ELSE
+			M_CheckAction := E_ErrorIdCmd.ERRORID_UnsuitableTarget;	
+		END_IF		
+ELSE
+	M_CheckAction := SUPER^.M_CheckAction(refActionData, pCorrelObject);
+END_CASE]]></ST>
+      </Implementation>
+    </Method>
+    <Method Name="M_CheckBottles" Id="{1eb2fe1c-6e75-43c6-811c-3f977a222962}">
+      <Declaration><![CDATA[METHOD M_CheckBottles : ERRORID
+VAR_INPUT
+END_VAR
+]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[IF pDiluter > 0 THEN
+	M_CheckBottles := 0;
+END_IF]]></ST>
+      </Implementation>
+    </Method>
+    <Method Name="M_CheckProps" Id="{6508f3c4-5b52-491d-a1c4-6976149a6ab6}">
+      <Declaration><![CDATA[METHOD M_CheckProps : ERRORID
+VAR_INPUT
+END_VAR
+]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[M_CheckProps := SUPER^.M_CheckProps();
+IF M_CheckProps > 0 THEN
+	RETURN;
+END_IF
+//Konfigurierte Properties checken
+//zugeordneter Diuter
+IF fbObjectDirectory.M_GetObjType(nDiluterObjId) <> E_ObjectType.OBJECTTYPE_Diluter THEN
+	M_CheckProps := E_ErrorIdObjMgmt.ERRORID_InvalidDiluterObjId; //Error
+	RETURN;
+ELSE
+	pDiluter := fbObjectDirectory.M_GetObjPointer(nDiluterObjId);
+END_IF]]></ST>
+      </Implementation>
+    </Method>
+    <Method Name="M_ClearAllProps" Id="{4de4dc74-5ad0-4559-9337-bbfb88fc8ae7}">
+      <Declaration><![CDATA[METHOD M_ClearAllProps
+VAR_INPUT
+	bIgnoreParent : BOOL; //Es wird das gesamte OD gelöscht. -> Zeiger auf Parent nicht mehr gültig!
+END_VAR
+]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[pPneuChannelPress := 0;
+SUPER^.M_ClearAllProps(bIgnoreParent);]]></ST>
+      </Implementation>
+    </Method>
+    <Method Name="M_ExeAction" Id="{0652e3c4-b5c2-4f93-9a64-6d9f0883e834}">
+      <Declaration><![CDATA[METHOD M_ExeAction : ERRORID
+VAR_INPUT
+	refActionData : REFERENCE TO ST_ActionData;	
+END_VAR]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[IF NOT (eCurrentState = E_MachineState.MACHINESTATE_Idle OR
+	eCurrentState = E_MachineState.MACHINESTATE_Active OR
+	eCurrentState = E_MachineState.MACHINESTATE_Ready) THEN
+	M_ExeAction := E_ErrorIdCmd.ERRORID_InvalidState;
+	RETURN;
+END_IF
+
+CASE refActionData.eAction OF
+	
+	E_Action.ACTION_Init:
+		IF NOT bInitAxis AND NOT bInitTool THEN
+			bInitAxis := TRUE;
+			bInitTool := TRUE;
+			fbList.A_AddHeadValue( hList := hList, putValue := E_Action.ACTION_Init);	//InitBase
+			fbList.A_AddHeadValue( hList := hList, putValue := E_Action.ACTION_Init);	//InitSpec
+		ELSE
+			RETURN;
+		END_IF		
+	
+	E_Action.ACTION_Aspirate:
+		IF NOT bAspirate THEN
+			M_ExeAction := pDiluter^.M_CheckBottles(0); //Checken, ob Bottles OK
+			IF M_ExeAction > 0 THEN
+				RETURN;
+			END_IF
+			nQuantity := refActionData.aParams[1];
+			nFlow := refActionData.aParams[2];
+			fbList.A_AddHeadValue( hList := hList, putValue := E_Action.ACTION_Aspirate);
+			bAspirate := TRUE;
+		END_IF
+		
+	E_Action.ACTION_Dispense:
+		IF NOT bDispense THEN
+			M_ExeAction := pDiluter^.M_CheckBottles(0); //Checken, ob Bottles OK
+			IF M_ExeAction > 0 THEN
+				RETURN;
+			END_IF
+			nQuantity := refActionData.aParams[1];
+			nFlow := refActionData.aParams[2];
+			fbList.A_AddHeadValue( hList := hList, putValue := E_Action.ACTION_Dispense);
+			bDispense := TRUE;
+		END_IF
+		
+	E_Action.ACTION_DispenseDrops:
+		bDispensePiezoStart := DINT_TO_BOOL(refActionData.aParams[2]);
+		IF NOT bDispensePiezo AND bDispensePiezoStart THEN
+			fbPiezoControl.P_nFrequency := nFrequency;
+			fbPiezoControl.P_nPulse := nPulse;
+			fbPiezoControl.P_nDrops := nDrops := DINT_TO_UINT(refActionData.aParams[1]);
+			fbPiezoControl.P_bStroboscope := DINT_TO_BOOL(refActionData.aParams[3]);
+			fbList.A_AddHeadValue(hList := hList, putValue := E_Action.ACTION_DispenseDrops);
+			bDispensePiezo := TRUE;
+		ELSE
+			fbPiezoControl.M_StartStop(bDispensePiezoStart); //Stoppen
+		END_IF
+		
+	E_Action.ACTION_DilMoveValve:
+		//Darf nur ausgeführt werden, wenn kein Dispensen aktiv ist
+		IF NOT (bAspirate OR bDispense OR bDispensePiezo OR bDilMoveValve) THEN
+			M_ExeAction := pDiluter^.M_ExeAction(refActionData);
+			IF M_ExeAction > 0 THEN
+				RETURN;
+			END_IF
+			fbList.A_AddHeadValue(hList := hList, putValue := E_Action.ACTION_DilMoveValve);
+			bDilMoveValve := TRUE;
+		END_IF
+		
+	E_Action.ACTION_MoveX,E_Action.ACTION_MoveY,E_Action.ACTION_MoveXY:
+		IF pZAxisRef^.stInput.nToolState.1 THEN	//ZSensor ist montiert
+			M_ExeAction := ERRORID_PipMoveWithZSensor;  //Error
+			RETURN;
+		ELSE
+			M_ExeAction := SUPER^.M_ExeAction(refActionData);
+			RETURN;
+		END_IF
+
+	E_Action.ACTION_MoveZ:
+		IF pZAxisRef^.stInput.nToolState.1 THEN //ZSensor ist montiert
+			eMoveModeZ := DINT_TO_USINT(refActionData.aParams[1]);
+			IF NOT(eMoveModeZ = E_MoveMode.MODE_Free OR eMoveModeZ = E_MoveMode.MODE_Home) THEN
+				M_ExeAction := ERRORID_PipMoveWithZSensor;  //Error
+				RETURN;
+			END_IF
+			M_ExeAction := SUPER^.M_ExeAction(refActionData);
+			RETURN;			
+		ELSE
+			M_ExeAction := SUPER^.M_ExeAction(refActionData);
+			RETURN;
+		END_IF
+		
+	E_Action.ACTION_SetPressure:
+		fbSetPress(bExecute:= FALSE, pPneuChannelRef:= pPneuChannelPress); //eventueller Fehler wird auch zurückgesetzt
+		fbSetPress.bAwait := DINT_TO_BOOL(refActionData.aParams[1]);
+		fbSetPress.nValue := DINT_TO_INT(refActionData.aParams[2]);
+		fbSetPress.nTolerancePlus := DINT_TO_INT(refActionData.aParams[3]);
+		fbSetPress.nToleranceMinus := DINT_TO_INT(refActionData.aParams[4]);
+		fbSetPress.tTimeout := DINT_TO_TIME(refActionData.aParams[5]);
+		
+		fbSetPress(bExecute:= TRUE,	pPneuChannelRef:= pPneuChannelPress,nErrorId=> M_ExeAction);
+		IF fbSetPress.bError THEN
+			RETURN;
+		END_IF
+		
+		IF NOT bSetPress AND fbSetPress.bBusy THEN
+			bSetPress := TRUE;
+			fbList.A_AddHeadValue(hList := hList, putValue := E_Action.ACTION_SetPressure);
+		ELSE
+			RETURN;	
+		END_IF
+		
+	E_Action.ACTION_SwitchPressure:
+		eSwitchPressCtrl := DINT_TO_USINT(refActionData.aParams[1]);
+		IF eSwitchPressCtrl = E_PressCtrl.PRESSCTRL_PressOn THEN
+			fbPCV.M_SwitchPneuValve(TRUE);
+		ELSIF eSwitchPressCtrl = E_PressCtrl.PRESSCTRL_Off THEN
+			fbPCV.M_SwitchPneuValve(FALSE);
+		ELSE
+			M_ExeAction := E_ErrorIdCmd.ERRORID_InvalidCtrl;
+			RETURN;		
+		END_IF
+	ELSE
+		M_ExeAction := SUPER^.M_ExeAction(refActionData);
+		RETURN;
+END_CASE
+bBusy := TRUE;
+eCurrentState := E_MachineState.MACHINESTATE_Active;]]></ST>
+      </Implementation>
+    </Method>
+    <Method Name="M_GetAllProps" Id="{6e49f443-5984-42e2-874a-1c80b0743e18}">
+      <Declaration><![CDATA[METHOD M_GetAllProps : ERRORID
+VAR_INPUT
+	refCmdData : REFERENCE TO  ST_CmdData;
+END_VAR
+]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[//BaseProperties lesen
+SUPER^.M_GetAllProps(refCmdData);
+nCurrentPropIndex := nCurrentPropIndex + 1;
+refCmdData.n32Data[nCurrentPropIndex] := P_nObjIdDiluter;
+nCurrentPropIndex := nCurrentPropIndex + 1;
+IF pPneuChannelPress > 0 THEN
+	refCmdData.n32Data[nCurrentPropIndex] := pPneuChannelPress^.nChannel;
+ELSE
+	refCmdData.n32Data[nCurrentPropIndex] := 0;
+END_IF
+nCurrentPropIndex := nCurrentPropIndex + 1;
+refCmdData.n32Data[nCurrentPropIndex] := nFrequency;
+nCurrentPropIndex := nCurrentPropIndex + 1;
+refCmdData.n32Data[nCurrentPropIndex] := nPulse;
+nCurrentPropIndex := nCurrentPropIndex + 1;
+refCmdData.n32Data[nCurrentPropIndex] := fbPiezoControl.P_nHoldVoltage;
+nCurrentPropIndex := nCurrentPropIndex + 1;
+refCmdData.n32Data[nCurrentPropIndex] := fbPiezoControl.P_nPrePeakTime;
+nCurrentPropIndex := nCurrentPropIndex + 1;
+refCmdData.n32Data[nCurrentPropIndex] := REAL_TO_DINT(rAspFrequSweepStart);
+nCurrentPropIndex := nCurrentPropIndex + 1;
+refCmdData.n32Data[nCurrentPropIndex] := REAL_TO_DINT(rAspFrequSweepEnd);
+nCurrentPropIndex := nCurrentPropIndex + 1;
+refCmdData.n32Data[nCurrentPropIndex] := REAL_TO_DINT(rAspFrequSweepTime);
+nCurrentPropIndex := nCurrentPropIndex + 1;
+refCmdData.n32Data[nCurrentPropIndex] := nAspiratePulse;
+nCurrentPropIndex := nCurrentPropIndex + 1;
+refCmdData.n32Data[nCurrentPropIndex] := REAL_TO_DINT(rDispFrequSweepStart);
+nCurrentPropIndex := nCurrentPropIndex + 1;
+refCmdData.n32Data[nCurrentPropIndex] := REAL_TO_DINT(rDispFrequSweepEnd);
+nCurrentPropIndex := nCurrentPropIndex + 1;
+refCmdData.n32Data[nCurrentPropIndex] := REAL_TO_DINT(rDispFrequSweepTime);
+nCurrentPropIndex := nCurrentPropIndex + 1;
+refCmdData.n32Data[nCurrentPropIndex] := nDispensePulse;
+nCurrentPropIndex := nCurrentPropIndex + 1;
+refCmdData.n32Data[nCurrentPropIndex] := nDrypadArea;
+nCurrentPropIndex := nCurrentPropIndex + 1;
+refCmdData.n32Data[nCurrentPropIndex] := TIME_TO_DINT(tDryTime);]]></ST>
+      </Implementation>
+    </Method>
+    <Method Name="M_SetAllProps" Id="{ef9ff2a8-5836-4030-958f-68c49f5d86fa}">
+      <Declaration><![CDATA[METHOD M_SetAllProps : ERRORID
+VAR_INPUT
+	refCmdData : REFERENCE TO  ST_CmdData;
+END_VAR
+
+VAR
+	pSinglePiezoHolder 	: POINTER TO FB_SingelPiezoHolder;
+	pTwinPiezoHolder 	:  POINTER TO FB_TwinPiezoHolder;
+	nPneuChannel 		: USINT;
+END_VAR]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[M_SetAllProps := SUPER^.M_SetAllProps(refCmdData);
+
+IF M_SetAllProps > 0 THEN
+	RETURN;
+END_IF
+
+IF pParentMzTool^.P_eObjectType = E_ObjectType.OBJECTTYPE_SinglePiezoHolder THEN
+	pSinglePiezoHolder := pParentMzTool;
+	pFbPiezoRef := pSinglePiezoHolder^.M_GetPiezoRef(pParentSlot);	
+ELSIF pParentMzTool^.P_eObjectType = E_ObjectType.OBJECTTYPE_TwinPiezoHolder THEN
+	pTwinPiezoHolder := pParentMzTool;
+	pFbPiezoRef := pTwinPiezoHolder^.M_GetPiezoRef(pParentSlot);
+ELSE
+	M_SetAllProps := E_ErrorIdObjMgmt.ERRORID_InvalidParentMzTool;
+	RETURN;
+END_IF
+
+IF pFbPiezoRef = 0 THEN
+	M_SetAllProps := E_ErrorIdObjMgmt.ERRORID_InvalidPiezoRef;
+	RETURN;
+END_IF
+
+fbPiezoControl(pFbPiezoRef:= pFbPiezoRef);	//Setzt den Zeiger "pFbPiezoRef" innerhalb von fbMultiZPiezo
+
+//Diluter
+nCurrentPropIndex := nCurrentPropIndex + 1;
+nSpecPropIndex := nCurrentPropIndex;
+nDiluterObjId :=  DINT_TO_UINT(refCmdData.n32Data[nCurrentPropIndex]);
+IF fbObjectDirectory.M_GetObjType(nDiluterObjId) = E_ObjectType.OBJECTTYPE_Diluter THEN
+	pDiluter := fbObjectDirectory.M_GetObjPointer(nDiluterObjId);
+ELSE
+	M_SetAllProps := E_ErrorIdObjMgmt.ERRORID_InvalidDiluterObjId;
+	RETURN;
+END_IF
+
+//PneuChannel
+nCurrentPropIndex := nCurrentPropIndex + 1;
+nPneuChannel := DINT_TO_USINT(refCmdData.n32Data[nCurrentPropIndex]);	//PneuChannel Druck
+IF NOT (nPneuChannel > 0 AND nPneuChannel <= cNoOfPneuChannels) THEN
+	M_SetAllProps := E_ErrorIdObjMgmt.ERRORID_InvalidPneuChannel;
+	RETURN;	
+END_IF
+pPneuChannelPress := ADR(aFbPneuChannel[nPneuChannel]);
+
+//Frequenz
+nCurrentPropIndex := nCurrentPropIndex + 1;
+M_SetAllProps := M_SetFrequency(refCmdData.n32Data[nCurrentPropIndex], FALSE);
+IF M_SetAllProps > 0 THEN
+	RETURN;
+END_IF
+
+//Plusbreite
+nCurrentPropIndex := nCurrentPropIndex + 1;
+M_SetAllProps := M_SetPulse(refCmdData.n32Data[nCurrentPropIndex], FALSE);
+IF M_SetAllProps > 0 THEN
+	RETURN;
+END_IF
+
+//Spannung (HoldVoltage) in mV
+nCurrentPropIndex := nCurrentPropIndex + 1;
+M_SetAllProps := M_SetVoltage(refCmdData.n32Data[nCurrentPropIndex], FALSE);
+IF M_SetAllProps > 0 THEN
+	RETURN;
+END_IF
+
+//PrePeakTime
+nCurrentPropIndex := nCurrentPropIndex + 1;
+IF NOT (refCmdData.n32Data[nCurrentPropIndex] >= 100 AND refCmdData.n32Data[nCurrentPropIndex] <= 350) THEN
+	M_SetAllProps := E_ErrorIdObjMgmt.ERRORID_InvalidPrePeakTime;
+	RETURN;
+END_IF
+fbPiezoControl.P_nPrePeakTime := DINT_TO_UINT(refCmdData.n32Data[nCurrentPropIndex]);
+
+//FrequenzSweep Anfangsfrequenz - Aspirieren
+nCurrentPropIndex := nCurrentPropIndex + 1;
+IF NOT (refCmdData.n32Data[nCurrentPropIndex] >= 30 AND refCmdData.n32Data[nCurrentPropIndex] <= 500) THEN
+	M_SetAllProps := E_ErrorIdObjMgmt.ERRORID_InvalidFrequency;
+	RETURN;
+END_IF
+rAspFrequSweepStart := DINT_TO_REAL(refCmdData.n32Data[nCurrentPropIndex]);
+
+//FrequenzSweep Endfrequenz - Aspirieren
+nCurrentPropIndex := nCurrentPropIndex + 1;
+IF NOT (refCmdData.n32Data[nCurrentPropIndex] >= 30 AND refCmdData.n32Data[nCurrentPropIndex] <= 500) THEN
+	M_SetAllProps := E_ErrorIdObjMgmt.ERRORID_InvalidFrequency;
+	RETURN;
+END_IF
+rAspFrequSweepEnd := DINT_TO_REAL(refCmdData.n32Data[nCurrentPropIndex]);
+
+//FrequenzSweep Zeit - Aspirieren
+nCurrentPropIndex := nCurrentPropIndex + 1;
+rAspFrequSweepTime := DINT_TO_REAL(refCmdData.n32Data[nCurrentPropIndex]);
+
+ //Pulsbreite - Aspirieren
+nCurrentPropIndex := nCurrentPropIndex + 1;
+IF NOT (refCmdData.n32Data[nCurrentPropIndex] >= 400 AND refCmdData.n32Data[nCurrentPropIndex] <= 10000) THEN
+	M_SetAllProps := E_ErrorIdObjMgmt.ERRORID_InvalidPulseWidth;
+	RETURN;
+END_IF
+nAspiratePulse := DINT_TO_UINT(refCmdData.n32Data[nCurrentPropIndex]);
+
+//FrequenzSweep Anfangsfrequenz - Dispensen
+nCurrentPropIndex := nCurrentPropIndex + 1;
+IF NOT (refCmdData.n32Data[nCurrentPropIndex] >= 30 AND refCmdData.n32Data[nCurrentPropIndex] <= 500) THEN
+	M_SetAllProps := E_ErrorIdObjMgmt.ERRORID_InvalidFrequency;
+	RETURN;
+END_IF
+rDispFrequSweepStart := DINT_TO_REAL(refCmdData.n32Data[nCurrentPropIndex]);
+
+//FrequenzSweep Endfrequenz - Dispensen
+nCurrentPropIndex := nCurrentPropIndex + 1;
+IF NOT (refCmdData.n32Data[nCurrentPropIndex] >= 30 AND refCmdData.n32Data[nCurrentPropIndex] <= 500) THEN
+	M_SetAllProps := E_ErrorIdObjMgmt.ERRORID_InvalidFrequency;
+	RETURN;
+END_IF
+rDispFrequSweepEnd := DINT_TO_REAL(refCmdData.n32Data[nCurrentPropIndex]);
+
+//FrequenzSweep Zeit - Dispensen
+nCurrentPropIndex := nCurrentPropIndex + 1;
+rDispFrequSweepTime := DINT_TO_REAL(refCmdData.n32Data[nCurrentPropIndex]);
+
+ //Pulsbreite - Dispensen
+nCurrentPropIndex := nCurrentPropIndex + 1;
+IF NOT (refCmdData.n32Data[nCurrentPropIndex] >= 400 AND refCmdData.n32Data[nCurrentPropIndex] <= 10000) THEN
+	M_SetAllProps := E_ErrorIdObjMgmt.ERRORID_InvalidPulseWidth;
+	RETURN;
+END_IF
+nDispensePulse := DINT_TO_UINT(refCmdData.n32Data[nCurrentPropIndex]);
+
+//DrypadArea
+nCurrentPropIndex := nCurrentPropIndex + 1;
+nDrypadArea := DINT_TO_USINT(refCmdData.n32Data[nCurrentPropIndex]);
+IF NOT (nDrypadArea > 0 AND nDrypadArea < 3) THEN
+	M_SetAllProps := E_ErrorIdObjMgmt.ERRORID_InvalidDrypadArea;
+	RETURN;
+END_IF
+
+//DryTime
+nCurrentPropIndex := nCurrentPropIndex + 1;
+tDryTime := DINT_TO_TIME(refCmdData.n32Data[nCurrentPropIndex]);
+
+nNoOfProps := nCurrentPropIndex + 1;]]></ST>
+      </Implementation>
+    </Method>
+    <Method Name="M_SetFrequency" Id="{0721585b-efa2-4dbf-8b6b-993840e36ebd}">
+      <Declaration><![CDATA[METHOD M_SetFrequency : ERRORID
+VAR_INPUT
+	nValue 				: DINT;
+	bSetObjectChange 	: BOOL;
+END_VAR
+]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[IF nValue >= 30 AND nValue < 500 THEN
+	fbPiezoControl.P_nFrequency := nFrequency := DINT_TO_UINT(nValue);
+	IF bSetObjectChange THEN
+		fbObjectDirectory.M_SetObjChange(nObjectId);
+	END_IF	
+ELSE
+	M_SetFrequency := E_ErrorIdObjMgmt.ERRORID_InvalidFrequency;
+END_IF]]></ST>
+      </Implementation>
+    </Method>
+    <Method Name="M_SetPrintParams" Id="{d99f8f93-2f82-457e-921a-ac35f96a36c2}">
+      <Declaration><![CDATA[METHOD M_SetPrintParams : ST_MethResult
+VAR_INPUT
+	eType 		: E_PrintParamType;
+	nNumerator	: USINT;
+	nValue		: DINT;
+END_VAR
+]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[IF nNumerator <> 1 THEN
+	M_SetPrintParams.bError := TRUE;
+	M_SetPrintParams.nErrorId := E_ErrorIdCmd.ERRORID_InvalidPrintParamNumerator;
+	RETURN;
+END_IF
+
+CASE eType OF
+	E_PrintParamType.Frequency:
+		M_SetPrintParams.nErrorId := M_SetFrequency(nValue, TRUE);
+	E_PrintParamType.Pulse:
+		M_SetPrintParams.nErrorId := M_SetPulse(nValue, TRUE);
+	E_PrintParamType.Voltage:
+		M_SetPrintParams.nErrorId := M_SetVoltage(nValue, TRUE);
+ELSE
+	M_SetPrintParams.bError := TRUE;
+	M_SetPrintParams.nErrorId := E_ErrorIdCmd.ERRORID_InvalidPrintParamType;
+END_CASE
+
+IF M_SetPrintParams.nErrorId > 0 THEN
+	M_SetPrintParams.bError := TRUE;
+ELSE
+	fbObjectDirectory.M_SetObjChange(nObjectId);
+END_IF]]></ST>
+      </Implementation>
+    </Method>
+    <Method Name="M_SetPulse" Id="{a25b4f54-a49a-4f29-ae18-8e0e5500d190}">
+      <Declaration><![CDATA[METHOD M_SetPulse : ERRORID
+VAR_INPUT
+	nValue 				: DINT;
+	bSetObjectChange 	: BOOL;
+END_VAR
+]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[IF nValue > 400 AND nValue < 10000 THEN
+	fbPiezoControl.P_nPulse := nPulse := DINT_TO_UINT(nValue);
+	IF bSetObjectChange THEN
+		fbObjectDirectory.M_SetObjChange(nObjectId);
+	END_IF	
+ELSE
+	M_SetPulse := E_ErrorIdObjMgmt.ERRORID_InvalidPulseWidth;
+END_IF]]></ST>
+      </Implementation>
+    </Method>
+    <Method Name="M_SetSingleProp" Id="{a7246ef1-534d-4a3b-99cd-87568d585438}">
+      <Declaration><![CDATA[METHOD M_SetSingleProp : ERRORID
+VAR_INPUT
+	refCmdData : REFERENCE TO  ST_CmdData;
+END_VAR
+VAR
+	rAspDispTime	: REAL;
+	nPneuChannel 	: USINT;
+END_VAR]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[IF nSpecPropIndex = refCmdData.aHeader[1] THEN
+	//Diluter Id sollte nicht einzeln geändert werden können!
+	M_SetSingleProp := E_ErrorIdCmd.ERRORID_InvalidProperty;
+
+ELSIF (nSpecPropIndex + 1) = refCmdData.aHeader[1] THEN	//PneuChannel
+	nPneuChannel := DINT_TO_USINT(refCmdData.n32Data[0]);	//PneuChannel Druck
+	IF NOT (nPneuChannel > 0 AND nPneuChannel <= cNoOfPneuChannels) THEN
+		M_SetSingleProp := E_ErrorIdObjMgmt.ERRORID_InvalidPneuChannel;
+		RETURN;	
+	END_IF
+	pPneuChannelPress := ADR(aFbPneuChannel[nPneuChannel]);	
+
+ELSIF (nSpecPropIndex + 2) = refCmdData.aHeader[1] THEN	//Frequenz
+	M_SetSingleProp := M_SetFrequency(refCmdData.n32Data[0], FALSE);
+	
+ELSIF (nSpecPropIndex + 3) = refCmdData.aHeader[1] THEN //Pulsbreite
+	M_SetSingleProp := M_SetPulse(refCmdData.n32Data[0], FALSE);
+	
+ELSIF (nSpecPropIndex + 4) = refCmdData.aHeader[1] THEN	//Spannung (HoldVoltage)
+	M_SetSingleProp := M_SetVoltage(refCmdData.n32Data[0], FALSE);
+	
+ELSIF (nSpecPropIndex + 5) = refCmdData.aHeader[1] THEN	//PrePeakTime
+	IF NOT (refCmdData.n32Data[0] >= 100 AND refCmdData.n32Data[0] <= 350) THEN
+		M_SetSingleProp := E_ErrorIdObjMgmt.ERRORID_InvalidPrePeakTime;;
+		RETURN;		
+	END_IF
+	fbPiezoControl.P_nPrePeakTime := DINT_TO_UINT(refCmdData.n32Data[0]);
+	
+ELSIF (nSpecPropIndex + 6) = refCmdData.aHeader[1] THEN
+	IF NOT (refCmdData.n32Data[0] >= 30 AND refCmdData.n32Data[0] <= 500) THEN //FrequenzSweep Anfangsfrequenz - Aspirieren
+		M_SetSingleProp := E_ErrorIdObjMgmt.ERRORID_InvalidFrequency;
+		RETURN;
+	END_IF
+	rAspFrequSweepStart := DINT_TO_REAL(refCmdData.n32Data[0]);
+	
+ELSIF (nSpecPropIndex + 7) = refCmdData.aHeader[1] THEN
+	IF NOT (refCmdData.n32Data[0] >= 30 AND refCmdData.n32Data[0] <= 500) THEN //FrequenzSweep Endfrequenz - Aspirieren
+		M_SetSingleProp := E_ErrorIdObjMgmt.ERRORID_InvalidFrequency;
+		RETURN;
+	END_IF
+	rAspFrequSweepEnd := DINT_TO_REAL(refCmdData.n32Data[0]);
+	
+ELSIF (nSpecPropIndex + 8) = refCmdData.aHeader[1] THEN //FrequenzSweep Zeit - Aspirieren
+	rAspFrequSweepTime := DINT_TO_REAL(refCmdData.n32Data[0]);
+	
+ELSIF (nSpecPropIndex + 9) = refCmdData.aHeader[1] THEN
+	IF NOT (refCmdData.n32Data[0] >= 400 AND refCmdData.n32Data[0] <= 10000) THEN //Pulsbreite - Aspirieren
+		M_SetSingleProp := E_ErrorIdObjMgmt.ERRORID_InvalidPulseWidth;
+		RETURN;
+	END_IF
+	//Falls entsprechende Aktion aktiv, dann gleich zur Hardware senden	
+	nAspiratePulse := DINT_TO_UINT(refCmdData.n32Data[0]);
+	
+ELSIF (nSpecPropIndex + 10) = refCmdData.aHeader[1] THEN
+	IF NOT (refCmdData.n32Data[0] >= 30 AND refCmdData.n32Data[0] <= 500) THEN //FrequenzSweep Anfangsfrequenz - Dispensen
+		M_SetSingleProp := E_ErrorIdObjMgmt.ERRORID_InvalidFrequency;
+		RETURN;
+	END_IF
+	rDispFrequSweepStart := DINT_TO_REAL(refCmdData.n32Data[0]);
+	
+ELSIF (nSpecPropIndex + 11) = refCmdData.aHeader[1] THEN
+	IF NOT (refCmdData.n32Data[0] >= 30 AND refCmdData.n32Data[0] <= 500) THEN //FrequenzSweep Endfrequenz - Dispensen
+		M_SetSingleProp := E_ErrorIdObjMgmt.ERRORID_InvalidFrequency;
+		RETURN;
+	END_IF
+	rDispFrequSweepEnd := DINT_TO_REAL(refCmdData.n32Data[0]);
+
+ELSIF (nSpecPropIndex + 12) = refCmdData.aHeader[1] THEN //FrequenzSweep Zeit - Dispensen
+	rDispFrequSweepTime := DINT_TO_REAL(refCmdData.n32Data[0]);
+	
+ELSIF (nSpecPropIndex + 13) = refCmdData.aHeader[1] THEN
+	IF NOT (refCmdData.n32Data[0] >= 400 AND refCmdData.n32Data[0] <= 10000) THEN //Pulsbreite - Dispensen
+		M_SetSingleProp := E_ErrorIdObjMgmt.ERRORID_InvalidPulseWidth;
+		RETURN;
+	END_IF
+	nDispensePulse := DINT_TO_UINT(refCmdData.n32Data[0]);
+	
+ELSIF (nSpecPropIndex + 14) = refCmdData.aHeader[1] THEN //DryTime
+	tDryTime := DINT_TO_TIME(refCmdData.n32Data[0]);
+ELSE
+	M_SetSingleProp := SUPER^.M_SetSingleProp(refCmdData);
+END_IF]]></ST>
+      </Implementation>
+    </Method>
+    <Method Name="M_SetVoltage" Id="{85d0b661-e9f8-4e1e-98d2-622809da3499}">
+      <Declaration><![CDATA[METHOD M_SetVoltage : ERRORID
+VAR_INPUT
+	nValue 				: DINT;
+	bSetObjectChange 	: BOOL;
+END_VAR
+]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[IF nValue > 1500 AND nValue < 4500 THEN
+	fbPiezoControl.P_nHoldVoltage := DINT_TO_UINT(nValue);
+	IF bSetObjectChange THEN
+		fbObjectDirectory.M_SetObjChange(nObjectId);
+	END_IF	
+ELSE
+	M_SetVoltage := E_ErrorIdObjMgmt.ERRORID_InvalidVoltage;
+END_IF]]></ST>
+      </Implementation>
+    </Method>
+    <Method Name="M_StartUniDispense" Id="{71c5ca16-3344-40c6-85a4-8a732e20f394}">
+      <Declaration><![CDATA[METHOD M_StartUniDispense : ERRORID
+VAR_INPUT
+	nParam1 : DINT; //Drops
+	nParam2 : DINT; //nicht benutzt
+END_VAR
+
+VAR_OUTPUT
+	bIsContinous : BOOL;
+END_VAR
+
+VAR
+	stActionData : ST_ActionData;
+END_VAR
+]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[IF nParam1 = 0 THEN //DauerDispensen
+	bIsContinous := TRUE;
+	stActionData.aParams[1] := 0; //Continous
+ELSE
+	stActionData.aParams[1] := nParam1; //Drops
+END_IF
+
+stActionData.eAction := E_Action.ACTION_DispenseDrops;
+stActionData.aParams[2] := 1; //On
+M_StartUniDispense := M_ExeAction(stActionData);]]></ST>
+      </Implementation>
+    </Method>
+    <Method Name="M_StopUniDispense" Id="{f66dd6d0-d52a-448d-9289-cda9f65ad4f4}">
+      <Declaration><![CDATA[METHOD M_StopUniDispense : ERRORID
+VAR_INPUT
+END_VAR
+]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[M_CancelAction(E_Action.ACTION_DispenseDrops);]]></ST>
+      </Implementation>
+    </Method>
+    <Property Name="P_bSensorMounted" Id="{d48f5239-c31c-41f2-a0ae-faaa246d2a4e}">
+      <Declaration><![CDATA[PROPERTY P_bSensorMounted : BOOL]]></Declaration>
+      <Get Name="Get" Id="{ecccf12a-5275-4d8e-9f0e-a49274e849b2}">
+        <Declaration><![CDATA[VAR
+END_VAR
+]]></Declaration>
+        <Implementation>
+          <ST><![CDATA[IF pParentMzTool^.P_eObjectType = E_ObjectType.OBJECTTYPE_SinglePiezoHolder THEN
+	P_bSensorMounted := pZAxisRef^.stInput.nToolState.1;	
+END_IF]]></ST>
+        </Implementation>
+      </Get>
+    </Property>
+    <Property Name="P_nDrypadArea" Id="{e516396f-8364-43bd-8f59-bc6054af0cdd}">
+      <Declaration><![CDATA[PROPERTY P_nDrypadArea : USINT]]></Declaration>
+      <Get Name="Get" Id="{15e57cdd-1204-40ed-abb8-ed1710252281}">
+        <Declaration><![CDATA[VAR
+END_VAR
+]]></Declaration>
+        <Implementation>
+          <ST><![CDATA[P_nDrypadArea := nDrypadArea;]]></ST>
+        </Implementation>
+      </Get>
+    </Property>
+    <Property Name="P_nObjIdDiluter" Id="{19738e1e-f6f4-4352-a4b0-1b83e02e1dcf}">
+      <Declaration><![CDATA[PROPERTY P_nObjIdDiluter : UINT]]></Declaration>
+      <Get Name="Get" Id="{c18e436c-4f48-48b9-a83e-aa45c9e6d76d}">
+        <Declaration><![CDATA[VAR
+END_VAR
+]]></Declaration>
+        <Implementation>
+          <ST><![CDATA[IF pDiluter > 0 THEN
+	P_nObjIdDiluter := pDiluter^.P_nObjectID;
+END_IF]]></ST>
+        </Implementation>
+      </Get>
+    </Property>
+    <Property Name="P_nTestResult" Id="{f3640e5d-c08a-489e-9a2f-f8f3aa290d56}">
+      <Declaration><![CDATA[PROPERTY P_nTestResult : UDINT]]></Declaration>
+      <Get Name="Get" Id="{75344249-971c-4b1e-a492-5a24e5f7ca26}">
+        <Declaration><![CDATA[VAR
+END_VAR
+]]></Declaration>
+        <Implementation>
+          <ST><![CDATA[P_nTestResult := nTestResult;]]></ST>
+        </Implementation>
+      </Get>
+      <Set Name="Set" Id="{e3287b1c-3b13-4014-b532-15a43d856e6c}">
+        <Declaration><![CDATA[VAR
+END_VAR
+]]></Declaration>
+        <Implementation>
+          <ST><![CDATA[nTestResult := P_nTestResult;]]></ST>
+        </Implementation>
+      </Set>
+    </Property>
+    <Property Name="P_pDiluter" Id="{1b2b57c3-b476-4a20-ad70-37aa3fc6e6d1}">
+      <Declaration><![CDATA[PROPERTY P_pDiluter : POINTER TO FB_Diluter]]></Declaration>
+      <Get Name="Get" Id="{4d570503-2826-4f0d-8e3a-107b43de7cea}">
+        <Declaration><![CDATA[VAR
+END_VAR
+]]></Declaration>
+        <Implementation>
+          <ST><![CDATA[P_pDiluter := pDiluter;]]></ST>
+        </Implementation>
+      </Get>
+    </Property>
+    <Property Name="P_pPiezoRef" Id="{b633d54a-a82d-4526-9c0c-2dcdfedb9ec1}">
+      <Declaration><![CDATA[PROPERTY P_pPiezoRef : POINTER TO FB_PiezoRef]]></Declaration>
+      <Get Name="Get" Id="{a65ab7ac-3364-4ffb-ab86-3b35b2a5b071}">
+        <Declaration><![CDATA[VAR
+END_VAR
+]]></Declaration>
+        <Implementation>
+          <ST><![CDATA[P_pPiezoRef := pFbPiezoRef;]]></ST>
+        </Implementation>
+      </Get>
+    </Property>
+    <Property Name="P_rToolRadius" Id="{bcd7b585-173f-40bf-b658-9b8507c8f94c}">
+      <Declaration><![CDATA[PROPERTY P_rToolRadius : REAL]]></Declaration>
+      <Get Name="Get" Id="{f14724f9-521d-4c46-858c-abe516b01ec5}">
+        <Declaration><![CDATA[VAR
+	stDim : ST_3DDimension;
+END_VAR
+]]></Declaration>
+        <Implementation>
+          <ST><![CDATA[P_rToolRadius := 1500.0;]]></ST>
+        </Implementation>
+      </Get>
+    </Property>
+    <Property Name="P_stCurrentXYArea" Id="{737f5dce-e97f-4fe0-aeca-9f2914b32af5}">
+      <Declaration><![CDATA[PROPERTY P_stCurrentXYArea : FB_RectAngle]]></Declaration>
+      <Get Name="Get" Id="{720fdbfb-eb9f-442a-8593-743737574643}">
+        <Declaration><![CDATA[VAR
+	stPoint : ST_3DPoint;
+END_VAR
+]]></Declaration>
+        <Implementation>
+          <ST><![CDATA[stPoint := P_stCurrentPosPhys;
+P_stCurrentXYArea.X1 := stPoint.X - 1500.0;
+P_stCurrentXYArea.X2 := stPoint.X + 1500.0;
+P_stCurrentXYArea.Y1 := stPoint.Y - 1500.0;
+P_stCurrentXYArea.Y2 := stPoint.Y + 1500.0;]]></ST>
+        </Implementation>
+      </Get>
+    </Property>
+    <Property Name="P_tDryTime" Id="{a98f5d01-679a-48ae-98f7-db658ffcdba0}">
+      <Declaration><![CDATA[PROPERTY P_tDryTime : TIME]]></Declaration>
+      <Get Name="Get" Id="{3c61529c-da0b-482a-952e-63f89aff9141}">
+        <Declaration><![CDATA[VAR
+END_VAR
+]]></Declaration>
+        <Implementation>
+          <ST><![CDATA[P_tDryTime := tDryTime;]]></ST>
+        </Implementation>
+      </Get>
+    </Property>
+    <LineIds Name="FB_SolenoidPip">
+      <LineId Id="331" Count="72" />
+      <LineId Id="493" Count="1" />
+      <LineId Id="406" Count="3" />
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="FB_SolenoidPip.A_Aspirate">
+      <LineId Id="72" Count="69" />
+      <LineId Id="1" Count="0" />
+    </LineIds>
+    <LineIds Name="FB_SolenoidPip.A_DilMoveValve">
+      <LineId Id="2" Count="17" />
+      <LineId Id="1" Count="0" />
+    </LineIds>
+    <LineIds Name="FB_SolenoidPip.A_Dispense">
+      <LineId Id="142" Count="71" />
+      <LineId Id="1" Count="0" />
+    </LineIds>
+    <LineIds Name="FB_SolenoidPip.A_DispenseDrops">
+      <LineId Id="57" Count="54" />
+      <LineId Id="1" Count="0" />
+    </LineIds>
+    <LineIds Name="FB_SolenoidPip.A_InitTool">
+      <LineId Id="7" Count="4" />
+      <LineId Id="1" Count="0" />
+    </LineIds>
+    <LineIds Name="FB_SolenoidPip.A_Reset">
+      <LineId Id="2" Count="16" />
+      <LineId Id="27" Count="2" />
+      <LineId Id="22" Count="4" />
+      <LineId Id="1" Count="0" />
+    </LineIds>
+    <LineIds Name="FB_SolenoidPip.A_Stop">
+      <LineId Id="2" Count="0" />
+      <LineId Id="19" Count="2" />
+      <LineId Id="3" Count="0" />
+      <LineId Id="22" Count="0" />
+      <LineId Id="4" Count="14" />
+      <LineId Id="1" Count="0" />
+    </LineIds>
+    <LineIds Name="FB_SolenoidPip.FB_init">
+      <LineId Id="7" Count="1" />
+    </LineIds>
+    <LineIds Name="FB_SolenoidPip.M_AddChild">
+      <LineId Id="20" Count="0" />
+      <LineId Id="12" Count="0" />
+      <LineId Id="5" Count="0" />
+    </LineIds>
+    <LineIds Name="FB_SolenoidPip.M_CancelAction">
+      <LineId Id="3" Count="13" />
+      <LineId Id="26" Count="1" />
+      <LineId Id="19" Count="2" />
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="FB_SolenoidPip.M_CheckAction">
+      <LineId Id="57" Count="1" />
+      <LineId Id="140" Count="0" />
+      <LineId Id="59" Count="2" />
+      <LineId Id="84" Count="0" />
+      <LineId Id="62" Count="9" />
+      <LineId Id="128" Count="1" />
+      <LineId Id="72" Count="2" />
+      <LineId Id="93" Count="23" />
+      <LineId Id="92" Count="0" />
+      <LineId Id="75" Count="1" />
+      <LineId Id="31" Count="0" />
+    </LineIds>
+    <LineIds Name="FB_SolenoidPip.M_CheckBottles">
+      <LineId Id="3" Count="1" />
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="FB_SolenoidPip.M_CheckProps">
+      <LineId Id="3" Count="10" />
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="FB_SolenoidPip.M_ClearAllProps">
+      <LineId Id="18" Count="0" />
+      <LineId Id="6" Count="0" />
+    </LineIds>
+    <LineIds Name="FB_SolenoidPip.M_ExeAction">
+      <LineId Id="171" Count="124" />
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="FB_SolenoidPip.M_GetAllProps">
+      <LineId Id="3" Count="4" />
+      <LineId Id="40" Count="3" />
+      <LineId Id="8" Count="27" />
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="FB_SolenoidPip.M_SetAllProps">
+      <LineId Id="3" Count="4" />
+      <LineId Id="163" Count="0" />
+      <LineId Id="168" Count="0" />
+      <LineId Id="173" Count="0" />
+      <LineId Id="169" Count="1" />
+      <LineId Id="174" Count="0" />
+      <LineId Id="171" Count="0" />
+      <LineId Id="166" Count="0" />
+      <LineId Id="172" Count="0" />
+      <LineId Id="167" Count="0" />
+      <LineId Id="164" Count="0" />
+      <LineId Id="16" Count="20" />
+      <LineId Id="184" Count="4" />
+      <LineId Id="41" Count="1" />
+      <LineId Id="198" Count="18" />
+      <LineId Id="65" Count="4" />
+      <LineId Id="71" Count="72" />
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="FB_SolenoidPip.M_SetFrequency">
+      <LineId Id="5" Count="0" />
+      <LineId Id="9" Count="0" />
+      <LineId Id="17" Count="1" />
+      <LineId Id="16" Count="0" />
+      <LineId Id="7" Count="0" />
+      <LineId Id="10" Count="0" />
+      <LineId Id="8" Count="0" />
+    </LineIds>
+    <LineIds Name="FB_SolenoidPip.M_SetPrintParams">
+      <LineId Id="31" Count="4" />
+      <LineId Id="30" Count="0" />
+      <LineId Id="7" Count="1" />
+      <LineId Id="10" Count="3" />
+      <LineId Id="15" Count="0" />
+      <LineId Id="14" Count="0" />
+      <LineId Id="16" Count="1" />
+      <LineId Id="9" Count="0" />
+      <LineId Id="19" Count="0" />
+      <LineId Id="18" Count="0" />
+      <LineId Id="22" Count="1" />
+      <LineId Id="20" Count="1" />
+    </LineIds>
+    <LineIds Name="FB_SolenoidPip.M_SetPulse">
+      <LineId Id="5" Count="0" />
+      <LineId Id="9" Count="0" />
+      <LineId Id="17" Count="1" />
+      <LineId Id="16" Count="0" />
+      <LineId Id="7" Count="0" />
+      <LineId Id="10" Count="0" />
+      <LineId Id="8" Count="0" />
+    </LineIds>
+    <LineIds Name="FB_SolenoidPip.M_SetSingleProp">
+      <LineId Id="3" Count="2" />
+      <LineId Id="116" Count="0" />
+      <LineId Id="6" Count="0" />
+      <LineId Id="101" Count="4" />
+      <LineId Id="100" Count="0" />
+      <LineId Id="107" Count="0" />
+      <LineId Id="117" Count="1" />
+      <LineId Id="122" Count="0" />
+      <LineId Id="119" Count="1" />
+      <LineId Id="123" Count="0" />
+      <LineId Id="121" Count="0" />
+      <LineId Id="30" Count="3" />
+      <LineId Id="35" Count="57" />
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="FB_SolenoidPip.M_SetVoltage">
+      <LineId Id="5" Count="0" />
+      <LineId Id="9" Count="0" />
+      <LineId Id="17" Count="1" />
+      <LineId Id="16" Count="0" />
+      <LineId Id="7" Count="0" />
+      <LineId Id="10" Count="0" />
+      <LineId Id="8" Count="0" />
+    </LineIds>
+    <LineIds Name="FB_SolenoidPip.P_bSensorMounted.Get">
+      <LineId Id="3" Count="1" />
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="FB_SolenoidPip.P_nDrypadArea.Get">
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="FB_SolenoidPip.P_nObjIdDiluter.Get">
+      <LineId Id="3" Count="1" />
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="FB_SolenoidPip.P_nTestResult.Get">
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="FB_SolenoidPip.P_nTestResult.Set">
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="FB_SolenoidPip.P_pDiluter.Get">
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="FB_SolenoidPip.P_pPiezoRef.Get">
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="FB_SolenoidPip.P_rToolRadius.Get">
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="FB_SolenoidPip.P_stCurrentXYArea.Get">
+      <LineId Id="3" Count="3" />
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="FB_SolenoidPip.P_tDryTime.Get">
+      <LineId Id="2" Count="0" />
+    </LineIds>
+  </POU>
+</TcPlcObject>

@@ -1,0 +1,776 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<TcPlcObject Version="1.1.0.1" ProductVersion="3.1.4024.9">
+  <POU Name="FB_MultiCartHolder" Id="{73e03b2f-df56-4c04-a73e-d551b45e1967}" SpecialFunc="None">
+    <Declaration><![CDATA[FUNCTION_BLOCK FB_MultiCartHolder EXTENDS FB_GCodeTool IMPLEMENTS I_Dispenser
+VAR_INPUT
+END_VAR
+VAR_OUTPUT
+END_VAR
+VAR
+	//Specproperties
+	pFbHeaterRef		: POINTER TO FB_MZHeaterRef;
+	pCartDispenser1		: POINTER TO FB_CartDispenser;
+	pCartDispenser2		: POINTER TO FB_CartDispenser;
+	pCartDispenser3		: POINTER TO FB_CartDispenser;
+
+	//****************************************Aktionsvariablen****************************************************
+
+	//Action: "SwitchPressure"
+	//Diese Action wird auf alle vorhandene Childs vom Typ CartridgeDispenser ausgeführt
+	//es werden also Zeiger auf die entpsrechende Tools gesetzt
+	//Die Frage ist, wie man das mit der Zeit macht? Na genauso wie bei den einzelnen.
+	bSwitchPress		: BOOL;			
+	nStateA_SwitchPress	: USINT;		//State von A_SwitchPress()
+	eSwitchPressCtrl	: E_PressCtrl;
+	tPressTime			: TIME;			//nach dieser Zeit Ventil automatisch wieder zu
+	timerPress			: TON;			//Timer für Öffnungszeit Druckventil
+	bPressIsOn			: BOOL;	
+	
+	
+	
+	//Action: "Heating"
+	bHeating 			: BOOL;
+	nStateA_Heating		: USINT;		//State von A_Heating()
+	nTempSetpoint		: UINT;			//Solltemperatur
+	bHeatingOn			: BOOL;			//Heizung "EIN"
+	fbHeaterCtrl		: FB_MzHeaterControl;
+	
+	nCurrentTemp1		: UINT;
+	nCurrentTemp2		: UINT;
+END_VAR
+
+VAR CONSTANT
+	cHotTemp		: UINT := 500;	//ab dieser Isttemperatur wird Tool als heiß betrachtet (Interlock)
+END_VAR]]></Declaration>
+    <Implementation>
+      <ST><![CDATA[IF eCurrentState = E_MachineState.MACHINESTATE_Active THEN
+	IF bHeating THEN	//Heizen
+		A_Heating();
+		IF nStateA_Heating >= 80 THEN
+			IF nStateA_Heating >= 99 THEN
+				bError := TRUE;
+			END_IF
+			M_RemoveListEntry(nSearchValue:= E_Action.ACTION_Heating);
+			bHeating := FALSE;
+			nStateA_Heating := 0;
+		END_IF
+	END_IF
+	
+	IF bSwitchPress THEN	//Kartuschendruck einstellen und Ein-bzw. Aus schalten 
+		A_SwitchPress();
+		IF nStateA_SwitchPress >= 80 THEN
+			IF nStateA_SwitchPress >= 99 THEN
+				bError := TRUE;
+			END_IF
+			bSwitchPress := FALSE;
+			nStateA_SwitchPress := 0;
+			M_RemoveListEntry(nSearchValue:= E_Action.ACTION_SwitchPressure);
+		END_IF
+	END_IF
+
+	
+END_IF
+
+SUPER^();	//FB_MzTool aufrufen
+
+//Prozessdaten aktualisieren
+IF pZAxisRef > 0 THEN
+	stProcessData.n32Data[7] := BOOL_TO_DINT(pZAxisRef^.stInput.nToolState.2);
+	//Komplett überarbeiten
+END_IF
+
+aObjProcData[nNotifyId] := stProcessData;]]></ST>
+    </Implementation>
+    <Action Name="A_Heating" Id="{22b0caf6-9f2e-4de2-9f44-3a080f08c3da}">
+      <Implementation>
+        <ST><![CDATA[IF nStateA_Heating = 0 THEN
+	fbHeaterCtrl(bExecute:= TRUE, nTempZone1:= nTempSetpoint, bHeatingOn:= bHeatingOn, pFbHeaterRef:= pFbHeaterRef);
+
+	IF NOT fbHeaterCtrl.bBusy THEN
+		IF fbHeaterCtrl.bError THEN
+			stError.ErrorId := fbHeaterCtrl.nErrorId; 
+			stError.POUState := nStateA_Heating;
+			nStateA_Heating := 99;
+		ELSE
+			nStateA_Heating := 80;	
+		END_IF
+		fbHeaterCtrl(bExecute:= FALSE, pFbHeaterRef:= pFbHeaterRef);
+	END_IF
+ELSIF nStateA_Heating = 70 THEN
+	fbHeaterCtrl(bExecute:= FALSE, pFbHeaterRef:= pFbHeaterRef);
+	nStateA_Heating := 80;
+END_IF
+
+//Errorhandling
+IF nStateA_Heating = 99 THEN
+	stError.POU := E_POU.POU_FB_MultiCartHolder;
+	stError.Cmd := E_Action.ACTION_Heating;
+	stError.POUAction := E_POUACT.POUACT_A_Heating;
+	fbErrorList.M_Add(stError);
+END_IF]]></ST>
+      </Implementation>
+    </Action>
+    <Action Name="A_Reset" Id="{65855b94-647f-4cca-8d66-1574cef6c27c}">
+      <Implementation>
+        <ST><![CDATA[//Ist noch eine Aktion aktiv?
+IF nStateA_ResetSpec = 0 THEN 
+	IF bHeating THEN
+		bHeating := FALSE;
+		nStateA_Heating := 0;
+	END_IF
+	
+	nStateA_ResetSpec := 80;
+END_IF
+
+SUPER^.A_Reset();]]></ST>
+      </Implementation>
+    </Action>
+    <Action Name="A_Stop" Id="{2ebc2a78-c1d7-47ff-98f8-113133b77323}">
+      <Implementation>
+        <ST><![CDATA[IF nStateA_Stop = 0 THEN
+	nStateA_Stop := 1;	
+END_IF
+
+SUPER^.A_Stop();]]></ST>
+      </Implementation>
+    </Action>
+    <Action Name="A_SwitchPress" Id="{2ea4b620-952a-44c9-a0c4-a97887b20b38}">
+      <Implementation>
+        <ST><![CDATA[CASE nStateA_SwitchPress OF
+	0: 
+		IF pCartDispenser1 > 0 THEN
+			IF pCartDispenser1^.M_GetActionBusy(E_Action.ACTION_SwitchPressure) THEN
+				RETURN;
+			END_IF
+		END_IF
+		IF pCartDispenser2 > 0 THEN
+			IF pCartDispenser2^.M_GetActionBusy(E_Action.ACTION_SwitchPressure) THEN
+				RETURN;
+			END_IF
+		END_IF
+		IF pCartDispenser3 > 0 THEN
+			IF pCartDispenser3^.M_GetActionBusy(E_Action.ACTION_SwitchPressure) THEN
+				RETURN;
+			END_IF
+		END_IF
+		nStateA_SwitchPress := 80;
+	
+	70:
+		IF pCartDispenser1 > 0 THEN
+			pCartDispenser1^.M_CancelAction(E_Action.ACTION_SwitchPressure);
+		END_IF
+		IF pCartDispenser2 > 0 THEN
+			pCartDispenser2^.M_CancelAction(E_Action.ACTION_SwitchPressure);
+		END_IF
+		IF pCartDispenser3 > 0 THEN
+			pCartDispenser3^.M_CancelAction(E_Action.ACTION_SwitchPressure);
+		END_IF
+		nStateA_SwitchPress := 80;
+END_CASE]]></ST>
+      </Implementation>
+    </Action>
+    <Method Name="FB_init" Id="{bf4045b6-1d77-4eab-b1ba-68a7b6f88621}">
+      <Declaration><![CDATA[METHOD FB_init : BOOL
+VAR_INPUT
+	bInitRetains : BOOL; // if TRUE, the retain variables are initialized (warm start / cold start)
+	bInCopyCode : BOOL;  // if TRUE, the instance afterwards gets moved into the copy code (online change)
+END_VAR
+]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[eObjectType := E_ObjectType.OBJECTTYPE_MultiCartHolder;
+eObjectGroup := E_ObjectGroup.OBJECTGROUP_MzTool OR E_ObjectGroup.OBJECTGROUP_Device;]]></ST>
+      </Implementation>
+    </Method>
+    <Method Name="M_AddChild" Id="{cd91d220-fb4b-42d0-9b35-3c25142c92fb}">
+      <Declaration><![CDATA[METHOD M_AddChild : ERRORID
+VAR_INPUT
+	pObject : POINTER TO FB_Object;
+	nSlotNr	: UINT;
+	nIndex : INT;
+END_VAR
+]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[IF pObject > 0 THEN
+	IF pObject^.P_eObjectType = E_ObjectType.OBJECTTYPE_CartDispenser OR
+		pObject^.P_eObjectType = E_ObjectType.OBJECTTYPE_CartDispStirrer OR
+		pObject^.P_eObjectType = E_ObjectType.OBJECTTYPE_DummyTool OR
+		pObject^.P_eObjectType = E_ObjectType.OBJECTTYPE_Nozzle THEN
+		M_AddChild := SUPER^.M_AddChild(pObject,nSlotNr,nIndex);
+	ELSE
+		M_AddChild := E_ErrorIdObjMgmt.ERRORID_InvalidParentObject;
+	END_IF
+ELSE
+	M_AddChild := E_ErrorIdObjMgmt.ERRORID_InvalidParentObject;
+END_IF]]></ST>
+      </Implementation>
+    </Method>
+    <Method Name="M_CancelAction" Id="{e60417bf-1646-4674-9908-555d5ce0092e}">
+      <Declaration><![CDATA[METHOD M_CancelAction
+VAR_INPUT
+	eAction : E_Action;
+END_VAR
+]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[CASE eAction OF
+	E_Action.ACTION_Heating:
+		IF bHeating AND nStateA_Heating < 70 THEN
+			nStateA_Heating := 70;
+		END_IF
+
+	E_Action.ACTION_SwitchPressure:
+		//es stellt sich die Frage, ob das notwendig ist, da ja eventuell bei den Childs abgebrochen wird
+
+ELSE
+	SUPER^.M_CancelAction(eAction);
+END_CASE]]></ST>
+      </Implementation>
+    </Method>
+    <Method Name="M_CheckAction" Id="{accff759-ea5b-40bc-9fbd-c0d03c9c5130}">
+      <Declaration><![CDATA[METHOD M_CheckAction : ERRORID
+VAR_INPUT
+	refActionData 	: REFERENCE TO ST_ActionData;
+	pCorrelObject	: POINTER TO FB_Object;
+END_VAR
+]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[CASE refActionData.eAction OF
+	E_Action.ACTION_CleanTip,
+	E_Action.ACTION_MeasureTool,
+	E_Action.ACTION_SwitchPressure, //BasicAction für ActionOnArray
+	E_Action.ACTION_TeachTarget:
+		RETURN;
+ELSE
+	M_CheckAction := SUPER^.M_CheckAction(refActionData, pCorrelObject);
+END_CASE]]></ST>
+      </Implementation>
+    </Method>
+    <Method Name="M_CheckProcDataType" Id="{3f3fdef3-dceb-403d-8ba3-88097580c502}">
+      <Declaration><![CDATA[METHOD M_CheckProcDataType : BOOL
+VAR_INPUT
+	eProcDataType : E_ProcDataType;
+END_VAR
+]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[IF eProcDataType = E_ProcDataType.PROCDATATYPE_Temp1 OR eProcDataType = E_ProcDataType.PROCDATATYPE_Temp2 THEN
+	M_CheckProcDataType := TRUE;
+END_IF]]></ST>
+      </Implementation>
+    </Method>
+    <Method Name="M_CheckProps" Id="{a7c7db0c-1bfb-4d59-8681-3dfa521ea8c6}">
+      <Declaration><![CDATA[METHOD M_CheckProps : ERRORID
+VAR_INPUT
+END_VAR
+
+VAR
+	i : UINT;
+	pSlot : POINTER TO FB_Slot;
+END_VAR]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[M_CheckProps := SUPER^.M_CheckProps();
+//Kann bis zu 3 CartDispenser enthalten
+pCartDispenser1 := 0;
+pCartDispenser2	:= 0;
+pCartDispenser3	:= 0;
+FOR i:= 1 TO nNumberOfSlots BY 1 DO
+	pSlot := fbSlotList.M_GetAtNr(i);
+	IF pSlot > 0 AND_THEN pSlot^.P_pChild > 0 AND_THEN
+		(pSlot^.P_pChild^.P_eObjectType = E_ObjectType.OBJECTTYPE_CartDispenser OR pSlot^.P_pChild^.P_eObjectType = E_ObjectType.OBJECTTYPE_CartDispStirrer) THEN
+		CASE pSlot^.P_nNr OF
+			1: pCartDispenser1 := pSlot^.P_pChild;
+			2: pCartDispenser2 := pSlot^.P_pChild;
+			3: pCartDispenser3 := pSlot^.P_pChild;
+		END_CASE
+	END_IF
+END_FOR
+
+IF pPiece = 0 THEN
+	M_CheckProps := E_ErrorIdObjMgmt.ERRORID_NoNozzleOnTool;
+END_IF]]></ST>
+      </Implementation>
+    </Method>
+    <Method Name="M_ClearAllProps" Id="{304f4c16-6f87-4311-9d85-65affa603850}">
+      <Declaration><![CDATA[METHOD M_ClearAllProps
+VAR_INPUT
+	bIgnoreParent : BOOL; //Es wird das gesamte OD gelöscht. -> Zeiger auf Parent nicht mehr gültig!
+END_VAR
+]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[pCartDispenser1 := 0;
+pCartDispenser2 := 0;
+pCartDispenser3 := 0;
+SUPER^.M_ClearAllProps(bIgnoreParent);]]></ST>
+      </Implementation>
+    </Method>
+    <Method Name="M_DispenserPrepare" Id="{d7837a70-e55d-48a6-a64f-5aab655b7d00}">
+      <Declaration><![CDATA[METHOD M_DispenserPrepare : ERRORID
+VAR_INPUT
+END_VAR
+]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[]]></ST>
+      </Implementation>
+    </Method>
+    <Method Name="M_DispenserStart" Id="{cfa9b368-300d-4f70-afe9-3860744d50cf}">
+      <Declaration><![CDATA[METHOD M_DispenserStart : ERRORID
+VAR_INPUT
+END_VAR
+
+VAR
+	stActionData : ST_ActionData;
+END_VAR]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[//Es werden alle 3 Kartuschen (wenn vorhanden) dauerhaft eingeschalten
+stActionData.eAction := E_Action.ACTION_SwitchPressure;
+stActionData.aParams[1] := 7;
+M_DispenserStart := M_ExeAction(stActionData);
+]]></ST>
+      </Implementation>
+    </Method>
+    <Method Name="M_DispenserStop" Id="{7325bc8c-85bc-4a96-8914-facf157f7913}">
+      <Declaration><![CDATA[METHOD M_DispenserStop : ERRORID
+VAR_INPUT
+END_VAR
+
+VAR
+	stActionData : ST_ActionData;
+END_VAR
+]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[stActionData.eAction := E_Action.ACTION_SwitchPressure;
+M_DispenserStop := M_ExeAction(stActionData);]]></ST>
+      </Implementation>
+    </Method>
+    <Method Name="M_ExeAction" Id="{60696844-721e-4982-a1ff-7bc4e60b97d9}">
+      <Declaration><![CDATA[METHOD M_ExeAction : ERRORID
+VAR_INPUT
+	refActionData : REFERENCE TO ST_ActionData;	
+END_VAR
+
+VAR
+	bFlag : BOOL;
+	stActionData : ST_ActionData;
+	tPressTime : TIME;
+END_VAR]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[IF NOT (eCurrentState = E_MachineState.MACHINESTATE_Idle OR
+	eCurrentState = E_MachineState.MACHINESTATE_Active OR
+	eCurrentState = E_MachineState.MACHINESTATE_Ready) THEN
+	M_ExeAction := E_ErrorIdCmd.ERRORID_InvalidState;
+	RETURN;
+END_IF
+
+CASE refActionData.eAction OF
+	E_Action.ACTION_Heating:
+		IF nStateA_Heating = 0 THEN
+			nTempSetpoint := DINT_TO_UINT(refActionData.aParams[1]);
+			IF nTempSetpoint > 2000 THEN
+				M_ExeAction := E_ErrorIdCmd.ERRORID_InvalidHeatingTemp;  //Error
+				RETURN;
+			END_IF
+			bHeatingOn := DINT_TO_BOOL(refActionData.aParams[2]);			
+			bHeating := TRUE;
+			fbList.A_AddHeadValue(hList := hList, putValue := E_Action.ACTION_Heating);
+		ELSE
+			RETURN;
+		END_IF
+		
+	E_Action.ACTION_SwitchPressure:
+		//Die Action kann nur ausgeführt werden, wenn es mind. ein Child vom Typ "CartDispenser" gibt.
+		//Die einzelnen Bits aus aParams[1] werden als die einzelnen Dispenser angesehen
+		IF pCartDispenser1 > 0 OR pCartDispenser2 > 0 OR pCartDispenser3 > 0 THEN
+			//Die einzelnen Bits extrahieren
+			tPressTime := DINT_TO_TIME(refActionData.aParams[2]);
+			IF pCartDispenser1 > 0 THEN
+				IF refActionData.aParams[1].0 THEN
+					M_ExeAction := pCartDispenser1^.M_SwitchPressure(E_PressCtrl.PRESSCTRL_PressOn,tPressTime);
+				ELSE
+					M_ExeAction := pCartDispenser1^.M_SwitchPressure(E_PressCtrl.PRESSCTRL_Off,tPressTime);
+				END_IF
+				IF M_ExeAction > 0 THEN
+					RETURN;
+				END_IF
+				IF pCartDispenser1^.M_GetActionBusy(E_Action.ACTION_SwitchPressure) THEN
+					bFlag := TRUE;
+				END_IF				
+			END_IF
+			
+			IF pCartDispenser2 > 0 THEN
+				IF refActionData.aParams[1].1 THEN
+					M_ExeAction := pCartDispenser2^.M_SwitchPressure(E_PressCtrl.PRESSCTRL_PressOn,tPressTime);
+				ELSE
+					M_ExeAction := pCartDispenser2^.M_SwitchPressure(E_PressCtrl.PRESSCTRL_Off,tPressTime);
+				END_IF
+				IF M_ExeAction > 0 THEN
+					RETURN;
+				END_IF
+				IF pCartDispenser2^.M_GetActionBusy(E_Action.ACTION_SwitchPressure) THEN
+					bFlag := TRUE;
+				END_IF				
+			END_IF
+			
+			IF pCartDispenser3 > 0 THEN
+				IF refActionData.aParams[1].2 THEN
+					M_ExeAction := pCartDispenser3^.M_SwitchPressure(E_PressCtrl.PRESSCTRL_PressOn,tPressTime);
+				ELSE
+					M_ExeAction := pCartDispenser3^.M_SwitchPressure(E_PressCtrl.PRESSCTRL_Off,tPressTime);
+				END_IF
+				IF M_ExeAction > 0 THEN
+					RETURN;
+				END_IF
+				IF pCartDispenser3^.M_GetActionBusy(E_Action.ACTION_SwitchPressure) THEN
+					bFlag := TRUE;
+				END_IF				
+			END_IF
+			
+			IF bFlag AND NOT bSwitchPress THEN
+				bSwitchPress := TRUE;
+				fbList.A_AddHeadValue(hList := hList, putValue := E_Action.ACTION_SwitchPressure);
+			END_IF
+		
+		ELSE
+			M_ExeAction := E_ErrorIdCmd.ERRORID_NoCartridgeDispConfigured;
+			RETURN;			
+		END_IF
+
+	ELSE
+		M_ExeAction := SUPER^.M_ExeAction(refActionData);
+		RETURN;
+END_CASE
+
+bBusy := TRUE;
+eCurrentState := E_MachineState.MACHINESTATE_Active;]]></ST>
+      </Implementation>
+    </Method>
+    <Method Name="M_GetAllProps" Id="{b4cadbd1-e1ce-4b32-b41b-5ef643601c0e}">
+      <Declaration><![CDATA[METHOD M_GetAllProps : ERRORID
+VAR_INPUT
+	refCmdData : REFERENCE TO  ST_CmdData;
+END_VAR
+]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[//Basisproperties lesen
+SUPER^.M_GetAllProps(refCmdData);
+//Specialproperties lesen
+nCurrentPropIndex := nCurrentPropIndex + 1;
+refCmdData.n32Data[nCurrentPropIndex] := BOOL_TO_DINT(pFbHeaterRef^.P_bHeaterDetected);]]></ST>
+      </Implementation>
+    </Method>
+    <Method Name="M_GetProcData" Id="{af68f15b-9069-4733-8e9d-5465dbcfecd5}">
+      <Declaration><![CDATA[METHOD M_GetProcData : DINT
+VAR_INPUT
+	eProcDataType : E_ProcDataType;
+END_VAR
+]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[IF eProcDataType = E_ProcDataType.PROCDATATYPE_Temp1 THEN
+	M_GetProcData := nCurrentTemp1;
+ELSIF eProcDataType = E_ProcDataType.PROCDATATYPE_Temp2 THEN
+	M_GetProcData := nCurrentTemp2;
+END_IF
+]]></ST>
+      </Implementation>
+    </Method>
+    <Method Name="M_SetAllProps" Id="{f80badce-5be0-4305-af15-4b5edbae4800}">
+      <Declaration><![CDATA[METHOD M_SetAllProps : ERRORID
+VAR_INPUT
+	refCmdData : REFERENCE TO  ST_CmdData;
+END_VAR
+]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[M_SetAllProps := SUPER^.M_SetAllProps(refCmdData);
+
+IF M_SetAllProps > 0 THEN
+	RETURN;
+END_IF
+
+nCurrentPropIndex := nCurrentPropIndex + 1;
+nSpecPropIndex := nCurrentPropIndex;
+
+pFbHeaterRef := ADR(pFbMultiZ^.aFbHeaterRef[pZAxisRef^.nChannel]);
+pFbHeaterRef^.P_bHeaterDetected := DINT_TO_BOOL(refCmdData.n32Data[nCurrentPropIndex]);
+
+IF pFbHeaterRef^.P_bHeaterDetected THEN
+	pZAxisRef^.eFixedToolType := E_MzToolType.TOOL_TYPE_Cartridge;
+ELSE
+	pZAxisRef^.eFixedToolType := E_MzToolType.TOOL_TYPE_None;
+END_IF
+
+nNoOfProps := nCurrentPropIndex + 1;]]></ST>
+      </Implementation>
+    </Method>
+    <Method Name="M_SetPrintParams" Id="{5614e465-53d2-4bc8-903c-1c5be0544076}">
+      <Declaration><![CDATA[METHOD M_SetPrintParams : ST_MethResult
+VAR_INPUT
+	eType 		: E_PrintParamType;
+	nNumerator	: USINT;
+	nValue		: DINT;
+END_VAR
+
+VAR
+	stActionData : ST_ActionData;
+	pCurrentDispenser : POINTER TO FB_CartDispenser;
+END_VAR
+
+VAR_STAT
+	bExecuted : BOOL;
+END_VAR]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[stActionData.eAction := E_Action.ACTION_SetPressure;
+stActionData.aParams[2] := nValue; //Soll
+
+IF eType = E_PrintParamType.Pressure THEN
+	CASE nNumerator OF
+		1:	pCurrentDispenser := pCartDispenser1;
+		
+		2:	pCurrentDispenser := pCartDispenser2;
+		
+		3:	pCurrentDispenser := pCartDispenser2;
+	ELSE
+		M_SetPrintParams.bError := TRUE;
+		M_SetPrintParams.nErrorId := E_ErrorIdCmd.ERRORID_InvalidPrintParamNumerator;
+	END_CASE
+ELSE
+	M_SetPrintParams.bError := TRUE;
+	M_SetPrintParams.nErrorId := E_ErrorIdCmd.ERRORID_InvalidPrintParamType;
+	RETURN;		
+END_IF
+
+IF pCurrentDispenser = 0 THEN
+	M_SetPrintParams.bError := TRUE;
+	M_SetPrintParams.nErrorId := E_ErrorIdCmd.ERRORID_InvalidPrintParamNumerator;
+	RETURN;
+END_IF
+  
+IF NOT pCurrentDispenser^.P_bPressIsOn THEN
+	stActionData.aParams[1] := 1; //Fertigmeldung, wenn Druck erreicht	
+	stActionData.aParams[3] := 20; //Toleranz +
+	stActionData.aParams[4] := 20; //Toleranz -
+	stActionData.aParams[5] := 20000; //Timeout	
+END_IF
+	
+IF NOT bExecuted THEN
+	M_SetPrintParams.nErrorId := pCurrentDispenser^.M_ExeAction(stActionData);
+	bExecuted := TRUE;
+END_IF
+
+IF M_SetPrintParams.nErrorId > 0 THEN
+	M_SetPrintParams.bError := TRUE;
+ELSIF pCurrentDispenser^.M_GetActionBusy(E_Action.ACTION_SetPressure) THEN //ist ActionStatemachine zur Überwachung gegangen
+	M_SetPrintParams.bBusy := TRUE;
+	RETURN;
+END_IF
+
+bExecuted := FALSE;
+]]></ST>
+      </Implementation>
+    </Method>
+    <Property Name="P_bIsHot" Id="{7b8b35c8-87ee-48e0-97b7-16cfa4de50ba}">
+      <Declaration><![CDATA[PROPERTY P_bIsHot : BOOL]]></Declaration>
+      <Get Name="Get" Id="{3faf3f6e-2326-4b16-9e06-6af53e6d70f4}">
+        <Declaration><![CDATA[VAR
+END_VAR
+]]></Declaration>
+        <Implementation>
+          <ST><![CDATA[P_bIsHot := (nCurrentTemp1 >= cHotTemp) OR (nCurrentTemp2 >= cHotTemp);]]></ST>
+        </Implementation>
+      </Get>
+    </Property>
+    <Property Name="P_eDispenserState" Id="{a2ff81f3-9db6-4105-a701-8b783b73ed55}">
+      <Declaration><![CDATA[PROPERTY P_eDispenserState : E_DispenserState]]></Declaration>
+      <Get Name="Get" Id="{0880e556-78c3-4f5b-80f3-25061d9cbff4}">
+        <Declaration><![CDATA[VAR
+END_VAR
+]]></Declaration>
+        <Implementation>
+          <ST><![CDATA[IF pCartDispenser1 > 0 AND_THEN pCartDispenser1^.P_bPressIsOn THEN
+	P_eDispenserState := E_DispenserState.Dispensing;
+END_IF
+
+IF pCartDispenser2 > 0 AND_THEN pCartDispenser2^.P_bPressIsOn THEN
+	P_eDispenserState := E_DispenserState.Dispensing;
+END_IF
+
+IF pCartDispenser3 > 0 AND_THEN pCartDispenser3^.P_bPressIsOn THEN
+	P_eDispenserState := E_DispenserState.Dispensing;
+END_IF]]></ST>
+        </Implementation>
+      </Get>
+    </Property>
+    <Property Name="P_pCartDispenser1" Id="{abf492ea-a5dd-4ea4-bbda-5aa28782b727}">
+      <Declaration><![CDATA[PROPERTY P_pCartDispenser1 : POINTER TO FB_CartDispenser]]></Declaration>
+      <Get Name="Get" Id="{b7f854f8-86d0-414e-a337-5164e8284521}">
+        <Declaration><![CDATA[VAR
+END_VAR
+]]></Declaration>
+        <Implementation>
+          <ST><![CDATA[P_pCartDispenser1 := pCartDispenser1;]]></ST>
+        </Implementation>
+      </Get>
+    </Property>
+    <Property Name="P_pCartDispenser2" Id="{760a7895-025d-468d-a632-49b0e2b0d25a}">
+      <Declaration><![CDATA[PROPERTY P_pCartDispenser2 : POINTER TO FB_CartDispenser]]></Declaration>
+      <Get Name="Get" Id="{05acbdf4-a53d-4187-b0c6-d5bfef68ec31}">
+        <Declaration><![CDATA[VAR
+END_VAR
+]]></Declaration>
+        <Implementation>
+          <ST><![CDATA[P_pCartDispenser2 := pCartDispenser2;]]></ST>
+        </Implementation>
+      </Get>
+    </Property>
+    <Property Name="P_pCartDispenser3" Id="{c1491691-d643-469b-9fa0-d06f650eb28b}">
+      <Declaration><![CDATA[PROPERTY P_pCartDispenser3 : POINTER TO FB_CartDispenser]]></Declaration>
+      <Get Name="Get" Id="{8db8ddca-0929-4e6e-9c5c-42f0ea4b997e}">
+        <Declaration><![CDATA[VAR
+END_VAR
+]]></Declaration>
+        <Implementation>
+          <ST><![CDATA[P_pCartDispenser3 := pCartDispenser3;]]></ST>
+        </Implementation>
+      </Get>
+    </Property>
+    <LineIds Name="FB_MultiCartHolder">
+      <LineId Id="3" Count="11" />
+      <LineId Id="275" Count="0" />
+      <LineId Id="264" Count="10" />
+      <LineId Id="39" Count="0" />
+      <LineId Id="62" Count="7" />
+      <LineId Id="72" Count="1" />
+      <LineId Id="223" Count="0" />
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="FB_MultiCartHolder.A_Heating">
+      <LineId Id="2" Count="23" />
+      <LineId Id="1" Count="0" />
+    </LineIds>
+    <LineIds Name="FB_MultiCartHolder.A_Reset">
+      <LineId Id="2" Count="6" />
+      <LineId Id="29" Count="2" />
+      <LineId Id="1" Count="0" />
+    </LineIds>
+    <LineIds Name="FB_MultiCartHolder.A_Stop">
+      <LineId Id="2" Count="0" />
+      <LineId Id="20" Count="2" />
+      <LineId Id="1" Count="0" />
+    </LineIds>
+    <LineIds Name="FB_MultiCartHolder.A_SwitchPress">
+      <LineId Id="1" Count="1" />
+      <LineId Id="10" Count="0" />
+      <LineId Id="8" Count="0" />
+      <LineId Id="11" Count="1" />
+      <LineId Id="9" Count="0" />
+      <LineId Id="13" Count="9" />
+      <LineId Id="39" Count="0" />
+      <LineId Id="5" Count="1" />
+      <LineId Id="24" Count="1" />
+      <LineId Id="28" Count="2" />
+      <LineId Id="33" Count="2" />
+      <LineId Id="38" Count="0" />
+      <LineId Id="7" Count="0" />
+      <LineId Id="3" Count="0" />
+    </LineIds>
+    <LineIds Name="FB_MultiCartHolder.FB_init">
+      <LineId Id="7" Count="1" />
+    </LineIds>
+    <LineIds Name="FB_MultiCartHolder.M_AddChild">
+      <LineId Id="40" Count="10" />
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="FB_MultiCartHolder.M_CancelAction">
+      <LineId Id="3" Count="4" />
+      <LineId Id="30" Count="0" />
+      <LineId Id="16" Count="0" />
+      <LineId Id="31" Count="0" />
+      <LineId Id="23" Count="2" />
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="FB_MultiCartHolder.M_CheckAction">
+      <LineId Id="25" Count="0" />
+      <LineId Id="34" Count="0" />
+      <LineId Id="26" Count="1" />
+      <LineId Id="33" Count="0" />
+      <LineId Id="29" Count="2" />
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="FB_MultiCartHolder.M_CheckProcDataType">
+      <LineId Id="3" Count="1" />
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="FB_MultiCartHolder.M_CheckProps">
+      <LineId Id="38" Count="18" />
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="FB_MultiCartHolder.M_ClearAllProps">
+      <LineId Id="24" Count="2" />
+      <LineId Id="6" Count="0" />
+    </LineIds>
+    <LineIds Name="FB_MultiCartHolder.M_DispenserPrepare">
+      <LineId Id="5" Count="0" />
+    </LineIds>
+    <LineIds Name="FB_MultiCartHolder.M_DispenserStart">
+      <LineId Id="5" Count="0" />
+      <LineId Id="74" Count="1" />
+      <LineId Id="77" Count="0" />
+      <LineId Id="76" Count="0" />
+    </LineIds>
+    <LineIds Name="FB_MultiCartHolder.M_DispenserStop">
+      <LineId Id="5" Count="0" />
+      <LineId Id="10" Count="0" />
+    </LineIds>
+    <LineIds Name="FB_MultiCartHolder.M_ExeAction">
+      <LineId Id="3" Count="85" />
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="FB_MultiCartHolder.M_GetAllProps">
+      <LineId Id="3" Count="3" />
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="FB_MultiCartHolder.M_GetProcData">
+      <LineId Id="3" Count="4" />
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="FB_MultiCartHolder.M_SetAllProps">
+      <LineId Id="3" Count="17" />
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="FB_MultiCartHolder.M_SetPrintParams">
+      <LineId Id="3" Count="1" />
+      <LineId Id="60" Count="1" />
+      <LineId Id="69" Count="0" />
+      <LineId Id="72" Count="0" />
+      <LineId Id="78" Count="3" />
+      <LineId Id="74" Count="0" />
+      <LineId Id="76" Count="1" />
+      <LineId Id="73" Count="0" />
+      <LineId Id="66" Count="2" />
+      <LineId Id="63" Count="1" />
+      <LineId Id="92" Count="1" />
+      <LineId Id="98" Count="1" />
+      <LineId Id="96" Count="1" />
+      <LineId Id="95" Count="0" />
+      <LineId Id="25" Count="19" />
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="FB_MultiCartHolder.P_bIsHot.Get">
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="FB_MultiCartHolder.P_eDispenserState.Get">
+      <LineId Id="2" Count="0" />
+      <LineId Id="7" Count="0" />
+      <LineId Id="6" Count="0" />
+      <LineId Id="9" Count="2" />
+      <LineId Id="8" Count="0" />
+      <LineId Id="13" Count="2" />
+      <LineId Id="12" Count="0" />
+    </LineIds>
+    <LineIds Name="FB_MultiCartHolder.P_pCartDispenser1.Get">
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="FB_MultiCartHolder.P_pCartDispenser2.Get">
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="FB_MultiCartHolder.P_pCartDispenser3.Get">
+      <LineId Id="2" Count="0" />
+    </LineIds>
+  </POU>
+</TcPlcObject>

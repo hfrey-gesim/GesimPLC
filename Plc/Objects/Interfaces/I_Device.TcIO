@@ -1,0 +1,116 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<TcPlcObject Version="1.1.0.1" ProductVersion="3.1.4020.12">
+  <Itf Name="I_Device" Id="{ce6dc636-c3c2-4f7d-bc76-37d11b07f516}">
+    <Declaration><![CDATA[INTERFACE I_Device
+]]></Declaration>
+    <Property Name="P_bBusy" Id="{14e22351-688d-4bed-a74a-05934ce8d80c}">
+      <Declaration><![CDATA[PROPERTY P_bBusy : BOOL]]></Declaration>
+      <Get Name="Get" Id="{39213575-846f-4dff-82e2-ec757f4aa65c}">
+        <Declaration><![CDATA[]]></Declaration>
+      </Get>
+    </Property>
+    <Method Name="M_GetProcData" Id="{28b7a0f8-9c7d-4b3f-83e7-057294e92b03}">
+      <Declaration><![CDATA[METHOD M_GetProcData : DINT
+VAR_INPUT
+	eProcDataType : E_ProcDataType;
+END_VAR
+]]></Declaration>
+    </Method>
+    <Property Name="P_bError" Id="{3342ba9e-58ce-41b5-ad41-8eba06f65159}">
+      <Declaration><![CDATA[PROPERTY P_bError : BOOL]]></Declaration>
+      <Get Name="Get" Id="{7482e5ea-99b1-42ed-abdb-17401d600a4a}">
+        <Declaration><![CDATA[]]></Declaration>
+      </Get>
+    </Property>
+    <Method Name="M_GetActionBusy" Id="{367c8255-2cb6-42ef-8543-007e6e622c99}">
+      <Declaration><![CDATA[METHOD M_GetActionBusy : BOOL
+VAR_INPUT
+	eAction : E_Action;
+END_VAR
+]]></Declaration>
+    </Method>
+    <Method Name="M_Stop" Id="{5afbc1c5-bac0-4e58-ab8e-796b7e4e4325}">
+      <Declaration><![CDATA[METHOD M_Stop : ERRORID
+VAR_INPUT
+END_VAR
+]]></Declaration>
+    </Method>
+    <Method Name="M_ExeAction" Id="{5c185abf-ec15-4339-a25f-1ae661334ba2}">
+      <Declaration><![CDATA[METHOD M_ExeAction : ERRORID
+VAR_INPUT
+	refActionData : REFERENCE TO ST_ActionData;
+END_VAR
+]]></Declaration>
+    </Method>
+    <Property Name="P_pObject" Id="{6922917b-5ba1-4a8b-b26c-7394e53d9506}">
+      <Declaration><![CDATA[PROPERTY P_pObject : POINTER TO FB_Object]]></Declaration>
+      <Get Name="Get" Id="{b0150731-fcaf-466a-aae7-0f32e7d86452}">
+        <Declaration><![CDATA[]]></Declaration>
+      </Get>
+    </Property>
+    <Property Name="P_bCanceled" Id="{87e7be33-0740-4b74-a574-fb1645585520}">
+      <Declaration><![CDATA[PROPERTY P_bCanceled : BOOL]]></Declaration>
+      <Get Name="Get" Id="{26a707bc-be73-4de4-b396-32b775e9e811}">
+        <Declaration><![CDATA[]]></Declaration>
+      </Get>
+    </Property>
+    <Method Name="M_Reset" Id="{9bc323dc-f891-403f-8420-10d81bc47fe2}">
+      <Declaration><![CDATA[METHOD M_Reset
+VAR_INPUT
+END_VAR
+]]></Declaration>
+    </Method>
+    <Property Name="P_bStopAllOnError" Id="{9dcefe2d-ac56-4d14-8b05-a576afb5a671}">
+      <Declaration><![CDATA[PROPERTY P_bStopAllOnError : BOOL]]></Declaration>
+      <Get Name="Get" Id="{32156fcf-5f1f-4ad5-9859-0a78fa5ea20e}">
+        <Declaration><![CDATA[]]></Declaration>
+      </Get>
+    </Property>
+    <Property Name="P_bIsInit" Id="{c35f154a-b1c7-4507-b9e5-0b63381c2037}">
+      <Declaration><![CDATA[PROPERTY P_bIsInit : BOOL]]></Declaration>
+      <Get Name="Get" Id="{18da30f6-ffc4-4ec8-a579-f03b8595e331}">
+        <Declaration><![CDATA[]]></Declaration>
+      </Get>
+    </Property>
+    <Method Name="M_CheckAction" Id="{cd02f2e5-4127-4ad3-9cea-641449096cf7}">
+      <Declaration><![CDATA[METHOD M_CheckAction : ERRORID
+VAR_INPUT
+	refActionData 	: REFERENCE TO ST_ActionData;
+	pCorrelObject	: POINTER TO FB_Object;
+END_VAR
+]]></Declaration>
+    </Method>
+    <Method Name="M_CheckProcDataType" Id="{db7cc75e-294f-4166-853e-dd3cd77c442e}">
+      <Declaration><![CDATA[METHOD M_CheckProcDataType : BOOL
+VAR_INPUT
+	eProcDataType : E_ProcDataType;
+END_VAR
+]]></Declaration>
+    </Method>
+    <Method Name="M_CancelAction" Id="{df2f3d7c-1f38-4905-8e6b-4472f074f104}">
+      <Declaration><![CDATA[METHOD M_CancelAction
+VAR_INPUT
+	eAction : E_Action;
+END_VAR
+]]></Declaration>
+    </Method>
+    <Property Name="P_eCurrentState" Id="{e0cba9c7-89d4-4863-bd52-ca239d01a364}">
+      <Declaration><![CDATA[PROPERTY P_eCurrentState : E_MachineState]]></Declaration>
+      <Get Name="Get" Id="{75faa665-79e8-4276-8c17-aac6b72bbe90}">
+        <Declaration><![CDATA[]]></Declaration>
+      </Get>
+    </Property>
+    <Property Name="P_nErrorId" Id="{e3c88d09-49c8-4ecd-ac7b-644fe6fe4f42}">
+      <Declaration><![CDATA[PROPERTY P_nErrorId : ERRORID]]></Declaration>
+      <Get Name="Get" Id="{75d6ea82-f97a-4739-9d2f-626ff3b201d4}">
+        <Declaration><![CDATA[]]></Declaration>
+      </Get>
+    </Property>
+    <Property Name="P_stError" Id="{ea2d6998-e5be-42d5-825b-a0c953799279}">
+      <Declaration><![CDATA[PROPERTY P_stError : ST_Error]]></Declaration>
+      <Get Name="Get" Id="{b6ca2eca-6306-4ffa-a4fb-1e58c7e66216}">
+        <Declaration><![CDATA[]]></Declaration>
+      </Get>
+    </Property>
+  </Itf>
+</TcPlcObject>

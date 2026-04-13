@@ -1,0 +1,423 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<TcPlcObject Version="1.1.0.1" ProductVersion="3.1.4022.18">
+  <POU Name="FB_ZAxisRef" Id="{fd9020f6-1dda-4da0-abca-7706599353b8}" SpecialFunc="None">
+    <Declaration><![CDATA[FUNCTION_BLOCK FB_ZAxisRef EXTENDS FB_HwModule
+VAR_INPUT
+	stInput 			: ST_ZAxisRef_In;
+	stOutput 			: ST_ZAxisRef_Out;
+	stStatus			: ST_ZAxisStatus;
+	
+	eDetectedToolType 	: E_MzToolType; //Sdo , wird nur bei Kopfbasisplatinen mir Toolerkennung benutzt und wird bei 
+										//A_PrepareAxis in FB_MultiZRef ausgelesen
+	eFixedToolType		: E_MzToolType; //Sdo, wird in den Objekten gesetzt und dann in A_SetConfig oder A_SetConfigLegacy
+										//in FB_MultiZRef ausgelesen 
+	
+	bHasTool	: BOOL;
+	sTmcVersion	: STRING(5);
+	nTmcModulId	: UINT;
+	nToolVersion: USINT;
+	bIsSubAxis	: BOOL; //Ist eine Unterachse z.B. vom Stempel (wird vom Stempel gesteuert)
+	bIngoreError: BOOL; //verhindert das Abfangen eines Fehlers in "A_Monitor"
+	pCurrentFb	: POINTER TO PVOID;
+END_VAR
+
+VAR_OUTPUT
+	pMultiZRef : POINTER TO FB_MultiZRef;
+	nChannel : USINT;
+END_VAR
+
+VAR PERSISTENT
+	rMaxSpeed 		: REAL;
+	rRefPos 		: REAL;
+	rMaxPos			: REAL;
+	rMinPos			: REAL;
+	rHomePos		: REAL;
+	rAxisLength		: REAL;
+	rSliderLength	: REAL;
+	bInvertInitDir	: BOOL;
+END_VAR
+
+VAR
+	nZSensorID  : DINT;
+END_VAR]]></Declaration>
+    <Implementation>
+      <ST><![CDATA[]]></ST>
+    </Implementation>
+    <Method Name="FB_init" Id="{eaecb542-800c-4386-9b17-3394eb31f6c1}">
+      <Declaration><![CDATA[METHOD FB_init : BOOL
+VAR_INPUT
+	bInitRetains : BOOL; // if TRUE, the retain variables are initialized (warm start / cold start)
+	bInCopyCode : BOOL;  // if TRUE, the instance afterwards gets moved into the copy code (online change)
+	pMultiZRef : POINTER TO FB_MultiZRef;
+END_VAR
+
+VAR
+	nFirstAdress : PVOID;
+	nSelfAdress : PVOID;
+END_VAR]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[THIS^.pMultiZRef := pMultiZRef;
+nFirstAdress := ADR(pMultiZRef^.aFbZAxisRef);
+nSelfAdress := THIS;
+{IF hasvalue (RegisterSize, '32')}
+nChannel := UDINT_TO_USINT((nSelfAdress - nFirstAdress)/SIZEOF(THIS^) + 1);
+{ELSE}
+nChannel := ULINT_TO_USINT((nSelfAdress - nFirstAdress)/SIZEOF(THIS^) + 1);
+{END_IF}
+stHardwareId.eGroup := E_HardwareGrp.AxisZ;
+stHardwareId.nItem := nChannel;]]></ST>
+      </Implementation>
+    </Method>
+    <Method Name="M_GetHwInfo" Id="{f55e5975-7bf2-454d-be80-41bb09486f0f}">
+      <Declaration><![CDATA[METHOD M_GetHwInfo : ST_HardwareInfo
+VAR_INPUT
+END_VAR]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[M_GetHwInfo := SUPER^.M_GetHwInfo();
+M_GetHwInfo.sHardwVersion := UINT_TO_STRING(nTmcModulId);
+M_GetHwInfo.sSoftwVersion := sTmcVersion;
+M_GetHwInfo.sSoftwVersion2 := USINT_TO_STRING(nToolVersion);]]></ST>
+      </Implementation>
+    </Method>
+    <Method Name="M_RenewHwId" Id="{545992a0-d838-4acb-8411-721782728375}">
+      <Declaration><![CDATA[METHOD M_RenewHwId
+VAR_INPUT
+END_VAR
+
+VAR
+	stHwIdParent : ST_HardwareId;
+END_VAR]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[stHwIdParent := pMultiZRef^.P_stHardwareId;
+stHardwareId.nParentItem := stHwIdParent.nItem;]]></ST>
+      </Implementation>
+    </Method>
+    <Property Name="P_bInvertInitDir" Id="{d735c89c-979e-4ee6-ac91-1c72563c0080}">
+      <Declaration><![CDATA[PROPERTY P_bInvertInitDir : BOOL]]></Declaration>
+      <Get Name="Get" Id="{b38e17ef-ebbe-4450-8ca3-1a486c26f0be}">
+        <Declaration><![CDATA[VAR
+END_VAR
+]]></Declaration>
+        <Implementation>
+          <ST><![CDATA[P_bInvertInitDir := bInvertInitDir;]]></ST>
+        </Implementation>
+      </Get>
+      <Set Name="Set" Id="{134bf3ea-82af-4d08-8bbb-282b08969207}">
+        <Declaration><![CDATA[VAR
+END_VAR
+]]></Declaration>
+        <Implementation>
+          <ST><![CDATA[bInvertInitDir := P_bInvertInitDir;
+fbSettings.M_WritePersData();]]></ST>
+        </Implementation>
+      </Set>
+    </Property>
+    <Property Name="P_nZSensorID" Id="{0e65d215-607e-4246-987c-9b62c4f53603}">
+      <Declaration><![CDATA[PROPERTY P_nZSensorID : DINT]]></Declaration>
+      <Get Name="Get" Id="{c24ac606-3599-46f8-977a-6b2229941e04}">
+        <Declaration><![CDATA[VAR
+END_VAR
+]]></Declaration>
+        <Implementation>
+          <ST><![CDATA[P_nZSensorID := nZSensorID;]]></ST>
+        </Implementation>
+      </Get>
+      <Set Name="Set" Id="{2d2a0d8e-1be8-422c-8630-2d911aed2217}">
+        <Declaration><![CDATA[VAR
+END_VAR
+]]></Declaration>
+        <Implementation>
+          <ST><![CDATA[nZSensorID := P_nZSensorID;]]></ST>
+        </Implementation>
+      </Set>
+    </Property>
+    <Property Name="P_rAbsTargetPos" Id="{de0c2abf-58c4-4d7b-b245-36411b7b66ba}">
+      <Declaration><![CDATA[PROPERTY P_rAbsTargetPos : REAL]]></Declaration>
+      <Set Name="Set" Id="{0cfeff5f-6c6f-44b1-b536-2252f9547489}">
+        <Declaration><![CDATA[VAR
+END_VAR
+]]></Declaration>
+        <Implementation>
+          <ST><![CDATA[stOutput.nTrgtPos := REAL_TO_DINT(rAxisLength - rSliderLength - P_rAbsTargetPos);
+]]></ST>
+        </Implementation>
+      </Set>
+    </Property>
+    <Property Name="P_rAxisLength" Id="{535886d6-f7dc-433d-a1f7-3427a98403c7}">
+      <Declaration><![CDATA[PROPERTY P_rAxisLength : REAL]]></Declaration>
+      <Get Name="Get" Id="{8ef7dd5d-2e58-4273-829f-063dadda6457}">
+        <Declaration><![CDATA[VAR
+END_VAR
+]]></Declaration>
+        <Implementation>
+          <ST><![CDATA[P_rAxisLength := rAxisLength;]]></ST>
+        </Implementation>
+      </Get>
+      <Set Name="Set" Id="{e410fc68-a5a7-4fec-8ada-dd142b4f4651}">
+        <Declaration><![CDATA[VAR
+END_VAR
+]]></Declaration>
+        <Implementation>
+          <ST><![CDATA[rAxisLength := P_rAxisLength;
+fbSettings.M_WritePersData();]]></ST>
+        </Implementation>
+      </Set>
+    </Property>
+    <Property Name="P_rCurrentPos" Id="{c9c91295-bd23-409d-961f-95411143990e}">
+      <Declaration><![CDATA[PROPERTY P_rCurrentPos : REAL]]></Declaration>
+      <Get Name="Get" Id="{67130349-ccad-42e0-a1bd-db9c3d887585}">
+        <Declaration><![CDATA[VAR
+END_VAR
+]]></Declaration>
+        <Implementation>
+          <ST><![CDATA[P_rCurrentPos := MIN(rAxisLength - rSliderLength - DINT_TO_REAL(stInput.nCurrentPos),rMaxPos);]]></ST>
+        </Implementation>
+      </Get>
+    </Property>
+    <Property Name="P_rHomePos" Id="{c4ca3150-806a-449b-a446-f0067796acec}">
+      <Declaration><![CDATA[PROPERTY P_rHomePos : REAL]]></Declaration>
+      <Get Name="Get" Id="{2c28c3e9-1712-421a-8141-3da84b3a1274}">
+        <Declaration><![CDATA[VAR
+END_VAR
+]]></Declaration>
+        <Implementation>
+          <ST><![CDATA[P_rHomePos := rHomePos;]]></ST>
+        </Implementation>
+      </Get>
+      <Set Name="Set" Id="{9d25bc1b-5d87-40cc-8547-707ee1978478}">
+        <Declaration><![CDATA[VAR
+END_VAR
+]]></Declaration>
+        <Implementation>
+          <ST><![CDATA[rHomePos := P_rHomePos;
+fbSettings.M_WritePersData();]]></ST>
+        </Implementation>
+      </Set>
+    </Property>
+    <Property Name="P_rMaxPos" Id="{fc2cf8e1-c1b0-42e1-ab9d-254065c30126}">
+      <Declaration><![CDATA[PROPERTY P_rMaxPos : REAL]]></Declaration>
+      <Get Name="Get" Id="{4b7efe2f-4750-4c6e-86fb-38e626163540}">
+        <Declaration><![CDATA[VAR
+END_VAR
+]]></Declaration>
+        <Implementation>
+          <ST><![CDATA[P_rMaxPos := rMaxPos;]]></ST>
+        </Implementation>
+      </Get>
+      <Set Name="Set" Id="{ff4b6452-b21c-48ff-a8f7-847b3c877a01}">
+        <Declaration><![CDATA[
+VAR
+END_VAR
+]]></Declaration>
+        <Implementation>
+          <ST><![CDATA[rMaxPos := P_rMaxPos;
+]]></ST>
+        </Implementation>
+      </Set>
+    </Property>
+    <Property Name="P_rMaxSpeed" Id="{3aed17fb-2ddb-4115-bd78-e40a26dac211}">
+      <Declaration><![CDATA[PROPERTY P_rMaxSpeed : REAL]]></Declaration>
+      <Get Name="Get" Id="{a2c00309-594f-4a44-af55-7e19a09bd278}">
+        <Declaration><![CDATA[VAR
+END_VAR
+]]></Declaration>
+        <Implementation>
+          <ST><![CDATA[P_rMaxSpeed := rMaxSpeed;]]></ST>
+        </Implementation>
+      </Get>
+      <Set Name="Set" Id="{9b8c5e54-4591-480b-8e91-ab911892a00a}">
+        <Declaration><![CDATA[VAR
+END_VAR
+]]></Declaration>
+        <Implementation>
+          <ST><![CDATA[rMaxSpeed := P_rMaxSpeed;
+fbSettings.M_WritePersData();]]></ST>
+        </Implementation>
+      </Set>
+    </Property>
+    <Property Name="P_rMinPos" Id="{9d668293-f955-48dd-85b8-10624b449367}">
+      <Declaration><![CDATA[PROPERTY P_rMinPos : REAL]]></Declaration>
+      <Get Name="Get" Id="{4d60eba6-700e-47b8-9f91-a152701f772d}">
+        <Declaration><![CDATA[VAR
+END_VAR
+]]></Declaration>
+        <Implementation>
+          <ST><![CDATA[P_rMinPos := rMinPos;]]></ST>
+        </Implementation>
+      </Get>
+      <Set Name="Set" Id="{0fa1fa49-88c9-48ff-aea9-932719f07624}">
+        <Declaration><![CDATA[VAR
+END_VAR
+]]></Declaration>
+        <Implementation>
+          <ST><![CDATA[rMinPos := P_rMinPos;
+fbSettings.M_WritePersData();]]></ST>
+        </Implementation>
+      </Set>
+    </Property>
+    <Property Name="P_rRefPos" Id="{27642a54-d99c-415f-b088-7259a2c20b08}">
+      <Declaration><![CDATA[PROPERTY P_rRefPos : REAL]]></Declaration>
+      <Get Name="Get" Id="{422318f7-58d6-4c31-a11c-80d4d95b7fcc}">
+        <Declaration><![CDATA[VAR
+END_VAR
+]]></Declaration>
+        <Implementation>
+          <ST><![CDATA[P_rRefPos := rRefPos;]]></ST>
+        </Implementation>
+      </Get>
+      <Set Name="Set" Id="{b7b9eb0c-cd29-4cb0-8dd8-669446eb7221}">
+        <Declaration><![CDATA[VAR
+END_VAR
+]]></Declaration>
+        <Implementation>
+          <ST><![CDATA[rRefPos := P_rRefPos;
+fbSettings.M_WritePersData();]]></ST>
+        </Implementation>
+      </Set>
+    </Property>
+    <Property Name="P_rRelTargetPos" Id="{24411efb-88f4-428e-8b74-83aa62b8f06b}">
+      <Declaration><![CDATA[PROPERTY P_rRelTargetPos : REAL]]></Declaration>
+      <Set Name="Set" Id="{f05fbc19-6466-4f1b-aa20-f1273f8cdc34}">
+        <Declaration><![CDATA[VAR
+END_VAR
+]]></Declaration>
+        <Implementation>
+          <ST><![CDATA[stOutput.nTrgtPos := REAL_TO_DINT(- P_rRelTargetPos);]]></ST>
+        </Implementation>
+      </Set>
+    </Property>
+    <Property Name="P_rSliderLength" Id="{1c6e2f5f-e567-40c9-8132-817a509553cf}">
+      <Declaration><![CDATA[PROPERTY P_rSliderLength : REAL]]></Declaration>
+      <Get Name="Get" Id="{4cc4196f-71bc-4a07-8b40-05ad8f74b5da}">
+        <Declaration><![CDATA[VAR
+END_VAR
+]]></Declaration>
+        <Implementation>
+          <ST><![CDATA[P_rSliderLength := rSliderLength;]]></ST>
+        </Implementation>
+      </Get>
+      <Set Name="Set" Id="{dc99d5cc-57d5-484b-abca-1a5393a5bb0d}">
+        <Declaration><![CDATA[VAR
+END_VAR
+]]></Declaration>
+        <Implementation>
+          <ST><![CDATA[rSliderLength := P_rSliderLength;
+fbSettings.M_WritePersData();]]></ST>
+        </Implementation>
+      </Set>
+    </Property>
+    <Property Name="P_rSpeed" Id="{b23d854b-ad79-4ed4-baf5-0b296cfdadd3}">
+      <Declaration><![CDATA[PROPERTY P_rSpeed : REAL]]></Declaration>
+      <Get Name="Get" Id="{9602764d-7d8c-4a2f-bb8b-3eb8a25487db}">
+        <Declaration><![CDATA[VAR
+END_VAR
+]]></Declaration>
+        <Implementation>
+          <ST><![CDATA[]]></ST>
+        </Implementation>
+      </Get>
+      <Set Name="Set" Id="{2eca0eed-d2b0-40cb-960a-b591ea8b1f60}">
+        <Declaration><![CDATA[VAR
+END_VAR
+]]></Declaration>
+        <Implementation>
+          <ST><![CDATA[]]></ST>
+        </Implementation>
+      </Set>
+    </Property>
+    <LineIds Name="FB_ZAxisRef">
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="FB_ZAxisRef.FB_init">
+      <LineId Id="17" Count="6" />
+      <LineId Id="2" Count="0" />
+      <LineId Id="34" Count="1" />
+    </LineIds>
+    <LineIds Name="FB_ZAxisRef.M_GetHwInfo">
+      <LineId Id="8" Count="0" />
+      <LineId Id="15" Count="2" />
+    </LineIds>
+    <LineIds Name="FB_ZAxisRef.M_RenewHwId">
+      <LineId Id="5" Count="0" />
+      <LineId Id="9" Count="0" />
+    </LineIds>
+    <LineIds Name="FB_ZAxisRef.P_bInvertInitDir.Get">
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="FB_ZAxisRef.P_bInvertInitDir.Set">
+      <LineId Id="3" Count="0" />
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="FB_ZAxisRef.P_nZSensorID.Get">
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="FB_ZAxisRef.P_nZSensorID.Set">
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="FB_ZAxisRef.P_rAbsTargetPos.Set">
+      <LineId Id="3" Count="0" />
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="FB_ZAxisRef.P_rAxisLength.Get">
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="FB_ZAxisRef.P_rAxisLength.Set">
+      <LineId Id="3" Count="0" />
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="FB_ZAxisRef.P_rCurrentPos.Get">
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="FB_ZAxisRef.P_rHomePos.Get">
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="FB_ZAxisRef.P_rHomePos.Set">
+      <LineId Id="3" Count="0" />
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="FB_ZAxisRef.P_rMaxPos.Get">
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="FB_ZAxisRef.P_rMaxPos.Set">
+      <LineId Id="3" Count="0" />
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="FB_ZAxisRef.P_rMaxSpeed.Get">
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="FB_ZAxisRef.P_rMaxSpeed.Set">
+      <LineId Id="3" Count="0" />
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="FB_ZAxisRef.P_rMinPos.Get">
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="FB_ZAxisRef.P_rMinPos.Set">
+      <LineId Id="3" Count="0" />
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="FB_ZAxisRef.P_rRefPos.Get">
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="FB_ZAxisRef.P_rRefPos.Set">
+      <LineId Id="3" Count="0" />
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="FB_ZAxisRef.P_rRelTargetPos.Set">
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="FB_ZAxisRef.P_rSliderLength.Get">
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="FB_ZAxisRef.P_rSliderLength.Set">
+      <LineId Id="3" Count="0" />
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="FB_ZAxisRef.P_rSpeed.Get">
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="FB_ZAxisRef.P_rSpeed.Set">
+      <LineId Id="2" Count="0" />
+    </LineIds>
+  </POU>
+</TcPlcObject>

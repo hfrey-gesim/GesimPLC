@@ -1,0 +1,381 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<TcPlcObject Version="1.1.0.1">
+  <POU Name="FB_FastMFunc" Id="{d26bd91e-6c6f-4b5a-b376-b13293240a7a}" SpecialFunc="None">
+    <Declaration><![CDATA[FUNCTION_BLOCK FB_FastMFunc
+VAR_INPUT
+	bStop : BOOL;
+END_VAR
+VAR_OUTPUT
+	bBusy				: BOOL;
+	bError				: BOOL;
+	nErrorId			: ERRORID;	
+END_VAR
+VAR_IN_OUT
+	stGCodeRef			: ST_GCodeRef;
+END_VAR
+VAR
+	fbItpResetFastMFuncEx100	: Tc2_NCI.ItpResetFastMFuncEx;
+	fbItpResetFastMFuncEx104	: Tc2_NCI.ItpResetFastMFuncEx;
+	fbItpResetFastMFuncEx105	: Tc2_NCI.ItpResetFastMFuncEx;
+	fbItpGoAhead				: Tc2_NCI.ItpGoAhead;
+	
+	fbAdsRead1					: ADSREAD;
+	fbAdsRead2					: ADSREAD;
+	
+	stCurrentPos				: ST_3DPoint;
+	
+	nStateA_FastMFunk100: USINT;
+	
+	rTrigM104			: R_TRIG;
+	rTrigM105			: R_TRIG;
+	
+	eCurModalGeoType	: E_ModalGeoTypes;
+	aTechnoData			: ARRAY[0..1] OF UDINT;
+	alXYTargetPos		: ARRAY[0..2] OF LREAL;
+	alQ1TargetPos		: ARRAY[0..4] OF LREAL;
+	
+	nCyclCounter		: USINT;
+	nCyclThreshold		: USINT := 20;
+	
+	stActionDataMoveZ	: ST_ActionData;
+	nStateA_MoveZ		: USINT;
+	
+	stError 			: ST_Error := (POU := E_POU.POU_GCode);
+END_VAR
+]]></Declaration>
+    <Implementation>
+      <ST><![CDATA[fbItpResetFastMFuncEx100(sNciToPlc:= stGCodeRef.sNciToPlc);
+IF fbItpResetFastMFuncEx100.bExecute AND NOT fbItpResetFastMFuncEx100.bBusy THEN
+	fbItpResetFastMFuncEx100(bExecute:= FALSE, nMFuncNo:= 100 , sNciToPlc:= stGCodeRef.sNciToPlc);
+END_IF
+
+fbItpResetFastMFuncEx104(sNciToPlc:= stGCodeRef.sNciToPlc);
+IF fbItpResetFastMFuncEx104.bExecute AND NOT fbItpResetFastMFuncEx104.bBusy THEN
+	fbItpResetFastMFuncEx104(bExecute:= FALSE, nMFuncNo:= 104 , sNciToPlc:= stGCodeRef.sNciToPlc);
+END_IF
+
+fbItpResetFastMFuncEx105(sNciToPlc:= stGCodeRef.sNciToPlc);
+IF fbItpResetFastMFuncEx105.bExecute AND NOT fbItpResetFastMFuncEx104.bBusy THEN
+	fbItpResetFastMFuncEx105(bExecute:= FALSE, nMFuncNo:= 105 , sNciToPlc:= stGCodeRef.sNciToPlc);
+END_IF
+
+fbItpGoAhead();
+IF fbItpGoAhead.bExecute AND NOT fbItpGoAhead.bBusy THEN
+	fbItpGoAhead(bExecute:= FALSE);
+END_IF
+
+//***************************M100 MoveZ*************************************
+IF ItpIsFastMFunc(100,stGCodeRef.sNciToPlc) THEN	//G00,G01 Q1=x M100 @717
+	CASE nStateA_FastMFunk100 OF	//20Zyklen warten, damit Technologiedaten aktuell
+		0:	nCyclCounter := nCyclCounter + 1;
+			IF nCyclCounter = nCyclThreshold THEN
+				nCyclCounter := 0;
+				nStateA_FastMFunk100 := 10;
+			END_IF
+		
+		10:	//Technologiedaten lesen (muss unbegingt vor dem Auslesen der Z-Position erfolgen)
+			//zumindest sollte vor dem Auslesen der Z-Position noch ein Zyklus stattfinden
+			//NC-Override auf "0" setzen damit XY noch nicht losfahren, bis ZMove beginnt
+			stGCodeRef.lrNcOverride := 0.0;
+			ItpSetOverridePercent(stGCodeRef.lrNcOverride,stGCodeRef.sPlcToNci);
+			
+			fbAdsRead1(PORT:= 501, IDXGRP:= 16#2100 + ItpGetChannelId(stGCodeRef.sNciToPlc), IDXOFFS:= 16#13 ,
+						LEN:= SIZEOF(aTechnoData), DESTADDR:= ADR(aTechnoData), READ:= TRUE);
+			IF NOT fbAdsRead1.BUSY THEN
+				IF fbAdsRead1.ERR THEN
+					bError := TRUE;
+					nErrorId := UDINT_TO_UINT(fbAdsRead1.ERRID);
+				ELSE
+					IF bStop THEN
+						nStateA_FastMFunk100 := 0;
+						bBusy := FALSE;
+					ELSE
+						nStateA_FastMFunk100 := 20;	
+					END_IF
+				END_IF
+				fbAdsRead1(READ:=FALSE);
+			END_IF
+			
+		20:	//Positionen aus NCI lesen
+			//TargetPos XY
+			nStateA_FastMFunk100 := 30;
+			fbAdsRead1(PORT:= 501, IDXGRP:= 16#3100 + ItpGetGroupId(stGCodeRef.sNciToPlc), IDXOFFS:= 16#530 ,	
+					LEN:= SIZEOF(alXYTargetPos), DESTADDR:= ADR(alXYTargetPos), READ:= TRUE);
+
+			//TargetPos Q1
+			fbAdsRead2(PORT:= 501, IDXGRP:= 16#3100 + ItpGetGroupId(stGCodeRef.sNciToPlc), IDXOFFS:= 16#531 ,	
+					LEN:= SIZEOF(alQ1TargetPos), DESTADDR:= ADR(alQ1TargetPos), READ:= TRUE);
+
+			IF fbAdsRead1.ERR THEN
+				bError := TRUE;
+				nErrorId := UDINT_TO_UINT(fbAdsRead1.ERRID);
+				fbAdsRead1(READ:=FALSE);
+			END_IF
+			
+
+			IF fbAdsRead2.ERR THEN
+				bError := TRUE;
+				nErrorId := UDINT_TO_UINT(fbAdsRead1.ERRID);
+				fbAdsRead2(READ:=FALSE);
+			END_IF
+			
+			IF NOT (fbAdsRead1.BUSY OR fbAdsRead2.BUSY) THEN
+				IF bStop THEN
+					nStateA_FastMFunk100 := 0;
+					bBusy := FALSE;
+				END_IF
+				fbAdsRead1(READ:=FALSE);
+				fbAdsRead2(READ:=FALSE);
+			ELSE
+				nStateA_FastMFunk100 := 20;
+			END_IF
+			
+		30:	
+			eCurModalGeoType := aTechnoData[1];
+			stActionDataMoveZ.aParams[1] := E_MoveMode.MODE_AbsWithOffset;
+			stCurrentPos := stGCodeRef.pCurrentTool^.P_stCurrentPosTotal;
+			//befindet sich aktuelle XY-Position außerhalb des GCode-Druckbereichs, dann Fehler werfen
+			IF NOT stGCodeRef.fbLimitCuboid.M_IsPointInnerXY(stCurrentPos) THEN
+				nStateA_FastMFunk100 := 0;
+				stGCodeRef.lrNcOverride := 100.0;
+				bBusy := FALSE;
+				bError := TRUE;
+				nErrorId := E_ErrorIdGCode.ERRORID_ZMoveOutsidePrintArea;
+				RETURN;
+			END_IF
+			
+			CASE eCurModalGeoType OF
+				E_ModalGeoTypes.MODALGEOTYPE_G0:	//Eilgang
+					stActionDataMoveZ.aParams[3] := -1;	//max Speed
+					A_MoveZ();
+					nStateA_FastMFunk100 := 40;
+				E_ModalGeoTypes.MODALGEOTYPE_G01,E_ModalGeoTypes.MODALGEOTYPE_G02,E_ModalGeoTypes.MODALGEOTYPE_G03:
+					stActionDataMoveZ.aParams[3] := LREAL_TO_DINT(stGCodeRef.sNciToPlc.DoubleParams[0] * 1000); (*programmierte Geschwindigkeit des aktuellen Segments*)
+					IF stActionDataMoveZ.aParams[3] = 0 THEN
+						stGCodeRef.lrNcOverride := 100.0;
+						ItpSetOverridePercent(stGCodeRef.lrNcOverride,stGCodeRef.sPlcToNci);
+						fbItpGoAhead(bExecute:= TRUE, nChnId:= ItpGetChannelId(stGCodeRef.sNciToPlc));
+						nStateA_MoveZ := 0;
+						nStateA_FastMFunk100 := 0;
+						fbItpResetFastMFuncEx100(bExecute:= TRUE, nMFuncNo:= 100 , sNciToPlc:= stGCodeRef.sNciToPlc);
+					ELSE
+						A_MoveZ();
+						nStateA_FastMFunk100 := 40;
+					END_IF
+			ELSE
+				nStateA_FastMFunk100 := 0;
+				fbItpResetFastMFuncEx100(bExecute:= TRUE, nMFuncNo:= 100 , sNciToPlc:= stGCodeRef.sNciToPlc);
+				fbItpGoAhead(bExecute:= TRUE, nChnId:= ItpGetChannelId(stGCodeRef.sNciToPlc));
+			END_CASE
+					
+		40:	//MoveZ ready?
+			A_MoveZ();
+			stGCodeRef.lrNcOverride := 100.0;
+			ItpSetOverridePercent(stGCodeRef.lrNcOverride,stGCodeRef.sPlcToNci);
+			IF nStateA_MoveZ >= 80 THEN
+				IF nStateA_MoveZ >= 99 THEN
+					bError := TRUE;
+				ELSE
+					IF bStop THEN
+						bBusy := FALSE;
+					ELSE
+						fbItpGoAhead(bExecute:= TRUE, nChnId:= ItpGetChannelId(stGCodeRef.sNciToPlc));
+					END_IF
+				END_IF
+				nStateA_MoveZ := 0;
+				nStateA_FastMFunk100 := 0;
+				fbItpResetFastMFuncEx100(bExecute:= TRUE, nMFuncNo:= 100 , sNciToPlc:= stGCodeRef.sNciToPlc);
+			END_IF
+	END_CASE
+END_IF
+
+IF ItpIsFastMFunc(150,stGCodeRef.sNciToPlc) THEN	//M150 DigiOut On
+	bTrigger2 := TRUE;
+END_IF
+
+IF ItpIsFastMFunc(151,stGCodeRef.sNciToPlc) THEN	//M151 DigiOut Off
+	bTrigger2 := FALSE;
+END_IF
+
+//***************************M104 PrintActorOff* Channel1****************************************
+rTrigM104(CLK:= ItpIsFastMFunc(104,stGCodeRef.sNciToPlc));
+IF rTrigM104.Q THEN
+	//Abhängig vom Tool den entsprechenden PrintActor ausschalten
+	M_StopPrintAction(stGCodeRef.pCurrentTool,1);
+	stGCodeRef.aToolTable[stGCodeRef.sNciToPlc.Tool].bIsInAction1 := FALSE;
+	fbItpResetFastMFuncEx104(bExecute:= TRUE, nMFuncNo:= 104 , sNciToPlc:= stGCodeRef.sNciToPlc);
+END_IF
+
+//***************************M105 PrintActorOff* Channel2****************************************
+rTrigM105(CLK:= ItpIsFastMFunc(105,stGCodeRef.sNciToPlc));
+IF rTrigM105.Q THEN
+	M_StopPrintAction(stGCodeRef.pCurrentTool,2);
+	stGCodeRef.aToolTable[stGCodeRef.sNciToPlc.Tool].bIsInAction2 := FALSE;
+	fbItpResetFastMFuncEx105(bExecute:= TRUE, nMFuncNo:= 105 , sNciToPlc:= stGCodeRef.sNciToPlc);
+END_IF
+
+IF NOT bStop THEN
+	IF ItpIsFastMFunc(100,stGCodeRef.sNciToPlc) OR ItpIsFastMFunc(104,stGCodeRef.sNciToPlc) OR
+		ItpIsFastMFunc(105,stGCodeRef.sNciToPlc) OR fbItpGoAhead.bExecute THEN
+		bBusy := TRUE;
+	ELSE
+		bBusy := FALSE;
+	END_IF	
+END_IF]]></ST>
+    </Implementation>
+    <Action Name="A_MoveZ" Id="{e60a71c6-cce2-4faa-9d02-2c071c0781d0}">
+      <Implementation>
+        <ST><![CDATA[stError.POUState := nStateA_MoveZ;
+
+CASE nStateA_MoveZ OF
+	0:
+		IF stGCodeRef.pCurrentTool = 0 THEN
+			stError.Cmd := E_Action.ACTION_MoveZ;
+			stError.ErrorId := E_ErrorIdGCode.ERRORID_NoSelectedTool;
+			nStateA_MoveZ := 99;
+		ELSE
+			stActionDataMoveZ.eAction := E_Action.ACTION_MoveZ;
+			
+			IF stActionDataMoveZ.aParams[3] > REAL_TO_DINT(stGCodeRef.pCurrentTool^.M_GetMaxSpeed(E_MoveDirection.DIRECTION_ZPLUS)) THEN
+				stActionDataMoveZ.aParams[3]:= -1; //MaxSpeed Z
+			END_IF
+			
+			//MoveMode = absolut ? -> Nullpunktverschiebung verrechnen
+			IF stActionDataMoveZ.aParams[1] = E_MoveMode.MODE_AbsWithOffset THEN
+				stActionDataMoveZ.aParams[2] := LREAL_TO_DINT((stGCodeRef.sZeroShiftDesc.fShiftZ + alQ1TargetPos[0]) * 1000.0);
+			ELSE
+				stActionDataMoveZ.aParams[2] := LREAL_TO_DINT(alQ1TargetPos[0]);
+			END_IF
+			
+			stError.ErrorId := stGCodeRef.pCurrentTool^.M_ExeAction(stActionDataMoveZ);
+			
+			IF stError.ErrorId > 0 THEN
+				nStateA_MoveZ := 99;
+			ELSE
+				nStateA_MoveZ := 1;
+			END_IF			
+		END_IF
+	
+
+	1:	//Move ready?
+		IF NOT stGCodeRef.pCurrentTool^.M_GetActionBusy(E_Action.ACTION_MoveZ) THEN
+			IF stGCodeRef.pCurrentTool^.P_bError THEN
+				stError.ErrorId := stGCodeRef.pCurrentTool^.P_nErrorId;
+				nStateA_MoveZ := 99;
+			ELSE
+				nStateA_MoveZ := 80;
+			END_IF
+		END_IF
+END_CASE
+
+IF nStateA_MoveZ = 99 THEN
+	stError.POUAction := E_POUACT.POUACT_A_MoveZ;
+	fbErrorList.M_Add(stError);	
+END_IF]]></ST>
+      </Implementation>
+    </Action>
+    <Method Name="M_Reset" Id="{2d38248d-17ad-48ef-9ba9-0e6d4b440a27}">
+      <Declaration><![CDATA[METHOD M_Reset
+VAR_INPUT
+END_VAR
+]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[fbItpResetFastMFuncEx100(bExecute:= FALSE, sNciToPlc:= stGCodeRef.sNciToPlc);
+fbItpResetFastMFuncEx104(bExecute:= FALSE, sNciToPlc:= stGCodeRef.sNciToPlc);
+fbItpResetFastMFuncEx105(bExecute:= FALSE, sNciToPlc:= stGCodeRef.sNciToPlc);
+fbItpGoAhead(bExecute:= FALSE);
+nStateA_FastMFunk100 := 0;
+nStateA_MoveZ := 0;
+nCyclCounter := 0;
+bBusy := FALSE;
+bError := FALSE;
+nErrorId := 0;]]></ST>
+      </Implementation>
+    </Method>
+    <Method Name="M_StopPrintAction" Id="{ad74df97-d72e-499d-b182-0a004237a676}">
+      <Declaration><![CDATA[METHOD M_StopPrintAction : ERRORID
+VAR_INPUT
+	pTool	: POINTER TO FB_MzTool;
+	nChannel : DINT;
+END_VAR
+
+VAR
+	stAction : ST_ActionData;
+	pMultiCartHolder : POINTER TO FB_MultiCartHolder;
+END_VAR
+]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[IF pTool > 0 THEN
+	CASE pTool^.P_eObjectType OF
+		E_ObjectType.OBJECTTYPE_CartDispenser,
+		E_ObjectType.OBJECTTYPE_CartDispStirrer:
+			stAction.eAction := E_Action.ACTION_SwitchPressure;
+			pTool^.M_ExeAction(stAction);
+			stAction.eAction := E_Action.ACTION_Expose;
+			pTool^.M_ExeAction(stAction);
+		E_ObjectType.OBJECTTYPE_MultiCartHolder:
+			pMultiCartHolder := pTool;
+			//In Abhängigkeit vom Channel auf die einzelnen Dispenser anwenden
+			stAction.eAction := E_Action.ACTION_SwitchPressure;
+			CASE nChannel OF
+				0:	pMultiCartHolder^.M_ExeAction(stAction);
+				
+				1:	IF pMultiCartHolder^.P_pCartDispenser1 > 0 THEN
+						pMultiCartHolder^.P_pCartDispenser1^.M_ExeAction(stAction);
+					END_IF
+					
+				2:	IF pMultiCartHolder^.P_pCartDispenser2 > 0 THEN
+						pMultiCartHolder^.P_pCartDispenser2^.M_ExeAction(stAction);
+					END_IF
+					
+				3:	IF pMultiCartHolder^.P_pCartDispenser3 > 0 THEN
+						pMultiCartHolder^.P_pCartDispenser3^.M_ExeAction(stAction);
+					END_IF
+			END_CASE
+		E_ObjectType.OBJECTTYPE_HybridDispenser:
+			stAction.eAction := E_Action.ACTION_BasicDispense;	
+			pTool^.M_ExeAction(stAction);
+		E_ObjectType.OBJECTTYPE_DeloDot, E_ObjectType.OBJECTTYPE_PiezoPip, E_ObjectType.OBJECTTYPE_TwinPiezoHolder, E_ObjectType.OBJECTTYPE_SolenoidPip,
+			E_ObjectType.OBJECTTYPE_VermesDisp:
+			stAction.eAction := E_Action.ACTION_DispenseDrops;
+			//restliche Paremeter sind sowieso "0"
+			pTool^.M_ExeAction(stAction);
+		E_ObjectType.OBJECTTYPE_Exposure:
+			stAction.eAction := E_Action.ACTION_Expose;
+			pTool^.M_ExeAction(stAction);
+		E_ObjectType.OBJECTTYPE_PassivPip:
+			pTool^.M_CancelAction(E_Action.ACTION_Dispense);
+		E_ObjectType.OBJECTTYPE_Extruder:
+			stAction.eAction := E_Action.ACTION_Extrude;
+			pTool^.M_ExeAction(stAction);
+		E_ObjectType.OBJECTTYPE_TwinExtruder:
+			stAction.eAction := E_Action.ACTION_Extrude;
+			pTool^.M_ExeAction(stAction);
+	ELSE
+		RETURN;
+	END_CASE
+END_IF]]></ST>
+      </Implementation>
+    </Method>
+    <LineIds Name="FB_FastMFunc">
+      <LineId Id="622" Count="176" />
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="FB_FastMFunc.A_MoveZ">
+      <LineId Id="2" Count="13" />
+      <LineId Id="48" Count="0" />
+      <LineId Id="17" Count="5" />
+      <LineId Id="50" Count="0" />
+      <LineId Id="24" Count="23" />
+      <LineId Id="1" Count="0" />
+    </LineIds>
+    <LineIds Name="FB_FastMFunc.M_Reset">
+      <LineId Id="3" Count="8" />
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="FB_FastMFunc.M_StopPrintAction">
+      <LineId Id="117" Count="48" />
+      <LineId Id="2" Count="0" />
+    </LineIds>
+  </POU>
+</TcPlcObject>

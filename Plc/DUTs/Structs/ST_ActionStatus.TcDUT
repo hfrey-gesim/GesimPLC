@@ -1,0 +1,17 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<TcPlcObject Version="1.1.0.1" ProductVersion="3.1.4022.10">
+  <DUT Name="ST_ActionStatus" Id="{3e565aba-943f-4d6a-bbb5-bcc8871753c6}">
+    <Declaration><![CDATA[{attribute 'enable_dynamic_creation'}
+TYPE ST_ActionStatus :
+STRUCT
+	nActionId	: UINT;
+	eAction		: E_Action;
+	nObjectId	: UINT;
+	eStatus		: E_ActionStatus;
+	nChannel	: USINT;
+	eOldStatus	: E_ActionStatus;
+END_STRUCT
+END_TYPE
+]]></Declaration>
+  </DUT>
+</TcPlcObject>

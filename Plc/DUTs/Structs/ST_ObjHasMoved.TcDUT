@@ -1,0 +1,14 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<TcPlcObject Version="1.1.0.1" ProductVersion="3.1.4020.12">
+  <DUT Name="ST_ObjHasMoved" Id="{c6c0bde5-36d3-45d4-9ef1-4ced44bc3540}">
+    <Declaration><![CDATA[TYPE ST_ObjHasMoved :
+STRUCT
+	ObjectId : UINT;
+	DestObjId : UINT;
+	DestSlotNr : UINT;
+	ChangeCounter : USINT;
+END_STRUCT
+END_TYPE
+]]></Declaration>
+  </DUT>
+</TcPlcObject>

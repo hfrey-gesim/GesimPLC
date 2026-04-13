@@ -1,0 +1,833 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<TcPlcObject Version="1.1.0.1" ProductVersion="3.1.4024.14">
+  <POU Name="ScanHwModules" Id="{d5b212a5-cb66-4889-afb3-941d0535a0c9}" SpecialFunc="None">
+    <Declaration><![CDATA[PROGRAM ScanHwModules
+VAR
+	fbCxGetDeviceIdent	: FB_CxGetDeviceIdentificationEx;
+	stDeviceIdentEx		: ST_CxDeviceIdentificationEx;	
+	fbGetDeviceIds		: IOF_GetDeviceIDs;
+	fbGetDeviceType		: IOF_GetDeviceType;
+	fbGetDeviceNetId	: IOF_GetDeviceNetId;
+	fbEcGetConfSlaves 	: FB_EcGetConfSlaves;
+	fbEcCoeSdoRead		: FB_EcCoESdoRead;
+
+	aDevIds				: ARRAY[0..cMaxDeviceIds - 1] OF WORD;
+	nCntEcMaster		: USINT; //Anzahl der gefundenen EtherCAT-Master
+	wDevIdCANMaster		: WORD;
+	dwBuffer			: DWORD;
+	aEtherCATMaster		: ARRAY [1..cMaxEcMaster] OF ST_EtherCATMaster;
+	
+	nDriveCounter		: USINT;
+	aDriveType			: ARRAY[0..3] OF STRING(15);
+	aDriveAdsAddr		: ARRAY[0..3] OF ST_AdsAdress;
+	
+	stCanMasterAddress	: ST_CanMasterAddress;
+	bCANInterfaceAvailable	: BOOL;
+	nCanNodeCnt			: USINT;
+	
+	i 					: USINT;
+	j					: UINT;
+	nState 				: USINT;
+	stError				: ST_Error;
+	stErrorTmp			: ST_Error;
+	bErrorTmp			: BOOL;
+	
+	nYAxes				: USINT;
+	nMultiZRefs			: USINT;
+
+	pYDrive				: POINTER TO FB_XYDriveBase;
+	pHwModule			: POINTER TO FB_HwModule;
+	pMultiZ				: POINTER TO FB_MultiZRef;
+	stHwInfo			: ST_HardwareInfo;
+	stHardwareId 		: ST_HardwareId;
+	
+	test				: UINT;
+	
+END_VAR
+VAR_OUTPUT
+	bBusy 	 : BOOL;
+	bError	 : BOOL;
+	nErrorId : ERRORID;
+END_VAR
+
+VAR CONSTANT
+	cMaxDeviceIds : USINT := 5;
+	cMaxEcMaster : USINT := 2;
+END_VAR]]></Declaration>
+    <Implementation>
+      <ST><![CDATA[stError.POUState := nState;
+CASE nState OF
+	0:	//PlcInformationen auslesen
+		bBusy := TRUE;
+		fbCxGetDeviceIdent(bExecute:= TRUE,stDevIdent=>stDeviceIdentEx); //PlcInfo auslesen
+		IF NOT fbCxGetDeviceIdent.bBusy THEN
+			IF fbCxGetDeviceIdent.bError THEN
+				stError.ErrorId := UDINT_TO_UINT(fbCxGetDeviceIdent.nErrorID);
+				nState := 99;
+			ELSE
+				fbCxGetDeviceIdent(bExecute:= FALSE);
+				stPlcInfo.sTargetType := stDeviceIdentEx.strTargetType;
+				stPlcInfo.sSerialNo := stDeviceIdentEx.strHardwareSerialNo;
+				stPlcInfo.sTwinCATBuild := stDeviceIdentEx.strTwinCATBuild;
+				stPlcInfo.sPlcVersion := stLibVersion_SPS_PlattformCD.sVersion;
+				nState := 1;			
+			END_IF
+			fbCxGetDeviceIdent(bExecute:= FALSE);
+		END_IF
+
+	1:	//Alle DeviceIds abrufen
+		fbGetDeviceIds(LEN:= SIZEOF(aDevIds), DESTADDR:= ADR(aDevIds), START:= TRUE); 
+		IF NOT fbGetDeviceIds.BUSY THEN
+			IF fbGetDeviceIds.ERR THEN
+				stError.ErrorId := UDINT_TO_UINT(fbGetDeviceIds.ERRID);
+				nState := 99;
+			ELSE
+				nState := 2;				
+			END_IF
+			fbGetDeviceIds(START:= FALSE);
+		END_IF	
+
+	2:	//DeviceId des EcMasters ermitteln
+		fbGetDeviceType(DEVICEID:= aDevIds[i],  START:= TRUE);
+		IF NOT fbGetDeviceType.BUSY THEN
+			IF fbGetDeviceType.IODeviceType = IODEVICETYPE_ETHERCAT THEN
+				nCntEcMaster := nCntEcMaster + 1;
+				aEtherCATMaster[nCntEcMaster].nDeviceId := aDevIds[i];;
+			ELSIF fbGetDeviceType.IODeviceType = IODEVICETYPE_EL6751 THEN
+				wDevIdCANMaster := aDevIds[i];
+			END_IF
+			i:= i + 1;
+			fbGetDeviceType(START:= FALSE);
+		END_IF
+
+		IF i > cMaxDeviceIds THEN
+			IF aEtherCATMaster[1].nDeviceId = 0 THEN	//es muss mind. 1 EtherCAT-Master gefunden werden
+				stError.ErrorId := E_ErrorIdObjMgmt.ERRORID_EtherCATMasterNotConfigured;
+				nState := 99;
+			ELSIF wDevIdCANMaster = 0 THEN
+				stError.ErrorId := E_ErrorIdObjMgmt.ERRORID_CANopenMasterNotConfigured;
+				nState := 99;
+			ELSE
+				nState := 3;
+			END_IF
+		END_IF
+		
+	3:	//NetId's der EtherCAT-Master ermitteln
+		//wird für jeden Master durchlaufen
+		fbGetDeviceNetId(DEVICEID:= aEtherCATMaster[nCntEcMaster].nDeviceId, START:= TRUE, DeviceNetId=> aEtherCATMaster[nCntEcMaster].sNetId);
+		IF NOT fbGetDeviceNetId.BUSY THEN
+			IF fbGetDeviceNetId.ERR THEN
+				stError.ErrorId := UDINT_TO_UINT(fbGetDeviceNetId.ERRID);
+				nState := 99;
+			ELSE
+				nCntEcMaster := nCntEcMaster - 1;
+				IF nCntEcMaster = 0 THEN
+					nCntEcMaster := nCntEcMaster + 1;
+					nState := 4;
+				END_IF
+			END_IF
+			fbGetDeviceNetId(START:= FALSE);
+		END_IF
+		
+	4:	//NetId vom CANopen-Master ermitteln (es ist nur ein Master vorgesehen)
+		fbGetDeviceNetId(DEVICEID:= wDevIdCANMaster, START:= TRUE, DeviceNetId=> stCanMasterAddress.sOwnNetId);
+		IF NOT fbGetDeviceNetId.BUSY THEN
+			IF fbGetDeviceNetId.ERR THEN
+				stError.ErrorId := UDINT_TO_UINT(fbGetDeviceNetId.ERRID);
+				nState := 99;
+			ELSE
+				nState := 5;
+			END_IF
+			fbGetDeviceNetId(START:= FALSE);
+		END_IF
+		
+	5:	//Konfigurierte EtherCAT-Slaves ermitteln und in entsprechendes Array speichern
+		//wird für jeden Master durchlaufen
+		fbEcGetConfSlaves(sNetId:= aEtherCATMaster[nCntEcMaster].sNetId, pArrEcConfSlaveInfo:= ADR(aEtherCATMaster[nCntEcMaster].aStSlaveInfo),
+							cbBufLen:= SIZEOF(aEtherCATMaster[nCntEcMaster].aStSlaveInfo), bExecute:= TRUE, nSlaves=> aEtherCATMaster[nCntEcMaster].nCfgSlaves);
+ 		IF NOT fbEcGetConfSlaves.bBusy THEN
+			IF fbEcGetConfSlaves.bError THEN
+				stError.ErrorId := UDINT_TO_UINT(fbEcGetConfSlaves.nErrorId);
+				nState := 99;
+			ELSE
+				IF nCntEcMaster = cMaxEcMaster OR (aEtherCATMaster[nCntEcMaster + 1].sNetId = '') THEN
+					nState := 6;
+				ELSE
+					nCntEcMaster := nCntEcMaster + 1;
+				END_IF
+			END_IF
+			fbEcGetConfSlaves(bExecute := FALSE);
+		END_IF
+ 
+	6:	//EtherCAT-Slaves auswerten
+		FOR i:= 1 TO nCntEcMaster BY 1 DO
+			FOR j:= 0 TO aEtherCATMaster[i].nCfgSlaves BY 1 DO
+				IF M_IsXYDrive(aEtherCATMaster[i].aStSlaveInfo[j]) THEN
+					aDriveType[nDriveCounter] := aEtherCATMaster[i].aStSlaveInfo[j].sType;
+					aDriveAdsAddr[nDriveCounter].sNetId := aEtherCATMaster[i].sNetId;
+					aDriveAdsAddr[nDriveCounter].nPort := aEtherCATMaster[i].aStSlaveInfo[j].nAddr;
+					nDriveCounter := nDriveCounter + 1;
+				ELSIF aEtherCATMaster[i].aStSlaveInfo[j].sType = 'EL6751' THEN
+					stCanMasterAddress.sEcMasterNetId := aEtherCATMaster[i].sNetId;
+					stCanMasterAddress.nBoxAddress := aEtherCATMaster[i].aStSlaveInfo[j].nAddr;
+				ELSIF aEtherCATMaster[i].aStSlaveInfo[j].sType = 'EL6900' OR aEtherCATMaster[i].aStSlaveInfo[j].sType = 'EL1918' THEN
+					pFbSafety := ADR(fbSafety);
+				ELSIF aEtherCATMaster[i].aStSlaveInfo[j].sType = 'EL7031' OR aEtherCATMaster[i].aStSlaveInfo[j].sType = 'EL7041' OR 
+																			aEtherCATMaster[i].aStSlaveInfo[j].sType = 'EL7047' THEN
+					{IF defined(variable:fbHwRefSpinDrive)}
+						fbHwRefSpinDrive.P_sNetId := aEtherCATMaster[i].sNetId;
+					{END_IF}
+					{IF defined(variable:fbHwRefLiftDrive)}
+						fbHwRefLiftDrive.P_sNetId := aEtherCATMaster[i].sNetId;
+					{END_IF}
+					{IF defined(variable:fbHwRefTrayStop)}
+						fbHwRefTrayStop.P_sNetId := aEtherCATMaster[i].sNetId;
+					{END_IF}
+				END_IF
+			END_FOR
+		END_FOR
+		
+		IF pFbSafety = 0 THEN //kein InterlockSafe
+			//SimpleInterlock möglich?
+			IF F_GetMappingStatus(ADR(fbSafetyPseudo.bInput),SIZEOF(fbSafetyPseudo.bInput)) = EPlcMappingStatus.MS_Partial THEN
+				pFbSafety := ADR(fbSafetyPseudo);
+			ELSE
+				pFbSafety := ADR(fbSafetyBase); //Dummy
+			END_IF
+		ELSE
+			fbSafety.M_CheckBoxCtcMapping();
+		END_IF
+		
+		//XYDrive-Pointer den entsprechenden XYDrive-Instanzen zuordnen
+		IF aDriveType[0] = 'EL7041' AND aDriveType[1] = 'EL7041' AND aDriveType[2] = 'EL7041' THEN	//Plattform C
+			//X
+			stHardwareId.eGroup := E_HardwareGrp.AxisX;
+			stHardwareId.nParentItem := 0;
+			stHardwareId.nItem := 1;
+			fbXDriveBeck.P_stHardwareId := stHardwareId;
+			fbXDriveBeck.P_stAdsAddress := aDriveAdsAddr[0];
+			fbXYDriveList.M_Add(ADR(fbXDriveBeck));
+			//Y
+			stHardwareId.eGroup := E_HardwareGrp.AxisY;
+			stHardwareId.nParentItem := 1;
+			stHardwareId.nItem := 1;
+			fbYDriveBeck.P_stHardwareId := stHardwareId;
+			fbYDriveBeck.P_stAdsAddress := aDriveAdsAddr[2];
+			fbXYDriveList.M_Add(ADR(fbYDriveBeck));
+			nYAxes := 1;
+			
+			stTipCalibrator.bInvert := FALSE;
+			
+		ELSIF  (LEFT(aDriveType[0],11) = 'C1150-DS-XC' AND LEFT(aDriveType[1],11) = 'C1150-DS-XC' AND LEFT(aDriveType[2],11) = 'C1150-DS-XC') THEN //Plattform D zwei Ebenen
+
+			stHardwareId.eGroup := E_HardwareGrp.AxisX;
+			stHardwareId.nParentItem := 0;
+			stHardwareId.nItem := 1;
+			fbX1DriveLmtDS.P_stHardwareId := stHardwareId;
+			fbX1DriveLmtDS.P_stAdsAddress := aDriveAdsAddr[2];
+			fbXYDriveList.M_Add(ADR(fbX1DriveLmtDS));
+			
+			stHardwareId.eGroup := E_HardwareGrp.AxisY;
+			stHardwareId.nParentItem := 1;
+			stHardwareId.nItem := 1;
+			fbY1DriveLmtDS.P_stHardwareId := stHardwareId;
+			fbY1DriveLmtDS.P_stAdsAddress := aDriveAdsAddr[0];
+			fbXYDriveList.M_Add(ADR(fbY1DriveLmtDS));
+			
+			stHardwareId.eGroup := E_HardwareGrp.AxisY;
+			stHardwareId.nParentItem := 1;
+			stHardwareId.nItem := 2;
+			fbY2DriveLmtDS.P_stHardwareId := stHardwareId;
+			fbY2DriveLmtDS.P_stAdsAddress := aDriveAdsAddr[1];
+			fbXYDriveList.M_Add(ADR(fbY2DriveLmtDS));
+			nYAxes := 2;
+			
+			stTipCalibrator.bInvert := FALSE;
+			
+		ELSIF (LEFT(aDriveType[0],11) = 'C1250-DS-XC' AND LEFT(aDriveType[1],11) = 'C1250-DS-XC' AND LEFT(aDriveType[2],11) = 'C1250-DS-XC') THEN  //Plattform D zwei Ebenen
+			stHardwareId.eGroup := E_HardwareGrp.AxisX;
+			stHardwareId.nParentItem := 0;
+			stHardwareId.nItem := 1;
+			fbX1DriveLmtDS.P_stHardwareId := stHardwareId;
+			fbX1DriveLmtDS.P_stAdsAddress := aDriveAdsAddr[0];
+			fbXYDriveList.M_Add(ADR(fbX1DriveLmtDS));
+			
+			stHardwareId.eGroup := E_HardwareGrp.AxisY;
+			stHardwareId.nParentItem := 1;
+			stHardwareId.nItem := 1;
+			fbY1DriveLmtDS.P_stHardwareId := stHardwareId;
+			fbY1DriveLmtDS.P_stAdsAddress := aDriveAdsAddr[2];
+			fbXYDriveList.M_Add(ADR(fbY1DriveLmtDS));
+			
+			stHardwareId.eGroup := E_HardwareGrp.AxisY;
+			stHardwareId.nParentItem := 1;
+			stHardwareId.nItem := 2;
+			fbY2DriveLmtDS.P_stHardwareId := stHardwareId;
+			fbY2DriveLmtDS.P_stAdsAddress := aDriveAdsAddr[1];
+			fbXYDriveList.M_Add(ADR(fbY2DriveLmtDS));
+
+			stTipCalibrator.bInvert := TRUE;
+			
+			nYAxes := 2;
+			
+		ELSIF (LEFT(aDriveType[0],11) = 'C1100-EC-XC' AND LEFT(aDriveType[1],11) = 'C1100-EC-XC' AND LEFT(aDriveType[2],11) = 'C1100-EC-XC') THEN
+			stHardwareId.eGroup := E_HardwareGrp.AxisX;
+			stHardwareId.nParentItem := 0;
+			stHardwareId.nItem := 1;
+			fbX1DriveLmtEC.P_stHardwareId := stHardwareId;
+			fbX1DriveLmtEC.P_stAdsAddress := aDriveAdsAddr[0];
+			fbXYDriveList.M_Add(ADR(fbX1DriveLmtEC));
+			
+			stHardwareId.eGroup := E_HardwareGrp.AxisY;
+			stHardwareId.nParentItem := 1;
+			stHardwareId.nItem := 1;
+			fbY1DriveLmtEC.P_stHardwareId := stHardwareId;
+			fbY1DriveLmtEC.P_stAdsAddress := aDriveAdsAddr[1];
+			fbXYDriveList.M_Add(ADR(fbY1DriveLmtEC));
+			
+			stHardwareId.eGroup := E_HardwareGrp.AxisY;
+			stHardwareId.nParentItem := 1;
+			stHardwareId.nItem := 2;
+			fbY2DriveLmtEC.P_stHardwareId := stHardwareId;
+			fbY2DriveLmtEC.P_stAdsAddress := aDriveAdsAddr[2];
+			fbXYDriveList.M_Add(ADR(fbY2DriveLmtEC));
+			nYAxes := 2;
+			
+		ELSIF (LEFT(aDriveType[0],11) = 'C1150-DS-XC' AND LEFT(aDriveType[1],11) = 'C1150-DS-XC') OR
+				(LEFT(aDriveType[0],11) = 'C1250-DS-XC' AND LEFT(aDriveType[1],11) = 'C1250-DS-XC') THEN //Plattform D eine Ebene
+			stHardwareId.eGroup := E_HardwareGrp.AxisX;
+			stHardwareId.nParentItem := 0;
+			stHardwareId.nItem := 1;
+			fbX1DriveLmtDS.P_stHardwareId := stHardwareId;
+			fbX1DriveLmtDS.P_stAdsAddress := aDriveAdsAddr[0];
+			fbXYDriveList.M_Add(ADR(fbX1DriveLmtDS));
+			
+			stHardwareId.eGroup := E_HardwareGrp.AxisY;
+			stHardwareId.nParentItem := 1;
+			stHardwareId.nItem := 1;
+			fbY1DriveLmtDS.P_stHardwareId := stHardwareId;
+			fbY1DriveLmtDS.P_stAdsAddress := aDriveAdsAddr[1];
+			fbXYDriveList.M_Add(ADR(fbY1DriveLmtDS));
+			nYAxes := 1;
+			
+			//Bei der C1150 wird das Signal nicht invertiert
+			IF LEFT(aDriveType[0],11) = 'C1250-DS-XC' THEN
+				stTipCalibrator.bInvert := TRUE;
+			ELSE
+				stTipCalibrator.bInvert := FALSE;
+			END_IF
+
+		ELSE
+			stError.ErrorId := E_ErrorIdObjMgmt.ERRORID_InvalidDriveConfig;
+			nState := 99;
+			RETURN;
+		END_IF
+		
+		nState := 8;
+		
+	8:	//Überprüfen, welche CAN-Nodes im CANopen-Master konfiguriert - Schritt 1
+		//Konfiguration steht in COE-Objektverzeichnis 8000h-87E0h Subindex 0 des CANopen-Masters
+		fbEcCoeSdoRead(sNetId:= stCanMasterAddress.sEcMasterNetId, nSlaveAddr:= stCanMasterAddress.nBoxAddress, nIndex:= 16#8000 + 16 * nCanNodeCnt, nSubIndex:= 0,
+					pDstBuf:= ADR(dwBuffer), cbBufLen:= 2, bExecute:= TRUE);
+					
+		IF NOT fbEcCoeSdoRead.bBusy THEN
+			IF fbEcCoeSdoRead.bError THEN
+				stError.ErrorId := UDINT_TO_UINT(fbEcCoeSdoRead.nErrId);
+				nState := 99;
+			ELSE
+				//Wenn 36 ist Node ein CAN-Interface, wenn 46, dann ein CANopen-Slave
+				//Das CAN-Interface steht immer an erster Stelle, es wird aber nach dem letzten CANopen-Node abermals eine 36 zurückgegeben
+				IF dwBuffer = 36 AND NOT bCANInterfaceAvailable THEN //CAN-Interface
+					nCanNodeCnt := nCanNodeCnt + 1;
+					bCANInterfaceAvailable := TRUE;
+				ELSIF dwBuffer = 46 THEN //CANopen-Node
+					nState := 9;
+				ELSE
+					nState := 10;
+				END_IF
+			END_IF
+			fbEcCoeSdoRead(bExecute:= FALSE);
+		END_IF
+		
+	9:	//Überprüfen, welche CANopen-Nodes im CANopen-Master konfiguriert - Schritt 2
+		//NodeAdress steht in COE-Objektverzeichnis 8000h-87E0h Subindex 1 des CANopen-Masters
+		fbEcCoeSdoRead(sNetId:= stCanMasterAddress.sEcMasterNetId, nSlaveAddr:= stCanMasterAddress.nBoxAddress, nIndex:= 16#8000 + 16 * nCanNodeCnt, nSubIndex:= 1,
+					pDstBuf:= ADR(dwBuffer), cbBufLen:= 2, bExecute:= TRUE);
+					
+		IF NOT fbEcCoeSdoRead.bBusy THEN
+			IF fbEcCoeSdoRead.bError THEN
+				stError.ErrorId := UDINT_TO_UINT(fbEcCoeSdoRead.nErrId);
+				nState := 99;
+			ELSE
+				IF dwBuffer = 0 OR nCanNodeCnt = 126 THEN
+					nState := 10; //kein weiterer Node vorhanden
+				ELSE
+					aCanNodes[dwBuffer] := TRUE;
+					nState := 8; //zurück zu Schritt 1 (nState 8)
+					nCanNodeCnt := nCanNodeCnt + 1;
+				END_IF
+			END_IF
+			fbEcCoeSdoRead(bExecute:= FALSE);
+		END_IF
+		
+	10:	//Zuordung der CAN-Node-Ids zu den HwModul-Referenzen
+		//Tip-Cleaner nimmt eine Sonderstellung ein, da er kein Gesim-CANopen-Node ist
+		stTipCleanerRef.stAdsAdress.sNetId := stCanMasterAddress.sOwnNetId;
+		stTipCleanerRef.stAdsAdress.nPort := 36 + 4096; //36=NodeId
+		
+		//MultiZ
+		FOR i := 1 TO cMaxMzHeads BY 1 DO
+			IF aCanNodes[i + 7] THEN
+				afbMultiZRef[i].M_Prepare(stCanMasterAddress.sOwnNetId ,nCanNodeId := UINT_TO_USINT(i + 7));
+				fbMultiZRefList.M_Add(ADR(afbMultiZRef[i]));
+				fbCANOpenHwModuleList.M_Add(ADR(afbMultiZRef[i]));
+				nMultiZRefs := nMultiZRefs + 1;
+			END_IF
+		END_FOR
+		
+		//Zuordung der MultiZRefs zu den XY-Drives
+		fbMultiZRefList.M_SetCurrentToHead();
+		IF nYAxes = 1 THEN
+			stHardwareId.eGroup := E_HardwareGrp.AxisY;
+			stHardwareId.nParentItem := 1;	//derzeit gibt es nur eine X-Achse
+			stHardwareId.nItem := 1;
+			pYDrive := fbXYDriveList.M_GetByHwId(stHardwareId);
+			IF pYDrive > 0 THEN
+				pYDrive^.P_pMultiZRef := fbMultiZRefList.M_Get();
+				stHardwareId.eGroup := E_HardwareGrp.MultiZBasis;
+				stHardwareId.nParentItem := 1;
+				stHardwareId.nItem := 1;
+				pYDrive^.P_pMultiZRef^.P_stHardwareId := stHardwareId;
+			END_IF
+		ELSIF nYAxes = 2 AND nMultiZRefs = 1 THEN
+			stHardwareId.eGroup := E_HardwareGrp.AxisY;
+			stHardwareId.nParentItem := 1;	//derzeit gibt es nur eine X-Achse
+			stHardwareId.nItem := 2;
+			pYDrive := fbXYDriveList.M_GetByHwId(stHardwareId);
+			IF pYDrive > 0 THEN
+				pYDrive^.P_pMultiZRef := fbMultiZRefList.M_Get();
+				stHardwareId.eGroup := E_HardwareGrp.MultiZBasis;
+				stHardwareId.nParentItem := 2;
+				stHardwareId.nItem := 1;
+				pYDrive^.P_pMultiZRef^.P_stHardwareId := stHardwareId;
+			END_IF
+		ELSIF nYAxes = 2 AND nMultiZRefs = 2 THEN
+			stHardwareId.eGroup := E_HardwareGrp.AxisY;
+			stHardwareId.nParentItem := 1;	//derzeit gibt es nur eine X-Achse
+			stHardwareId.nItem := 1;
+			pYDrive := fbXYDriveList.M_GetByHwId(stHardwareId);
+			IF pYDrive > 0 THEN
+				pYDrive^.P_pMultiZRef := fbMultiZRefList.M_Get(); 
+				stHardwareId.eGroup := E_HardwareGrp.MultiZBasis;
+				stHardwareId.nParentItem := 1;
+				stHardwareId.nItem := 1;
+				pYDrive^.P_pMultiZRef^.P_stHardwareId := stHardwareId;
+			END_IF
+			stHardwareId.eGroup := E_HardwareGrp.AxisY;
+			stHardwareId.nParentItem := 1;	//derzeit gibt es nur eine X-Achse
+			stHardwareId.nItem := 2;
+			pYDrive := fbXYDriveList.M_GetByHwId(stHardwareId);
+			IF pYDrive > 0 THEN
+				pYDrive^.P_pMultiZRef := fbMultiZRefList.M_Get();
+				stHardwareId.eGroup := E_HardwareGrp.MultiZBasis;
+				stHardwareId.nParentItem := 2;
+				stHardwareId.nItem := 2;
+				pYDrive^.P_pMultiZRef^.P_stHardwareId := stHardwareId;
+ 			END_IF			
+		END_IF
+		
+		{IF defined(variable:afbMtpHeatRef)}
+		FOR i := 0 TO (cNoOfMtpHeaters  - 1) BY 1 DO
+			IF aCanNodes[i + cNodeIdMtpHeater1] THEN
+				stHardwareId.eGroup := E_HardwareGrp.MtpHeater;
+				stHardwareId.nParentItem := 0;
+				stHardwareId.nItem := i + 1;
+				afbMtpHeatRef[i + 1].P_stHardwareId := stHardwareId;
+				afbMtpHeatRef[i + 1].M_Prepare(stCanMasterAddress.sOwnNetId ,nCanNodeId := UINT_TO_USINT(i + cNodeIdMtpHeater1));
+				afbMtpHeatRef[i + 1]();
+				fbCANOpenHwModuleList.M_Add(ADR(afbMtpHeatRef[i + 1]));
+			END_IF
+		END_FOR
+		{END_IF}
+		
+		{IF defined(variable:afbSubstHeatRef)}
+		FOR i := 0 TO (cNoOfSubstHeaters - 1) BY 1 DO
+			IF aCanNodes[i + cNodeIdSubstHeater1] THEN
+				stHardwareId.eGroup := E_HardwareGrp.SubstHeater;
+				stHardwareId.nParentItem := 0;
+				stHardwareId.nItem := i + 1;
+				afbSubstHeatRef[i + 1].P_stHardwareId := stHardwareId;
+				afbSubstHeatRef[i + 1].M_Prepare(stCanMasterAddress.sOwnNetId ,nCanNodeId := UINT_TO_USINT(i + cNodeIdSubstHeater1));
+				afbSubstHeatRef[i + 1]();
+				fbCANOpenHwModuleList.M_Add(ADR(afbSubstHeatRef[i + 1]));
+			END_IF
+		END_FOR
+		{END_IF}
+		
+		{IF defined(variable: aFbReactDriveRef)}
+		FOR i := 0 TO (cNoOfReactDrives - 1) BY 1 DO
+			IF aCanNodes[i + cNodeIdReactDrive1] THEN
+				stHardwareId.eGroup := E_HardwareGrp.ReactorDrive;
+				stHardwareId.nParentItem := 0;
+				stHardwareId.nItem := i + 1;
+				aFbReactDriveRef[i + 1].P_stHardwareId := stHardwareId;			
+				aFbReactDriveRef[i + 1].M_Prepare(stCanMasterAddress.sOwnNetId ,nCanNodeId := UINT_TO_USINT(i + cNodeIdReactDrive1));
+				aFbReactDriveRef[i + 1]();
+				fbCANOpenHwModuleList.M_Add(ADR(aFbReactDriveRef[i + 1]));
+			END_IF
+		END_FOR
+		{END_IF}
+
+		{IF defined(variable: aFbReactHeatRef)}
+		FOR i := 0 TO (cNoOfReactHeaters - 1) BY 1 DO
+			IF aCanNodes[i + cNodeIdReactHeater1] THEN
+				stHardwareId.eGroup := E_HardwareGrp.ReactorHeater;
+				stHardwareId.nParentItem := 0;
+				stHardwareId.nItem := i + 1;
+				aFbReactHeatRef[i + 1].P_stHardwareId := stHardwareId;			
+				aFbReactHeatRef[i + 1].M_Prepare(stCanMasterAddress.sOwnNetId ,nCanNodeId := UINT_TO_USINT(i + cNodeIdReactHeater1));
+				aFbReactHeatRef[i + 1]();
+				fbCANOpenHwModuleList.M_Add(ADR(aFbReactHeatRef[i + 1]));
+			END_IF
+		END_FOR
+		{END_IF}
+		
+		{IF defined(variable:aFbTripleTriggerRef)}
+		FOR i := 0 TO (cNoOfTripleTriggers - 1) BY 1 DO
+			IF aCanNodes[i + cNodeIdTripleTrigger1] THEN
+				stHardwareId.eGroup := E_HardwareGrp.TripleTrigger;
+				stHardwareId.nParentItem := 0;
+				stHardwareId.nItem := i + 1;
+				aFbTripleTriggerRef[i + 1].P_stHardwareId := stHardwareId;			
+				aFbTripleTriggerRef[i + 1].M_Prepare(stCanMasterAddress.sOwnNetId ,nCanNodeId := UINT_TO_USINT(i + cNodeIdTripleTrigger1));
+				aFbTripleTriggerRef[i + 1]();
+				fbCANOpenHwModuleList.M_Add(ADR(aFbTripleTriggerRef[i + 1]));
+			END_IF		
+		END_FOR
+		{END_IF}
+		
+		{IF defined(variable:aFbIOExpanderRef)}
+		FOR i := 0 TO (cNoOfIOExpanders - 1) BY 1 DO
+			IF aCanNodes[i + cNodeIdIOExpander1] THEN
+				stHardwareId.eGroup := E_HardwareGrp.IOExpander;
+				stHardwareId.nParentItem := 0;
+				stHardwareId.nItem := i + 1;
+				aFbIOExpanderRef[i + 1].P_stHardwareId := stHardwareId;		
+				aFbIOExpanderRef[i + 1].M_Prepare(stCanMasterAddress.sOwnNetId ,nCanNodeId := UINT_TO_USINT(i + cNodeIdIOExpander1));
+				aFbIOExpanderRef[i + 1]();
+				fbCANOpenHwModuleList.M_Add(ADR(aFbIOExpanderRef[i + 1]));
+			END_IF
+		END_FOR
+		{END_IF}
+		
+		{IF defined(variable:aFbBottleRackRef)}
+		FOR i := 0 TO (cNoOfBottleRacks - 1) BY 1 DO
+			IF aCanNodes[i + cNodeIdBottleRack1] THEN
+				stHardwareId.eGroup := E_HardwareGrp.BottleRack;
+				stHardwareId.nParentItem := 0;
+				stHardwareId.nItem := i + 1;
+				aFbBottleRackRef[i + 1].P_stHardwareId := stHardwareId;			
+				aFbBottleRackRef[i + 1].M_Prepare(stCanMasterAddress.sOwnNetId ,nCanNodeId := UINT_TO_USINT(i + cNodeIdBottleRack1));
+				aFbBottleRackRef[i + 1]();
+				fbCANOpenHwModuleList.M_Add(ADR(aFbBottleRackRef[i + 1]));
+			END_IF
+		END_FOR
+		{END_IF}
+		
+		
+		{IF defined(variable:aFbInkStatDrvSpinRef)}
+		FOR i := 0 TO (cNoOfInkStatSpinDrives - 1) BY 1 DO
+			IF aCanNodes[i + cNodeIdInkStatSpinDrive1] THEN
+				stHardwareId.eGroup := E_HardwareGrp.InkStationSpinDrive;
+				stHardwareId.nParentItem := 0;
+				stHardwareId.nItem := i + 1;
+				aFbInkStatDrvSpinRef[i + 1].P_stHardwareId := stHardwareId;		
+				aFbInkStatDrvSpinRef[i + 1].M_Prepare(stCanMasterAddress.sOwnNetId ,nCanNodeId := UINT_TO_USINT(i + cNodeIdInkStatSpinDrive1));
+				aFbInkStatDrvSpinRef[i + 1]();
+				fbCANOpenHwModuleList.M_Add(ADR(aFbInkStatDrvSpinRef[i + 1]));
+			END_IF
+		END_FOR
+		{END_IF}
+
+		{IF defined(variable:aFbInkStatDrvCoverRef)}
+		FOR i := 0 TO (cNoOfInkStatCoverDrives - 1) BY 1 DO
+			IF aCanNodes[i + cNodeIdInkStatCoverDrive1] THEN
+				stHardwareId.eGroup := E_HardwareGrp.InkStationCoverDrive;
+				stHardwareId.nParentItem := 0;
+				stHardwareId.nItem := i + 1;
+				aFbInkStatDrvCoverRef[i + 1].P_stHardwareId := stHardwareId;
+				aFbInkStatDrvCoverRef[i + 1].M_Prepare(stCanMasterAddress.sOwnNetId ,nCanNodeId := UINT_TO_USINT(i + cNodeIdInkStatCoverDrive1));
+				aFbInkStatDrvCoverRef[i + 1]();
+				fbCANOpenHwModuleList.M_Add(ADR(aFbInkStatDrvCoverRef[i + 1]));
+			END_IF
+		END_FOR
+		{END_IF}
+		
+		{IF defined(variable:aFbPowderStatRef)}
+		FOR i := 0 TO (cNoOfPowderStations - 1) BY 1 DO
+			IF aCanNodes[i + cNodeIdPowderStation1] THEN
+				stHardwareId.eGroup := E_HardwareGrp.PowderStation;
+				stHardwareId.nParentItem := 0;
+				stHardwareId.nItem := i + 1;
+				aFbPowderStatRef[i + 1].P_stHardwareId := stHardwareId;				
+				aFbPowderStatRef[i + 1].M_Prepare(stCanMasterAddress.sOwnNetId ,nCanNodeId := UINT_TO_USINT(i + cNodeIdPowderStation1));
+				aFbPowderStatRef[i + 1]();
+				fbCANOpenHwModuleList.M_Add(ADR(aFbPowderStatRef[i + 1]));
+			END_IF
+		END_FOR
+		{END_IF}
+		
+		//MulitPurposeIO (F-Einschub)
+		{IF defined(variable:aFbHwRefMultiPurpIO)}
+		FOR i:= 0 TO (cNoOfMultiPurpIO - 1) BY 1 DO
+			IF aCanNodes[i + cNodeIdMultiPurpIO] THEN
+				stHardwareId.eGroup := E_HardwareGrp.MultiPurpIO;
+				stHardwareId.nParentItem := 0;
+				stHardwareId.nItem := i + 1;
+				aFbHwRefMultiPurpIO[i + 1].P_stHardwareId := stHardwareId;
+				aFbHwRefMultiPurpIO[i + 1].M_Prepare(stCanMasterAddress.sOwnNetId ,nCanNodeId := UINT_TO_USINT(i + cNodeIdMultiPurpIO));
+				fbCANOpenHwModuleList.M_Add(ADR(aFbHwRefMultiPurpIO[i + 1]));
+			END_IF
+		END_FOR
+		{END_IF}
+		
+		//TrayTransporter in 3 verschiedenen Varianten
+		{IF defined(TrayTransporterL)}
+		stHardwareId.eGroup := E_HardwareGrp.NanotecPD;
+		stHardwareId.nParentItem := 0;
+		stHardwareId.nItem := 1;
+		fbHwRefTrayTransSlider.P_stHardwareId := stHardwareId;
+		fbHwRefTrayTransSlider.M_Prepare(stCanMasterAddress.sOwnNetId ,nCanNodeId := 1);
+		fbCANOpenHwModuleList.M_Add(ADR(fbHwRefTrayTransSlider));
+		stHardwareId.eGroup := E_HardwareGrp.TMCM1140Stepper_Gen2;
+		fbHwRefDrivingPinLeft.P_stHardwareId := stHardwareId;
+		fbHwRefDrivingPinLeft.M_Prepare(stCanMasterAddress.sOwnNetId ,nCanNodeId := 36);
+		fbCANOpenHwModuleList.M_Add(ADR(fbHwRefDrivingPinLeft));
+		
+		{ELSIF defined(TrayTransporterR)}
+		stHardwareId.eGroup := E_HardwareGrp.NanotecPD;
+		stHardwareId.nParentItem := 0;
+		stHardwareId.nItem := 1;
+		fbHwRefTrayTransSlider.P_stHardwareId := stHardwareId;
+		fbHwRefTrayTransSlider.M_Prepare(stCanMasterAddress.sOwnNetId ,nCanNodeId := 1);
+		fbCANOpenHwModuleList.M_Add(ADR(fbHwRefTrayTransSlider));
+		stHardwareId.eGroup := E_HardwareGrp.TMCM1140Stepper_Gen2;
+		fbHwRefDrivingPinRight.P_stHardwareId := stHardwareId;
+		fbHwRefDrivingPinRight.M_Prepare(stCanMasterAddress.sOwnNetId ,nCanNodeId := 35);
+		fbCANOpenHwModuleList.M_Add(ADR(fbHwRefDrivingPinRight));
+		
+		{ELSIF defined(TrayTransporterLR)}
+		stHardwareId.eGroup := E_HardwareGrp.NanotecPD;
+		stHardwareId.nParentItem := 0;
+		stHardwareId.nItem := 1;
+		fbHwRefTrayTransSlider.P_stHardwareId := stHardwareId;
+		fbHwRefTrayTransSlider.M_Prepare(stCanMasterAddress.sOwnNetId ,nCanNodeId := 1);
+		fbCANOpenHwModuleList.M_Add(ADR(fbHwRefTrayTransSlider));
+		stHardwareId.eGroup := E_HardwareGrp.TMCM1140Stepper_Gen2;
+		fbHwRefDrivingPinLeft.P_stHardwareId := stHardwareId;
+		fbHwRefDrivingPinLeft.M_Prepare(stCanMasterAddress.sOwnNetId ,nCanNodeId := 36);
+		fbCANOpenHwModuleList.M_Add(ADR(fbHwRefDrivingPinLeft));
+		stHardwareId.nItem := 2;
+		fbHwRefDrivingPinRight.P_stHardwareId := stHardwareId;
+		fbHwRefDrivingPinRight.M_Prepare(stCanMasterAddress.sOwnNetId ,nCanNodeId := 35);
+		fbCANOpenHwModuleList.M_Add(ADR(fbHwRefDrivingPinRight));
+		{END_IF}
+		
+		{IF defined(FDM2)}
+		stHardwareId.eGroup := E_HardwareGrp.TMCM1140Stepper_Gen2;
+		stHardwareId.nItem := 3;
+		fbHwRefFDM_TMCM.P_stHardwareId := stHardwareId;
+		//Vielleicht sollte die NodeID mit über M_Init gesetzt werden?
+		fbHwRefFDM_TMCM.M_Prepare(stCanMasterAddress.sOwnNetId ,nCanNodeId := 3);
+		fbCANOpenHwModuleList.M_Add(ADR(fbHwRefFDM_TMCM));
+		{END_IF}
+		
+		{IF defined(Pure1)}
+		stHardwareId.eGroup := E_HardwareGrp.TMCM1140Stepper_Gen2;
+		stHardwareId.nItem := 4;
+		fbHwRefTMCM_Pure1.P_stHardwareId := stHardwareId;
+		//Vielleicht sollte die NodeID mit über M_Init gesetzt werden?
+		fbHwRefTMCM_Pure1.M_Prepare(stCanMasterAddress.sOwnNetId ,nCanNodeId := 41);
+		fbCANOpenHwModuleList.M_Add(ADR(fbHwRefTMCM_Pure1));
+		{END_IF}
+		
+		{IF defined(Pure2)}
+		stHardwareId.eGroup := E_HardwareGrp.TMCM1140Stepper_Gen2;
+		stHardwareId.nItem := 5;
+		fbHwRefTMCM_Pure2.P_stHardwareId := stHardwareId;
+		//Vielleicht sollte die NodeID mit über M_Init gesetzt werden?
+		fbHwRefTMCM_Pure2.M_Prepare(stCanMasterAddress.sOwnNetId ,nCanNodeId := 42);
+		fbCANOpenHwModuleList.M_Add(ADR(fbHwRefTMCM_Pure2));
+		{END_IF}
+		
+		{IF defined(Pure3)}
+		stHardwareId.eGroup := E_HardwareGrp.TMCM1140Stepper_Gen2;
+		stHardwareId.nItem := 6;
+		fbHwRefTMCM_Pure3.P_stHardwareId := stHardwareId;
+		//Vielleicht sollte die NodeID mit über M_Init gesetzt werden?
+		fbHwRefTMCM_Pure3.M_Prepare(stCanMasterAddress.sOwnNetId ,nCanNodeId := 43);
+		fbCANOpenHwModuleList.M_Add(ADR(fbHwRefTMCM_Pure3));
+		{END_IF}
+		
+		{IF defined(variable:fbHwRefSpinDrive)}
+		stHardwareId.eGroup := E_HardwareGrp.EL70xx;
+		stHardwareId.nParentItem := 0;
+		stHardwareId.nItem := 1;
+		fbHwRefSpinDrive.M_Prepare();
+		{END_IF}
+		{IF defined(variable:fbHwRefLiftDrive)}
+		stHardwareId.eGroup := E_HardwareGrp.EL70xx;
+		stHardwareId.nParentItem := 0;
+		stHardwareId.nItem := 2;
+		fbHwRefLiftDrive.M_Prepare();
+		{END_IF}
+		{IF defined(variable:fbHwRefTrayStop)}
+		stHardwareId.eGroup := E_HardwareGrp.EL70xx;
+		stHardwareId.nParentItem := 0;
+		stHardwareId.nItem := 3;
+		fbHwRefTrayStop.M_Prepare();
+		{END_IF}
+		
+		nState := 11;
+		
+	11:	//Warten, bis alle HwModules ready
+		nState := 12;
+		fbXYDriveList.M_SetCurrentToHead();
+		REPEAT
+			pHwModule := fbXYDriveList.M_Get();
+			IF pHwModule > 0 THEN
+				pHwModule^();
+				IF pHwModule^.P_bBusy THEN
+					nState := 11;
+				END_IF
+			END_IF		
+		UNTIL pHwModule = 0
+		END_REPEAT
+		
+		fbCANOpenHwModuleList.M_SetCurrentToHead();
+		REPEAT
+			pHwModule := fbCANOpenHwModuleList.M_Get();
+			IF pHwModule > 0 THEN
+				pHwModule^();
+				IF pHwModule^.P_bBusy THEN
+					nState := 11;
+				ELSE
+					IF pHwModule^.P_bError THEN
+						stErrorTmp := pHwModule^.P_stError;
+						stError.ErrorId := stErrorTmp.ErrorId;
+						stError.ErrorId2 := stErrorTmp.ErrorId2;
+						stError.HardwareGrp := stErrorTmp.HardwareGrp;
+						stError.HardwareNr := stErrorTmp.HardwareNr;
+						bErrorTmp := TRUE;
+						EXIT;
+					END_IF
+				END_IF
+			END_IF
+		UNTIL pHwModule = 0
+		END_REPEAT
+		
+		{IF defined(variable:fbHwRefSpinDrive)}
+		IF fbHwRefSpinDrive.P_bBusy THEN
+			nState := 11;
+		END_IF
+		{END_IF}
+		
+		{IF defined(variable:fbHwRefLiftDrive)}
+		IF fbHwRefLiftDrive.P_bBusy THEN
+			nState := 11;
+		END_IF
+		{END_IF}
+		
+		{IF defined(variable:fbHwRefTrayStop)}
+		IF fbHwRefTrayStop.P_bBusy THEN
+			nState := 11;
+		END_IF
+		{END_IF}
+		
+		IF bErrorTmp THEN
+			nState := 99;
+		END_IF
+	
+	12:	//HwInfoList füllen
+		fbCANOpenHwModuleList.M_SetCurrentToHead();
+		REPEAT
+			pHwModule := fbCANOpenHwModuleList.M_Get();
+			IF pHwModule > 0 THEN
+				stHwInfo := pHwModule^.M_GetHwInfo();
+				HwInfoList.M_Add(stHwInfo);
+				IF pHwModule^.P_eHardwareGrp = E_HardwareGrp.MultiZBasis THEN
+					pMultiZ := pHwModule;
+					FOR i := 1 TO 7 BY 1 DO
+						IF pMultiZ^.aFbZAxisRef[i].stInput.nStatus.7 THEN
+							pMultiZ^.aFbZAxisRef[i].M_RenewHwId();
+							stHwInfo := pMultiZ^.aFbZAxisRef[i].M_GetHwInfo();
+							HwInfoList.M_Add(stHwInfo);
+						END_IF
+					END_FOR
+				END_IF
+			END_IF
+		UNTIL pHwModule = 0
+		END_REPEAT
+		
+		IF bErrorTmp THEN
+			nState := 99;
+		ELSE
+			nState := 80;	
+		END_IF
+		bBusy := FALSE;
+END_CASE
+
+IF nState = 99 THEN
+	stError.POU := E_POU.POU_ScanHwModules;
+	stError.Cmd := 0;
+	stError.POUAction := E_POUACT.POUACT_UNDEFIEND;
+	fbErrorList.M_Add(stError);
+	bError := TRUE;
+	bBusy := FALSE;
+END_IF]]></ST>
+    </Implementation>
+    <Method Name="M_IsXYDrive" Id="{acf56178-60a6-4ecc-8daf-6eb8458fdde0}">
+      <Declaration><![CDATA[METHOD M_IsXYDrive : BOOL
+VAR_INPUT
+	//sDeviceType : STRING(15);
+	stSlaveInfo : ST_EcSlaveConfigData;
+END_VAR
+
+VAR
+	sTemp : STRING(6);
+END_VAR]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[IF FIND(stSlaveInfo.sName, 'P2') > 0 THEN //Die XY-Drive Klemmen sind niemals auf +P2
+	RETURN;
+END_IF
+
+sTemp := LEFT(stSlaveInfo.sType, 6);
+IF sTemp = 'EL7041' OR
+	sTemp = 'C1100-' OR
+	sTemp = 'C1150-' OR
+	sTemp = 'C1250-' THEN
+	M_IsXYDrive := TRUE;
+END_IF]]></ST>
+      </Implementation>
+    </Method>
+    <LineIds Name="ScanHwModules">
+      <LineId Id="5088" Count="585" />
+      <LineId Id="5842" Count="0" />
+      <LineId Id="5844" Count="24" />
+      <LineId Id="5843" Count="0" />
+      <LineId Id="5674" Count="115" />
+      <LineId Id="556" Count="0" />
+    </LineIds>
+    <LineIds Name="ScanHwModules.M_IsXYDrive">
+      <LineId Id="31" Count="0" />
+      <LineId Id="33" Count="1" />
+      <LineId Id="32" Count="0" />
+      <LineId Id="5" Count="0" />
+      <LineId Id="10" Count="0" />
+      <LineId Id="22" Count="0" />
+      <LineId Id="11" Count="0" />
+      <LineId Id="13" Count="1" />
+      <LineId Id="12" Count="0" />
+    </LineIds>
+  </POU>
+</TcPlcObject>

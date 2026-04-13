@@ -1,0 +1,21 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<TcPlcObject Version="1.1.0.1" ProductVersion="3.1.0.25">
+  <DUT Name="ST_CANInterfaceBuffer" Id="{5791ae7c-7cf9-47ee-94f9-dd2da73b5d84}">
+    <Declaration><![CDATA[TYPE ST_CANInterfaceBuffer :
+STRUCT
+	hList	: T_HLINKEDLIST;
+	aNodes  : ARRAY[0..5] OF T_LinkedListEntry;
+	bExecute: BOOL;
+	bBusy	: BOOL;
+	bError	: BOOL;
+	nTxIdent: UINT;
+	nTxDlc	: USINT;
+	aTxData	: ARRAY[0..7] OF USINT;
+	nRxIdent: UINT;
+	nRxDlc	: USINT;
+	aRxData	: ARRAY[0..7] OF USINT;	
+END_STRUCT
+END_TYPE]]></Declaration>
+    <ObjectProperties />
+  </DUT>
+</TcPlcObject>

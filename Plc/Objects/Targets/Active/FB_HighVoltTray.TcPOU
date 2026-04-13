@@ -1,0 +1,492 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<TcPlcObject Version="1.1.0.1" ProductVersion="3.1.4022.18">
+  <POU Name="FB_HighVoltTray" Id="{b14411df-784d-467c-989f-33a7aee080bd}" SpecialFunc="None">
+    <Declaration><![CDATA[FUNCTION_BLOCK FB_HighVoltTray EXTENDS FB_ActiveTarget
+
+VAR
+	//Hardware-Verküpfung
+	pHighVoltSupplyRef	: POINTER TO FB_HighVoltSupply;
+	
+	//Prozessdaten
+	nVoltageActual		: DINT;
+	nCurrentActual		: DINT;	//in 10tel µA (10 enstpr. 1.0µA)
+
+	//Variablen allgemeine Statemachine
+	
+	bCurrentMonitoring		: BOOL;
+	bPwrCutOffTriggered		: BOOL;
+
+	//Spec-Properties
+	nVoltageChannel			: USINT;
+	nCurrentLimit			: UINT; 		//Strombegrenzung der HV-Quelle //in 10tel µA (10 enstpr. 1.0µA)
+	
+	nPowerCutOffThreshold	: UINT;			//Stromüberwachung (Automatisches Abschalten bei Erreichen) //in 10tel µA (10 enstpr. 1.0µA)
+											//wenn "0" , dann wird nicht überwacht
+	tPowerCutOffTime		: TIME; 		//wenn Strom für diese Zeit die Abschaltschwelle überschreitet, dann wird abgeschaltet
+	
+	//****************************************Aktionvariablen****************************************************
+	
+	//Action: "SetVoltage"
+	nVoltageSetpoint	: USINT;
+	
+	//Action: "SetCurrent"
+	nCurrentSetpoint	: USINT;
+	
+	//Action: "SwitchVoltage"
+	bVoltageOn			: BOOL;
+	
+	timer : TON;	//Stromüberwachung
+	
+	
+END_VAR
+]]></Declaration>
+    <Implementation>
+      <ST><![CDATA[IF pHighVoltSupplyRef = 0 THEN
+	RETURN;
+END_IF
+
+pFbSafety^.M_MesBoxOn();
+
+//durch Notaus oder Unlock werden die Kanäle ausgeschalten und müssen in jedem Fall
+//manuell durch SwitchVoltage wieder eingeschalten werden
+IF NOT pHighVoltSupplyRef^.bHVPSAvailable THEN
+	pHighVoltSupplyRef^.M_SwitchVoltage(1,FALSE);
+	pHighVoltSupplyRef^.M_SwitchVoltage(2,FALSE);
+END_IF
+
+//Stromüberwachung
+nCurrentActual := pHighVoltSupplyRef^.M_GetCurrent();
+IF bCurrentMonitoring AND NOT bPwrCutOffTriggered THEN
+	IF nCurrentActual >= nPowerCutOffThreshold THEN
+		//Strom muss für eine vorgegebene Zeit die Abschaltschwelle erreicht haben.
+		timer(IN:= TRUE, PT:= tPowerCutOffTime);
+		IF timer.Q THEN
+			timer(IN:= FALSE);
+			bPwrCutOffTriggered := TRUE; 
+			pHighVoltSupplyRef^.M_SwitchVoltage(1,FALSE);
+			pHighVoltSupplyRef^.M_SwitchVoltage(2,FALSE);
+			stError.POU := E_POU.POU_FB_HighVoltTray;
+			stError.ErrorId := E_ErrorIdCmd.ERRORID_OverCurrentHighVoltTray;
+			stError.ObjectId := nObjectID;
+			fbErrorList.M_Add(stError);			
+		END_IF
+	ELSE
+		timer(IN:= FALSE);
+	END_IF
+END_IF
+
+//Prozessdaten aktualisieren
+stProcessData.nObjId := nObjectID;
+stProcessData.n32Data[0] := BOOL_TO_DINT(bIsInit);
+stProcessData.n32Data[1] := eCurrentState;
+stProcessData.n32Data[2] := stError.ErrorId;
+
+IF nVoltageChannel = 1 THEN
+	stProcessData.n32Data[3] := BOOL_TO_DINT(NOT pHighVoltSupplyRef^.bDigiOutVoltage1);
+ELSIF nVoltageChannel = 2 THEN
+	stProcessData.n32Data[3] := BOOL_TO_DINT(NOT pHighVoltSupplyRef^.bDigiOutVoltage2);
+END_IF
+
+nVoltageActual := pHighVoltSupplyRef^.M_GetVoltage();
+stProcessData.n32Data[4] := nVoltageActual;
+stProcessData.n32Data[5] := nCurrentActual;
+
+aObjProcData[nNotifyId] := stProcessData;]]></ST>
+    </Implementation>
+    <Method Name="FB_init" Id="{186bcc17-cfd2-444f-ba68-0a154951dd79}">
+      <Declaration><![CDATA[METHOD FB_init : BOOL
+VAR_INPUT
+	bInitRetains : BOOL; // if TRUE, the retain variables are initialized (warm start / cold start)
+	bInCopyCode : BOOL;  // if TRUE, the instance afterwards gets moved into the copy code (online change)
+END_VAR
+]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[eObjectType := E_ObjectType.OBJECTTYPE_HighVoltTray;
+eObjectGroup := E_ObjectGroup.OBJECTGROUP_Target OR E_ObjectGroup.OBJECTGROUP_Device;]]></ST>
+      </Implementation>
+    </Method>
+    <Method Name="M_CheckProcDataType" Id="{a3ed9780-b535-4d3e-a5b9-77710fdce5f7}">
+      <Declaration><![CDATA[METHOD M_CheckProcDataType : BOOL
+VAR_INPUT
+	eProcDataType : E_ProcDataType;
+END_VAR
+]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[IF eProcDataType = E_ProcDataType.PROCDATATYPE_Voltage1 OR eProcDataType = E_ProcDataType.PROCDATATYPE_Current1 THEN
+	M_CheckProcDataType := TRUE;
+END_IF]]></ST>
+      </Implementation>
+    </Method>
+    <Method Name="M_CurrentMonitoring" Id="{f9d38355-0248-49f8-9ae6-19668272f307}">
+      <Declaration><![CDATA[METHOD M_CurrentMonitoring
+VAR_INPUT
+	bOn : BOOL;
+END_VAR
+]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[IF bOn THEN
+	IF nPowerCutOffThreshold > 0 THEN
+		bCurrentMonitoring := TRUE;		
+	END_IF
+ELSE
+	bCurrentMonitoring := FALSE;
+ 	bPwrCutOffTriggered := FALSE;
+END_IF]]></ST>
+      </Implementation>
+    </Method>
+    <Method Name="M_ExeAction" Id="{0126e16c-e3bb-4e8f-95d7-0509df56c85f}">
+      <Declaration><![CDATA[METHOD M_ExeAction : ERRORID
+VAR_INPUT
+	refActionData	: REFERENCE TO ST_ActionData;	
+END_VAR
+]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[CASE refActionData.eAction OF
+	E_Action.ACTION_Init:
+		bIsInit := TRUE;
+		RETURN;
+	E_Action.ACTION_SetVoltage:
+		IF 	pHighVoltSupplyRef > 0 THEN
+			pHighVoltSupplyRef^.M_SetVoltage(DINT_TO_INT(refActionData.aParams[1]));
+			pHighVoltSupplyRef^.M_SetCurrent(nCurrentLimit);
+		END_IF
+	E_Action.ACTION_SwitchVoltage:
+		IF 	pHighVoltSupplyRef > 0 THEN
+			IF pHighVoltSupplyRef^.bHVPSAvailable THEN
+				pHighVoltSupplyRef^.M_SwitchVoltage(nVoltageChannel,DINT_TO_BOOL(refActionData.aParams[1]));
+			ELSE
+				M_ExeAction := E_ErrorIdCmd.ERRORID_HighVoltSupplyOff;
+			END_IF
+		ELSE
+			M_ExeAction := E_ErrorIdObjMgmt.ERRORID_InvalidHardwareRef;
+		END_IF
+	ELSE
+		M_ExeAction := E_ErrorIdCmd.ERRORID_InvalidAction;	
+END_CASE
+]]></ST>
+      </Implementation>
+    </Method>
+    <Method Name="M_GetActionBusy" Id="{bb0c56a8-3a6b-4ac8-be7c-1caf0a366737}">
+      <Declaration><![CDATA[METHOD M_GetActionBusy : BOOL
+VAR_INPUT
+	eAction : E_Action;
+END_VAR
+]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[IF eAction = eCurrentAction THEN
+	M_GetActionBusy := TRUE;
+END_IF]]></ST>
+      </Implementation>
+    </Method>
+    <Method Name="M_GetAllProps" Id="{c58d8807-36e7-495b-95d6-135ba5f847a1}">
+      <Declaration><![CDATA[METHOD M_GetAllProps : ERRORID
+VAR_INPUT
+	refCmdData : REFERENCE TO  ST_CmdData;
+END_VAR
+]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[SUPER^.M_GetAllProps(refCmdData);
+nCurrentPropIndex := nCurrentPropIndex + 1;
+refCmdData.n32Data[nCurrentPropIndex] := nVoltageChannel;
+nCurrentPropIndex := nCurrentPropIndex + 1;
+refCmdData.n32Data[nCurrentPropIndex] := nCurrentLimit;
+nCurrentPropIndex := nCurrentPropIndex + 1;
+refCmdData.n32Data[nCurrentPropIndex] := nPowerCutOffThreshold;
+nCurrentPropIndex := nCurrentPropIndex + 1;
+refCmdData.n32Data[nCurrentPropIndex] := TIME_TO_DINT(tPowerCutOffTime);]]></ST>
+      </Implementation>
+    </Method>
+    <Method Name="M_GetProcData" Id="{11ff710c-ea16-4957-9c15-412b0ff47283}">
+      <Declaration><![CDATA[METHOD M_GetProcData : DINT
+VAR_INPUT
+	eProcDataType : E_ProcDataType;
+END_VAR
+]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[IF eProcDataType = E_ProcDataType.PROCDATATYPE_Voltage1 THEN
+	M_GetProcData := pHighVoltSupplyRef^.M_GetVoltage();
+ELSIF eProcDataType = E_ProcDataType.PROCDATATYPE_Current1 THEN
+	M_GetProcData := pHighVoltSupplyRef^.M_GetCurrent();
+END_IF]]></ST>
+      </Implementation>
+    </Method>
+    <Method Name="M_Reset" Id="{892c5a7d-75ac-4c3c-aa85-0804e9898739}">
+      <Declaration><![CDATA[METHOD M_Reset
+]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[bBusy := TRUE;
+eCurrentState := E_MachineState.MACHINESTATE_Reset;
+M_CurrentMonitoring(FALSE);
+]]></ST>
+      </Implementation>
+    </Method>
+    <Method Name="M_SetAllProps" Id="{a17c4f64-c560-43e8-955f-f9432d728443}">
+      <Declaration><![CDATA[METHOD M_SetAllProps : ERRORID
+VAR_INPUT
+	refCmdData : REFERENCE TO  ST_CmdData;
+END_VAR
+]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[M_SetAllProps := SUPER^.M_SetAllProps(refCmdData);
+
+IF M_SetAllProps > 0 THEN
+	RETURN;
+END_IF
+
+{IF defined (variable:fbHighVoltSupplyRef)}
+pHighVoltSupplyRef := ADR(fbHighVoltSupplyRef);
+{ELSE}
+{warning 'implement errorId}
+M_SetAllProps := E_ErrorIdObjMgmt.ERRORID_InvalidHardwareRef;
+{END_IF}
+nCurrentPropIndex := nCurrentPropIndex + 1;
+nSpecPropIndex := nCurrentPropIndex;
+IF refCmdData.n32Data[nCurrentPropIndex] >= 1 AND refCmdData.n32Data[nCurrentPropIndex] <= 2 THEN
+	nVoltageChannel := DINT_TO_USINT(refCmdData.n32Data[nCurrentPropIndex]);
+ELSE
+	M_SetAllProps := E_ErrorIdObjMgmt.ERRORID_InvalidHardwareRef;
+END_IF
+
+nCurrentPropIndex := nCurrentPropIndex + 1;
+nCurrentLimit := DINT_TO_UINT(refCmdData.n32Data[nCurrentPropIndex]);
+nCurrentPropIndex := nCurrentPropIndex + 1;
+nPowerCutOffThreshold := DINT_TO_UINT(refCmdData.n32Data[nCurrentPropIndex]);
+nCurrentPropIndex := nCurrentPropIndex + 1;
+tPowerCutOffTime := DINT_TO_TIME(refCmdData.n32Data[nCurrentPropIndex]);
+
+nNoOfProps := nCurrentPropIndex + 1;
+ ]]></ST>
+      </Implementation>
+    </Method>
+    <Method Name="M_SetSingleProp" Id="{7acf8738-3593-473e-ab93-c696c2fcd1f8}">
+      <Declaration><![CDATA[METHOD M_SetSingleProp : ERRORID
+VAR_INPUT
+	refCmdData : REFERENCE TO  ST_CmdData;
+END_VAR
+]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[IF nSpecPropIndex = refCmdData.aHeader[1] THEN
+	IF refCmdData.n32Data[0] >= 1 OR refCmdData.n32Data[0] <= 2 THEN
+		IF refCmdData.n32Data[0] <> nVoltageChannel THEN
+			IF pHighVoltSupplyRef > 0 THEN
+				pHighVoltSupplyRef^.M_SwitchVoltage(1,FALSE);
+				pHighVoltSupplyRef^.M_SwitchVoltage(2,FALSE); 
+			END_IF
+			nVoltageChannel := DINT_TO_USINT(refCmdData.n32Data[0]);
+		END_IF
+	ELSE
+		M_SetSingleProp := E_ErrorIdCmd.ERRORID_InvalidVoltageChannel;	
+	END_IF
+ELSIF (nSpecPropIndex + 1) = refCmdData.aHeader[1] THEN
+	nCurrentLimit := DINT_TO_UINT(refCmdData.n32Data[0]);
+	IF pHighVoltSupplyRef > 0 THEN
+		pHighVoltSupplyRef^.M_SetCurrent(nCurrentLimit);
+	END_IF
+ELSIF (nSpecPropIndex + 2) = refCmdData.aHeader[1] THEN
+	nPowerCutOffThreshold := DINT_TO_UINT(refCmdData.n32Data[0]);
+ELSIF (nSpecPropIndex + 3) = refCmdData.aHeader[1] THEN
+	tPowerCutOffTime := DINT_TO_TIME(refCmdData.n32Data[0]);
+ELSE
+	M_SetSingleProp := SUPER^.M_SetSingleProp(refCmdData);
+END_IF]]></ST>
+      </Implementation>
+    </Method>
+    <Property Name="P_bBusy" Id="{d6b3abc7-9e08-43d3-8835-10ad8c2c8332}">
+      <Declaration><![CDATA[PROPERTY P_bBusy : BOOL]]></Declaration>
+      <Get Name="Get" Id="{f90adaf2-3e5e-4f1c-be2a-c0739b953d61}">
+        <Declaration><![CDATA[VAR
+END_VAR
+]]></Declaration>
+        <Implementation>
+          <ST><![CDATA[P_bBusy := bBusy;]]></ST>
+        </Implementation>
+      </Get>
+    </Property>
+    <Property Name="P_bCanceled" Id="{ef22925e-d777-4203-8556-fe09d0971d2b}">
+      <Declaration><![CDATA[PROPERTY P_bCanceled : BOOL]]></Declaration>
+      <Get Name="Get" Id="{d035e83f-b3c0-4847-a6e3-7c513a64b9f8}">
+        <Declaration><![CDATA[VAR
+END_VAR
+]]></Declaration>
+        <Implementation>
+          <ST><![CDATA[P_bCanceled := bCanceled;]]></ST>
+        </Implementation>
+      </Get>
+    </Property>
+    <Property Name="P_bError" Id="{62172918-b16e-4e6b-af88-22f5894ea239}">
+      <Declaration><![CDATA[PROPERTY P_bError : BOOL]]></Declaration>
+      <Get Name="Get" Id="{90ba3ea7-be17-4ea6-be5f-9492d27b3929}">
+        <Declaration><![CDATA[VAR
+END_VAR
+]]></Declaration>
+        <Implementation>
+          <ST><![CDATA[IF eCurrentState = E_MachineState.MACHINESTATE_Error THEN
+	P_bError := TRUE;
+END_IF]]></ST>
+        </Implementation>
+      </Get>
+    </Property>
+    <Property Name="P_bIsInit" Id="{99c319b2-852d-4b75-9066-2fe403d7d514}">
+      <Declaration><![CDATA[PROPERTY P_bIsInit : BOOL]]></Declaration>
+      <Get Name="Get" Id="{d2cb6a9a-2a3a-45c6-8db9-722f03d3f2de}">
+        <Declaration><![CDATA[VAR
+END_VAR
+]]></Declaration>
+        <Implementation>
+          <ST><![CDATA[P_bIsInit := bIsInit;]]></ST>
+        </Implementation>
+      </Get>
+      <Set Name="Set" Id="{b0af8e08-f157-450d-851e-8fe261a41057}">
+        <Declaration><![CDATA[VAR
+END_VAR
+]]></Declaration>
+        <Implementation>
+          <ST><![CDATA[bIsInit := P_bIsInit;]]></ST>
+        </Implementation>
+      </Set>
+    </Property>
+    <Property Name="P_bPwrCutOffTriggered" Id="{f4291e9f-d87b-4ebf-8923-b951b2f52192}">
+      <Declaration><![CDATA[PROPERTY P_bPwrCutOffTriggered : BOOL]]></Declaration>
+      <Get Name="Get" Id="{8524ccca-a73c-4282-a2b7-81dbfb0de167}">
+        <Declaration><![CDATA[VAR
+END_VAR
+]]></Declaration>
+        <Implementation>
+          <ST><![CDATA[P_bPwrCutOffTriggered := bPwrCutOffTriggered; ]]></ST>
+        </Implementation>
+      </Get>
+    </Property>
+    <Property Name="P_bStopAllOnError" Id="{28da7f06-2236-46b7-b976-334e1966f0e3}">
+      <Declaration><![CDATA[PROPERTY P_bStopAllOnError : BOOL]]></Declaration>
+      <Get Name="Get" Id="{c443913b-1438-4752-b1d8-9355777331e7}">
+        <Declaration><![CDATA[VAR
+END_VAR
+]]></Declaration>
+        <Implementation>
+          <ST><![CDATA[]]></ST>
+        </Implementation>
+      </Get>
+    </Property>
+    <Property Name="P_nCurrentVoltage" Id="{23320105-96b0-423f-83f6-17b0f890c881}">
+      <Declaration><![CDATA[PROPERTY P_nCurrentVoltage : DINT]]></Declaration>
+      <Get Name="Get" Id="{e2a1ddd3-0d6b-4eed-8f54-7c20df20f59e}">
+        <Declaration><![CDATA[VAR
+END_VAR
+]]></Declaration>
+        <Implementation>
+          <ST><![CDATA[P_nCurrentVoltage := nVoltageActual;]]></ST>
+        </Implementation>
+      </Get>
+    </Property>
+    <Property Name="P_stError" Id="{955f92e7-6195-4cfd-bfbc-218c8256f34a}">
+      <Declaration><![CDATA[PROPERTY P_stError : ST_Error]]></Declaration>
+      <Get Name="Get" Id="{7c2f1c23-e449-46d8-a2c9-b4b6903d9b4f}">
+        <Declaration><![CDATA[VAR
+END_VAR
+]]></Declaration>
+        <Implementation>
+          <ST><![CDATA[]]></ST>
+        </Implementation>
+      </Get>
+    </Property>
+    <LineIds Name="FB_HighVoltTray">
+      <LineId Id="218" Count="16" />
+      <LineId Id="262" Count="0" />
+      <LineId Id="265" Count="0" />
+      <LineId Id="269" Count="0" />
+      <LineId Id="271" Count="0" />
+      <LineId Id="274" Count="5" />
+      <LineId Id="273" Count="0" />
+      <LineId Id="272" Count="0" />
+      <LineId Id="280" Count="1" />
+      <LineId Id="242" Count="18" />
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="FB_HighVoltTray.FB_init">
+      <LineId Id="7" Count="1" />
+    </LineIds>
+    <LineIds Name="FB_HighVoltTray.M_CheckProcDataType">
+      <LineId Id="3" Count="1" />
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="FB_HighVoltTray.M_CurrentMonitoring">
+      <LineId Id="13" Count="2" />
+      <LineId Id="11" Count="0" />
+      <LineId Id="16" Count="0" />
+      <LineId Id="7" Count="0" />
+      <LineId Id="9" Count="0" />
+      <LineId Id="5" Count="0" />
+    </LineIds>
+    <LineIds Name="FB_HighVoltTray.M_ExeAction">
+      <LineId Id="3" Count="21" />
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="FB_HighVoltTray.M_GetActionBusy">
+      <LineId Id="3" Count="1" />
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="FB_HighVoltTray.M_GetAllProps">
+      <LineId Id="3" Count="4" />
+      <LineId Id="12" Count="1" />
+      <LineId Id="15" Count="0" />
+      <LineId Id="14" Count="0" />
+    </LineIds>
+    <LineIds Name="FB_HighVoltTray.M_GetProcData">
+      <LineId Id="3" Count="3" />
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="FB_HighVoltTray.M_Reset">
+      <LineId Id="3" Count="0" />
+      <LineId Id="6" Count="0" />
+      <LineId Id="4" Count="0" />
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="FB_HighVoltTray.M_SetAllProps">
+      <LineId Id="3" Count="18" />
+      <LineId Id="36" Count="0" />
+      <LineId Id="22" Count="1" />
+      <LineId Id="30" Count="0" />
+      <LineId Id="33" Count="0" />
+      <LineId Id="31" Count="0" />
+      <LineId Id="34" Count="1" />
+      <LineId Id="24" Count="0" />
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="FB_HighVoltTray.M_SetSingleProp">
+      <LineId Id="3" Count="16" />
+      <LineId Id="26" Count="0" />
+      <LineId Id="28" Count="1" />
+      <LineId Id="27" Count="0" />
+      <LineId Id="20" Count="1" />
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="FB_HighVoltTray.P_bBusy.Get">
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="FB_HighVoltTray.P_bCanceled.Get">
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="FB_HighVoltTray.P_bError.Get">
+      <LineId Id="3" Count="1" />
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="FB_HighVoltTray.P_bIsInit.Get">
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="FB_HighVoltTray.P_bIsInit.Set">
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="FB_HighVoltTray.P_bPwrCutOffTriggered.Get">
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="FB_HighVoltTray.P_bStopAllOnError.Get">
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="FB_HighVoltTray.P_nCurrentVoltage.Get">
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="FB_HighVoltTray.P_stError.Get">
+      <LineId Id="2" Count="0" />
+    </LineIds>
+  </POU>
+</TcPlcObject>

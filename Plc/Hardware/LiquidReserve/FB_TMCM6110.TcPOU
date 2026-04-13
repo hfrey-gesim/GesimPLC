@@ -1,0 +1,82 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<TcPlcObject Version="1.1.0.1" ProductVersion="3.1.4020.6">
+  <POU Name="FB_TMCM6110" Id="{6f70b3c6-0258-4c1d-a592-4aadebff5015}" SpecialFunc="None">
+    <Declaration><![CDATA[FUNCTION_BLOCK FB_TMCM6110
+VAR_INPUT
+	bExecute	: BOOL;
+	eCommand	: E_TMCMCommand;
+	nSendValue	: DINT;	
+END_VAR
+VAR_IN_OUT
+	nMotorNr : USINT;
+END_VAR
+VAR_OUTPUT
+	bBusy			: BOOL;
+	bError			: BOOL;
+	nReceiveValue	: DINT;	
+END_VAR
+VAR
+	fbSendCanMessage 		: FB_SendCanMessage(ADR(CANInterfaceCom.stCanInterfaceBuffer));
+	nState					: USINT;
+	uByteArr4Dint			: U_ByteArr4_DINT;
+END_VAR]]></Declaration>
+    <Implementation>
+      <ST><![CDATA[IF bExecute THEN
+
+	IF nState = 0 THEN
+		bBusy := TRUE;
+		fbSendCanMessage.aTxData[0] := UINT_TO_USINT(SHR(eCommand,8)); //Command
+		fbSendCanMessage.aTxData[1] := UINT_TO_USINT(eCommand AND 16#00FF); //Type
+		fbSendCanMessage.aTxData[2] := nMotorNr - 1; // "0" für Motor1
+		//SendValue in Union kopieren
+		uByteArr4Dint.nDINT := nSendValue;
+		//Bytes aus Union in TxData kopieren (MSB in Byte3....LSB in Byte6)
+		fbSendCanMessage.aTxData[3] := uByteArr4Dint.aBytes[3];
+		fbSendCanMessage.aTxData[4] := uByteArr4Dint.aBytes[2];
+		fbSendCanMessage.aTxData[5] := uByteArr4Dint.aBytes[1];
+		fbSendCanMessage.aTxData[6] := uByteArr4Dint.aBytes[0];
+		fbSendCanMessage.tTimeout := T#100MS;
+		fbSendCanMessage.nTxLength := 8;
+		nState := 60;
+	END_IF
+	
+	IF nState = 60 THEN
+		fbSendCanMessage(nIdentifierTX:= 16#01, nIdentifierRX:= 16#02, bExecute:= TRUE);
+		IF NOT fbSendCanMessage.bBusy THEN
+			IF NOT fbSendCanMessage.bError THEN
+				//Response auswerten
+				IF fbSendCanMessage.aRxData[1] = 100 THEN	//OK ohne Fehler
+					//Bytes aus RxData in UNION kopieren (Byte3 in MSB....Byte6 in LSB)
+					uByteArr4Dint.aBytes[3] := fbSendCanMessage.aRxData[3];
+					uByteArr4Dint.aBytes[2] := fbSendCanMessage.aRxData[4];
+					uByteArr4Dint.aBytes[1] := fbSendCanMessage.aRxData[5];
+					uByteArr4Dint.aBytes[0] := fbSendCanMessage.aRxData[6];
+					//nDint aus UNION in nReceiveValue koipieren
+					nReceiveValue := uByteArr4Dint.nDINT;
+					nState := 80;
+				ELSE
+					nState := 99;	
+				END_IF
+			ELSE
+				nState := 99;
+			END_IF
+			fbSendCanMessage(bExecute:= FALSE);
+		END_IF		
+	END_IF
+	
+	IF nState = 80 THEN
+		bBusy := FALSE;
+	ELSIF nState = 99 THEN
+		bBusy := FALSE;
+		bError := TRUE;
+	END_IF
+	
+ELSE
+	bError := FALSE;
+	nState := 0;
+	nSendValue := 0;
+	nReceiveValue := 0;
+END_IF]]></ST>
+    </Implementation>
+  </POU>
+</TcPlcObject>

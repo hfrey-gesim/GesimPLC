@@ -1,0 +1,81 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<TcPlcObject Version="1.1.0.1" ProductVersion="3.1.4022.18">
+  <POU Name="FB_Septum" Id="{6f242a65-012c-401f-acec-1fd4f959004c}" SpecialFunc="None">
+    <Declaration><![CDATA[{attribute 'enable_dynamic_creation'}
+FUNCTION_BLOCK FB_Septum EXTENDS FB_UsingPiece
+VAR_INPUT
+END_VAR
+VAR_OUTPUT
+END_VAR
+VAR
+	pVial : POINTER TO FB_Vial;
+END_VAR
+]]></Declaration>
+    <Implementation>
+      <ST><![CDATA[]]></ST>
+    </Implementation>
+    <Method Name="FB_init" Id="{c0096feb-b959-49c1-a46d-713ee6189f09}">
+      <Declaration><![CDATA[METHOD FB_init : BOOL
+VAR_INPUT
+	bInitRetains : BOOL; // if TRUE, the retain variables are initialized (warm start / cold start)
+	bInCopyCode : BOOL;  // if TRUE, the instance afterwards gets moved into the copy code (online change)
+END_VAR
+]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[bUsingPiece := TRUE;
+eObjectType := E_ObjectType.OBJECTTYPE_Septum;
+eObjectGroup := E_ObjectGroup.OBJECTGROUP_Piece;]]></ST>
+      </Implementation>
+    </Method>
+    <Method Name="M_ClearAllProps" Id="{a660089d-e3a0-412f-9f4e-be7015d93b6d}">
+      <Declaration><![CDATA[{attribute 'object_name' := 'M_ClearAllProps'}
+METHOD M_ClearAllProps
+
+VAR_INPUT
+	bIgnoreParent : BOOL; //Es wird das gesamte OD gelöscht. -> Zeiger auf Parent nicht mehr gültig!
+END_VAR
+]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[pVial := 0;
+SUPER^.M_ClearAllProps(bIgnoreParent);]]></ST>
+      </Implementation>
+    </Method>
+    <Property Name="P_pVial" Id="{44ce96bd-185a-4404-b4d6-3d922b850546}">
+      <Declaration><![CDATA[PROPERTY P_pVial : POINTER TO FB_PieceBase]]></Declaration>
+      <Get Name="Get" Id="{1e6be827-27d5-43b3-8692-4690dd2f75f5}">
+        <Declaration><![CDATA[VAR
+END_VAR
+]]></Declaration>
+        <Implementation>
+          <ST><![CDATA[P_pVial := pVial;]]></ST>
+        </Implementation>
+      </Get>
+      <Set Name="Set" Id="{2034211f-765f-41d6-910e-09588b416d1f}">
+        <Declaration><![CDATA[VAR
+END_VAR
+]]></Declaration>
+        <Implementation>
+          <ST><![CDATA[pVial := P_pVial;]]></ST>
+        </Implementation>
+      </Set>
+    </Property>
+    <LineIds Name="FB_Septum">
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="FB_Septum.FB_init">
+      <LineId Id="2" Count="0" />
+      <LineId Id="9" Count="0" />
+      <LineId Id="8" Count="0" />
+    </LineIds>
+    <LineIds Name="FB_Septum.M_ClearAllProps">
+      <LineId Id="3" Count="0" />
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="FB_Septum.P_pVial.Get">
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="FB_Septum.P_pVial.Set">
+      <LineId Id="2" Count="0" />
+    </LineIds>
+  </POU>
+</TcPlcObject>

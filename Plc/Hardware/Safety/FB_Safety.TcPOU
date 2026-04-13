@@ -1,0 +1,792 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<TcPlcObject Version="1.1.0.1" ProductVersion="3.1.4022.12">
+  <POU Name="FB_Safety" Id="{81d7b58a-4596-42bc-80ea-8d35bfefe859}" SpecialFunc="None">
+    <Declaration><![CDATA[FUNCTION_BLOCK FB_Safety  EXTENDS FB_SafetyBase
+
+VAR_INPUT
+END_VAR
+
+VAR_OUTPUT
+	bVoltageSafe			: BOOL;
+	bToolTempSafe			: BOOL;
+END_VAR
+
+VAR
+	bEmergencyStop			AT %I* : BOOL;	//Notaus ist gedrückt
+	bInterlockIsLocked		AT %I* : BOOL;	//Interlock ist ordnungsgemäß verriegelt
+	bBoxContactsClosed		AT %I* : BOOL;	//Sicherheitskontakte der Sicherheitsbox geschlossen
+	bDriveIsSafe			AT %I* : BOOL;	//Sicherheitsrelais der Antriebe haben nicht angezogen
+	bMesIsSafe				AT %I* : BOOL;	//Sicherheitsrelais in MES-Box hat nicht angezogen
+	 
+	nTwinSafeGrpState		AT %I* : USINT;
+	
+	bRequDriveOn			AT %Q* : BOOL;	//Request an TwinSafe Gruppe die Drives freizugeben (Relais einschalten)
+	bRequMesOn				AT %Q* : BOOL;	//Request an TwinSafe Gruppe die MES freizugeben (Relais im HV-Generator einschalten)
+	bRequUnlock				AT %Q* : BOOL;	//Request an TwinSafe Gruppe die Sicherheitsbox zu entriegeln
+
+	bErrAckTwinSafeGrp		AT %Q* : BOOL;	//Error in TwinSafe Gruppe zurücksetzen
+	bRunStopTwinSafeGrp		AT %Q* : BOOL := TRUE;	//TwinSafe Gruppe starten/stoppen
+	
+	nSubstate				: USINT := 0;
+	nActionState			: USINT := 0;
+	eRequestState			: E_SafetyState;
+	eOldState				: E_SafetyState; //wird nur für Verlassen von EmergencyStopReleased durch Quit benötigt
+											 //muss also beim Übergang in EmergencyStopPressed gemerkt werden
+	
+	bBoxContacsAvailable	: BOOL;
+	bQuit					: BOOL;
+	timer					: TON;
+	i						: UINT;
+	stPosition				: ST_3DPoint;
+	
+	stError					: ST_Error;
+	stActionData			: ST_ActionData;
+	
+	pXYDrive				: POINTER TO FB_XYDriveBase;
+	
+END_VAR
+
+VAR CONSTANT
+	rSafePositionX			: REAL := 400000.0;
+	rSafePositionY			: REAL := 200000.0;
+	nSafeTemp				: UINT := 500; //50°C
+END_VAR]]></Declaration>
+    <Implementation>
+      <ST><![CDATA[IF bBoxContacsAvailable THEN
+	A_RunWithBoxContacts();
+ELSE
+	A_RunWithoutBoxContacts();
+END_IF]]></ST>
+    </Implementation>
+    <Action Name="A_Lock" Id="{5bba04f3-9455-47c7-a3d9-f355086fe15f}">
+      <Implementation>
+        <ST><![CDATA[stError.POUState := nActionState;
+IF nActionState = 0 THEN
+	bRequDriveOn := TRUE;
+	bRequUnlock := FALSE;
+	nActionState := 1;
+ELSIF nActionState = 1 THEN
+	//Warten, bis Safety bzw. Drive Relais ein
+	//hier Timeout erforderlich?
+	//was könnte dazu führen, dass das Drive Relay nicht anzieht?
+	//wenn gerade in dem Moment, in dem gelockt wird, der Schlüssel des Interlocks betätigt wird
+	//oder wenn ein Box Kontakt geöffnet wird
+	timer(IN:=TRUE, PT:=T#500MS);
+	IF timer.Q THEN
+		stError.ErrorId := E_ErrorIdCmd.ERRORID_TimeOut;
+		nActionState := 99;
+		timer(IN:= FALSE);
+	END_IF
+	
+	IF NOT bDriveIsSafe THEN
+		timer(IN:= FALSE);
+		//Drives wieder einschalten, wenn sie bereits initialisiert sind
+		fbXYDriveList.M_SetCurrentToHead();
+		REPEAT
+			pXYDrive := fbXYDriveList.M_Get();
+			IF pXYDrive > 0 THEN
+				IF pXYDrive^.P_bHomed THEN
+					pXYDrive^.M_PowerOn();
+				END_IF
+			END_IF
+		UNTIL pXYDrive = 0
+		END_REPEAT
+		nActionState := 80;
+	END_IF
+END_IF
+
+//Errorhandling
+IF nActionState = 99 THEN
+	stError.POU := E_POU.POU_FB_Safety;
+	stError.POUAction := E_POUACT.POUACT_A_Lock;
+	fbErrorList.M_Add(stError);
+END_IF]]></ST>
+      </Implementation>
+    </Action>
+    <Action Name="A_ResetError" Id="{7b8e6dbf-2fe5-4e43-90f8-80b6f4f5ad7f}">
+      <Implementation>
+        <ST><![CDATA[IF nActionState = 0 THEN
+	bErrAckTwinSafeGrp := TRUE;
+	timer(IN:= TRUE, PT:=T#500MS);
+	nActionState := 1;
+ELSIF nActionState = 1 THEN
+	timer();
+	IF timer.Q THEN
+		timer(IN:= FALSE);
+		bErrAckTwinSafeGrp := FALSE;
+		nActionState := 99;
+	ELSIF nTwinSafeGrpState = 5 THEN
+		bErrAckTwinSafeGrp := FALSE;
+	ELSIF nTwinSafeGrpState = 1 THEN
+		timer(IN:= FALSE);
+		nActionState := 80;
+		bErrAckTwinSafeGrp := FALSE;
+	END_IF
+END_IF]]></ST>
+      </Implementation>
+    </Action>
+    <Action Name="A_RunWithBoxContacts" Id="{b5675736-ca25-407d-be8b-4a026fe122be}">
+      <Implementation>
+        <ST><![CDATA[CASE eCurrentState OF
+	E_SafetyState.Init:
+		//Dieser State wird nur am Anfang einmal durchlaufen und falls die TwinSafe Gruppe in Error ist,
+		//wird dieser zurückgesetzt
+		IF nSubState = 0 THEN
+			bRunStopTwinSafeGrp := TRUE;
+			IF nTwinSafeGrpState <> 1 THEN
+				nSubState := 1;
+			ELSE
+				nSubState := 80;
+			END_IF
+		END_IF
+		//Error zurücksetzen
+		IF nSubState = 1 THEN
+			A_ResetError();
+			IF nActionState >= 80 THEN
+				IF nActionState = 99 THEN
+					nSubState := 99;
+				ELSE
+					nSubState := 80;
+				END_IF
+				nActionState := 0;
+			END_IF
+		END_IF
+		//weiterschalten
+		IF nSubState >= 80 THEN
+			IF nSubState = 99 THEN
+				eCurrentState := E_SafetyState.Error;
+			ELSE
+				//folgende States sind von hier aus möglich
+				//1: EmergencyStopPressed wenn Notaustaster gedrückt
+				//2: Locked wenn Interlock verriegelt (MES ist dabei egal)
+				//3: UnlockedBoxCtcOpen wenn Interlock entriegelt und der Betätiger im Interlock oder ein anderer Sicherheitskontakt unterbrochen
+				//4: UnlockedBoxCtcClosed wenn Interlock entriegelt und der Betätiger im Interlock und alle anderen Sicherheitskontakte geschlossen
+				IF bEmergencyStop THEN
+					eCurrentState := E_SafetyState.EmergencyStopPressed;
+					eOldState := E_SafetyState.Init;
+				ELSIF bInterlockIsLocked  THEN
+					eCurrentState := E_SafetyState.Locked;
+				ELSIF NOT bInterlockIsLocked AND NOT bBoxContactsClosed THEN
+					eCurrentState := E_SafetyState.UnlockedBoxCtcOpen;
+				ELSIF NOT bInterlockIsLocked AND bBoxContactsClosed THEN
+					eCurrentState := E_SafetyState.UnlockedBoxCtcClosed;
+				END_IF
+			END_IF
+			nSubState := 0;
+		END_IF
+	
+	E_SafetyState.Locked:
+		//folgende States sind von hier aus möglich
+		//1: Error wenn: BoxContact geöffnet wird 
+		//				 Interlock durch Schlüssel geöffnet wird ("bInterlockIsLocked" wechselt zu false)
+		//				 SaftyLogic meldet Error
+		//				 A_Unlock() mit State 99(Error) endet
+		//2: EmergencyStopPressed wenn Notaustaster gedrückt
+		//3: UnlockedBoxCtcClosed wenn A_Unlock() State 80(Succes) endet
+		//bRequDriveOn := TRUE;
+		IF nSubstate = 0 THEN //wartet auf StateRequest und überwacht
+			bRequDriveOn := TRUE;
+			IF NOT (bInterlockIsLocked AND bBoxContactsClosed AND nTwinSafeGrpState = 1) THEN //führt zu Error
+				eCurrentState := E_SafetyState.Error;
+			ELSIF bEmergencyStop THEN
+				eCurrentState := E_SafetyState.EmergencyStopPressed;
+				eOldState := E_SafetyState.Locked;
+			ELSIF eRequestState = E_SafetyState.Unlocked THEN
+				nSubstate := 1;
+			END_IF
+		ELSIF nSubstate = 1 THEN //führt A_Unlock() aus
+			A_Unlock();
+			IF nActionState >= 80 THEN
+				IF nActionState = 99 THEN
+					eCurrentState := E_SafetyState.Error;
+				ELSE
+					eCurrentState := E_SafetyState.UnlockedBoxCtcClosed;
+				END_IF
+				nSubState := 0;
+				nActionState := 0;
+			END_IF
+		END_IF
+
+		//Wenn dieser State verlassen wird, dann in jedem Fall bRequDriveOn und bRequMesOn zurücknehmen
+		IF eCurrentState <> E_SafetyState.Locked THEN
+			bRequDriveOn := FALSE;
+			bRequMesOn := FALSE;
+		END_IF
+		
+	E_SafetyState.UnlockedBoxCtcClosed:
+		//folgende States sind von hier aus möglich
+		//1: Error wenn: SaftyLogic meldet Error oder A_Lock() mit State 99 (Error) endet
+		//2: EmergencyStopPressed wenn Notaustaster gedrückt
+		//3: UnlockedBoxCtcOpen wenn: BoxContact geöffnet wird 
+		//							  Interlock durch Schlüssel geöffnet wird ("bInterlockIsLocked" wechselt zu false)
+		//4: Locked wenn A_Lock() State 80(Succes) endet
+
+		IF nSubstate = 0 THEN //wartet auf StateRequest und überwacht
+			IF nTwinSafeGrpState <> 1 THEN //führt zu Error
+				eCurrentState := E_SafetyState.Error;
+			ELSIF NOT bBoxContactsClosed THEN
+				eCurrentState := E_SafetyState.UnlockedBoxCtcOpen;
+				eOldState := E_SafetyState.UnlockedBoxCtcClosed;
+			ELSIF bEmergencyStop THEN
+				eCurrentState := E_SafetyState.EmergencyStopPressed;
+				eOldState := E_SafetyState.UnlockedBoxCtcClosed;
+			ELSIF eRequestState = E_SafetyState.Locked THEN
+				nSubstate := 1;
+			END_IF
+		ELSIF nSubstate = 1 THEN //führt A_Lock() aus
+			A_Lock();
+			IF nActionState >= 80 THEN
+				IF nActionState = 99 THEN
+					eCurrentState := E_SafetyState.Error;
+				ELSE
+					eCurrentState := E_SafetyState.Locked;
+				END_IF
+				nSubState := 0;
+				nActionState := 0;
+			END_IF
+		END_IF
+		
+	E_SafetyState.UnlockedBoxCtcOpen:
+		//folgende States sind von hier aus möglich
+		//1: Error wenn: SaftyLogic meldet Error
+		//2: EmergencyStopPressed wenn Notaustaster gedrückt wird
+		//3: UnlockedBoxCtcClosed wenn BoxContact geschlossen wird
+		IF nTwinSafeGrpState <> 1 THEN
+			eCurrentState := E_SafetyState.Error;
+		ELSIF bEmergencyStop THEN
+			eCurrentState := E_SafetyState.EmergencyStopPressed;
+			eOldState := E_SafetyState.UnlockedBoxCtcOpen;
+		ELSIF bBoxContactsClosed THEN
+			eCurrentState := E_SafetyState.UnlockedBoxCtcClosed;
+		END_IF
+	
+	E_SafetyState.EmergencyStopPressed:
+		//folgende States sind von hier aus möglich
+		//1: Error wenn: SaftyLogic meldet Error
+		//2: EmergencyStopReleased wenn der Notaustaster wieder freigegeben wird
+		IF nTwinSafeGrpState <> 1 THEN
+			stError.POU := E_POU.POU_FB_Safety;
+			stError.POUAction := E_POUACT.POUACT_A_RunWithoutBoxContacts;
+			stError.ErrorId := E_ErrorIdCmd.ERRORID_TwinSafeGroupError;
+			fbErrorList.M_Add(stError);
+			eCurrentState := E_SafetyState.Error;
+		ELSIF NOT bEmergencyStop THEN
+			eCurrentState := E_SafetyState.EmergencyStopReleased;
+		END_IF
+	E_SafetyState.EmergencyStopReleased:
+		//folgende States sind von hier aus möglich
+		//1: Error wenn: SaftyLogic meldet Error
+		//2: in vorherigen State wechseln wenn Quit
+		IF nTwinSafeGrpState <> 1 THEN
+			eCurrentState := E_SafetyState.Error;
+		ELSIF bQuit THEN
+			bQuit := FALSE;
+			eCurrentState := eOldState;
+		ELSIF bEmergencyStop THEN
+			eCurrentState := E_SafetyState.EmergencyStopPressed;
+		END_IF
+	E_SafetyState.Error:
+		IF bQuit THEN
+			bQuit := FALSE;
+			eCurrentState := E_SafetyState.Init;
+		END_IF
+END_CASE]]></ST>
+      </Implementation>
+    </Action>
+    <Action Name="A_RunWithoutBoxContacts" Id="{a74cb00d-a365-4c2f-86d6-12ba6a83d9ad}">
+      <Implementation>
+        <ST><![CDATA[//Statemachine Überwachung Interlock und Notauskreis ohne Boxkontakte
+//hier gibt es die States "UnlockedBoxCtcOpen" und "UnlockedBoxCtcClosed" nicht, stattdessen gibt es "Unlocked"
+CASE eCurrentState OF
+	E_SafetyState.Init:
+		//Dieser State wird nur am Anfang einmal durchlaufen und falls die TwinSafe Gruppe in Error ist,
+		//wird dieser zurückgesetzt
+		IF nSubState = 0 THEN
+			IF nTwinSafeGrpState <> 1 THEN
+				nSubState := 1;
+			ELSE
+				nSubState := 80;
+			END_IF
+		END_IF
+		//Error zurücksetzen
+		IF nSubState = 1 THEN
+			A_ResetError();//Fehlermeldung erfolgt in A_ResetError, aber was ist mit Fehlern, die in der TwinSafeGruppe auftreten?
+			IF nActionState >= 80 THEN
+				IF nActionState = 99 THEN
+					nSubState := 99;
+				ELSE
+					nSubState := 80;
+				END_IF
+				nActionState := 0;
+			END_IF
+		END_IF
+		//weiterschalten
+		IF nSubState >= 80 THEN
+			IF nSubState = 99 THEN
+				eCurrentState := E_SafetyState.Error;
+			ELSE
+				//folgende States sind von hier aus möglich
+				//1: EmergencyStopPressed wenn Notaustaster gedrückt
+				//2: Locked wenn Interlock verriegelt
+				//3: Unlocked wenn Interlock entriegelt
+				IF bEmergencyStop THEN
+					eCurrentState := E_SafetyState.EmergencyStopPressed;
+					eOldState := E_SafetyState.Init;
+				ELSIF bInterlockIsLocked  THEN
+					eCurrentState := E_SafetyState.Locked;
+				ELSIF NOT bInterlockIsLocked  THEN
+					eCurrentState := E_SafetyState.Unlocked;
+				END_IF
+			END_IF
+			nSubState := 0;
+		END_IF
+	
+	E_SafetyState.Locked:
+		//folgende States sind von hier aus möglich
+		//1: Error wenn: Interlock durch Schlüssel geöffnet wird ("bInterlockIsLocked" wechselt zu false)
+		//				 SaftyLogic meldet Error
+		//				 A_Unlock() mit State 99(Error) endet
+		//2: EmergencyStopPressed wenn Notaustaster gedrückt
+		//3: Unlocked wenn A_Unlock() State 80(Succes) endet
+		IF nSubstate = 0 THEN //wartet auf StateRequest und überwacht
+			bRequDriveOn := TRUE;
+			IF NOT (bInterlockIsLocked AND nTwinSafeGrpState = 1) THEN //führt zu Error
+				//Schlüssel des Interlocks wurde betätigt oder Drahtbruch
+				stError.POU := E_POU.POU_FB_Safety;
+				stError.POUAction := E_POUACT.POUACT_A_RunWithoutBoxContacts;
+				stError.ErrorId := E_ErrorIdCmd.ERRORID_InterlockError;
+				fbErrorList.M_Add(stError); 
+				eCurrentState := E_SafetyState.Error;
+			ELSIF nTwinSafeGrpState <> 1 THEN
+				//TwinSafeGruppe ist in Error gegangen
+				stError.POU := E_POU.POU_FB_Safety;
+				stError.POUAction := E_POUACT.POUACT_A_RunWithoutBoxContacts;
+				stError.ErrorId := E_ErrorIdCmd.ERRORID_TwinSafeGroupError;
+				fbErrorList.M_Add(stError);
+				eCurrentState := E_SafetyState.Error;
+			ELSIF bEmergencyStop THEN
+				eCurrentState := E_SafetyState.EmergencyStopPressed;
+				eOldState := E_SafetyState.Locked;
+			ELSIF eRequestState = E_SafetyState.Unlocked THEN
+				nSubstate := 1;
+			END_IF
+		ELSIF nSubstate = 1 THEN //führt A_Unlock() aus
+			A_Unlock();
+			IF nActionState >= 80 THEN
+				IF nActionState = 99 THEN
+					//Fehlermeldung erfolgt in A_Unlock
+					eCurrentState := E_SafetyState.Error;
+				ELSE
+					eCurrentState := E_SafetyState.Unlocked;
+				END_IF
+				nSubState := 0;
+				nActionState := 0;
+			END_IF
+		END_IF
+
+		//Wenn dieser State verlassen wird, dann in jedem Fall bRequDriveOn und bRequMesOn zurücknehmen
+		IF eCurrentState <> E_SafetyState.Locked THEN
+			bRequDriveOn := FALSE;
+			bRequMesOn := FALSE;
+		END_IF
+		
+	E_SafetyState.Unlocked:
+		//folgende States sind von hier aus möglich
+		//1: Error wenn: SafetyLogic meldet Error oder A_Locked() mit State 99 (Error) endet
+		//2: EmergencyStopPressed wenn Notaustaster gedrückt
+		//3: Locked wenn A_Lock() State 80(Succes) endet
+
+		IF nSubstate = 0 THEN //wartet auf StateRequest und überwacht
+			//wieso soll bInterlockIsLocked zu Error führen?
+			//kann  bInterlockIsLocked in diesem State eigentlich gesetzt werden?
+			//Drahtbruch führt nicht zu Gruppenfehler, da Stommessung und Testpulse aus
+			IF bInterlockIsLocked THEN
+				stError.POU := E_POU.POU_FB_Safety;
+				stError.POUAction := E_POUACT.POUACT_A_RunWithoutBoxContacts;
+				stError.ErrorId := E_ErrorIdCmd.ERRORID_InterlockError;
+				fbErrorList.M_Add(stError);
+				eCurrentState := E_SafetyState.Error;
+			ELSIF nTwinSafeGrpState <> 1 THEN //führt zu Error
+				stError.POU := E_POU.POU_FB_Safety;
+				stError.POUAction := E_POUACT.POUACT_A_RunWithoutBoxContacts;
+				stError.ErrorId := E_ErrorIdCmd.ERRORID_TwinSafeGroupError;
+				fbErrorList.M_Add(stError);
+				eCurrentState := E_SafetyState.Error;
+			ELSIF bEmergencyStop THEN
+				eCurrentState := E_SafetyState.EmergencyStopPressed;
+				eOldState := E_SafetyState.Unlocked;
+			ELSIF eRequestState = E_SafetyState.Locked THEN
+				nSubstate := 1;
+			END_IF
+		ELSIF nSubstate = 1 THEN //führt A_Lock() aus
+			A_Lock();
+			IF nActionState >= 80 THEN
+				IF nActionState = 99 THEN
+					//Fehlermeldung erfolgt in A_Lock
+					eCurrentState := E_SafetyState.Error;
+				ELSE
+					eCurrentState := E_SafetyState.Locked;
+				END_IF
+				nSubState := 0;
+				nActionState := 0;
+			END_IF
+		END_IF
+	
+	E_SafetyState.EmergencyStopPressed:
+		//folgende States sind von hier aus möglich
+		//1: Error wenn: SaftyLogic meldet Error
+		//2: EmergencyStopReleased wenn der Notaustaster wieder freigegeben wird
+		IF nTwinSafeGrpState <> 1 THEN
+			stError.POU := E_POU.POU_FB_Safety;
+			stError.POUAction := E_POUACT.POUACT_A_RunWithoutBoxContacts;
+			stError.ErrorId := E_ErrorIdCmd.ERRORID_TwinSafeGroupError;
+			fbErrorList.M_Add(stError);
+			eCurrentState := E_SafetyState.Error;
+		ELSIF NOT bEmergencyStop THEN
+			eCurrentState := E_SafetyState.EmergencyStopReleased;
+		END_IF
+	E_SafetyState.EmergencyStopReleased:
+		//folgende States sind von hier aus möglich
+		//1: Error wenn: SaftyLogic meldet Error
+		//2: in vorherigen State wechseln wenn Quit
+		IF nTwinSafeGrpState <> 1 THEN
+			eCurrentState := E_SafetyState.Error;
+		ELSIF bQuit THEN
+			bQuit := FALSE;
+			eCurrentState := eOldState;
+		ELSIF bEmergencyStop THEN
+			eCurrentState := E_SafetyState.EmergencyStopPressed;
+		END_IF
+	E_SafetyState.Error:
+		IF bQuit THEN
+			bQuit := FALSE;
+			eCurrentState := E_SafetyState.Init;
+		END_IF
+END_CASE]]></ST>
+      </Implementation>
+    </Action>
+    <Action Name="A_Unlock" Id="{814b23ae-ab9a-4f78-bfea-d6cf67671837}">
+      <Implementation>
+        <ST><![CDATA[//1. Hochspannung ausschalten
+//2. Fall Tools temperiert, in sichere Position fahren
+//3. warten bis o.g. Bedingungen erfüllt (Timeout)
+//4. Antriebe ausschalten
+//5. Interlock entriegeln
+stError.POUState := nActionState;
+CASE nActionState OF
+	0:	//GCode aktiv?
+		IF GCode.bBusy THEN
+			GCode.M_Stop();
+		ELSE
+			nActionState := 1;
+		END_IF
+		
+	1:	//Hochspannung aus
+		{IF defined(variable:fbHighVoltSupplyRef)}
+		 fbHighVoltSupplyRef.M_SwitchVoltage(1,FALSE);
+		 fbHighVoltSupplyRef.M_SwitchVoltage(2,FALSE);
+		{END_IF}
+		bRequMesOn := FALSE; //Relais in HV-Generator abschalten
+		nActionState := 3;
+		//Tools temperiert?
+		FOR i:= 1 TO fbObjectDirectory.nCntMZHead BY 1 DO
+			IF afbMzHead[i].P_bIsHot THEN
+				nActionState := 2;
+				stActionData.eAction := E_Action.ACTION_MoveAllHome;
+				stError.ErrorId := fbComplexAction.M_ExeAction(stActionData);
+				IF stError.ErrorId > 0 THEN
+					nActionState := 99;
+					EXIT;
+				END_IF
+			END_IF
+		END_FOR
+		
+	2:	//MoveAllHome ready?
+		IF NOT fbComplexAction.bBusy THEN
+			IF fbComplexAction.bError THEN
+				stError.ErrorId := fbComplexAction.nErrorId; 
+			ELSE
+				nActionState := 3;
+			END_IF
+		END_IF
+ 		
+	3:	//Spannungsfreiheit Hochspannungsmodul?
+		nActionState := 4;
+		{IF defined(variable:fbHighVoltSupplyRef)}
+		//>20 um Rauschen des analogen Eingangs zu unterbinden
+		IF fbHighVoltSupplyRef.bHVPSAvailable AND NOT fbHighVoltSupplyRef.bSafeVoltage AND (fbHighVoltSupplyRef.M_GetVoltage() > 20) THEN
+			nActionState := 3;
+		END_IF
+		{END_IF}
+		
+	4:	//Antriebe ausschalten
+		fbXYDriveList.M_SetCurrentToHead();
+		REPEAT
+			pXYDrive := fbXYDriveList.M_Get();
+			IF pXYDrive > 0 THEN
+				pXYDrive^.M_PowerOff();
+			END_IF
+		UNTIL pXYDrive = 0
+		END_REPEAT	
+		nActionState := 5;
+		
+	5:	//Safety bzw. Drive Relais ausschalten und Interlock entriegeln
+		bRequDriveOn := FALSE;
+		bRequUnlock := TRUE;
+		nActionState := 6;
+		
+	6:	//Warten bis Interlock entriegelt
+		timer(IN:=TRUE, PT:=T#500MS);
+		IF timer.Q THEN
+			stError.ErrorId := E_ErrorIdCmd.ERRORID_TimeOut;
+			nActionState := 99;
+			timer(IN:= FALSE);
+		END_IF
+		
+		IF NOT bInterlockIsLocked THEN
+			timer(IN:= FALSE);
+			nActionState := 80;
+		END_IF	
+END_CASE
+
+//Errorhandling
+IF nActionState = 99 THEN
+	stError.POU := E_POU.POU_FB_Safety;
+	stError.POUAction := E_POUACT.POUACT_A_Unlock;
+	fbErrorList.M_Add(stError);
+END_IF]]></ST>
+      </Implementation>
+    </Action>
+    <Method Name="M_CheckBoxCtcMapping" Id="{93eae5ad-18a6-407b-9750-9c7d5e5543fd}">
+      <Declaration><![CDATA[METHOD M_CheckBoxCtcMapping
+VAR_INPUT
+END_VAR
+]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[IF F_GetMappingStatus(ADR(bBoxContactsClosed),SIZEOF(bBoxContactsClosed)) = EPlcMappingStatus.MS_Partial THEN
+	bBoxContacsAvailable := TRUE;
+END_IF]]></ST>
+      </Implementation>
+    </Method>
+    <Method Name="M_Control" Id="{9c85e6a4-5720-4a18-9ee7-1212d694431c}">
+      <Declaration><![CDATA[METHOD M_Control : ERRORID
+VAR_INPUT
+	eCtrl : E_SafetyCtrl;
+END_VAR
+]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[CASE eCurrentState OF
+	E_SafetyState.Init:
+		//kein Befehl erlaubt, Meldung InvalidState
+	E_SafetyState.Locked:
+		//erlaubt ist Unlock
+		IF eCtrl = E_SafetyCtrl.Unlock THEN
+			eRequestState := E_SafetyState.Unlocked;
+		ELSE
+			M_Control := E_ErrorIdCmd.ERRORID_InvalidSafetyState;
+		END_IF
+	E_SafetyState.UnlockedBoxCtcClosed,E_SafetyState.Unlocked:
+		//erlaubt ist Lock
+		IF eCtrl = E_SafetyCtrl.Lock THEN
+			eRequestState := E_SafetyState.Locked;
+		ELSE
+			M_Control := E_ErrorIdCmd.ERRORID_InvalidSafetyState;
+		END_IF
+	E_SafetyState.UnlockedBoxCtcOpen:
+		M_Control := E_ErrorIdCmd.ERRORID_InvalidSafetyState;
+	E_SafetyState.EmergencyStopPressed:
+		M_Control := E_ErrorIdCmd.ERRORID_InvalidSafetyState;
+	E_SafetyState.EmergencyStopReleased,E_SafetyState.Error:
+		//erlaubt ist nur Quit
+		IF eCtrl = E_SafetyCtrl.Quit THEN
+			bQuit := TRUE;
+		ELSE
+			M_Control := E_ErrorIdCmd.ERRORID_InvalidSafetyState;
+		END_IF
+END_CASE]]></ST>
+      </Implementation>
+    </Method>
+    <Method Name="M_MesBoxOn" Id="{97637596-8d2b-449a-8ebb-eb11f77eb583}">
+      <Declaration><![CDATA[METHOD M_MesBoxOn : ERRORID
+VAR_INPUT
+END_VAR
+]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[IF eCurrentState = E_SafetyState.Locked THEN
+	bRequMesOn := TRUE;
+ELSE
+	M_MesBoxOn := E_ErrorIdCmd.ERRORID_InvalidSafetyState;
+END_IF]]></ST>
+      </Implementation>
+    </Method>
+    <Property Name="P_nSafeToolTemp" Id="{0f0c7e52-30a8-40d4-91a6-ce3b8f73b033}">
+      <Declaration><![CDATA[PROPERTY P_nSafeToolTemp : UINT]]></Declaration>
+      <Get Name="Get" Id="{92004936-9027-499b-bdbf-96482aa6cda8}">
+        <Declaration><![CDATA[VAR
+END_VAR
+]]></Declaration>
+        <Implementation>
+          <ST><![CDATA[P_nSafeToolTemp := nSafeTemp;]]></ST>
+        </Implementation>
+      </Get>
+    </Property>
+    <Property Name="P_rSafePositionX" Id="{8b4e1430-2219-429d-9392-fc171d48719d}">
+      <Declaration><![CDATA[PROPERTY P_rSafePositionX : REAL]]></Declaration>
+      <Get Name="Get" Id="{1605b253-8c1a-47ff-b732-3135faf503a8}">
+        <Declaration><![CDATA[VAR
+END_VAR
+]]></Declaration>
+        <Implementation>
+          <ST><![CDATA[P_rSafePositionX := rSafePositionX;]]></ST>
+        </Implementation>
+      </Get>
+    </Property>
+    <Property Name="P_rSafePositionY" Id="{a099f67b-8d96-4122-a37e-132c8b39ab3f}">
+      <Declaration><![CDATA[PROPERTY P_rSafePositionY : REAL]]></Declaration>
+      <Get Name="Get" Id="{f8001ab2-f33b-40a0-8106-e33fda58c242}">
+        <Declaration><![CDATA[VAR
+END_VAR
+]]></Declaration>
+        <Implementation>
+          <ST><![CDATA[P_rSafePositionY := rSafePositionY;]]></ST>
+        </Implementation>
+      </Get>
+    </Property>
+    <LineIds Name="FB_Safety">
+      <LineId Id="57" Count="0" />
+      <LineId Id="739" Count="0" />
+      <LineId Id="737" Count="0" />
+      <LineId Id="740" Count="0" />
+      <LineId Id="738" Count="0" />
+    </LineIds>
+    <LineIds Name="FB_Safety.A_Lock">
+      <LineId Id="37" Count="0" />
+      <LineId Id="2" Count="5" />
+      <LineId Id="40" Count="3" />
+      <LineId Id="59" Count="4" />
+      <LineId Id="44" Count="0" />
+      <LineId Id="64" Count="0" />
+      <LineId Id="8" Count="0" />
+      <LineId Id="80" Count="0" />
+      <LineId Id="79" Count="0" />
+      <LineId Id="9" Count="11" />
+      <LineId Id="1" Count="0" />
+      <LineId Id="70" Count="5" />
+      <LineId Id="69" Count="0" />
+    </LineIds>
+    <LineIds Name="FB_Safety.A_ResetError">
+      <LineId Id="2" Count="16" />
+      <LineId Id="1" Count="0" />
+    </LineIds>
+    <LineIds Name="FB_Safety.A_RunWithBoxContacts">
+      <LineId Id="2" Count="57" />
+      <LineId Id="174" Count="0" />
+      <LineId Id="60" Count="37" />
+      <LineId Id="177" Count="0" />
+      <LineId Id="180" Count="0" />
+      <LineId Id="178" Count="0" />
+      <LineId Id="98" Count="33" />
+      <LineId Id="153" Count="10" />
+      <LineId Id="139" Count="1" />
+      <LineId Id="164" Count="9" />
+      <LineId Id="148" Count="1" />
+      <LineId Id="181" Count="2" />
+      <LineId Id="152" Count="0" />
+      <LineId Id="1" Count="0" />
+    </LineIds>
+    <LineIds Name="FB_Safety.A_RunWithoutBoxContacts">
+      <LineId Id="2" Count="0" />
+      <LineId Id="4" Count="51" />
+      <LineId Id="57" Count="0" />
+      <LineId Id="135" Count="0" />
+      <LineId Id="58" Count="0" />
+      <LineId Id="144" Count="0" />
+      <LineId Id="156" Count="2" />
+      <LineId Id="155" Count="0" />
+      <LineId Id="59" Count="0" />
+      <LineId Id="145" Count="0" />
+      <LineId Id="148" Count="0" />
+      <LineId Id="152" Count="1" />
+      <LineId Id="150" Count="0" />
+      <LineId Id="154" Count="0" />
+      <LineId Id="149" Count="0" />
+      <LineId Id="60" Count="9" />
+      <LineId Id="159" Count="0" />
+      <LineId Id="70" Count="10" />
+      <LineId Id="134" Count="0" />
+      <LineId Id="81" Count="9" />
+      <LineId Id="160" Count="2" />
+      <LineId Id="91" Count="0" />
+      <LineId Id="167" Count="3" />
+      <LineId Id="164" Count="0" />
+      <LineId Id="163" Count="0" />
+      <LineId Id="171" Count="4" />
+      <LineId Id="93" Count="9" />
+      <LineId Id="176" Count="0" />
+      <LineId Id="103" Count="13" />
+      <LineId Id="177" Count="4" />
+      <LineId Id="118" Count="9" />
+      <LineId Id="136" Count="0" />
+      <LineId Id="128" Count="0" />
+      <LineId Id="141" Count="1" />
+      <LineId Id="129" Count="2" />
+      <LineId Id="137" Count="0" />
+      <LineId Id="132" Count="1" />
+      <LineId Id="1" Count="0" />
+    </LineIds>
+    <LineIds Name="FB_Safety.A_Unlock">
+      <LineId Id="7" Count="18" />
+      <LineId Id="84" Count="0" />
+      <LineId Id="26" Count="13" />
+      <LineId Id="93" Count="0" />
+      <LineId Id="95" Count="0" />
+      <LineId Id="99" Count="0" />
+      <LineId Id="101" Count="1" />
+      <LineId Id="100" Count="0" />
+      <LineId Id="97" Count="0" />
+      <LineId Id="94" Count="0" />
+      <LineId Id="45" Count="27" />
+      <LineId Id="103" Count="0" />
+      <LineId Id="73" Count="1" />
+      <LineId Id="76" Count="4" />
+      <LineId Id="82" Count="1" />
+      <LineId Id="85" Count="2" />
+      <LineId Id="104" Count="0" />
+      <LineId Id="89" Count="0" />
+      <LineId Id="91" Count="1" />
+      <LineId Id="6" Count="0" />
+    </LineIds>
+    <LineIds Name="FB_Safety.M_CheckBoxCtcMapping">
+      <LineId Id="6" Count="1" />
+      <LineId Id="5" Count="0" />
+    </LineIds>
+    <LineIds Name="FB_Safety.M_Control">
+      <LineId Id="7" Count="5" />
+      <LineId Id="43" Count="0" />
+      <LineId Id="14" Count="5" />
+      <LineId Id="42" Count="0" />
+      <LineId Id="21" Count="2" />
+      <LineId Id="35" Count="0" />
+      <LineId Id="48" Count="0" />
+      <LineId Id="24" Count="1" />
+      <LineId Id="27" Count="6" />
+      <LineId Id="6" Count="0" />
+    </LineIds>
+    <LineIds Name="FB_Safety.M_MesBoxOn">
+      <LineId Id="5" Count="0" />
+      <LineId Id="8" Count="0" />
+      <LineId Id="6" Count="0" />
+      <LineId Id="9" Count="0" />
+      <LineId Id="7" Count="0" />
+    </LineIds>
+    <LineIds Name="FB_Safety.P_nSafeToolTemp.Get">
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="FB_Safety.P_rSafePositionX.Get">
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="FB_Safety.P_rSafePositionY.Get">
+      <LineId Id="2" Count="0" />
+    </LineIds>
+  </POU>
+</TcPlcObject>

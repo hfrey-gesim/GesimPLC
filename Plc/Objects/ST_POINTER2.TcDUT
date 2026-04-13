@@ -1,0 +1,14 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<TcPlcObject Version="1.1.0.1" ProductVersion="3.1.4020.6">
+  <DUT Name="ST_POINTER2" Id="{2bdc05b3-cd75-4287-b931-d6676a786337}">
+    <Declaration><![CDATA[{attribute 'enable_dynamic_creation'}
+TYPE ST_POINTER2 :
+STRUCT
+	pContent:  PVOID;
+	pPrev	:  PVOID;
+	pNext	:  PVOID;	
+END_STRUCT
+END_TYPE
+]]></Declaration>
+  </DUT>
+</TcPlcObject>

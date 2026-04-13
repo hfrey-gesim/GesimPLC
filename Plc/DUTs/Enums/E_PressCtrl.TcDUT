@@ -1,0 +1,15 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<TcPlcObject Version="1.1.0.1" ProductVersion="3.1.4022.12">
+  <DUT Name="E_PressCtrl" Id="{ae2c9911-a1a8-4f1b-8ea0-4c06511091b7}">
+    <Declaration><![CDATA[TYPE E_PressCtrl :
+(
+	PRESSCTRL_Off := 0,
+	PRESSCTRL_PressOn := 1,
+	PRESSCTRL_VacOn := 2,
+	PRESSCTRL_BothOn := 3,
+	PRESSCTRL_UNDEFINED := 99
+)USINT;
+END_TYPE
+]]></Declaration>
+  </DUT>
+</TcPlcObject>

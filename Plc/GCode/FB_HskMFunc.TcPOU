@@ -1,0 +1,3314 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<TcPlcObject Version="1.1.0.1">
+  <POU Name="FB_HskMFunc" Id="{e10f20f1-25f1-40e7-a798-553454e9bd11}" SpecialFunc="None">
+    <Declaration><![CDATA[FUNCTION_BLOCK FB_HskMFunc
+VAR_INPUT
+	bStop 		: BOOL;	//hat Vorrang vor bPause und bContinue
+	bPause		: BOOL;	//nicht alle M-Funktionen lassen sich pausieren, hat Vorrang vor bContinue
+	bContinue	: BOOL; //falls in Pause, dann Fortsetzung
+END_VAR
+VAR_OUTPUT
+	bBusy				: BOOL;
+	bError				: BOOL;
+	nErrorId			: ERRORID;
+	bCanceled			: BOOL;
+	bIsInPause			: BOOL;
+END_VAR
+VAR_IN_OUT
+	stGCodeRef			: ST_GCodeRef;
+	pXDrive				: POINTER TO FB_XYDriveBase;
+	pYDrive				: POINTER TO FB_XYDriveBase;	
+END_VAR
+VAR
+	nStateAction		: USINT;
+	nMFuncNumber		: UINT;
+	bMFuncRequest		: BOOL;
+	bMFuncConfirm		: BOOL;
+	stActionData		: ST_ActionData;
+	alrRParam			: ARRAY[1..cMaxRParams] OF LREAL;
+	ePrintParamType		: E_PrintParamType;
+	nPrintParamNumerator: USINT;
+	nPrintParamValue	: DINT;
+	stMethResult		: ST_MethResult;
+	
+	rTrig				: R_TRIG;
+	fbItpReadRParams	: Tc2_NCI.ItpReadRParamsEx;
+	fbItpReadRParamsHdr	: Tc2_NCI.ItpReadRParamsEx; //Lesen des Headers
+	fbItpWriteRParams	: Tc2_NCI.ItpWriteRParamsEx;
+	fbItpWriteZeroShiftEx	: Tc2_NCI.ItpWriteZeroShiftEx;	//Zum Schreiben der Nullpunktverschiebung
+	fbItpConfirmHsk 		: Tc2_NCI.ItpConfirmHsk;
+	
+	fbMcSetPosition		: Tc2_Mc2.MC_SetPosition;
+	pNewTool			: POINTER TO FB_GCodeTool;
+	pPiezoPip			: POINTER TO FB_PiezoPip;
+	pPassivPip			: POINTER TO FB_PassivPip;
+	pExtruder			: POINTER TO FB_Extruder;
+	pTwinExtruder		: POINTER TO FB_TwinExtruder;
+	pTwinPiezoHolder	: POINTER TO FB_TwinPiezoHolder;
+	pTarget				: POINTER TO FB_TargetBase;
+	pMultiCartHolder	: POINTER TO FB_MultiCartHolder;
+	pHybridDispenser	: POINTER TO FB_HybridDispenser;
+	pMtp				: POINTER TO FB_Mtp;
+	pVialRack			: POINTER TO FB_VialRack;
+	pPieceSlot			: POINTER TO FB_PieceSlot;
+
+	stError 			: ST_Error := (POU := E_POU.POU_FB_HskMFunc);
+	fbBuildGroup		: FB_BuildGroup();
+	fbClearGroup		: FB_ClearGroup();
+	
+	alrHeaderRParam		: ARRAY[101..125] OF LREAL;
+	i					: USINT;
+	nCyclCounter		: USINT;
+	nToolNr				: USINT;
+		
+	sSetPositionOptions		: Tc2_Mc2.ST_SetPositionOptions := (ClearPositionLag:= TRUE);
+	
+	stPos1				: ST_3DPoint;
+	stPos2				: ST_3DPoint;
+	stCurrentPos		: ST_3DPoint;
+	
+	tDelay				: TIME;
+	nChannel			: USINT;
+	timer				: TON;
+	
+	stMeasToolOldOffset	: ST_3DPoint;
+	stMeasToolNewOffset	: ST_3DPoint;
+	
+	nSequenceNr			: UINT;
+	pSequence			: POINTER TO FB_Sequence;
+	
+	nStateA_MoveBack	: USINT;
+	nStateA_MoveFree	: USINT;
+	
+	//PipPre- und PostSequence
+	nTgtNrWS_Wash1 		: UINT;
+	nSpecPointNr_Wash1 	: UINT;
+	nWashFlow_Wash1		: DINT;
+	nWashTime_Wash1		: DINT;
+	nTgtNrWS_Wash2 		: UINT;
+	nSpecPointNr_Wash2 	: UINT;
+	nWashFlow_Wash2		: DINT;
+	nWashTime_Wash2		: DINT;
+	nTgtNrDryPad_Dry1	: UINT;
+	nDryCount_Dry1		: USINT;
+	nDryTime_Dry1		: DINT;
+	nTgtNrDryPad_Dry2	: UINT;
+	nDryCount_Dry2		: USINT;
+	nDryTime_Dry2		: DINT;
+	nTgtNrSource		: UINT; //Mtp oder VialRack für GetSample
+	nGetSampleColSlotNr	: DINT; //Col bei Mtp, SlotNr bei VialRack
+	nGetSampleRow		: DINT;
+	nGetSampleQuantity	: DINT;
+	nGetSampleFlow		: DINT;
+	nGetSampleDelay		: DINT;
+	nGetSampleAirGap	: DINT;
+	nGetSampleDilBypass	: DINT;
+	nTgtNrStrob			: UINT;
+	nDispenseTest		: DINT;
+	
+	nTgtNrWS_DispenseWaste1		: UINT;
+	nSpecPointNr_DispenseWaste1 : UINT;
+	nQuantity_DispenseWaste1	: DINT;
+	nFlow_DispenseWaste1		: DINT;
+	
+	nTgtNrWS_DispenseWaste2		: UINT;
+	nSpecPointNr_DispenseWaste2 : UINT;
+	nQuantity_DispenseWaste2	: DINT;
+	nFlow_DispenseWaste2		: DINT;
+	
+	//UniDispense
+	nUniDispParam1 : DINT;
+	nUniDispParam2 : DINT;
+	bUnitDispIsContinous : BOOL;
+	
+END_VAR
+
+VAR CONSTANT
+	cMaxRParams : USINT := 27;
+END_VAR
+]]></Declaration>
+    <Implementation>
+      <ST><![CDATA[bMFuncRequest := ItpIsHskMFunc(stGCodeRef.sNciToPlc);
+nMFuncNumber := INT_TO_UINT(ItpGetHskMFunc(stGCodeRef.sNciToPlc));
+
+rTrig(CLK:= bMFuncRequest);
+
+IF rTrig.Q THEN
+	fbItpReadRParams(sNciToPlc:= stGCodeRef.sNciToPlc, bExecute:= TRUE, pAddr:= ADR(alrRParam), nIndex:= 1, nCount:= cMaxRParams);
+END_IF
+
+fbItpReadRParams(sNciToPlc:= stGCodeRef.sNciToPlc);
+IF NOT fbItpReadRParams.bBusy AND fbItpReadRParams.bExecute THEN
+	fbItpReadRParams(sNciToPlc:= stGCodeRef.sNciToPlc, bExecute:= FALSE);
+END_IF
+
+IF bMFuncRequest OR bMFuncConfirm THEN
+	bBusy := TRUE;
+END_IF
+
+IF bMFuncRequest AND NOT bMFuncConfirm THEN
+	CASE nMFuncNumber OF
+		5:	//RParameter Header verarbeiten
+			A_AssignHeaderRParams();
+			IF nStateAction = 80 THEN
+				bMFuncConfirm := TRUE;
+				nStateAction := 0;
+			ELSIF nStateAction = 81 THEN	//Abbruch durch Interaktion (ZSensor mounted)
+				bMFuncConfirm := TRUE;
+				nStateAction := 0;
+				bCanceled := TRUE;
+			ELSIF nStateAction = 99 THEN	//Error
+				nStateAction := 0;
+				stError.POUAction := E_POUACT.POUACT_A_AssignRParamHeader;
+				fbErrorList.M_Add(stError);				
+				bError := TRUE;
+				bBusy := FALSE;
+			END_IF
+	
+		6:	//Select Tool
+			A_SelectTool();
+			IF nStateAction >= 80 THEN
+				IF nStateAction >= 99 THEN
+					stError.POUAction := E_POUACT.POUACT_A_SelectTool;
+					fbErrorList.M_Add(stError);					
+					bError := TRUE;
+				END_IF
+				nStateAction := 0;
+				bMFuncConfirm := TRUE;
+			END_IF
+			
+		101: //MoveZ home
+			A_MoveZHome();
+			IF nStateAction >= 80 THEN
+				IF nStateAction >= 99 THEN
+					stError.POUAction := E_POUACT.POUACT_A_MoveZHome;
+					fbErrorList.M_Add(stError);					
+					bError := TRUE;
+				END_IF
+				nStateAction := 0;
+				bMFuncConfirm := TRUE;
+			END_IF
+			
+		102: //SetPrintParameter
+			A_SetPrintParams();
+			IF nStateAction >= 80 THEN
+				IF nStateAction >= 99 THEN
+					stError.POUAction := E_POUACT.POUACT_A_SetPrintParams;
+					fbErrorList.M_Add(stError);					
+					bError := TRUE;
+				END_IF
+				nStateAction := 0;
+				bMFuncConfirm := TRUE;
+			END_IF
+
+		103: //SwitchPress
+			A_SwitchPress();
+			IF nStateAction >= 80 THEN
+				IF nStateAction >= 99 THEN
+					stError.POUAction := E_POUACT.POUACT_A_SwitchPress;
+					fbErrorList.M_Add(stError);					
+					bError := TRUE;
+				END_IF
+				nStateAction := 0;
+				bMFuncConfirm := TRUE;
+			END_IF
+			
+		110: //MeasureTool
+			A_MeasureTool();
+			IF nStateAction >= 80 THEN
+				IF nStateAction >= 99 THEN
+					stError.POUAction := E_POUACT.POUACT_A_MeasureTool;
+					fbErrorList.M_Add(stError);					
+					bError := TRUE;
+				END_IF
+				nStateAction := 0;
+				bMFuncConfirm := TRUE;
+			END_IF
+			
+		111: //CleanTip
+			A_CleanTip();
+			IF nStateAction >= 80 THEN
+				IF nStateAction >= 99 THEN
+					stError.POUAction := E_POUACT.POUACT_A_CleanTip;
+					fbErrorList.M_Add(stError);					
+					bError := TRUE;
+				END_IF
+				nStateAction := 0;
+				bMFuncConfirm := TRUE;
+			END_IF
+
+		114: //Aspirate
+			A_Aspirate();
+			IF nStateAction >= 80 THEN
+				IF nStateAction >= 99 THEN
+					stError.POUAction := E_POUACT.POUACT_A_Aspirate;
+					fbErrorList.M_Add(stError);
+					bError := TRUE;
+				END_IF
+				nStateAction := 0;
+				bMFuncConfirm := TRUE;
+			END_IF
+			
+		115: //Dispense
+			A_Dispense();
+			IF nStateAction >= 80 THEN
+				IF nStateAction >= 99 THEN
+					stError.POUAction := E_POUACT.POUACT_A_Dispense;
+					fbErrorList.M_Add(stError);					
+					bError := TRUE;
+				END_IF
+				nStateAction := 0;
+				bMFuncConfirm := TRUE;
+			END_IF
+
+		116: //Extrude
+			A_Extrude();
+			IF nStateAction >= 80 THEN
+				IF nStateAction >= 99 THEN
+					stError.POUAction := E_POUACT.POUACT_A_Extrude;
+					fbErrorList.M_Add(stError);					
+					bError := TRUE;
+				END_IF
+				nStateAction := 0;
+				bMFuncConfirm := TRUE;
+			END_IF		
+
+		117: //BasicDispense (Hybrid-Dispenser)
+			A_BasicDispense();
+			IF nStateAction >= 80 THEN
+				IF nStateAction >= 99 THEN
+					stError.POUAction := E_POUACT.POUACT_A_BasicDispense;
+					fbErrorList.M_Add(stError);				
+					bError := TRUE;
+				END_IF
+				nStateAction := 0;
+				bMFuncConfirm := TRUE;
+			END_IF		
+			
+		118: //DispenseDrops
+			A_DispenseDrops();
+			IF nStateAction >= 80 THEN
+				IF nStateAction >= 99 THEN
+					stError.POUAction := E_POUACT.POUACT_A_DispensePiezo;
+					fbErrorList.M_Add(stError);					
+					bError := TRUE;
+				END_IF
+				nStateAction := 0;
+				bMFuncConfirm := TRUE;
+			END_IF
+			
+		119: //WaitForUser
+			A_WaitForUser();
+			IF nStateAction >= 80 THEN
+				IF nStateAction >= 99 THEN
+					stError.POUAction := E_POUACT.POUACT_A_WaitForUser;
+					fbErrorList.M_Add(stError);					
+					bError := TRUE;
+				END_IF
+				nStateAction := 0;
+				bMFuncConfirm := TRUE;
+			END_IF		
+
+		121: //Expose
+			A_Expose();
+			IF nStateAction >= 80 THEN
+				IF nStateAction >= 99 THEN
+					stError.POUAction := E_POUACT.POUACT_A_Expose;
+					fbErrorList.M_Add(stError);					
+					bError := TRUE;
+				END_IF
+				nStateAction := 0;
+				bMFuncConfirm := TRUE;
+			END_IF		
+	
+		120: //WaitAtPoint
+			A_WaitAtPoint();
+			IF nStateAction >= 80 THEN
+				IF nStateAction >= 99 THEN
+					stError.POUAction := E_POUACT.POUACT_A_WaitAtPoint;
+					fbErrorList.M_Add(stError);					
+					bError := TRUE;
+				END_IF
+				nStateAction := 0;
+				bMFuncConfirm := TRUE;
+			END_IF		
+			
+		122: //RunSequence
+			A_Sequence();
+			IF nStateAction >= 80 THEN
+				IF nStateAction >= 99 THEN
+					stError.POUAction := E_POUACT.POUACT_A_Sequence;
+					fbErrorList.M_Add(stError);					
+					bError := TRUE;
+				END_IF
+				nStateAction := 0;
+				bMFuncConfirm := TRUE;
+			END_IF
+			
+		123: //DilMoveValve (zu Piezo zugehöriger)
+			A_DilMoveValve();
+			IF nStateAction >= 80 THEN
+				IF nStateAction >= 99 THEN
+					stError.POUAction := E_POUACT.POUACT_A_DilMoveValve;
+					fbErrorList.M_Add(stError);					
+					bError := TRUE;
+				END_IF
+				nStateAction := 0;
+				bMFuncConfirm := TRUE;
+			END_IF
+			
+		124: //PipPreSequence
+			A_PipPreSequence();
+			IF nStateAction >= 80 THEN
+				IF nStateAction >= 99 THEN
+					stError.POUAction := E_POUACT.POUACT_A_PipPreSequence;
+					fbErrorList.M_Add(stError);					
+					bError := TRUE;
+				END_IF
+				nStateAction := 0;
+				bMFuncConfirm := TRUE;
+			END_IF
+			
+		125: //PipPostSequence
+			A_PipPostSequence();
+			IF nStateAction >= 80 THEN
+				IF nStateAction >= 99 THEN
+					stError.POUAction := E_POUACT.POUACT_A_PipPostSequence;
+					fbErrorList.M_Add(stError);					
+					bError := TRUE;
+				END_IF
+				nStateAction := 0;
+				bMFuncConfirm := TRUE;
+			END_IF
+
+		126: //StirrCartridge
+			A_StirrCartridge();
+			IF nStateAction >= 80 THEN
+				IF nStateAction >= 99 THEN
+					stError.POUAction := E_POUACT.POUACT_A_StirrCartridge;
+					fbErrorList.M_Add(stError);					
+					bError := TRUE;
+				END_IF
+				nStateAction := 0;
+				bMFuncConfirm := TRUE;
+			END_IF
+			
+		127: //UniDispense
+			A_UniDispense();
+			IF nStateAction >= 80 THEN
+				IF nStateAction >= 99 THEN
+					stError.POUAction := E_POUACT.POUACT_A_UniDispense;
+					fbErrorList.M_Add(stError);					
+					bError := TRUE;
+				END_IF
+				nStateAction := 0;
+				bMFuncConfirm := TRUE;
+			END_IF
+			
+		
+	END_CASE
+END_IF
+
+IF bMFuncConfirm THEN
+	fbItpConfirmHsk(bExecute:= TRUE ,sNciToPlc:= stGCodeRef.sNciToPlc, sPlcToNci:= stGCodeRef.sPlcToNci);
+	IF NOT fbItpConfirmHsk.bBusy THEN
+		IF fbItpConfirmHsk.bErr THEN
+			nErrorId := UDINT_TO_UINT(fbItpConfirmHsk.nErrId);
+			bError := TRUE;
+		END_IF
+		fbItpConfirmHsk(bExecute:= FALSE ,sNciToPlc:= stGCodeRef.sNciToPlc, sPlcToNci:= stGCodeRef.sPlcToNci);
+		bMFuncConfirm := FALSE;
+		bBusy := FALSE;
+	END_IF	
+END_IF]]></ST>
+    </Implementation>
+    <Action Name="A_Aspirate" Id="{2b5e8720-758f-4cb6-b5dd-d8c8a07043c7}">
+      <Implementation>
+        <ST><![CDATA[stError.POUState := nStateAction;
+
+CASE nStateAction OF
+	0:	
+		IF bStop THEN
+			nStateAction := 80;
+		ELSE
+			IF stGCodeRef.pCurrentTool = 0 THEN
+				stError.ErrorId := E_ErrorIdGCode.ERRORID_NoSelectedTool;
+				nStateAction := 99;
+			ELSE
+				IF NOT fbItpReadRParams.bBusy THEN
+					MEMSET(ADR(stActionData),0,SIZEOF(stActionData));
+					stActionData.eAction := E_Action.ACTION_Aspirate;
+					stActionData.aParams[1] := LREAL_TO_DINT(alrRParam[1]);
+					stActionData.aParams[2] := LREAL_TO_DINT(alrRParam[2]);
+					stError.ErrorId := stGCodeRef.pCurrentTool^.M_ExeAction(stActionData);
+					IF stError.ErrorId > 0 THEN
+						nStateAction := 99;
+					ELSE
+						nStateAction := 1;
+					END_IF
+				END_IF
+			END_IF
+		END_IF
+		
+	1:	//Aspirate ready?
+		IF bStop THEN
+			stGCodeRef.pCurrentTool^.M_CancelAction(E_Action.ACTION_Aspirate);
+		END_IF
+		
+		IF NOT stGCodeRef.pCurrentTool^.P_bBusy THEN
+			IF stGCodeRef.pCurrentTool^.P_bError THEN
+				stError.ErrorId := stGCodeRef.pCurrentTool^.P_nErrorId;
+				nStateAction := 99;
+			ELSE
+				nStateAction := 80;	
+			END_IF
+		END_IF
+END_CASE]]></ST>
+      </Implementation>
+    </Action>
+    <Action Name="A_AssignHeaderRParams" Id="{f1ae60f7-cfa1-445b-abe5-aa9fc184568d}">
+      <Implementation>
+        <ST><![CDATA[stError.POUState := nStateAction;
+
+CASE nStateAction OF
+	0:	//R-Parameter R101 bis R125 auslesen
+		//R101 bis R120 Toolnummern
+		//R121 bis R125 Dimension des Scaffolds
+		fbItpReadRParamsHdr(sNciToPlc:= stGCodeRef.sNciToPlc, bExecute:= TRUE, pAddr:= ADR(alrHeaderRParam),nIndex:= 101, nCount:= 25);
+		IF NOT fbItpReadRParamsHdr.bBusy THEN
+			IF fbItpReadRParamsHdr.bErr THEN
+				stError.ErrorId := UDINT_TO_UINT(fbItpReadRParamsHdr.nErrId);
+				nStateAction := 99;
+			ELSE
+				IF bStop THEN
+					nStateAction := 80;
+				ELSE
+					nStateAction := 1;	
+				END_IF
+			END_IF
+			fbItpReadRParamsHdr(sNciToPlc:= stGCodeRef.sNciToPlc, bExecute:= FALSE);
+		END_IF
+
+	1:	//ObjectIds zuordnen
+		//Die RParams iterieren
+		FOR i := 101 TO 110 BY 1 DO
+			//als Erstes den RParameter checken
+			//er darf nicht größer sein als max Tools
+			nToolNr := LREAL_TO_USINT(alrHeaderRParam[i]); //Die R-Parameter werden in GCode auf "0" gesetzt
+			IF nToolNr > GCode.cMaxGCodeTools THEN
+				stError.ErrorId := E_ErrorIdGCode.ERRORID_InvalidToolNr;		
+				nStateAction := 99;
+			ELSIF nToolNr > 0 THEN
+				IF stGCodeRef.aToolTable[nToolNr].pMzTool > 0 THEN
+					IF NOT stGCodeRef.aToolTable[nToolNr].pMzTool^.P_bIsInit THEN
+						stError.ObjectId := stGCodeRef.aToolTable[i].pMzTool^.P_nObjectID;
+						stError.ErrorId := E_ErrorIdCmd.ERRORID_DeviceNotInitialized;
+						nStateAction := 99;
+						EXIT;
+					END_IF
+				ELSE
+					stError.ErrorId := E_ErrorIdGCode.ERRORID_InvalidToolNr;		
+					nStateAction := 99;
+				END_IF
+				stGCodeRef.aToolTable[nToolNr].bIsUsed := TRUE; //Dieses Tool wird im GCode benutzt
+			END_IF
+ 		END_FOR
+		
+		stGCodeRef.fbLimitCuboid.M_SetDimension(alrHeaderRParam[120], alrHeaderRParam[121], alrHeaderRParam[122],
+												alrHeaderRParam[123], alrHeaderRParam[124], alrHeaderRParam[125]);
+		
+		IF nStateAction < 99 THEN
+			IF bStop THEN
+				nStateAction := 80;
+			ELSE
+				nStateAction := 2; //weiter zu ZSensorCheck	
+			END_IF
+		END_IF
+		
+	2:	//Checken, ob ein Tool verwendet wird, an desse Achse gerade ein ZSensor angebaut ist
+		//Wenn ja, dann eine Auforderung zum Abmontieren senden
+		//Gleichzeitig wird die Erreichbarkeit der Scaffoldgrenzen der Tools überprüft
+		nStateAction := 80;
+		IF NOT bStop THEN
+			FOR i:= 1 TO GCode.cMaxGCodeTools BY 1 DO
+				IF stGCodeRef.aToolTable[i].pMzTool > 0 AND stGCodeRef.aToolTable[i].bIsUsed THEN
+					
+					stError.ErrorId := stGCodeRef.aToolTable[i].pMzTool^.M_CheckMoveLimitEx(stGCodeRef.fbLimitCuboid);
+					IF stError.ErrorId > 0 THEN
+						stError.ObjectId := stGCodeRef.aToolTable[i].pMzTool^.P_nObjectID;
+						nStateAction := 99;
+						EXIT;
+					END_IF
+				
+					IF stGCodeRef.aToolTable[i].pMzTool^.P_bSensorMounted THEN
+						stInteractRequest.nObjectId := stGCodeRef.aToolTable[i].pMzTool^.P_nObjectID;
+						stInteractRequest.eInteractMessageType := E_InteractMessageType.INTERACTMES_UnmountZSensor;	//Interaction Request
+						nStateAction := 3;
+						nCyclCounter := 0;
+						EXIT;
+					END_IF
+				END_IF
+			END_FOR
+		END_IF
+		
+	3:	//Request wurde abgesendet und Antwort abwarten
+		IF bStop THEN
+			nStateAction := 80;
+			RETURN;
+		END_IF
+		
+		IF stInterResponse.eInteractMessageType = stInteractRequest.eInteractMessageType THEN
+			//50 Zyklen warten, damit das Event auch ankommt
+			//damit die Abtastzeit beim Client nicht zu niedrig gewählt werden muss
+			nCyclCounter := nCyclCounter + 1;
+			IF nCyclCounter = 50 THEN
+				nStateAction := 4;
+			END_IF
+			MEMSET(ADR(stInteractRequest),0,SIZEOF(stInteractRequest));
+			MEMSET(ADR(stInterResponse),0,SIZEOF(stInterResponse));			
+		ELSIF stInterResponse.eInteractMessageType = E_InteractMessageType.INTERACTMES_Cancel THEN
+			nStateAction := 5;
+			MEMSET(ADR(stInteractRequest),0,SIZEOF(stInteractRequest));
+			MEMSET(ADR(stInterResponse),0,SIZEOF(stInterResponse));			
+		END_IF
+		
+	4:	//Response ist angekommen mit positiver Antwort
+		nStateAction := 2;	//erneut checken
+	
+	5:	//Response ist angekommen mit negativer Antwort
+		nStateAction := 81;
+END_CASE
+
+IF nStateAction = 80 THEN
+	//falls die Oberkante des Scaffolds höher ist als die Kollissionshöhe der Workplate, dann diese erhöhen
+	IF stGCodeRef.fbLimitCuboid.P_rZMax > afbWorkplate[1].P_rCollHeight THEN
+		IF stGCodeRef.pHead^.P_rMaxCollFreeHeight > stGCodeRef.fbLimitCuboid.P_rZMax THEN
+			afbWorkplate[1].P_rCollHeight := stGCodeRef.fbLimitCuboid.P_rZMax + 1000; 
+		ELSE
+			stError.ErrorId := E_ErrorIdGCode.ERRORID_ScaffoldHeightExceeded;
+			nStateAction := 99;
+		END_IF
+	END_IF	
+END_IF]]></ST>
+      </Implementation>
+    </Action>
+    <Action Name="A_BasicDispense" Id="{36cc6231-8890-4495-b669-cc2d7afd346f}">
+      <Implementation>
+        <ST><![CDATA[//Nur relevant für Hybrid-Dispenser
+
+stError.POUState := nStateAction;
+
+IF nStateAction = 0 THEN //Preparation
+	IF bStop THEN
+		nStateAction := 80;
+	ELSE
+		IF stGCodeRef.pCurrentTool = 0 THEN
+			stError.ErrorId := E_ErrorIdGCode.ERRORID_NoSelectedTool;
+			nStateAction := 99;
+		ELSE 
+			IF stGCodeRef.pCurrentTool^.P_eObjectType = E_ObjectType.OBJECTTYPE_HybridDispenser THEN
+				pHybridDispenser := stGCodeRef.pCurrentTool;
+			ELSE
+				nStateAction := 99;
+				RETURN;
+			END_IF
+			IF NOT fbItpReadRParams.bBusy THEN
+				IF alrRParam[1] >= 1.0 THEN //Preparation? R1=Prepare
+					pHybridDispenser^.M_Prepare(FALSE);
+					stMethResult := pHybridDispenser^.M_Prepare(TRUE);
+					nStateAction := 1;
+				ELSE
+					nStateAction := 2;
+				END_IF
+			END_IF
+		END_IF
+	END_IF
+ELSIF nStateAction = 1 THEN //Preparation fertig?
+	IF bStop THEN
+		nStateAction := 80;
+	ELSE
+		stMethResult := pHybridDispenser^.M_Prepare(TRUE);
+		IF NOT stMethResult.bBusy THEN
+			IF stMethResult.bError THEN
+				stError.ErrorId := nErrorId := stMethResult.nErrorId;
+				nStateAction := 99;
+			ELSE
+				//Preparing ready
+				nStateAction := 2; //weiter zu Start dispensing
+			END_IF
+		END_IF
+	END_IF
+END_IF
+
+IF nStateAction = 2 THEN //Start hybrid dispenser and timer
+	IF bStop THEN
+		nStateAction := 80;
+	ELSE
+		stGCodeRef.aToolTable[stGCodeRef.sNciToPlc.Tool].bIsInAction1 := TRUE;
+		tDelay := LREAL_TO_TIME(alrRParam[2]); //R2=Start break
+		timer(IN:=FALSE);
+		IF tDelay > T#0S THEN
+			timer(IN:=TRUE,PT:=tDelay);
+			stGCodeRef.aToolTable[stGCodeRef.sNciToPlc.Tool].tDelayStart := tDelay;
+			nStateAction := 3;
+		ELSE
+			stGCodeRef.aToolTable[stGCodeRef.sNciToPlc.Tool].tDelayStart := T#0s;
+			nStateAction := 80;
+		END_IF					
+		MEMSET(ADR(stActionData),0,SIZEOF(stActionData));
+		stActionData.eAction := E_Action.ACTION_BasicDispense;
+		stActionData.aParams[1] := 1; //Start
+		stError.ErrorId := pHybridDispenser^.M_ExeAction(stActionData);
+		IF stError.ErrorId > 0 THEN
+			nStateAction := 99;
+		END_IF
+	END_IF
+ELSIF nStateAction = 3 THEN
+	IF bStop THEN
+		timer(IN:= FALSE);
+		pHybridDispenser^.M_CancelAction(E_Action.ACTION_BasicDispense);
+		nStateAction := 80;
+		RETURN;
+	END_IF
+	timer();
+	IF timer.Q THEN
+		timer(IN:= FALSE);		
+		nStateAction := 80;
+	END_IF
+END_IF]]></ST>
+      </Implementation>
+    </Action>
+    <Action Name="A_CleanTip" Id="{2e70542b-4fba-4bbd-9668-79151a109760}">
+      <Implementation>
+        <ST><![CDATA[stError.POUState := nStateAction;
+
+IF fbComplexAction.bError THEN
+	stError.ErrorId :=fbComplexAction.nErrorId;
+	nStateAction := 99;
+	RETURN;
+END_IF
+
+CASE nStateAction OF
+	0:	//Aktuelles Tool ausgewählt?
+		IF stGCodeRef.pCurrentTool = 0 THEN
+			stError.ErrorId := E_ErrorIdGCode.ERRORID_NoSelectedTool;
+			nStateAction := 99;
+		ELSE
+			IF NOT fbItpReadRParams.bBusy THEN
+				//konfigurierten TipCleaner ermitteln
+				pTarget := fbObjectDirectory.M_GetTipCleaner();
+				IF pTarget > 0 THEN
+					//NCI-Gruppe auflösen
+					fbClearGroup(stGCodeRef:= stGCodeRef, bReGearInSlave:= TRUE, bExecute:= TRUE);
+					IF NOT fbClearGroup.bBusy THEN
+						IF fbClearGroup.bError THEN
+							nStateAction := 99;
+							stError.ErrorId := fbClearGroup.nErrorId;
+						ELSE
+							stCurrentPos := pNewTool^.P_stCurrentPosTotal;
+							IF bStop THEN
+								nStateAction := 80;
+							ELSE
+								nStateAction := 1;	
+							END_IF
+						END_IF
+						fbClearGroup(stGCodeRef:= stGCodeRef, bExecute:= FALSE);			
+					END_IF
+				ELSE
+					stError.ObjectId := stGCodeRef.pCurrentTool^.P_nObjectID;
+					stError.ErrorId := E_ErrorIdCmd.ERRORID_NoTipCleanerConfigured;
+					nStateAction := 99;
+				END_IF
+			END_IF
+		END_IF
+		
+	1:	//Action "CleanTip" ausführen
+		IF bStop THEN
+			nStateAction := 80;
+			RETURN;
+		END_IF
+		MEMSET(ADR(stActionData),0,SIZEOF(stActionData));
+		stActionData.eAction := E_Action.ACTION_CleanTip;
+		stActionData.nObject := stGCodeRef.pCurrentTool^.P_nObjectID;
+		stActionData.nTarget := pTarget^.P_nObjectID;
+		stActionData.aParams[1] := LREAL_TO_DINT(alrRParam[1]);
+		stActionData.aParams[2] := LREAL_TO_DINT(alrRParam[2]);
+		stActionData.aParams[3] := LREAL_TO_DINT(alrRParam[3]);
+		stActionData.aParams[4] := LREAL_TO_DINT(alrRParam[4]);
+
+		stError.ErrorId := fbComplexAction.M_ExeAction(stActionData);
+		IF stError.ErrorId > 0 THEN
+			nStateAction := 99;
+		ELSE
+			nStateAction := 2;	
+		END_IF
+		
+	2:	//CleanTip ready?
+		IF bStop THEN
+			IF fbComplexAction.bBusy THEN
+				fbComplexAction.M_Stop();
+			ELSE
+				nStateAction := 80;
+			END_IF
+		ELSE
+			IF NOT fbComplexAction.bBusy THEN
+				A_MoveBack();
+				nStateAction := 3;
+			END_IF			
+		END_IF
+		
+	3:	//MoveBack
+		A_MoveBack();
+		IF nStateA_MoveBack >= 80 THEN
+			IF nStateA_MoveBack = 99 THEN
+				nStateAction := 99;
+			ELSE
+				nStateAction := 80;
+			END_IF
+			nStateA_MoveBack := 0;
+		END_IF
+		
+END_CASE]]></ST>
+      </Implementation>
+    </Action>
+    <Action Name="A_DilMoveValve" Id="{87adbe72-593d-47b6-bd17-668de7502264}">
+      <Implementation>
+        <ST><![CDATA[stError.POUState := nStateAction;
+
+CASE nStateAction OF
+	0:	
+		IF bStop THEN
+			nStateAction := 80;
+		ELSE
+			IF stGCodeRef.pCurrentTool = 0 THEN
+				stError.ErrorId := E_ErrorIdGCode.ERRORID_NoSelectedTool;
+				nStateAction := 99;
+			ELSE
+				IF NOT fbItpReadRParams.bBusy THEN
+					MEMSET(ADR(stActionData),0,SIZEOF(stActionData));
+					stActionData.eAction := E_Action.ACTION_DilMoveValve;
+					stActionData.aParams[1] := LREAL_TO_DINT(alrRParam[1]); //ValvePos
+					stError.ErrorId := stGCodeRef.pCurrentTool^.M_ExeAction(stActionData);
+					IF stError.ErrorId > 0 THEN
+						nStateAction := 99;
+					ELSE
+						nStateAction := 1;	
+					END_IF
+				END_IF
+			END_IF
+		END_IF
+		
+	1:	//Ready?
+		IF bStop THEN
+			stGCodeRef.pCurrentTool^.M_CancelAction(E_Action.ACTION_DilMoveValve);
+		END_IF
+		
+		IF NOT stGCodeRef.pCurrentTool^.P_bBusy THEN
+			IF stGCodeRef.pCurrentTool^.P_bError THEN
+				stError.ErrorId := stGCodeRef.pCurrentTool^.P_nErrorId;
+				nStateAction := 99;
+			ELSE
+				nStateAction := 80;	
+			END_IF
+		END_IF
+END_CASE]]></ST>
+      </Implementation>
+    </Action>
+    <Action Name="A_Dispense" Id="{2dee6f0b-81f1-45ee-a030-7a8e91733aa4}">
+      <Implementation>
+        <ST><![CDATA[stError.POUState := nStateAction;
+
+CASE nStateAction OF
+	0:	//Diluter in Ausgangsposition fahren (BOTTOM)	
+		IF bStop THEN
+			nStateAction := 80;
+		ELSE
+			IF stGCodeRef.pCurrentTool = 0 THEN
+				stError.ErrorId := E_ErrorIdGCode.ERRORID_NoSelectedTool;
+				nStateAction := 99;
+			ELSE 
+				IF stGCodeRef.pCurrentTool^.P_eObjectType = E_ObjectType.OBJECTTYPE_PassivPip THEN
+					pPassivPip := stGCodeRef.pCurrentTool;
+				ELSE
+					nStateAction := 99;
+					RETURN;
+				END_IF
+				
+				IF NOT fbItpReadRParams.bBusy THEN
+					MEMSET(ADR(stActionData),0,SIZEOF(stActionData));
+					stActionData.eAction := E_Action.ACTION_DilMovePlunger;
+					stActionData.aParams[1] := 24000;
+					stActionData.aParams[2] := pPassivPip^.P_pDiluter^.P_nConfigReloadSpeed;
+					stActionData.aParams[3] := pPassivPip^.P_pDiluter^.P_nValvePosInput;
+					stError.ErrorId := pPassivPip^.P_pDiluter^.M_ExeAction(stActionData);
+					IF stError.ErrorId > 0 THEN
+						nStateAction := 99;
+					ELSE
+						nStateAction := 1;
+					END_IF
+				END_IF
+			END_IF
+		END_IF
+		
+	1:	//Diluter ready -> Dispensen + Timer für Startbreak starten 
+		IF bStop THEN
+			pPassivPip^.P_pDiluter^.M_CancelAction(ACTION_DilMovePlunger);
+			nStateAction := 80;
+		ELSE
+			IF NOT pPassivPip^.P_pDiluter^.M_GetActionBusy(ACTION_DilMovePlunger) THEN
+				MEMSET(ADR(stActionData),0,SIZEOF(stActionData));
+				stActionData.eAction := E_Action.ACTION_Dispense;
+				IF alrRParam[1] > 0.0 THEN
+					stActionData.aParams[1] := LREAL_TO_DINT(alrRParam[1]); //Quantity
+					nStateAction := 3;
+				ELSE
+					//Es wird mit max. 2 x Spritzen-Volumen dispenst
+					stActionData.aParams[1] := pPassivPip^.P_pDiluter^.P_nSyringeSize * 20;
+					tDelay := LREAL_TO_TIME(alrRParam[3]);
+					IF tDelay > T#0S THEN	//Delay
+						timer(IN:=TRUE,PT:=tDelay);	//Timer starten
+						stGCodeRef.aToolTable[stGCodeRef.sNciToPlc.Tool].tDelayStart := tDelay;
+						nStateAction := 2;
+					ELSE
+						stGCodeRef.aToolTable[stGCodeRef.sNciToPlc.Tool].tDelayStart := T#0s;
+						nStateAction := 80;
+					END_IF					
+				END_IF
+				stActionData.aParams[2] := LREAL_TO_DINT(alrRParam[2]); //Flow
+				stError.ErrorId := stGCodeRef.pCurrentTool^.M_ExeAction(stActionData);
+				IF stError.ErrorId > 0 THEN
+					nStateAction := 99;
+				END_IF
+			END_IF
+		END_IF
+		
+	2:	//Warten auf Timer
+		IF bStop THEN
+			timer(IN:= FALSE);
+			stGCodeRef.pCurrentTool^.M_CancelAction(E_Action.ACTION_Dispense);
+			nStateAction := 80;
+			RETURN;
+		END_IF
+		timer();
+		IF timer.Q THEN
+			timer(IN:= FALSE);		
+			nStateAction := 80;
+		END_IF
+	
+	3:	//Warten bis Dispensen fertig
+		IF bStop THEN
+			pPassivPip^.M_CancelAction(E_Action.ACTION_Dispense);
+			nStateAction := 80;
+		ELSE
+			IF NOT pPassivPip^.M_GetActionBusy(E_Action.ACTION_Dispense) THEN
+				nStateAction := 80;
+			END_IF
+		END_IF
+END_CASE]]></ST>
+      </Implementation>
+    </Action>
+    <Action Name="A_DispenseDrops" Id="{7b4c6e8a-1412-406a-9aae-bdbfdd3b3d4a}">
+      <Implementation>
+        <ST><![CDATA[stError.POUState := nStateAction;
+
+CASE nStateAction OF
+	0:	
+		IF bStop THEN
+			nStateAction := 80;
+		ELSE
+			IF stGCodeRef.pCurrentTool = 0 THEN
+				stError.ErrorId := E_ErrorIdGCode.ERRORID_NoSelectedTool;
+				nStateAction := 99;
+			ELSE
+				IF NOT fbItpReadRParams.bBusy THEN
+					stGCodeRef.aToolTable[stGCodeRef.sNciToPlc.Tool].bIsInAction1 := FALSE;
+					MEMSET(ADR(stActionData),0,SIZEOF(stActionData));
+					stActionData.eAction := E_Action.ACTION_DispenseDrops;
+					stActionData.aParams[1] := LREAL_TO_DINT(alrRParam[1]); //Drops
+					stActionData.aParams[2] := 1;
+					stActionData.aParams[4] := LREAL_TO_DINT(alrRParam[3]); //Drops für Slave bei TwinPip 
+					stError.ErrorId := stGCodeRef.pCurrentTool^.M_ExeAction(stActionData);
+					IF stError.ErrorId > 0 THEN
+						nStateAction := 99;
+					ELSE
+						IF stActionData.aParams[1] = 0 THEN //Dauerdispensen
+							stGCodeRef.aToolTable[stGCodeRef.sNciToPlc.Tool].bIsInAction1 := TRUE;
+							tDelay := LREAL_TO_TIME(alrRParam[2]); //Delay
+							IF tDelay > T#0S THEN	//Delay
+								timer(IN:=TRUE,PT:=tDelay);	//Timer starten
+								stGCodeRef.aToolTable[stGCodeRef.sNciToPlc.Tool].tDelayStart := tDelay;
+								nStateAction := 2;								
+							ELSE
+								stGCodeRef.aToolTable[stGCodeRef.sNciToPlc.Tool].tDelayStart := T#0S;
+								nStateAction := 80;
+							END_IF
+						ELSE
+							nStateAction := 1;
+						END_IF
+					END_IF
+				END_IF
+			END_IF
+		END_IF
+		
+	1:	//Dispense ready?
+		IF bStop THEN
+			stGCodeRef.pCurrentTool^.M_CancelAction(E_Action.ACTION_DispenseDrops);
+			stGCodeRef.aToolTable[stGCodeRef.sNciToPlc.Tool].bIsInAction1 := FALSE;
+		END_IF
+		
+		IF NOT stGCodeRef.pCurrentTool^.P_bBusy THEN
+			stGCodeRef.aToolTable[stGCodeRef.sNciToPlc.Tool].bIsInAction1 := FALSE;
+			IF stGCodeRef.pCurrentTool^.P_bError THEN
+				stError.ErrorId := stGCodeRef.pCurrentTool^.P_nErrorId;
+				nStateAction := 99;
+			ELSE
+				nStateAction := 80;	
+			END_IF
+		END_IF
+		
+	2:	//Warten auf Timer
+		IF bStop THEN
+			timer(IN:= FALSE);
+			stGCodeRef.pCurrentTool^.M_CancelAction(E_Action.ACTION_DispenseDrops);
+			stGCodeRef.aToolTable[stGCodeRef.sNciToPlc.Tool].bIsInAction1 := FALSE;
+			nStateAction := 80;
+			RETURN;
+		END_IF
+		timer();
+		IF timer.Q THEN
+			timer(IN:= FALSE);		
+			nStateAction := 80;
+		END_IF		
+END_CASE]]></ST>
+      </Implementation>
+    </Action>
+    <Action Name="A_Expose" Id="{ab07e639-e724-4ef5-9a10-e06d78705b2f}">
+      <Implementation>
+        <ST><![CDATA[stError.POUState := nStateAction;
+
+CASE nStateAction OF
+	0:	
+		IF bStop THEN
+			nStateAction := 80;
+		ELSE
+			IF stGCodeRef.pCurrentTool = 0 THEN
+				stError.ErrorId := E_ErrorIdGCode.ERRORID_NoSelectedTool;
+				nStateAction := 99;
+			ELSE
+				IF NOT fbItpReadRParams.bBusy THEN
+					MEMSET(ADR(stActionData),0,SIZEOF(stActionData));
+					stActionData.eAction := E_Action.ACTION_Expose;
+					stActionData.aParams[1] := LREAL_TO_DINT(alrRParam[1]); //Ctrl
+					stActionData.aParams[2] := LREAL_TO_DINT(alrRParam[2]); //Brightness
+					stActionData.aParams[3] := LREAL_TO_DINT(alrRParam[3]); //Time
+					stError.ErrorId := stGCodeRef.pCurrentTool^.M_ExeAction(stActionData);
+					IF stError.ErrorId > 0 THEN
+						nStateAction := 99;
+					ELSE
+						IF stActionData.aParams[3] = 0 THEN
+							nStateAction := 80;
+						ELSE
+							nStateAction := 1;	
+						END_IF
+					END_IF
+				END_IF
+			END_IF
+		END_IF
+		
+	1:	//Expose ready?
+		IF bStop THEN
+			stGCodeRef.pCurrentTool^.M_CancelAction(E_Action.ACTION_Expose);
+		END_IF
+		
+		IF NOT stGCodeRef.pCurrentTool^.P_bBusy THEN
+			IF stGCodeRef.pCurrentTool^.P_bError THEN
+				stError.ErrorId := stGCodeRef.pCurrentTool^.P_nErrorId;
+				nStateAction := 99;
+			ELSE
+				nStateAction := 80;	
+			END_IF
+		END_IF
+END_CASE]]></ST>
+      </Implementation>
+    </Action>
+    <Action Name="A_Extrude" Id="{6f20d465-0e4e-4998-943b-7940f8276f34}">
+      <Implementation>
+        <ST><![CDATA[stError.POUState := nStateAction;
+CASE nStateAction OF
+	0:	
+		IF bStop THEN
+			nStateAction := 80;
+		ELSE
+			IF stGCodeRef.pCurrentTool = 0 THEN
+				stError.ErrorId := E_ErrorIdGCode.ERRORID_NoSelectedTool;
+				nStateAction := 99;
+			ELSE
+				IF NOT fbItpReadRParams.bBusy THEN
+					//Falls Extruder noch nicht ready, weil er z.B. noch in Decomp-Phase ist, warten!
+					IF stGCodeRef.pCurrentTool^.M_GetActionBusy(E_Action.ACTION_Extrude) THEN
+						RETURN;
+					END_IF
+					MEMSET(ADR(stActionData),0,SIZEOF(stActionData));
+					stActionData.eAction := E_Action.ACTION_Extrude;
+					stActionData.aParams[1] := 0;
+					stActionData.aParams[2] := 1; //On
+					stError.ErrorId := stGCodeRef.pCurrentTool^.M_ExeAction(stActionData);
+					IF stError.ErrorId > 0 THEN
+						nStateAction := 99;
+					ELSE
+						stGCodeRef.aToolTable[stGCodeRef.sNciToPlc.Tool].bIsInAction1 := TRUE;
+						tDelay := LREAL_TO_TIME(alrRParam[1]); //Delay (Startbreak)
+						IF tDelay > T#0S THEN	//Delay
+							timer(IN:=TRUE,PT:=tDelay);	//Timer starten
+							stGCodeRef.aToolTable[stGCodeRef.sNciToPlc.Tool].tDelayStart := tDelay;
+							nStateAction := 1;								
+						ELSE
+							stGCodeRef.aToolTable[stGCodeRef.sNciToPlc.Tool].tDelayStart := T#0S;
+							nStateAction := 80;
+						END_IF
+					END_IF
+				END_IF
+			END_IF
+		END_IF
+		
+	1: //Warten auf Timer
+		IF bStop THEN
+			timer(IN:= FALSE);
+			stGCodeRef.pCurrentTool^.M_CancelAction(E_Action.ACTION_Extrude);
+			nStateAction := 80;
+			RETURN;
+		END_IF
+		timer();
+		IF timer.Q THEN
+			timer(IN:= FALSE);
+			nStateAction := 80;
+		END_IF
+END_CASE]]></ST>
+      </Implementation>
+    </Action>
+    <Action Name="A_MeasureTool" Id="{286576ec-1839-4ef3-8bf0-a2886c2e1364}">
+      <Implementation>
+        <ST><![CDATA[stError.POUState := nStateAction;
+
+IF fbComplexAction.bError THEN
+	stError.ErrorId :=fbComplexAction.nErrorId;
+	nStateAction := 99;
+END_IF
+
+CASE nStateAction OF
+	0:	//Aktuelles Tool ausgewählt?
+		IF stGCodeRef.pCurrentTool = 0 THEN
+			stError.Cmd := E_Action.ACTION_MeasureTool;
+			stError.ErrorId := E_ErrorIdGCode.ERRORID_NoSelectedTool;
+			nStateAction := 99;
+		ELSE
+			IF NOT fbItpReadRParams.bBusy THEN
+				IF fbObjectDirectory.M_GetObjType(LREAL_TO_UINT(alrRParam[1])) = E_ObjectType.OBJECTTYPE_TipCalibrator THEN
+					pTarget := fbObjectDirectory.M_GetObjPointer(LREAL_TO_UINT(alrRParam[1]));
+					//NCI-Gruppe auflösen
+					fbClearGroup(stGCodeRef:= stGCodeRef, bReGearInSlave:= TRUE, bExecute:= TRUE);
+					IF NOT fbClearGroup.bBusy THEN
+						IF fbClearGroup.bError THEN
+							nStateAction := 99;
+							stError.ErrorId := fbClearGroup.nErrorId;
+						ELSE
+							stCurrentPos := pNewTool^.P_stCurrentPosTotal;
+							IF bStop THEN
+								nStateAction := 80;
+							ELSE
+								nStateAction := 1;	
+							END_IF
+						END_IF
+						fbClearGroup(stGCodeRef:= stGCodeRef, bExecute:= FALSE);			
+					END_IF
+				ELSE
+					stError.Cmd := E_Action.ACTION_MeasureTool;
+					stError.ObjectId := LREAL_TO_UINT(alrRParam[1]);
+					stError.ErrorId := E_ErrorIdCmd.ERRORID_UnsuitableTarget;
+					nStateAction := 99;
+				END_IF
+			END_IF
+		END_IF
+
+	1:	//Action "MeasureTool" ausführen
+		stMeasToolOldOffset := stGCodeRef.pCurrentTool^.P_stAbsPosTotal;
+		MEMSET(ADR(stActionData),0,SIZEOF(stActionData));
+		stActionData.eAction := E_Action.ACTION_MeasureTool;
+		stActionData.nObject := stGCodeRef.pCurrentTool^.P_nObjectID;
+		stActionData.nTarget := pTarget^.P_nObjectID;
+		stActionData.aParams[2] := LREAL_TO_DINT(alrRParam[3]);
+
+		stError.ErrorId := fbComplexAction.M_ExeAction(stActionData);
+		IF stError.ErrorId > 0 THEN
+			nStateAction := 99;
+		ELSE
+			nStateAction := 2;	
+		END_IF
+		
+	2:	//MeasureTool ready? -> Nullpunkt um neuen Offset verschieben
+		IF NOT fbComplexAction.bBusy THEN
+			stMeasToolNewOffset := stGCodeRef.pCurrentTool^.P_stAbsPosTotal;
+			stGCodeRef.sZeroShiftDesc.fShiftX := stGCodeRef.sZeroShiftDesc.fShiftX + stMeasToolOldOffset.X / 1000 -  stMeasToolNewOffset.X / 1000;
+			stGCodeRef.sZeroShiftDesc.fShiftY := stGCodeRef.sZeroShiftDesc.fShiftY + stMeasToolOldOffset.Y / 1000 -  stMeasToolNewOffset.Y / 1000;
+			stCurrentPos := stGCodeRef.pCurrentTool^.P_stCurrentPosTotal;
+			nStateAction := 3;
+		END_IF
+
+	3:	//neuen Offset schreiben
+		fbItpWriteZeroShiftEx(bExecute:= TRUE, sNciToPlc:= stGCodeRef.sNciToPlc, nZsNo:= 54, sZeroShiftDesc:= stGCodeRef.sZeroShiftDesc);
+		IF NOT fbItpWriteZeroShiftEx.bBusy THEN
+			IF fbItpWriteZeroShiftEx.bErr THEN
+				stError.ErrorId := UDINT_TO_UINT(fbItpWriteZeroShiftEx.nErrId);
+				nStateAction := 99;
+			ELSE
+				A_MoveBack();
+				nStateAction := 4;
+			END_IF
+			fbItpWriteZeroShiftEx(bExecute:= FALSE, sNciToPlc:= stGCodeRef.sNciToPlc, sZeroShiftDesc:= stGCodeRef.sZeroShiftDesc);
+		END_IF
+		
+	4:	//MoveBack
+		A_MoveBack();
+		IF nStateA_MoveBack >= 80 THEN
+			IF nStateA_MoveBack = 99 THEN
+				nStateAction := 99;
+			ELSE
+				nStateAction := 80;
+			END_IF
+			nStateA_MoveBack := 0;
+		END_IF
+END_CASE]]></ST>
+      </Implementation>
+    </Action>
+    <Action Name="A_MoveBack" Id="{e1d03f36-9879-40d1-9ec8-092878095c4c}">
+      <Implementation>
+        <ST><![CDATA[CASE nStateA_MoveBack OF
+	0:	//MoveXY Ausgangspunkt (stCurrentPos)
+		MEMSET(ADR(stActionData),0,SIZEOF(stActionData));
+		stActionData.eAction := E_Action.ACTION_MoveXY;
+		stActionData.aParams[1] := E_MoveMode.MODE_AbsWithOffset;
+		stActionData.aParams[2] := REAL_TO_DINT(stCurrentPos.X);
+		stActionData.aParams[3] := REAL_TO_DINT(stCurrentPos.Y);
+		stActionData.aParams[4] := -1; //max Speed X
+		stActionData.aParams[5] := -1; //max Speed Y
+		stError.ErrorId := stGCodeRef.pCurrentTool^.M_ExeAction(stActionData);
+		IF stError.ErrorId > 0 THEN
+			nStateA_MoveBack := 99;
+		ELSE
+			nStateA_MoveBack := 1;
+		END_IF
+	
+	1:	//MoveXY ready? -> MoveZ Ausgangspunkt (stCurrentPos)
+		IF NOT stGCodeRef.pCurrentTool^.M_GetActionBusy(E_Action.ACTION_MoveXY) THEN
+			IF stGCodeRef.pCurrentTool^.P_eObjectType = E_ObjectType.OBJECTTYPE_TwinPiezoHolder THEN
+				//Einschwenken, falls ausgeschwenkt
+				pTwinPiezoHolder := stGCodeRef.pCurrentTool;
+				IF pTwinPiezoHolder^.P_eCurrentSwivelState = E_SwivelState.Original THEN
+					MEMSET(ADR(stActionData),0,SIZEOF(stActionData));
+					stActionData.eAction := E_Action.ACTION_Swivel;
+					stActionData.aParams[1] := 1;
+					stError.ErrorId := pTwinPiezoHolder^.M_ExeAction(stActionData);
+					IF stError.ErrorId > 0 THEN
+						nStateA_MoveBack := 99;
+					ELSE
+						nStateA_MoveBack := 2;
+					END_IF
+				ELSE
+					nStateA_MoveBack := 3;		
+				END_IF
+			ELSE
+				nStateA_MoveBack := 3;	
+			END_IF
+		END_IF	
+	
+	2:	//TwinPiezoHolder ready?
+		IF NOT stGCodeRef.pCurrentTool^.M_GetActionBusy(E_Action.ACTION_Swivel) THEN
+			nStateA_MoveBack := 3;
+		END_IF
+	
+	3:	//NCI-Gruppe wieder erstellen
+		fbBuildGroup(stGCodeRef:= stGCodeRef, bExecute:= TRUE);
+		IF NOT fbBuildGroup.bBusy THEN
+			IF fbBuildGroup.bError THEN
+				stError.ErrorId := fbBuildGroup.nErrorId;
+				nStateA_MoveBack := 99;
+			ELSE
+				nStateA_MoveBack := 80;
+			END_IF
+			fbBuildGroup(stGCodeRef:= stGCodeRef, bExecute:= FALSE);
+		END_IF	
+END_CASE]]></ST>
+      </Implementation>
+    </Action>
+    <Action Name="A_MoveFree" Id="{ef26d49a-7d22-41f9-82ed-6dd4dfbace49}">
+      <Implementation>
+        <ST><![CDATA[CASE nStateA_MoveFree OF
+	0:	
+		MEMSET(ADR(stActionData),0,SIZEOF(stActionData));
+		stActionData.eAction := E_Action.ACTION_MoveZ;
+		stActionData.aParams[1] := E_MoveMode.MODE_Free;
+		stActionData.aParams[3] := -1;
+
+		stError.ErrorId := stGCodeRef.pCurrentTool^.M_ExeAction(stActionData);
+		IF stError.ErrorId > 0 THEN
+			nStateA_MoveFree := 99;
+		ELSE
+			nStateA_MoveFree := 1;
+		END_IF
+	
+	1:	//MoveXY ready? -> MoveZ Ausgangspunkt (stCurrentPos)
+		IF NOT stGCodeRef.pCurrentTool^.M_GetActionBusy(E_Action.ACTION_MoveZ) THEN
+			nStateA_MoveFree := 2;
+		END_IF	
+	
+	2:	//NCI-Gruppe wieder erstellen
+		fbBuildGroup(stGCodeRef:= stGCodeRef, bExecute:= TRUE);
+		IF NOT fbBuildGroup.bBusy THEN
+			IF fbBuildGroup.bError THEN
+				stError.ErrorId := fbBuildGroup.nErrorId;
+				nStateA_MoveFree := 99;
+			ELSE
+				nStateA_MoveFree := 80;
+			END_IF
+			fbBuildGroup(stGCodeRef:= stGCodeRef, bExecute:= FALSE);
+		END_IF	
+END_CASE]]></ST>
+      </Implementation>
+    </Action>
+    <Action Name="A_MoveZHome" Id="{50aaca29-90f4-4733-b698-d8e96b95719b}">
+      <Implementation>
+        <ST><![CDATA[stError.POUState := nStateAction;
+
+IF stGCodeRef.pCurrentTool^.P_bError THEN
+	stError.ErrorId := stGCodeRef.pCurrentTool^.P_nErrorId;
+	nStateAction := 99;
+END_IF
+
+CASE nStateAction OF
+	0:	//Aktuelles Tool ausgewählt?
+		IF stGCodeRef.pCurrentTool = 0 THEN
+			stError.ErrorId := E_ErrorIdGCode.ERRORID_NoSelectedTool;
+			nStateAction := 99;
+		ELSE //Interpolationsgruppe auflösen (notwendig für Step3)
+			fbClearGroup(stGCodeRef:= stGCodeRef,bReGearInSlave:= TRUE, bExecute:= TRUE);
+			IF NOT fbClearGroup.bBusy THEN
+				IF fbClearGroup.bError THEN
+					nStateAction := 99;
+					stError.ErrorId := fbClearGroup.nErrorId;
+				ELSE
+					stCurrentPos := pNewTool^.P_stCurrentPosTotal;
+					IF bStop THEN
+						nStateAction := 80;
+					ELSE
+						nStateAction := 1;	
+					END_IF
+				END_IF
+				fbClearGroup(stGCodeRef:= stGCodeRef, bExecute:= FALSE);
+			END_IF
+		END_IF
+		
+	1:	//MoveZ
+		IF bStop THEN
+			nStateAction := 80;
+		ELSE
+			MEMSET(ADR(stActionData),0,SIZEOF(stActionData));
+			stActionData.eAction := E_Action.ACTION_MoveZ;
+			stActionData.aParams[1] := E_MoveMode.MODE_Home;
+			stActionData.aParams[3]  := -1; //MaxSpeed
+			stError.ErrorId := stGCodeRef.pCurrentTool^.M_ExeAction(stActionData);
+			IF stError.ErrorId > 0 THEN
+				nStateAction := 99;
+			ELSE
+				nStateAction := 2;
+			END_IF
+		END_IF
+		
+	2:	//MoveZ ready? -> aktuelle Position auf Q1-Achse übertragen
+		IF NOT stGCodeRef.pCurrentTool^.M_GetActionBusy(E_Action.ACTION_MoveZ) THEN
+			stCurrentPos := stGCodeRef.pCurrentTool^.P_stCurrentPosTotal;
+ 			fbMcSetPosition(Axis:= AxisRefQ1, Execute:= TRUE, Position:= stCurrentPos.Z / 1000.0 - stGCodeRef.sZeroShiftDesc.fShiftZ , Options:= sSetPositionOptions);
+			nStateAction := 3;	
+		END_IF
+		
+	3:	//SetPosition ready?
+		fbMcSetPosition(Axis:= AxisRefQ1);
+		IF NOT fbMcSetPosition.Busy THEN
+			IF fbMcSetPosition.Error THEN
+				stError.ErrorId := UDINT_TO_UINT(fbMcSetPosition.ErrorID);
+				nStateAction := 99;
+			ELSE
+				IF bStop THEN
+					nStateAction := 80;
+				ELSE
+					nStateAction := 4;	
+				END_IF
+			END_IF
+			fbMcSetPosition(Axis:= AxisRefQ1 , Execute:= FALSE);
+		END_IF
+		
+	4:	//Interpolationsgruppe bilden
+		fbBuildGroup(stGCodeRef:= stGCodeRef, bExecute:= TRUE);
+		IF NOT fbBuildGroup.bBusy THEN
+			IF fbBuildGroup.bError THEN
+				stError.ErrorId := fbBuildGroup.nErrorId;
+				nStateAction := 99;
+			ELSE
+				nStateAction := 80;
+			END_IF
+			fbBuildGroup(stGCodeRef:= stGCodeRef, bExecute:= FALSE);
+		END_IF
+END_CASE]]></ST>
+      </Implementation>
+    </Action>
+    <Action Name="A_PipPostSequence" Id="{40be7d6e-e270-47bf-8624-2db30080368d}">
+      <Implementation>
+        <ST><![CDATA[stError.POUState := nStateAction;
+
+IF fbComplexAction.bError THEN
+	stError.ErrorId :=fbComplexAction.nErrorId;
+	nStateAction := 99;
+	RETURN;
+END_IF
+
+CASE nStateAction OF
+	0:	//R-Parameter auswerten und validieren
+		IF stGCodeRef.pCurrentTool = 0 THEN
+			stError.ErrorId := E_ErrorIdGCode.ERRORID_NoSelectedTool;
+			nStateAction := 99;
+		ELSE
+			IF NOT fbItpReadRParams.bBusy THEN
+				//alle Paramter validieren und TargetIds zwischenspeichern
+				nTgtNrStrob := LREAL_TO_UINT(alrRParam[1]);
+				nDispenseTest := LREAL_TO_DINT(alrRParam[2]);
+				
+				nTgtNrWS_DispenseWaste1	:= LREAL_TO_UINT(alrRParam[3]);
+				nSpecPointNr_DispenseWaste1 := LREAL_TO_UINT(alrRParam[4]);
+				nQuantity_DispenseWaste1 := LREAL_TO_DINT(alrRParam[5]);
+				nFlow_DispenseWaste1 := LREAL_TO_DINT(alrRParam[6]);
+				
+				nTgtNrSource := LREAL_TO_UINT(alrRParam[7]);
+				nGetSampleColSlotNr := LREAL_TO_DINT(alrRParam[8]);
+				nGetSampleRow := LREAL_TO_DINT(alrRParam[9]);
+				nGetSampleQuantity := LREAL_TO_DINT(alrRParam[10]);
+				nGetSampleFlow := LREAL_TO_DINT(alrRParam[11]);
+				nGetSampleDelay := LREAL_TO_DINT(alrRParam[12]);
+				
+				nTgtNrWS_DispenseWaste2 := LREAL_TO_UINT(alrRParam[13]);
+				nSpecPointNr_DispenseWaste2 := LREAL_TO_UINT(alrRParam[14]);
+				nQuantity_DispenseWaste2 := LREAL_TO_DINT(alrRParam[15]);
+				nFlow_DispenseWaste2 := LREAL_TO_DINT(alrRParam[16]);
+				
+				nTgtNrWS_Wash1 := LREAL_TO_UINT(alrRParam[17]);
+				nSpecPointNr_Wash1 := LREAL_TO_UINT(alrRParam[18]);
+				nWashFlow_Wash1 := LREAL_TO_DINT(alrRParam[19]);
+				nWashTime_Wash1 := LREAL_TO_DINT(alrRParam[20]);
+
+				nTgtNrWS_Wash2 := LREAL_TO_UINT(alrRParam[21]);
+				nSpecPointNr_Wash2 := LREAL_TO_UINT(alrRParam[22]);
+				nWashFlow_Wash2 := LREAL_TO_DINT(alrRParam[23]);
+				nWashTime_Wash2 := LREAL_TO_DINT(alrRParam[24]);
+				
+				nTgtNrDryPad_Dry1 := LREAL_TO_UINT(alrRParam[25]);
+				nDryCount_Dry1 := LREAL_TO_USINT(alrRParam[26]);
+				nDryTime_Dry1 := LREAL_TO_DINT(alrRParam[27]);
+				
+				//Check 1. DispenseTest
+				IF nDispenseTest > 0 THEN
+					IF NOT M_ValidateTargetNr(nTgtNrStrob) THEN
+						stError.ErrorId := E_ErrorIdGCode.ERRORID_InvalidRParameter;
+						stError.ErrorId2 := 1;
+						nStateAction := 99;
+						RETURN;
+					END_IF
+				END_IF
+				
+				//Check 2. DispenseWaste
+				IF nQuantity_DispenseWaste1 > 0 THEN
+					IF NOT M_ValidateTargetNr(nTgtNrWS_DispenseWaste1) THEN
+						stError.ErrorId := E_ErrorIdGCode.ERRORID_InvalidRParameter;
+						stError.ErrorId2 := 3;
+						nStateAction := 99;
+						RETURN;
+					END_IF
+					//Flow muss größer 0 sein!
+				END_IF
+				
+				//Check 3. GetPipSample (Waschlösung)
+				IF nGetSampleQuantity > 0 THEN //wenn 0, dann werden die nächsten beiden Schritte auch ausgelassen und müssen nicht gecheckt werden
+					IF M_ValidateTargetNr(nTgtNrSource) THEN
+						pTarget := fbObjectDirectory.M_GetObjPointer(stGCodeRef.aTargetTable[nTgtNrSource]);
+						IF pTarget = 0 THEN
+							stError.ErrorId := E_ErrorIdGCode.ERRORID_InvalidRParameter;
+							stError.ErrorId2 := 7;
+							nStateAction := 99;
+							RETURN;
+						END_IF
+						IF pTarget^.P_eObjectType = E_ObjectType.OBJECTTYPE_Mtp THEN
+							pMtp := pTarget;
+							IF NOT(nGetSampleColSlotNr > 0 AND nGetSampleColSlotNr <= pMtp^.P_nCols) THEN
+								stError.ErrorId := E_ErrorIdGCode.ERRORID_InvalidRParameter;
+								stError.ErrorId2 := 8;
+								nStateAction := 99;
+								RETURN;
+							END_IF
+							IF NOT(nGetSampleRow > 0 AND nGetSampleRow <= pMtp^.P_nRows) THEN
+								stError.ErrorId := E_ErrorIdGCode.ERRORID_InvalidRParameter;
+								stError.ErrorId2 := 9;
+								nStateAction := 99;
+								RETURN;
+							END_IF
+						ELSIF pTarget^.P_eObjectType = E_ObjectType.OBJECTTYPE_VialRack THEN
+							pVialRack := pTarget;						
+							//Im Slot muss auch ein Vial sein!
+							pPieceSlot := pVialRack^.M_GetSlot(DINT_TO_UINT(nGetSampleColSlotNr));
+							IF pPieceSlot = 0 THEN
+								stError.ErrorId := E_ErrorIdGCode.ERRORID_InvalidRParameter;
+								stError.ErrorId2 := 8;
+								nStateAction := 99;
+								RETURN;
+							END_IF
+							IF pPieceSlot^.P_pPiece = 0 THEN
+								stError.ErrorId := E_ErrorIdGCode.ERRORID_InvalidRParameter;
+								stError.ErrorId2 := 3;
+								nStateAction := 99;
+								RETURN;
+							END_IF
+						END_IF
+					ELSE
+						stError.ErrorId := E_ErrorIdGCode.ERRORID_InvalidRParameter;
+						stError.ErrorId2 := 7;
+						nStateAction := 99;
+						RETURN;
+					END_IF
+					
+					IF nGetSampleFlow < 1 THEN
+						stError.ErrorId := E_ErrorIdGCode.ERRORID_InvalidRParameter;
+						stError.ErrorId2 := 11;
+						nStateAction := 99;
+						RETURN;
+					END_IF
+					
+					//Check 4. DispenseWaste
+					IF nQuantity_DispenseWaste2 > 0 THEN
+						IF NOT M_ValidateTargetNr(nTgtNrWS_DispenseWaste2) THEN
+							stError.ErrorId := E_ErrorIdGCode.ERRORID_InvalidRParameter;
+							stError.ErrorId2 := 13;
+							nStateAction := 99;
+							RETURN;
+						END_IF
+						
+						IF nFlow_DispenseWaste2 = 0 THEN
+							stError.ErrorId := E_ErrorIdGCode.ERRORID_InvalidRParameter;
+							stError.ErrorId2 := 16;
+							nStateAction := 99;
+							RETURN;
+						END_IF
+					END_IF
+					//Check 5. WashTool
+					IF nWashTime_Wash1 > 0 THEN
+						IF NOT M_ValidateTargetNr(nTgtNrWS_Wash1) THEN
+							stError.ErrorId := E_ErrorIdGCode.ERRORID_InvalidRParameter;
+							stError.ErrorId2 := 17;
+							nStateAction := 99;
+							RETURN;
+						END_IF
+						IF nWashFlow_Wash1 = 0 THEN
+							stError.ErrorId := E_ErrorIdGCode.ERRORID_InvalidRParameter;
+							stError.ErrorId2 := 19;
+							nStateAction := 99;
+							RETURN;
+						END_IF
+					END_IF
+				END_IF
+				
+				//Check 6. WashTool
+				IF nWashTime_Wash2 > 0 THEN
+					IF NOT M_ValidateTargetNr(nTgtNrWS_Wash2) THEN
+						stError.ErrorId := E_ErrorIdGCode.ERRORID_InvalidRParameter;
+						stError.ErrorId2 := 21;
+						nStateAction := 99;
+						RETURN;
+					END_IF
+					IF nWashFlow_Wash2 = 0 THEN
+						stError.ErrorId := E_ErrorIdGCode.ERRORID_InvalidRParameter;
+						stError.ErrorId2 := 23;
+						nStateAction := 99;
+						RETURN;
+					END_IF
+				END_IF
+					
+				//Check 7. DryPip
+				IF nDryCount_Dry1 > 0 THEN
+					IF NOT M_ValidateTargetNr(nTgtNrDryPad_Dry1) THEN
+						stError.ErrorId := E_ErrorIdGCode.ERRORID_InvalidRParameter;
+						stError.ErrorId2 := 25;
+						nStateAction := 99;
+						RETURN;
+					END_IF
+				END_IF
+				nStateAction := 1;
+			END_IF
+		END_IF
+		
+	
+	1:	//NCI-Gruppe auflösen
+		fbClearGroup(stGCodeRef:= stGCodeRef, bReGearInSlave:= TRUE, bExecute:= TRUE);
+		IF NOT fbClearGroup.bBusy THEN
+			IF fbClearGroup.bError THEN
+				nStateAction := 99;
+				stError.ErrorId := fbClearGroup.nErrorId;
+			ELSE
+				stCurrentPos := pNewTool^.P_stCurrentPosTotal;
+				IF bStop THEN
+					nStateAction := 80;
+				ELSE
+					nStateAction := 2;
+				END_IF
+			END_IF
+			fbClearGroup(stGCodeRef:= stGCodeRef, bExecute:= FALSE);			
+		END_IF
+	
+	2:	//DispenseTest start
+		IF bStop THEN
+			nStateAction := 80;
+			RETURN;
+		END_IF
+		
+		IF nDispenseTest > 0 THEN
+			MEMSET(ADR(stActionData),0,SIZEOF(stActionData));
+			stActionData.eAction := E_Action.ACTION_DispenseTest;
+			stActionData.nObject := stGCodeRef.pCurrentTool^.P_nObjectID;
+			stActionData.nTarget := stGCodeRef.aTargetTable[nTgtNrStrob];
+			stActionData.aParams[1] := nDispenseTest;
+			stActionData.aParams[2] := 1; //Inhibit dispense trials
+			stError.ErrorId := fbComplexAction.M_ExeAction(stActionData);
+			IF stError.ErrorId > 0 THEN
+				nStateAction := 99;
+			ELSE
+				alrRParam[1] := 0.0;
+				nStateAction := 3;
+			END_IF
+		ELSE
+			nStateAction := 3;
+		END_IF
+	
+	3:	//DispenseTest ready?
+		IF NOT fbComplexAction.bBusy THEN
+			IF fbComplexAction.P_bLastActionResult THEN
+				alrRParam[1] := DINT_TO_LREAL(fbComplexAction.P_nLastActionResult);
+				fbComplexAction.P_bLastActionResult := FALSE;
+			END_IF
+			//in R-Parameter R140 schreiben
+			fbItpWriteRParams(sNciToPlc:= stGCodeRef.sNciToPlc, bExecute:= TRUE, pAddr:= ADR(alrRParam), nIndex:= 140, nCount:= 1);
+			IF NOT fbItpWriteRParams.bBusy THEN
+				IF fbItpWriteRParams.bErr THEN
+					nStateAction := 99;
+				ELSE
+					nStateAction := 4;
+				END_IF
+				fbItpWriteRParams(sNciToPlc:= stGCodeRef.sNciToPlc, bExecute:= FALSE);
+			END_IF
+		END_IF
+		
+	4:	//DispenseWaste start (WashInside)
+		IF bStop THEN
+			nStateAction := 80;
+			RETURN;
+		END_IF
+	
+		IF nQuantity_DispenseWaste1 > 0 THEN
+			MEMSET(ADR(stActionData),0,SIZEOF(stActionData));
+			stActionData.eAction := E_Action.ACTION_WashTool;
+			stActionData.nObject := stGCodeRef.pCurrentTool^.P_nObjectID;
+			stActionData.nTarget := stGCodeRef.aTargetTable[nTgtNrWS_DispenseWaste1];
+			stActionData.aParams[1] := nSpecPointNr_DispenseWaste1;
+			stActionData.aParams[2] := E_WashMode.MODE_WashInside;
+			stActionData.aParams[3] := nQuantity_DispenseWaste1;
+			stActionData.aParams[4] := nFlow_DispenseWaste1;
+			stError.ErrorId := fbComplexAction.M_ExeAction(stActionData);
+			IF stError.ErrorId > 0 THEN
+				nStateAction := 99;
+			ELSE
+				nStateAction := 5;	
+			END_IF
+		ELSE
+			nStateAction := 6;
+		END_IF
+	
+	5:	//DispenseWaste ready?
+		IF NOT fbComplexAction.bBusy THEN
+			nStateAction := 6;
+		END_IF
+	
+	6:	//GetPipSample start (Waschlösung)
+		IF bStop THEN
+			nStateAction := 80;
+			RETURN;
+		END_IF
+		IF nGetSampleQuantity > 0 THEN
+			MEMSET(ADR(stActionData),0,SIZEOF(stActionData));
+			stActionData.eAction := E_Action.ACTION_GetPipSample;
+			stActionData.nObject := stGCodeRef.pCurrentTool^.P_nObjectID;
+			stActionData.nTarget := stGCodeRef.aTargetTable[nTgtNrSource];
+			stActionData.aParams[1] := nGetSampleColSlotNr;
+			stActionData.aParams[2] := nGetSampleRow;
+			stActionData.aParams[3] := nGetSampleQuantity;
+			stActionData.aParams[4] := nGetSampleFlow;
+			stActionData.aParams[5] := nGetSampleDelay;
+			//stActionData.aParams[6] := nGetSampleAirGap;
+			//stActionData.aParams[7] := nGetSampleDilBypass;
+			stActionData.aParams[8] := 1; //aktivate Piezo
+			stError.ErrorId := fbComplexAction.M_ExeAction(stActionData);
+			IF stError.ErrorId > 0 THEN
+				nStateAction := 99;
+			ELSE
+				nStateAction := 7;
+			END_IF
+		
+		ELSE
+			nStateAction := 12;
+		END_IF
+
+	7:	//GetPipSample ready?
+		IF NOT fbComplexAction.bBusy THEN
+			nStateAction := 8; //DispenseWaste
+		END_IF
+	8:	//DispenseWaste start (WashInside)
+		IF bStop THEN
+			nStateAction := 80;
+			RETURN;
+		END_IF
+		
+		IF nQuantity_DispenseWaste2 > 0 THEN
+			MEMSET(ADR(stActionData),0,SIZEOF(stActionData));
+			stActionData.eAction := E_Action.ACTION_WashTool;
+			stActionData.nObject := stGCodeRef.pCurrentTool^.P_nObjectID;
+			stActionData.nTarget := stGCodeRef.aTargetTable[nTgtNrWS_DispenseWaste2];
+			stActionData.aParams[1] := nSpecPointNr_DispenseWaste2;
+			stActionData.aParams[2] := E_WashMode.MODE_WashInside;
+			stActionData.aParams[3] := nQuantity_DispenseWaste2;
+			stActionData.aParams[4] := nFlow_DispenseWaste2;
+			stError.ErrorId := fbComplexAction.M_ExeAction(stActionData);
+			IF stError.ErrorId > 0 THEN
+				nStateAction := 99;
+			ELSE
+				nStateAction := 9;
+			END_IF
+		ELSE
+			nStateAction := 10;
+		END_IF	
+		
+	9:	//DispenseWaste ready?
+		IF NOT fbComplexAction.bBusy THEN
+			nStateAction := 10;
+		END_IF
+	10:	//WashTool(1) start
+		IF bStop THEN
+			nStateAction := 80;
+			RETURN;
+		END_IF
+		
+		IF nWashTime_Wash1 > 0 THEN
+			MEMSET(ADR(stActionData),0,SIZEOF(stActionData));
+			stActionData.eAction := E_Action.ACTION_WashTool;
+			stActionData.nObject := stGCodeRef.pCurrentTool^.P_nObjectID;
+			stActionData.nTarget := stGCodeRef.aTargetTable[nTgtNrWS_Wash1];
+			stActionData.aParams[1] := nSpecPointNr_Wash1;
+			stActionData.aParams[2] := E_WashMode.MODE_WashInOutside;
+			stActionData.aParams[3] := 0; //wenn Quantity 0 dann wird nach Time dispenst?
+			stActionData.aParams[4] := nWashFlow_Wash1;
+			stActionData.aParams[5] := nWashTime_Wash1;
+			stError.ErrorId := fbComplexAction.M_ExeAction(stActionData);
+			IF stError.ErrorId > 0 THEN
+				nStateAction := 99;
+			ELSE
+				nStateAction := 11;
+			END_IF
+		ELSE
+			nStateAction := 12;
+		END_IF
+	11:	//WashTool(1) ready?
+		IF NOT fbComplexAction.bBusy THEN
+			nStateAction := 12;
+		END_IF		
+
+	12:	//WashTool(2) start
+		IF bStop THEN
+			nStateAction := 80;
+			RETURN;
+		END_IF
+		
+		IF nWashTime_Wash2 > 0 THEN
+			MEMSET(ADR(stActionData),0,SIZEOF(stActionData));
+			stActionData.eAction := E_Action.ACTION_WashTool;
+			stActionData.nObject := stGCodeRef.pCurrentTool^.P_nObjectID;
+			stActionData.nTarget := stGCodeRef.aTargetTable[nTgtNrWS_Wash2];
+			stActionData.aParams[1] := nSpecPointNr_Wash2;
+			stActionData.aParams[2] := E_WashMode.MODE_WashInOutside;
+			stActionData.aParams[3] := 0; //wenn Quantity 0 dann wird nach Time dispenst?
+			stActionData.aParams[4] := nWashFlow_Wash2;
+			stActionData.aParams[5] := nWashTime_Wash2;
+			stError.ErrorId := fbComplexAction.M_ExeAction(stActionData);
+			IF stError.ErrorId > 0 THEN
+				nStateAction := 99;
+			ELSE
+				nStateAction := 13;
+			END_IF
+		ELSE
+			nStateAction := 14;
+		END_IF
+	13:	//WashTool(2) ready?
+		IF NOT fbComplexAction.bBusy THEN
+			nStateAction := 14;
+		END_IF		
+		
+	14:	//DryPip
+		IF bStop THEN
+			nStateAction := 80;
+			RETURN;
+		END_IF
+	
+		IF nDryCount_Dry1 > 0 THEN
+			MEMSET(ADR(stActionData),0,SIZEOF(stActionData));
+			stActionData.eAction := E_Action.ACTION_DryPip;
+			stActionData.nObject := stGCodeRef.pCurrentTool^.P_nObjectID;
+			stActionData.nTarget := stGCodeRef.aTargetTable[nTgtNrDryPad_Dry1];
+			stActionData.aParams[1] := nDryTime_Dry1;
+			stError.ErrorId := fbComplexAction.M_ExeAction(stActionData);
+			IF stError.ErrorId > 0 THEN
+				nStateAction := 99;
+			ELSE
+				nStateAction := 15;	
+			END_IF
+		ELSE
+			nStateAction := 16;
+		END_IF
+		
+	15:	//DryPip ready?
+		IF NOT fbComplexAction.bBusy THEN
+			nDryCount_Dry1 := nDryCount_Dry1 - 1;
+			IF nDryCount_Dry1 > 0 THEN //wiederholen
+				nStateAction := 14;
+			ELSE
+				nStateAction := 16;
+			END_IF
+		END_IF
+		
+	16:	//MoveFree
+		A_MoveFree();
+		IF nStateA_MoveFree >= 80 THEN
+			IF nStateA_MoveFree = 99 THEN
+				nStateAction := 99;
+			ELSE
+				nStateAction := 80;
+			END_IF
+			nStateA_MoveFree := 0;
+		END_IF		
+	
+END_CASE
+]]></ST>
+      </Implementation>
+    </Action>
+    <Action Name="A_PipPreSequence" Id="{b80bb4a0-dd5e-440a-89e0-15ff29a711f3}">
+      <Implementation>
+        <ST><![CDATA[stError.POUState := nStateAction;
+
+IF fbComplexAction.bError THEN
+	stError.ErrorId :=fbComplexAction.nErrorId;
+	nStateAction := 99;
+	RETURN;
+END_IF
+
+CASE nStateAction OF
+	0:	//R-Parameter auswerten und validieren
+		IF stGCodeRef.pCurrentTool = 0 THEN
+			stError.ErrorId := E_ErrorIdGCode.ERRORID_NoSelectedTool;
+			nStateAction := 99;
+		ELSE
+			IF NOT fbItpReadRParams.bBusy THEN
+				//alle Paramter validieren und TargetIds zwischenspeichern
+				nTgtNrWS_Wash1 := LREAL_TO_UINT(alrRParam[1]);
+				nSpecPointNr_Wash1 := LREAL_TO_UINT(alrRParam[2]);
+				nWashFlow_Wash1 := LREAL_TO_DINT(alrRParam[3]);
+				nWashTime_Wash1 := LREAL_TO_DINT(alrRParam[4]);
+				nTgtNrDryPad_Dry1 := LREAL_TO_UINT(alrRParam[5]);	//kann auch Washstation mit Airblade sein (ab V2.0.8.9)
+				nDryCount_Dry1 := LREAL_TO_USINT(alrRParam[6]);		//bei Washstation ist das der SpecPoint der Airblade
+				nDryTime_Dry1 := LREAL_TO_DINT(alrRParam[7]);
+				nTgtNrSource := LREAL_TO_UINT(alrRParam[8]);
+				nGetSampleColSlotNr := LREAL_TO_DINT(alrRParam[9]);
+				nGetSampleRow := LREAL_TO_DINT(alrRParam[10]);
+				nGetSampleQuantity := LREAL_TO_DINT(alrRParam[11]);
+				nGetSampleFlow := LREAL_TO_DINT(alrRParam[12]);
+				nGetSampleDelay := LREAL_TO_DINT(alrRParam[13]);
+				nGetSampleAirGap := LREAL_TO_DINT(alrRParam[14]);
+				nGetSampleDilBypass := LREAL_TO_DINT(alrRParam[15]);
+				nTgtNrDryPad_Dry2 := LREAL_TO_UINT(alrRParam[16]);	//kann auch Washstation mit Airblade sein (ab V2.0.8.9)
+				nDryCount_Dry2 := LREAL_TO_USINT(alrRParam[17]);	//bei Washstation ist das der SpecPoint der Airblade
+				nDryTime_Dry2 := LREAL_TO_DINT(alrRParam[18]);
+				nTgtNrStrob := LREAL_TO_UINT(alrRParam[19]);
+				nDispenseTest := LREAL_TO_DINT(alrRParam[20]);
+				//Check 1. WashTool
+				IF nWashTime_Wash1 > 0 THEN
+					IF NOT M_ValidateTargetNr(nTgtNrWS_Wash1) THEN
+						stError.ErrorId := E_ErrorIdGCode.ERRORID_InvalidRParameter;
+						stError.ErrorId2 := 1;
+						nStateAction := 99;
+						RETURN;
+					END_IF
+				END_IF
+				//Check 2. DryPip
+				IF nDryCount_Dry1 > 0 THEN
+					IF NOT M_ValidateTargetNr(nTgtNrDryPad_Dry1) THEN
+						stError.ErrorId := E_ErrorIdGCode.ERRORID_InvalidRParameter;
+						stError.ErrorId2 := 5;
+						nStateAction := 99;
+						RETURN;
+					END_IF
+				END_IF
+				//Check 3. GetPipSample
+				IF nGetSampleQuantity  > 0 THEN
+					IF M_ValidateTargetNr(nTgtNrSource) THEN
+						pTarget := fbObjectDirectory.M_GetObjPointer(stGCodeRef.aTargetTable[nTgtNrSource]);
+						IF pTarget = 0 THEN
+							stError.ErrorId := E_ErrorIdGCode.ERRORID_InvalidRParameter;
+							stError.ErrorId2 := 8;
+							nStateAction := 99;
+							RETURN;
+						END_IF
+						IF pTarget^.P_eObjectType = E_ObjectType.OBJECTTYPE_Mtp THEN
+							pMtp := pTarget;
+							IF NOT(nGetSampleColSlotNr > 0 AND nGetSampleColSlotNr <= pMtp^.P_nCols) THEN
+								stError.ErrorId := E_ErrorIdGCode.ERRORID_InvalidRParameter;
+								stError.ErrorId2 := 9;
+								nStateAction := 99;
+								RETURN;
+							END_IF
+							IF NOT(nGetSampleRow > 0 AND nGetSampleRow <= pMtp^.P_nRows) THEN
+								stError.ErrorId := E_ErrorIdGCode.ERRORID_InvalidRParameter;
+								stError.ErrorId2 := 10;
+								nStateAction := 99;
+								RETURN;
+							END_IF
+						ELSIF pTarget^.P_eObjectType = E_ObjectType.OBJECTTYPE_VialRack THEN
+							pVialRack := pTarget;						
+							//Im Slot muss auch ein Vial sein!
+							pPieceSlot := pVialRack^.M_GetSlot(DINT_TO_UINT(nGetSampleColSlotNr));
+							IF pPieceSlot = 0 THEN
+								stError.ErrorId := E_ErrorIdGCode.ERRORID_InvalidRParameter;
+								stError.ErrorId2 := 9;
+								nStateAction := 99;
+								RETURN;
+							END_IF
+							IF pPieceSlot^.P_pPiece = 0 THEN
+								stError.ErrorId := E_ErrorIdGCode.ERRORID_InvalidRParameter;
+								stError.ErrorId2 := 9;
+								nStateAction := 99;
+								RETURN;
+							END_IF
+						END_IF
+					ELSE
+						stError.ErrorId := E_ErrorIdGCode.ERRORID_InvalidRParameter;
+						stError.ErrorId2 := 8;
+						nStateAction := 99;
+						RETURN;
+					END_IF
+					
+					IF nGetSampleFlow < 1 THEN
+						stError.ErrorId := E_ErrorIdGCode.ERRORID_InvalidRParameter;
+						stError.ErrorId2 := 12;
+						nStateAction := 99;
+						RETURN;
+					END_IF
+					
+					//Check 4. DryPip
+					IF nDryCount_Dry2 > 0 THEN
+						IF NOT M_ValidateTargetNr(nTgtNrDryPad_Dry2) THEN
+							stError.ErrorId := E_ErrorIdGCode.ERRORID_InvalidRParameter;
+							stError.ErrorId2 := 16;
+							nStateAction := 99;
+							RETURN;
+						END_IF
+					END_IF
+					
+					IF nDispenseTest > 0 AND NOT M_ValidateTargetNr(nTgtNrStrob) THEN
+						stError.ErrorId := E_ErrorIdGCode.ERRORID_InvalidRParameter;
+						stError.ErrorId2 := 18;
+						nStateAction := 99;
+						RETURN;
+					END_IF
+					
+				END_IF
+				nStateAction := 1;
+			END_IF
+		END_IF
+		
+	1:	//NCI-Gruppe auflösen
+		fbClearGroup(stGCodeRef:= stGCodeRef, bReGearInSlave:= TRUE, bExecute:= TRUE);
+		IF NOT fbClearGroup.bBusy THEN
+			IF fbClearGroup.bError THEN
+				nStateAction := 99;
+				stError.ErrorId := fbClearGroup.nErrorId;
+			ELSE
+				stCurrentPos := pNewTool^.P_stCurrentPosTotal;
+				IF bStop THEN
+					nStateAction := 80;
+				ELSE
+					nStateAction := 2;
+				END_IF
+			END_IF
+			fbClearGroup(stGCodeRef:= stGCodeRef, bExecute:= FALSE);			
+		END_IF
+		
+	2:	//1. WashTool start
+		IF bStop THEN
+			nStateAction := 80;
+			RETURN;
+		END_IF
+		
+		IF nWashTime_Wash1 > 0 THEN
+			MEMSET(ADR(stActionData),0,SIZEOF(stActionData));
+			stActionData.eAction := E_Action.ACTION_WashTool;
+			stActionData.nObject := stGCodeRef.pCurrentTool^.P_nObjectID;
+			stActionData.nTarget := stGCodeRef.aTargetTable[nTgtNrWS_Wash1];
+			stActionData.aParams[1] := nSpecPointNr_Wash1;
+			stActionData.aParams[2] := E_WashMode.MODE_WashInOutside;
+			stActionData.aParams[3] := 0; //wenn Quantity 0 dann wird nach Time dispenst?
+			stActionData.aParams[4] := nWashFlow_Wash1;
+			stActionData.aParams[5] := nWashTime_Wash1;
+			stError.ErrorId := fbComplexAction.M_ExeAction(stActionData);
+			IF stError.ErrorId > 0 THEN
+				nStateAction := 99;
+			ELSE
+				nStateAction := 3;	
+			END_IF
+		ELSE
+			nStateAction := 4;
+		END_IF
+		
+	3:	//1. WashTool ready?
+		IF NOT fbComplexAction.bBusy THEN
+			nStateAction := 4;
+		END_IF
+		
+	4:	//2. DryPip start
+		IF bStop THEN
+			nStateAction := 80;
+			RETURN;
+		END_IF
+	
+		//Ab V2.0.8.9 wird unterschieden, ob auf Drypad oder Washstation mit Airblade getrockent wird.
+		IF nDryCount_Dry1 > 0 THEN
+			MEMSET(ADR(stActionData),0,SIZEOF(stActionData));
+			stActionData.nObject := stGCodeRef.pCurrentTool^.P_nObjectID;
+			stActionData.nTarget := stGCodeRef.aTargetTable[nTgtNrDryPad_Dry1];
+			
+			pTarget := fbObjectDirectory.M_GetObjPointer(stGCodeRef.aTargetTable[nTgtNrDryPad_Dry1]);
+			IF pTarget^.P_eObjectType = E_ObjectType.OBJECTTYPE_DryPad THEN
+				stActionData.eAction := E_Action.ACTION_DryPip;
+				stActionData.aParams[1] := nDryTime_Dry1;
+			ELSIF pTarget^.P_eObjectType = E_ObjectType.OBJECTTYPE_WashStation THEN
+				stActionData.eAction := E_Action.ACTION_WashTool;
+				stActionData.aParams[1] := nDryCount_Dry1; //Specpoint
+				stActionData.aParams[2] := E_WashMode.MODE_DryOutside;
+				stActionData.aParams[5] := nDryTime_Dry1;
+			ELSE
+				stError.ErrorId := E_ErrorIdCmd.ERRORID_InvalidTarget;
+			END_IF
+			
+			IF stError.ErrorId > 0 THEN
+				nStateAction := 99;
+			ELSE
+				stError.ErrorId := fbComplexAction.M_ExeAction(stActionData);
+				IF stError.ErrorId > 0 THEN
+					nStateAction := 99;
+				ELSE
+					nStateAction := 5;	
+				END_IF
+			END_IF
+		ELSE
+			nStateAction := 6; //GetPipSample	
+		END_IF
+	
+	5:	//2. DryPip ready?
+		IF NOT fbComplexAction.bBusy THEN
+			IF pTarget^.P_eObjectType = E_ObjectType.OBJECTTYPE_DryPad THEN
+				nDryCount_Dry1 := nDryCount_Dry1 - 1;
+				IF nDryCount_Dry1 > 0 THEN
+					nStateAction := 4;
+				ELSE
+					nStateAction := 6; //GetSample
+				END_IF
+			ELSE
+				nStateAction := 6; //GetSample
+			END_IF
+		END_IF
+		
+	6:	//3. GetSample start
+		IF bStop THEN
+			nStateAction := 80;
+			RETURN;
+		END_IF
+	
+		IF nGetSampleQuantity > 0 THEN
+			MEMSET(ADR(stActionData),0,SIZEOF(stActionData));
+			stActionData.eAction := E_Action.ACTION_GetPipSample;
+			stActionData.nObject := stGCodeRef.pCurrentTool^.P_nObjectID;
+			stActionData.nTarget := stGCodeRef.aTargetTable[nTgtNrSource];
+			stActionData.aParams[1] := nGetSampleColSlotNr;
+			stActionData.aParams[2] := nGetSampleRow;
+			stActionData.aParams[3] := nGetSampleQuantity;
+			stActionData.aParams[4] := nGetSampleFlow;
+			stActionData.aParams[5] := nGetSampleDelay;
+			stActionData.aParams[6] := nGetSampleAirGap;
+			stActionData.aParams[7] := nGetSampleDilBypass;
+			stError.ErrorId := fbComplexAction.M_ExeAction(stActionData);
+			IF stError.ErrorId > 0 THEN
+				nStateAction := 99;
+			ELSE
+				nStateAction := 7;
+			END_IF
+		ELSE
+			nStateAction := 8; //DryPip zum Zweiten
+		END_IF
+	
+	7:	//3. GetSample ready?
+		IF NOT fbComplexAction.bBusy THEN
+			nStateAction := 8; //DryPip zum Zweiten
+		END_IF
+		
+	8:	//4. DryPip start
+		IF bStop THEN
+			nStateAction := 80;
+			RETURN;
+		END_IF
+	
+		IF nDryCount_Dry2 > 0 THEN
+			MEMSET(ADR(stActionData),0,SIZEOF(stActionData));
+			stActionData.nObject := stGCodeRef.pCurrentTool^.P_nObjectID;
+			stActionData.nTarget := stGCodeRef.aTargetTable[nTgtNrDryPad_Dry2];
+			
+			pTarget := fbObjectDirectory.M_GetObjPointer(stGCodeRef.aTargetTable[nTgtNrDryPad_Dry2]);
+			IF pTarget^.P_eObjectType = E_ObjectType.OBJECTTYPE_DryPad THEN
+				stActionData.eAction := E_Action.ACTION_DryPip;
+				stActionData.aParams[1] := nDryTime_Dry2;
+			ELSIF pTarget^.P_eObjectType = E_ObjectType.OBJECTTYPE_WashStation THEN
+				stActionData.eAction := E_Action.ACTION_WashTool;
+				stActionData.aParams[1] := nDryCount_Dry2; //Specpoint
+				stActionData.aParams[2] := E_WashMode.MODE_DryOutside;
+				stActionData.aParams[5] := nDryTime_Dry2;
+			ELSE
+				stError.ErrorId := E_ErrorIdCmd.ERRORID_InvalidTarget;
+			END_IF
+			
+			IF stError.ErrorId > 0 THEN
+				nStateAction := 99;
+			ELSE
+				stError.ErrorId := fbComplexAction.M_ExeAction(stActionData);
+				IF stError.ErrorId > 0 THEN
+					nStateAction := 99;
+				ELSE
+					nStateAction := 9;
+				END_IF
+			END_IF
+		ELSE
+			IF nDispenseTest > 0 THEN
+				nStateAction := 10; //DispenseTest
+			ELSE
+				nStateAction := 12;
+			END_IF
+		END_IF
+	
+	9:	//DryPip ready?
+		IF NOT fbComplexAction.bBusy THEN
+			IF pTarget^.P_eObjectType = E_ObjectType.OBJECTTYPE_DryPad THEN
+				nDryCount_Dry2 := nDryCount_Dry2 - 1;
+				IF nDryCount_Dry2 > 0 THEN //wiederholen
+					nStateAction := 8;
+				ELSE
+					IF nDispenseTest > 0 THEN
+						nStateAction := 10; //DispenseTest
+					ELSE
+						nStateAction := 12;
+					END_IF
+				END_IF
+			ELSE
+				IF nDispenseTest > 0 THEN
+					nStateAction := 10; //DispenseTest
+				ELSE
+					nStateAction := 12;
+				END_IF
+			END_IF
+		END_IF
+		
+	10:	//DispenseTest start
+		IF bStop THEN
+			nStateAction := 80;
+			RETURN;
+		END_IF
+	
+		MEMSET(ADR(stActionData),0,SIZEOF(stActionData));
+		stActionData.eAction := E_Action.ACTION_DispenseTest;
+		stActionData.nObject := stGCodeRef.pCurrentTool^.P_nObjectID;
+		stActionData.nTarget := stGCodeRef.aTargetTable[nTgtNrStrob];
+		stActionData.aParams[1] := nDispenseTest;
+		fbComplexAction.P_nDispenseTrials := 0;
+		stError.ErrorId := fbComplexAction.M_ExeAction(stActionData);
+		IF stError.ErrorId > 0 THEN
+			nStateAction := 99;
+		ELSE
+			alrRParam[1] := 0.0;
+			nStateAction := 11;
+		END_IF
+	
+	11:	//DispenseTest ready?
+		IF NOT fbComplexAction.bBusy THEN
+			IF fbComplexAction.P_bLastActionResult THEN
+				alrRParam[1] := DINT_TO_LREAL(fbComplexAction.P_nLastActionResult);
+				fbComplexAction.P_bLastActionResult := FALSE;
+			END_IF
+			//in R-Parameter R140 schreiben
+			fbItpWriteRParams(sNciToPlc:= stGCodeRef.sNciToPlc, bExecute:= TRUE, pAddr:= ADR(alrRParam), nIndex:= 140, nCount:= 1);
+			IF NOT fbItpWriteRParams.bBusy THEN
+				IF fbItpWriteRParams.bErr THEN
+					nStateAction := 99;
+				ELSE
+					nStateAction := 12;	
+				END_IF
+				fbItpWriteRParams(sNciToPlc:= stGCodeRef.sNciToPlc, bExecute:= FALSE);
+			END_IF
+		END_IF
+		
+	12:	//MoveFree
+		A_MoveFree();
+		IF nStateA_MoveFree >= 80 THEN
+			IF nStateA_MoveFree = 99 THEN
+				nStateAction := 99;
+			ELSE
+				nStateAction := 80;
+			END_IF
+			nStateA_MoveFree := 0;
+		END_IF	
+END_CASE]]></ST>
+      </Implementation>
+    </Action>
+    <Action Name="A_SelectTool" Id="{56d432f9-661d-4fb5-b4d9-82f447494e0a}">
+      <Implementation>
+        <ST><![CDATA[//+++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
+//Änderung ab V2.0.17!
+//Beim Toolwechsel wird nicht mehr der Druck oder der Feed eingestellt.
+//Nach einem Toolwechsel sollte daher immer M102 ausgeführt werden
+stError.POUState := nStateAction;
+
+CASE nStateAction OF
+	0:	
+		IF bStop THEN
+			nStateAction := 80;
+		ELSE
+			//Checken, ob Toolnummer (T-Paramter) gültig
+			IF NOT (stGCodeRef.sNciToPlc.Tool > 0 AND stGCodeRef.sNciToPlc.Tool <= GCode.cMaxGCodeTools) THEN
+				stError.ErrorId := E_ErrorIdGCode.ERRORID_InvalidToolNr;
+				nStateAction := 99;
+				RETURN;
+			ELSE
+				//Checken, ob ein gültiges Werkzeug zugeordnet
+				IF stGCodeRef.aToolTable[stGCodeRef.sNciToPlc.Tool].pMzTool = 0 OR 
+											NOT stGCodeRef.aToolTable[stGCodeRef.sNciToPlc.Tool].bIsUsed THEN
+					stError.ErrorId := E_ErrorIdGCode.ERRORID_InvalidToolNr;
+					nStateAction := 99;
+					RETURN;
+				END_IF
+			END_IF
+			
+			pNewTool := stGCodeRef.aToolTable[stGCodeRef.sNciToPlc.Tool].pMzTool;
+			
+			//Achsen freifahren
+			IF pNewTool^.P_bIsMESTool THEN //MES-Tool wird vom Freifahren ausgeschlossen, da Faden abreißen würde
+				stError.ErrorId := stGCodeRef.pHead^.M_MoveFree(pNewTool);
+			ELSE
+				stError.ErrorId := stGCodeRef.pHead^.M_MoveFree(0);	
+			END_IF
+			
+			IF stError.ErrorId > 0 THEN
+				nStateAction := 99;
+				RETURN;
+			END_IF
+			nStateAction := 1;
+		END_IF
+		
+	1:	//Achsen ready?
+		IF NOT stGCodeRef.pHead^.M_GetActionBusy(E_Action.ACTION_MoveZ) THEN
+			nStateAction := 3;
+			IF bStop THEN
+				nStateAction := 80;
+			ELSE
+				IF pNewTool^.P_eObjectType = E_ObjectType.OBJECTTYPE_TwinPiezoHolder THEN
+					pTwinPiezoHolder := pNewTool;
+					IF pTwinPiezoHolder^.P_eCurrentSwivelState <> E_SwivelState.Swiveled THEN
+						//Einschwenken
+						MEMSET(ADR(stActionData),0,SIZEOF(stActionData));
+						stActionData.eAction := E_Action.ACTION_Swivel;
+						stActionData.aParams[1] := 1;
+						stError.ErrorId := pTwinPiezoHolder^.M_ExeAction(stActionData);
+						IF stError.ErrorId > 0 THEN
+							nStateAction := 99;
+							RETURN;					
+						END_IF
+						nStateAction := 2;	//warten bis eingeschwenkt
+					END_IF
+ 				END_IF
+			END_IF
+		END_IF
+		
+		IF stGCodeRef.pHead^.P_bError THEN
+			stError.ErrorId := stGCodeRef.pHead^.P_nErrorId;
+			nStateAction := 99;
+			RETURN;
+		END_IF
+	
+	2:	//TwinPiezoHolder eingeschwenkt?
+		IF bStop THEN
+			pNewTool^.M_CancelAction(E_Action.ACTION_Swivel);
+			nStateAction := 80;
+			RETURN;
+		END_IF
+		
+		IF NOT pNewTool^.M_GetActionBusy(E_Action.ACTION_Swivel) THEN
+			nStateAction := 3;
+		END_IF
+		
+
+		//hier kommt dann noch ein zusätzlicher Offset hinzu, welcher sich aus der zukünftigen Objektvermessung ergibt
+	3:	//Neue Nullpunktverschiebeung berechnen (Offset vom aktuellen mit Offset von neuem Tool verrechnen)
+		//Es gibt 2 Fälle
+		IF stGCodeRef.pCurrentTool = 0 THEN //Es erfolgt die erstmalige Tool-auswahl
+			stPos1 := stGCodeRef.pHead^.P_stAbsPosTotal;
+		ELSE //Es wurde bereits ein Tool ausgewählt -> es findet ein Toolwechsel statt
+			stPos1 := stGCodeRef.pCurrentTool^.P_stAbsPosTotal;
+		END_IF
+			
+		stPos2 := pNewTool^.P_stAbsPosTotal;
+		
+		stGCodeRef.sZeroShiftDesc.fShiftX := stGCodeRef.sZeroShiftDesc.fShiftX + stPos1.X / 1000.0 -  stPos2.X / 1000.0;
+		stGCodeRef.sZeroShiftDesc.fShiftY := stGCodeRef.sZeroShiftDesc.fShiftY + stPos1.Y / 1000.0 -  stPos2.Y / 1000.0;
+
+		stGCodeRef.pCurrentTool := pNewTool;
+		
+		nStateAction := 4;
+	
+	4:	//Neue Nullpunktverschiebung schreiben
+		fbItpWriteZeroShiftEx(bExecute:= TRUE, sNciToPlc:= stGCodeRef.sNciToPlc, nZsNo:= 54, sZeroShiftDesc:= stGCodeRef.sZeroShiftDesc);	
+ 		IF NOT fbItpWriteZeroShiftEx.bBusy THEN
+			IF fbItpWriteZeroShiftEx.bErr THEN
+				nStateAction := 99;
+			ELSE
+				IF bStop THEN
+					nStateAction := 80;
+				ELSE
+					nStateAction := 5;
+				END_IF
+			END_IF
+			fbItpWriteZeroShiftEx(bExecute:= FALSE, sNciToPlc:= stGCodeRef.sNciToPlc, nZsNo:= 54, sZeroShiftDesc:= stGCodeRef.sZeroShiftDesc);
+		END_IF
+		
+	5:	//NCI-Gruppe auflösen
+		fbClearGroup(stGCodeRef:= stGCodeRef, bReGearInSlave:= TRUE, bExecute:= TRUE);
+		IF NOT fbClearGroup.bBusy THEN
+			IF fbClearGroup.bError THEN
+				nStateAction := 99;
+				stError.ErrorId := fbClearGroup.nErrorId;
+			ELSE
+				stCurrentPos := pNewTool^.P_stCurrentPosTotal;
+				IF bStop THEN
+					nStateAction := 80;
+				ELSE
+					nStateAction := 6;
+				END_IF
+				
+			END_IF
+			fbClearGroup(stGCodeRef:= stGCodeRef, bExecute:= FALSE);
+		END_IF
+		
+	6:	//die aktuelle Position des Tools auf die Q1-Achse übertragen
+		fbMcSetPosition(Axis:= AxisRefQ1 , Execute:= TRUE, Position:= stCurrentPos.Z / 1000.0 - stGCodeRef.sZeroShiftDesc.fShiftZ , Options:= sSetPositionOptions);
+		IF NOT fbMcSetPosition.Busy THEN
+			IF fbMcSetPosition.Error THEN
+				nStateAction := 99;
+			ELSE
+				IF bStop THEN
+					nStateAction := 80;
+				ELSE
+					nStateAction := 7;
+				END_IF
+			END_IF
+			fbMcSetPosition(Axis:= AxisRefQ1 , Execute:= FALSE);
+		END_IF
+		
+	7:	//NCI-Gruppe wieder erstellen
+		fbBuildGroup(stGCodeRef:= stGCodeRef, bExecute:= TRUE);
+		IF NOT fbBuildGroup.bBusy THEN
+			IF fbBuildGroup.bError THEN
+				stError.ErrorId := fbBuildGroup.nErrorId;
+				nStateAction := 99;
+			ELSE
+				nStateAction := 80;
+			END_IF
+			fbBuildGroup(stGCodeRef:= stGCodeRef, bExecute:= FALSE);
+		END_IF
+END_CASE]]></ST>
+      </Implementation>
+    </Action>
+    <Action Name="A_Sequence" Id="{3bbf0d6f-48da-4143-b19d-5d6e88a66700}">
+      <Implementation>
+        <ST><![CDATA[stError.POUState := nStateAction;
+
+IF fbComplexAction.bError THEN
+	stError.ErrorId :=fbComplexAction.nErrorId;
+	nStateAction := 99;
+END_IF
+
+IF nStateAction = 0 THEN
+	IF stGCodeRef.pCurrentTool = 0 THEN
+		//stError.Cmd := E_Action.ACTION_;;
+		stError.ErrorId := E_ErrorIdGCode.ERRORID_NoSelectedTool;
+		nStateAction := 99;
+	ELSE
+		IF NOT fbItpReadRParams.bBusy THEN
+			nSequenceNr := LREAL_TO_UINT(alrRParam[1]);
+			//SequenceNr 1..5 ?
+			IF nSequenceNr >= 1 AND nSequenceNr <= 5 THEN
+				pSequence := fbSequenceList.M_Get(stGCodeRef.aSequenceIds[nSequenceNr]);
+				//Gültige SubSequence?
+				IF pSequence > 0 THEN
+					//Sequence schon busy?
+					IF NOT((pSequence^.eCurrentState = E_SequenceState.State_Idle) OR (pSequence^.eCurrentState = E_SequenceState.State_Ready)) THEN
+						nStateAction := 99;
+						stError.ErrorId := E_ErrorIdGCode.ERRORID_InvalidSequenceNr;
+						RETURN;
+					END_IF
+					//Steps vorhanden?
+					stError.ErrorId := pSequence^.M_CheckForStart();
+					IF stError.ErrorId = 0 THEN
+						//NCI-Gruppe auflösen
+						fbClearGroup(stGCodeRef:= stGCodeRef, bReGearInSlave:= TRUE, bExecute:= TRUE);
+						IF NOT fbClearGroup.bBusy THEN
+							IF fbClearGroup.bError THEN
+								nStateAction := 99;
+								stError.ErrorId := fbClearGroup.nErrorId;
+							ELSE
+								stCurrentPos := pNewTool^.P_stCurrentPosTotal;
+								IF bStop THEN
+									nStateAction := 80;
+								ELSIF bPause THEN
+									nStateAction := 2; //sofort in Pause gehen
+								ELSE
+									GCode.P_bMoveActionsLocked := FALSE;
+									pSequence^.M_Start(0);									
+									nStateAction := 3; //perform sequence
+								END_IF
+							END_IF
+							fbClearGroup(stGCodeRef:= stGCodeRef, bExecute:= FALSE);			
+						END_IF
+					ELSE
+						nStateAction := 99;				
+					END_IF
+				ELSE
+					stError.ErrorId := E_ErrorIdCmd.ERRORID_SequenceNotExists;
+					nStateAction := 99;
+				END_IF				
+			ELSE
+				stError.ErrorId := E_ErrorIdGCode.ERRORID_InvalidSequenceNr;
+				nStateAction := 99;
+			END_IF
+		END_IF
+	END_IF
+END_IF
+
+IF nStateAction = 1 THEN //Sequence pausieren
+	pSequence^.M_Pause();
+	pSequence^();
+	IF pSequence^.eCurrentState = E_SequenceState.State_Pause THEN
+		nStateAction := 2;
+	ELSIF pSequence^.eCurrentState = E_SequenceState.State_Error THEN
+		nStateAction := 99;
+	ELSIF pSequence^.eCurrentState = E_SequenceState.State_Ready THEN
+		pSequence^.M_Reset();
+		nStateAction := 80;
+		RETURN;
+	END_IF
+ELSIF nStateAction = 2 THEN //Sequence ist pausiert
+	IF bStop THEN
+		pSequence^.M_Stop();
+		nStateAction := 3;
+	ELSIF bPause THEN
+		bIsInPause := TRUE;
+		RETURN;
+	ELSIF bContinue THEN
+		IF pSequence^.eCurrentState = E_SequenceState.State_Pause THEN	
+			pSequence^.M_Continue();
+		ELSIF pSequence^.eCurrentState = E_SequenceState.State_Idle THEN //wurde noch nicht gestartet
+			pSequence^.M_Start(0);
+		END_IF
+		nStateAction := 3;
+	END_IF
+END_IF
+
+IF nStateAction = 3 THEN //perform sequence , wait for ready
+	bIsInPause := FALSE;
+	IF bStop THEN
+		pSequence^.M_Stop();
+	ELSIF bPause THEN
+		pSequence^.M_Pause();
+		nStateAction := 1;
+	END_IF
+	pSequence^();
+	IF pSequence^.eCurrentState = E_SequenceState.State_Ready THEN
+		pSequence^.M_Reset();
+		nStateAction := 4;
+		GCode.P_bMoveActionsLocked := TRUE;
+	ELSIF pSequence^.eCurrentState = E_SequenceState.State_Canceled THEN
+		pSequence^.M_Reset();
+		nStateAction := 80;
+	ELSIF pSequence^.eCurrentState = E_SequenceState.State_Error THEN
+		pSequence^.M_Reset();
+		nStateAction := 99;
+	END_IF
+END_IF
+
+IF nStateAction = 4 THEN //MoveBack
+	A_MoveBack();
+	IF nStateA_MoveBack >= 80 THEN
+		IF nStateA_MoveBack = 99 THEN
+			nStateAction := 99;
+		ELSE
+			nStateAction := 80;
+		END_IF
+		nStateA_MoveBack := 0;
+	END_IF	
+END_IF
+]]></ST>
+      </Implementation>
+    </Action>
+    <Action Name="A_SetPrintParams" Id="{84eeb8fb-18eb-4104-9558-62c5287d1ff8}">
+      <Implementation>
+        <ST><![CDATA[stError.POUState := nStateAction;
+
+IF nStateAction = 0 THEN
+	IF NOT fbItpReadRParams.bBusy THEN
+		nToolNr := LREAL_TO_USINT(alrRParam[1]);
+		ePrintParamType := LREAL_TO_USINT(alrRParam[2]);
+		nPrintParamNumerator := LREAL_TO_USINT(alrRParam[3]);
+		nPrintParamValue := LREAL_TO_DINT(alrRParam[4]);
+		IF nToolNr = 0 THEN //ausgewähltes Tool benutzen
+			pNewTool := stGCodeRef.pCurrentTool;
+		ELSIF nToolNr >= 1 AND nToolNr <= GCode.cMaxGCodeTools THEN
+			pNewTool := stGCodeRef.aToolTable[nToolNr].pMzTool;
+		END_IF
+		nStateAction := 1;
+		IF pNewTool = 0 THEN
+			stError.ErrorId := E_ErrorIdGCode.ERRORID_InvalidToolNr;
+			nStateAction := 99;
+		END_IF
+	END_IF
+END_IF
+
+IF nStateAction = 1 THEN
+	stMethResult := pNewTool^.M_SetPrintParams(ePrintParamType, nPrintParamNumerator, nPrintParamValue);
+	IF NOT stMethResult.bBusy THEN
+		IF stMethResult.bError THEN
+			stError.ObjectId := pNewTool^.P_nObjectID;
+			stError.ErrorId := nErrorId := stMethResult.nErrorId;
+			nStateAction := 99;
+		ELSE
+			nStateAction := 80;
+		END_IF
+	END_IF	
+END_IF]]></ST>
+      </Implementation>
+    </Action>
+    <Action Name="A_StirrCartridge" Id="{93dd2363-dc4d-4884-9bd9-c439db833017}">
+      <Implementation>
+        <ST><![CDATA[stError.POUState := nStateAction;
+
+IF nStateAction = 0 THEN
+	IF bStop THEN
+		nStateAction := 80;
+	ELSE
+		IF stGCodeRef.pCurrentTool = 0 THEN
+			stError.ErrorId := E_ErrorIdGCode.ERRORID_NoSelectedTool;
+			nStateAction := 99;
+		ELSE
+			IF NOT fbItpReadRParams.bBusy THEN
+				MEMSET(ADR(stActionData),0,SIZEOF(stActionData));
+				stActionData.eAction := E_Action.ACTION_StirrCartridge;
+				stActionData.aParams[1] := LREAL_TO_DINT(alrRParam[1]);
+				stActionData.aParams[2] := LREAL_TO_DINT(alrRParam[2]);
+				stActionData.aParams[3] := LREAL_TO_DINT(alrRParam[3]);
+				stActionData.aParams[4] := LREAL_TO_DINT(alrRParam[4]);
+				stError.ErrorId := stGCodeRef.pCurrentTool^.M_ExeAction(stActionData);
+				IF stError.ErrorId > 0 THEN
+					nStateAction := 99;
+				ELSE
+					nStateAction := 80;
+				END_IF
+			END_IF
+		END_IF
+	END_IF
+END_IF]]></ST>
+      </Implementation>
+    </Action>
+    <Action Name="A_SwitchPress" Id="{88c42136-2184-4a66-89fa-d62f360235a0}">
+      <Implementation>
+        <ST><![CDATA[stError.POUState := nStateAction;
+
+CASE nStateAction OF
+	0:	
+		IF bStop THEN
+			nStateAction := 80;
+		ELSE
+			IF stGCodeRef.pCurrentTool = 0 THEN
+				stError.ErrorId := E_ErrorIdGCode.ERRORID_NoSelectedTool;
+				nStateAction := 99;
+			ELSE
+				IF NOT (stGCodeRef.pCurrentTool^.P_eObjectType = E_ObjectType.OBJECTTYPE_CartDispenser OR
+					stGCodeRef.pCurrentTool^.P_eObjectType = E_ObjectType.OBJECTTYPE_CartDispStirrer OR
+					stGCodeRef.pCurrentTool^.P_eObjectType = E_ObjectType.OBJECTTYPE_MultiCartHolder OR
+					stGCodeRef.pCurrentTool^.P_eObjectType = E_ObjectType.OBJECTTYPE_DeloDot) THEN
+					stError.ErrorId := E_ErrorIdCmd.ERRORID_UnsuitableObject;
+					nStateAction := 99;
+				ELSE
+					IF NOT fbItpReadRParams.bBusy THEN
+						nChannel := LREAL_TO_USINT(alrRParam[1]);
+						tDelay := LREAL_TO_TIME(alrRParam[2]);
+						
+						MEMSET(ADR(stActionData),0,SIZEOF(stActionData));
+						stActionData.eAction := E_Action.ACTION_SwitchPressure;
+						stActionData.aParams[1] := 1; //On
+						IF tDelay > T#0S THEN	//Delay
+							timer(IN:=TRUE,PT:=tDelay);	//Timer starten
+							stGCodeRef.aToolTable[stGCodeRef.sNciToPlc.Tool].tDelayStart := tDelay;
+							nStateAction := 1;
+						ELSE
+							stGCodeRef.aToolTable[stGCodeRef.sNciToPlc.Tool].tDelayStart := T#0s;
+							nStateAction := 80;
+						END_IF
+						
+						IF stGCodeRef.pCurrentTool^.P_eObjectType = E_ObjectType.OBJECTTYPE_MultiCartHolder THEN
+							pMultiCartHolder := stGCodeRef.pCurrentTool;
+							CASE nChannel OF
+								1:	
+									IF pMultiCartHolder^.P_pCartDispenser1 > 0 THEN
+										nErrorId := pMultiCartHolder^.P_pCartDispenser1^.M_ExeAction(stActionData);
+										stGCodeRef.aToolTable[stGCodeRef.sNciToPlc.Tool].bIsInAction1 := TRUE;
+									ELSE
+										stError.ErrorId := E_ErrorIdObjMgmt.ERRORID_InvalidPneuChannel;
+									END_IF
+ 								2:
+									IF pMultiCartHolder^.P_pCartDispenser2 > 0 THEN
+										nErrorId := pMultiCartHolder^.P_pCartDispenser2^.M_ExeAction(stActionData);
+										stGCodeRef.aToolTable[stGCodeRef.sNciToPlc.Tool].bIsInAction2 := TRUE;
+									ELSE
+										stError.ErrorId := E_ErrorIdObjMgmt.ERRORID_InvalidPneuChannel;
+									END_IF
+ 								3:
+									IF pMultiCartHolder^.P_pCartDispenser3 > 0 THEN
+										nErrorId := pMultiCartHolder^.P_pCartDispenser3^.M_ExeAction(stActionData);
+										stGCodeRef.aToolTable[stGCodeRef.sNciToPlc.Tool].bIsInAction3 := TRUE;
+									ELSE
+										stError.ErrorId := E_ErrorIdObjMgmt.ERRORID_InvalidPneuChannel;
+									END_IF
+							END_CASE
+						ELSE
+							//bei den anderen Tools gibt es nur einen Druckkanal, der geschaltet werden kann
+ 							nErrorId := stGCodeRef.pCurrentTool^.M_ExeAction(stActionData);
+							stGCodeRef.aToolTable[stGCodeRef.sNciToPlc.Tool].bIsInAction1 := TRUE;
+						END_IF
+						
+						IF nErrorId > 0 THEN
+							nStateAction := 99;
+							stGCodeRef.aToolTable[stGCodeRef.sNciToPlc.Tool].bIsInAction1 := FALSE;
+							stGCodeRef.aToolTable[stGCodeRef.sNciToPlc.Tool].bIsInAction2 := FALSE;
+							stGCodeRef.aToolTable[stGCodeRef.sNciToPlc.Tool].bIsInAction3 := FALSE;
+						END_IF
+					END_IF
+				END_IF
+			END_IF			
+		END_IF
+	
+	1:	//Warten auf Timer
+		IF bStop THEN
+			timer(IN:= FALSE);
+			stActionData.aParams[1] := 0; //off
+			stGCodeRef.pCurrentTool^.M_ExeAction(stActionData);
+			nStateAction := 80;
+			RETURN;
+		END_IF
+		timer();
+		IF timer.Q THEN
+			timer(IN:= FALSE);		
+			nStateAction := 80;
+		END_IF	
+END_CASE
+		
+IF nStateAction = 99 THEN
+	timer(IN:= FALSE);
+END_IF]]></ST>
+      </Implementation>
+    </Action>
+    <Action Name="A_UniDispense" Id="{82cc1cdc-b5e8-4d8f-997d-e7116961854e}">
+      <Implementation>
+        <ST><![CDATA[stError.POUState := nStateAction;
+
+CASE nStateAction OF
+	0:	
+		IF bStop THEN
+			nStateAction := 80;
+		ELSE
+			IF stGCodeRef.pCurrentTool = 0 THEN
+				stError.ErrorId := E_ErrorIdGCode.ERRORID_NoSelectedTool;
+				nStateAction := 99;
+			ELSE
+				IF NOT fbItpReadRParams.bBusy THEN
+					stGCodeRef.aToolTable[stGCodeRef.sNciToPlc.Tool].bIsInAction1 := FALSE;
+					nUniDispParam1 := LREAL_TO_DINT(alrRParam[2]);
+					nUniDispParam2 := LREAL_TO_DINT(alrRParam[3]);
+					stError.ErrorId := stGCodeRef.pCurrentTool^.M_StartUniDispense(nParam1:= nUniDispParam1, nParam2:= nUniDispParam2, bIsContinous=> bUnitDispIsContinous); 
+					IF stError.ErrorId > 0 THEN
+						nStateAction := 99;
+					ELSE
+						IF bUnitDispIsContinous THEN //Dauerdispensen
+							stGCodeRef.aToolTable[stGCodeRef.sNciToPlc.Tool].bIsInAction1 := TRUE;
+							tDelay := LREAL_TO_TIME(alrRParam[1]); //Delay
+							IF tDelay > T#0S THEN	//Delay
+								timer(IN:=TRUE,PT:=tDelay);	//Timer starten
+								stGCodeRef.aToolTable[stGCodeRef.sNciToPlc.Tool].tDelayStart := tDelay;
+								nStateAction := 2;								
+							ELSE
+								stGCodeRef.aToolTable[stGCodeRef.sNciToPlc.Tool].tDelayStart := T#0S;
+								nStateAction := 80;
+							END_IF
+						ELSE
+							nStateAction := 1;
+						END_IF
+					END_IF
+				END_IF
+			END_IF
+		END_IF
+		
+	1:	//Dispense ready?
+		IF bStop THEN
+			stGCodeRef.pCurrentTool^.M_StopUniDispense();
+			stGCodeRef.aToolTable[stGCodeRef.sNciToPlc.Tool].bIsInAction1 := FALSE;
+		END_IF
+		
+		IF NOT stGCodeRef.pCurrentTool^.P_bBusy THEN
+			stGCodeRef.aToolTable[stGCodeRef.sNciToPlc.Tool].bIsInAction1 := FALSE;
+			IF stGCodeRef.pCurrentTool^.P_bError THEN
+				stError.ErrorId := stGCodeRef.pCurrentTool^.P_nErrorId;
+				nStateAction := 99;
+			ELSE
+				nStateAction := 80;	
+			END_IF
+		END_IF
+		
+	2:	//Warten auf Timer
+		IF bStop THEN
+			timer(IN:= FALSE);
+			stGCodeRef.pCurrentTool^.M_StopUniDispense();
+			stGCodeRef.aToolTable[stGCodeRef.sNciToPlc.Tool].bIsInAction1 := FALSE;
+			nStateAction := 80;
+			RETURN;
+		END_IF
+		timer();
+		IF timer.Q THEN
+			timer(IN:= FALSE);		
+			nStateAction := 80;
+		END_IF		
+END_CASE]]></ST>
+      </Implementation>
+    </Action>
+    <Action Name="A_WaitAtPoint" Id="{02368f78-91e6-4889-8b4c-35627d05274b}">
+      <Implementation>
+        <ST><![CDATA[stError.POUState := nStateAction;
+
+IF fbComplexAction.bError THEN
+	stError.ErrorId :=fbComplexAction.nErrorId;
+	nStateAction := 99;
+END_IF
+
+CASE nStateAction OF
+	0:	//Aktuelles Tool ausgewählt?
+		IF stGCodeRef.pCurrentTool = 0 THEN
+			stError.Cmd := E_Action.ACTION_MoveToTarget;
+			stError.ErrorId := E_ErrorIdGCode.ERRORID_NoSelectedTool;
+			nStateAction := 99;
+		ELSE
+			IF NOT fbItpReadRParams.bBusy THEN
+				IF GCode.stGCodeRef.pWaitPoint = 0 THEN
+					nStateAction := 2;
+				ELSE
+					//NCI-Gruppe auflösen
+					fbClearGroup(stGCodeRef:= stGCodeRef, bReGearInSlave:= TRUE, bExecute:= TRUE);
+					IF NOT fbClearGroup.bBusy THEN
+						IF fbClearGroup.bError THEN
+							nStateAction := 99;
+							stError.ErrorId := fbClearGroup.nErrorId;
+						ELSE
+							stCurrentPos := pNewTool^.P_stCurrentPosTotal;
+							IF bStop THEN
+								nStateAction := 80;
+							ELSE
+								nStateAction := 1;	
+							END_IF
+						END_IF
+						fbClearGroup(stGCodeRef:= stGCodeRef, bExecute:= FALSE);			
+					END_IF
+				END_IF
+			END_IF
+		END_IF
+
+	1:	//Action "MoveToTarget" ausführen
+		IF bStop THEN
+			nStateAction := 80;
+			RETURN;
+		END_IF	
+		MEMSET(ADR(stActionData),0,SIZEOF(stActionData));
+		stActionData.eAction := E_Action.ACTION_MoveToTarget;
+		stActionData.nObject := stGCodeRef.pCurrentTool^.P_nObjectID;
+		stActionData.nTarget := GCode.stGCodeRef.pWaitPoint^.P_nObjectID;
+		stActionData.aParams[1] := E_TargetRef.TARGETREF_Center;
+		stActionData.aParams[5] := -1;	//SpeedX
+		stActionData.aParams[6] := -1;	//SpeedY
+		stActionData.aParams[7] := -1; 	//SpeedZ
+
+		stError.ErrorId := fbComplexAction.M_ExeAction(stActionData);
+		IF stError.ErrorId > 0 THEN
+			nStateAction := 99;
+		ELSE
+			nStateAction := 2;	
+		END_IF
+		
+	2:	//MoveToTarget ready? -> Warten
+		IF bStop THEN
+			IF fbComplexAction.bBusy THEN
+				fbComplexAction.M_Stop();
+			ELSE
+				nStateAction := 80;
+			END_IF		
+		ELSE
+			IF NOT fbComplexAction.bBusy THEN
+				timer(IN:=TRUE, PT:= LREAL_TO_TIME(alrRParam[1]));
+				nStateAction := 3;
+			END_IF
+		END_IF
+
+	3:	//Warten
+		IF bStop THEN
+			timer(IN:= FALSE);
+			nStateAction := 80;
+		ELSE
+			timer();
+			IF timer.Q THEN
+				timer(IN:= FALSE);
+				IF GCode.stGCodeRef.pWaitPoint = 0 THEN
+					nStateAction := 80;
+				ELSE
+					nStateAction := 4;	
+				END_IF
+				
+			END_IF
+		END_IF
+		
+	4:	//MoveFree
+		A_MoveFree();
+		IF nStateA_MoveFree >= 80 THEN
+			IF nStateA_MoveFree = 99 THEN
+				nStateAction := 99;
+			ELSE
+				nStateAction := 80;
+			END_IF
+			nStateA_MoveFree := 0;
+		END_IF
+END_CASE
+]]></ST>
+      </Implementation>
+    </Action>
+    <Action Name="A_WaitForUser" Id="{6339e3ef-6308-4a87-9a30-3ac2190596c1}">
+      <Implementation>
+        <ST><![CDATA[stError.POUState := nStateAction;
+CASE nStateAction OF
+	0:	//R-Parameter einlesen
+		IF bStop THEN
+			nStateAction := 80;
+		ELSE
+			IF stGCodeRef.pCurrentTool = 0 THEN
+				stError.ErrorId := E_ErrorIdGCode.ERRORID_NoSelectedTool;
+				nStateAction := 99;
+			ELSE
+				IF NOT fbItpReadRParams.bBusy THEN
+					//Request absenden
+					MEMSET(ADR(stInterResponse),0,SIZEOF(stInterResponse));
+					stInteractRequest.eInteractMessageType := E_InteractMessageType.INTERACTMES_WaitForUser;
+					stInteractRequest.nObjectId := stGCodeRef.pCurrentTool^.P_nObjectID;
+					stInteractRequest.nArg1 := LREAL_TO_DINT(alrRParam[1]);
+					stInteractRequest.nArg2 := LREAL_TO_DINT(alrRParam[2]);
+					stInteractRequest.nArg3 := LREAL_TO_DINT(alrRParam[3]);
+					stInteractRequest.nArg4 := LREAL_TO_DINT(alrRParam[4]);
+					nStateAction := 1;
+				ELSE
+					MEMSET(ADR(stInteractRequest),0,SIZEOF(stInteractRequest));
+				END_IF
+			END_IF
+		END_IF
+		
+	1:	//auf User Response warten
+		IF stInterResponse.eInteractMessageType = E_InteractMessageType.INTERACTMES_Continue OR bStop THEN
+			MEMSET(ADR(stInteractRequest),0,SIZEOF(stInteractRequest));
+			nStateAction := 80;
+		END_IF
+END_CASE]]></ST>
+      </Implementation>
+    </Action>
+    <Method Name="M_Reset" Id="{a6ca00db-7f6d-4ed3-9a32-0c5462aaeecc}">
+      <Declaration><![CDATA[METHOD M_Reset
+VAR_INPUT
+END_VAR
+]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[fbItpReadRParams(sNciToPlc:= stGCodeRef.sNciToPlc, bExecute:= FALSE);
+fbItpConfirmHsk(bExecute:= FALSE ,sNciToPlc:= stGCodeRef.sNciToPlc, sPlcToNci:= stGCodeRef.sPlcToNci);
+bMFuncRequest := FALSE;
+bMFuncConfirm := FALSE;
+nStateAction := 0;
+bBusy := FALSE;
+bCanceled := FALSE;
+bError := FALSE;
+bStop := FALSE;
+timer(IN:= FALSE);]]></ST>
+      </Implementation>
+    </Method>
+    <Method Name="M_ValidateTargetNr" Id="{4128ead3-b2f7-4d0d-b83f-7c56e071d066}">
+      <Declaration><![CDATA[METHOD M_ValidateTargetNr : BOOL
+VAR_INPUT
+	nTargetNr 	: UINT;
+END_VAR
+
+VAR
+	pTarget 	: POINTER TO FB_TargetBase;
+END_VAR
+]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[IF nTargetNr > 0 AND nTargetNr < GCode.cMaxGCodeTargets THEN
+	IF fbObjectDirectory.M_ObjIsTarget(stGCodeRef.aTargetTable[nTargetNr]) THEN
+		M_ValidateTargetNr := TRUE;
+	END_IF
+END_IF]]></ST>
+      </Implementation>
+    </Method>
+    <LineIds Name="FB_HskMFunc">
+      <LineId Id="2209" Count="291" />
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="FB_HskMFunc.A_Aspirate">
+      <LineId Id="2" Count="39" />
+    </LineIds>
+    <LineIds Name="FB_HskMFunc.A_AssignHeaderRParams">
+      <LineId Id="318" Count="120" />
+      <LineId Id="309" Count="0" />
+    </LineIds>
+    <LineIds Name="FB_HskMFunc.A_BasicDispense">
+      <LineId Id="162" Count="80" />
+      <LineId Id="1" Count="0" />
+    </LineIds>
+    <LineIds Name="FB_HskMFunc.A_CleanTip">
+      <LineId Id="2" Count="14" />
+      <LineId Id="127" Count="2" />
+      <LineId Id="139" Count="15" />
+      <LineId Id="132" Count="0" />
+      <LineId Id="155" Count="0" />
+      <LineId Id="135" Count="1" />
+      <LineId Id="131" Count="0" />
+      <LineId Id="40" Count="11" />
+      <LineId Id="124" Count="2" />
+      <LineId Id="158" Count="0" />
+      <LineId Id="52" Count="3" />
+      <LineId Id="156" Count="1" />
+      <LineId Id="57" Count="0" />
+      <LineId Id="59" Count="26" />
+    </LineIds>
+    <LineIds Name="FB_HskMFunc.A_DilMoveValve">
+      <LineId Id="2" Count="14" />
+      <LineId Id="19" Count="3" />
+      <LineId Id="26" Count="0" />
+      <LineId Id="28" Count="18" />
+    </LineIds>
+    <LineIds Name="FB_HskMFunc.A_Dispense">
+      <LineId Id="2" Count="1" />
+      <LineId Id="46" Count="0" />
+      <LineId Id="51" Count="6" />
+      <LineId Id="76" Count="0" />
+      <LineId Id="80" Count="3" />
+      <LineId Id="79" Count="0" />
+      <LineId Id="84" Count="0" />
+      <LineId Id="78" Count="0" />
+      <LineId Id="59" Count="3" />
+      <LineId Id="172" Count="0" />
+      <LineId Id="63" Count="8" />
+      <LineId Id="85" Count="1" />
+      <LineId Id="72" Count="0" />
+      <LineId Id="87" Count="0" />
+      <LineId Id="119" Count="0" />
+      <LineId Id="89" Count="1" />
+      <LineId Id="120" Count="1" />
+      <LineId Id="160" Count="0" />
+      <LineId Id="154" Count="0" />
+      <LineId Id="184" Count="0" />
+      <LineId Id="155" Count="2" />
+      <LineId Id="161" Count="9" />
+      <LineId Id="159" Count="0" />
+      <LineId Id="124" Count="0" />
+      <LineId Id="127" Count="2" />
+      <LineId Id="132" Count="0" />
+      <LineId Id="88" Count="0" />
+      <LineId Id="101" Count="1" />
+      <LineId Id="47" Count="0" />
+      <LineId Id="103" Count="0" />
+      <LineId Id="171" Count="0" />
+      <LineId Id="104" Count="0" />
+      <LineId Id="111" Count="1" />
+      <LineId Id="114" Count="4" />
+      <LineId Id="173" Count="6" />
+      <LineId Id="181" Count="2" />
+      <LineId Id="180" Count="0" />
+      <LineId Id="41" Count="0" />
+    </LineIds>
+    <LineIds Name="FB_HskMFunc.A_DispenseDrops">
+      <LineId Id="2" Count="11" />
+      <LineId Id="77" Count="0" />
+      <LineId Id="14" Count="3" />
+      <LineId Id="71" Count="0" />
+      <LineId Id="18" Count="4" />
+      <LineId Id="81" Count="0" />
+      <LineId Id="23" Count="19" />
+      <LineId Id="79" Count="0" />
+      <LineId Id="43" Count="2" />
+      <LineId Id="80" Count="0" />
+      <LineId Id="46" Count="11" />
+      <LineId Id="76" Count="0" />
+      <LineId Id="58" Count="8" />
+    </LineIds>
+    <LineIds Name="FB_HskMFunc.A_Expose">
+      <LineId Id="2" Count="44" />
+    </LineIds>
+    <LineIds Name="FB_HskMFunc.A_Extrude">
+      <LineId Id="2" Count="0" />
+      <LineId Id="4" Count="8" />
+      <LineId Id="86" Count="3" />
+      <LineId Id="45" Count="1" />
+      <LineId Id="71" Count="1" />
+      <LineId Id="47" Count="0" />
+      <LineId Id="50" Count="2" />
+      <LineId Id="90" Count="0" />
+      <LineId Id="53" Count="0" />
+      <LineId Id="55" Count="8" />
+      <LineId Id="67" Count="2" />
+      <LineId Id="38" Count="1" />
+      <LineId Id="73" Count="11" />
+      <LineId Id="1" Count="0" />
+    </LineIds>
+    <LineIds Name="FB_HskMFunc.A_MeasureTool">
+      <LineId Id="2" Count="45" />
+      <LineId Id="49" Count="43" />
+    </LineIds>
+    <LineIds Name="FB_HskMFunc.A_MoveBack">
+      <LineId Id="2" Count="16" />
+      <LineId Id="51" Count="0" />
+      <LineId Id="53" Count="0" />
+      <LineId Id="55" Count="2" />
+      <LineId Id="61" Count="8" />
+      <LineId Id="60" Count="0" />
+      <LineId Id="58" Count="0" />
+      <LineId Id="70" Count="1" />
+      <LineId Id="54" Count="0" />
+      <LineId Id="52" Count="0" />
+      <LineId Id="31" Count="3" />
+      <LineId Id="36" Count="13" />
+      <LineId Id="1" Count="0" />
+    </LineIds>
+    <LineIds Name="FB_HskMFunc.A_MoveFree">
+      <LineId Id="2" Count="6" />
+      <LineId Id="11" Count="7" />
+      <LineId Id="51" Count="0" />
+      <LineId Id="72" Count="0" />
+      <LineId Id="31" Count="0" />
+      <LineId Id="38" Count="11" />
+      <LineId Id="1" Count="0" />
+    </LineIds>
+    <LineIds Name="FB_HskMFunc.A_MoveZHome">
+      <LineId Id="2" Count="80" />
+    </LineIds>
+    <LineIds Name="FB_HskMFunc.A_PipPostSequence">
+      <LineId Id="2" Count="5" />
+      <LineId Id="1" Count="0" />
+      <LineId Id="9" Count="0" />
+      <LineId Id="8" Count="0" />
+      <LineId Id="13" Count="6" />
+      <LineId Id="127" Count="1" />
+      <LineId Id="140" Count="0" />
+      <LineId Id="129" Count="2" />
+      <LineId Id="124" Count="0" />
+      <LineId Id="141" Count="0" />
+      <LineId Id="132" Count="5" />
+      <LineId Id="125" Count="0" />
+      <LineId Id="143" Count="2" />
+      <LineId Id="142" Count="0" />
+      <LineId Id="126" Count="0" />
+      <LineId Id="20" Count="3" />
+      <LineId Id="162" Count="0" />
+      <LineId Id="158" Count="3" />
+      <LineId Id="157" Count="0" />
+      <LineId Id="24" Count="2" />
+      <LineId Id="163" Count="0" />
+      <LineId Id="39" Count="0" />
+      <LineId Id="166" Count="0" />
+      <LineId Id="169" Count="0" />
+      <LineId Id="601" Count="1" />
+      <LineId Id="172" Count="2" />
+      <LineId Id="168" Count="0" />
+      <LineId Id="164" Count="1" />
+      <LineId Id="175" Count="0" />
+      <LineId Id="178" Count="0" />
+      <LineId Id="603" Count="1" />
+      <LineId Id="181" Count="2" />
+      <LineId Id="246" Count="0" />
+      <LineId Id="177" Count="0" />
+      <LineId Id="184" Count="2" />
+      <LineId Id="190" Count="2" />
+      <LineId Id="605" Count="1" />
+      <LineId Id="195" Count="5" />
+      <LineId Id="607" Count="1" />
+      <LineId Id="203" Count="3" />
+      <LineId Id="609" Count="1" />
+      <LineId Id="209" Count="7" />
+      <LineId Id="611" Count="1" />
+      <LineId Id="219" Count="3" />
+      <LineId Id="613" Count="1" />
+      <LineId Id="225" Count="3" />
+      <LineId Id="594" Count="0" />
+      <LineId Id="615" Count="1" />
+      <LineId Id="598" Count="1" />
+      <LineId Id="229" Count="2" />
+      <LineId Id="617" Count="1" />
+      <LineId Id="234" Count="4" />
+      <LineId Id="255" Count="0" />
+      <LineId Id="271" Count="0" />
+      <LineId Id="619" Count="1" />
+      <LineId Id="274" Count="4" />
+      <LineId Id="621" Count="1" />
+      <LineId Id="281" Count="2" />
+      <LineId Id="257" Count="0" />
+      <LineId Id="189" Count="0" />
+      <LineId Id="287" Count="1" />
+      <LineId Id="627" Count="1" />
+      <LineId Id="291" Count="2" />
+      <LineId Id="295" Count="0" />
+      <LineId Id="629" Count="1" />
+      <LineId Id="300" Count="1" />
+      <LineId Id="297" Count="0" />
+      <LineId Id="294" Count="0" />
+      <LineId Id="188" Count="0" />
+      <LineId Id="302" Count="1" />
+      <LineId Id="305" Count="1" />
+      <LineId Id="631" Count="1" />
+      <LineId Id="309" Count="3" />
+      <LineId Id="633" Count="1" />
+      <LineId Id="315" Count="7" />
+      <LineId Id="635" Count="1" />
+      <LineId Id="325" Count="3" />
+      <LineId Id="114" Count="2" />
+      <LineId Id="330" Count="1" />
+      <LineId Id="388" Count="0" />
+      <LineId Id="332" Count="13" />
+      <LineId Id="12" Count="0" />
+      <LineId Id="10" Count="0" />
+      <LineId Id="389" Count="0" />
+      <LineId Id="348" Count="5" />
+      <LineId Id="358" Count="4" />
+      <LineId Id="638" Count="0" />
+      <LineId Id="363" Count="6" />
+      <LineId Id="356" Count="1" />
+      <LineId Id="355" Count="0" />
+      <LineId Id="370" Count="0" />
+      <LineId Id="393" Count="0" />
+      <LineId Id="372" Count="1" />
+      <LineId Id="375" Count="12" />
+      <LineId Id="371" Count="0" />
+      <LineId Id="391" Count="0" />
+      <LineId Id="394" Count="0" />
+      <LineId Id="399" Count="3" />
+      <LineId Id="398" Count="0" />
+      <LineId Id="395" Count="0" />
+      <LineId Id="405" Count="7" />
+      <LineId Id="414" Count="5" />
+      <LineId Id="403" Count="1" />
+      <LineId Id="397" Count="0" />
+      <LineId Id="347" Count="0" />
+      <LineId Id="422" Count="2" />
+      <LineId Id="420" Count="1" />
+      <LineId Id="425" Count="0" />
+      <LineId Id="427" Count="4" />
+      <LineId Id="437" Count="10" />
+      <LineId Id="593" Count="0" />
+      <LineId Id="448" Count="5" />
+      <LineId Id="432" Count="0" />
+      <LineId Id="434" Count="1" />
+      <LineId Id="433" Count="0" />
+      <LineId Id="426" Count="0" />
+      <LineId Id="456" Count="0" />
+      <LineId Id="458" Count="3" />
+      <LineId Id="463" Count="3" />
+      <LineId Id="484" Count="0" />
+      <LineId Id="467" Count="16" />
+      <LineId Id="462" Count="0" />
+      <LineId Id="457" Count="0" />
+      <LineId Id="486" Count="4" />
+      <LineId Id="492" Count="4" />
+      <LineId Id="498" Count="18" />
+      <LineId Id="518" Count="2" />
+      <LineId Id="517" Count="0" />
+      <LineId Id="485" Count="0" />
+      <LineId Id="522" Count="28" />
+      <LineId Id="521" Count="0" />
+      <LineId Id="551" Count="0" />
+      <LineId Id="553" Count="19" />
+      <LineId Id="637" Count="0" />
+      <LineId Id="573" Count="9" />
+      <LineId Id="584" Count="8" />
+      <LineId Id="583" Count="0" />
+      <LineId Id="552" Count="0" />
+      <LineId Id="11" Count="0" />
+      <LineId Id="600" Count="0" />
+    </LineIds>
+    <LineIds Name="FB_HskMFunc.A_PipPreSequence">
+      <LineId Id="855" Count="376" />
+      <LineId Id="11" Count="0" />
+    </LineIds>
+    <LineIds Name="FB_HskMFunc.A_SelectTool">
+      <LineId Id="771" Count="2" />
+      <LineId Id="770" Count="0" />
+      <LineId Id="507" Count="6" />
+      <LineId Id="777" Count="0" />
+      <LineId Id="515" Count="5" />
+      <LineId Id="781" Count="0" />
+      <LineId Id="774" Count="0" />
+      <LineId Id="522" Count="7" />
+      <LineId Id="599" Count="14" />
+      <LineId Id="776" Count="0" />
+      <LineId Id="614" Count="2" />
+      <LineId Id="775" Count="0" />
+      <LineId Id="618" Count="12" />
+      <LineId Id="633" Count="0" />
+      <LineId Id="636" Count="9" />
+      <LineId Id="663" Count="10" />
+      <LineId Id="779" Count="1" />
+      <LineId Id="674" Count="76" />
+    </LineIds>
+    <LineIds Name="FB_HskMFunc.A_Sequence">
+      <LineId Id="2" Count="5" />
+      <LineId Id="105" Count="0" />
+      <LineId Id="107" Count="0" />
+      <LineId Id="128" Count="12" />
+      <LineId Id="258" Count="0" />
+      <LineId Id="141" Count="16" />
+      <LineId Id="196" Count="1" />
+      <LineId Id="256" Count="1" />
+      <LineId Id="195" Count="0" />
+      <LineId Id="163" Count="17" />
+      <LineId Id="109" Count="1" />
+      <LineId Id="199" Count="0" />
+      <LineId Id="202" Count="2" />
+      <LineId Id="206" Count="0" />
+      <LineId Id="208" Count="1" />
+      <LineId Id="231" Count="0" />
+      <LineId Id="211" Count="1" />
+      <LineId Id="210" Count="0" />
+      <LineId Id="200" Count="0" />
+      <LineId Id="183" Count="0" />
+      <LineId Id="241" Count="0" />
+      <LineId Id="246" Count="1" />
+      <LineId Id="262" Count="0" />
+      <LineId Id="248" Count="1" />
+      <LineId Id="251" Count="1" />
+      <LineId Id="254" Count="1" />
+      <LineId Id="253" Count="0" />
+      <LineId Id="250" Count="0" />
+      <LineId Id="242" Count="1" />
+      <LineId Id="191" Count="0" />
+      <LineId Id="182" Count="0" />
+      <LineId Id="263" Count="0" />
+      <LineId Id="116" Count="0" />
+      <LineId Id="214" Count="0" />
+      <LineId Id="259" Count="2" />
+      <LineId Id="215" Count="1" />
+      <LineId Id="218" Count="3" />
+      <LineId Id="223" Count="7" />
+      <LineId Id="119" Count="2" />
+      <LineId Id="232" Count="7" />
+      <LineId Id="122" Count="1" />
+      <LineId Id="1" Count="0" />
+    </LineIds>
+    <LineIds Name="FB_HskMFunc.A_SetPrintParams">
+      <LineId Id="268" Count="5" />
+      <LineId Id="300" Count="0" />
+      <LineId Id="274" Count="25" />
+    </LineIds>
+    <LineIds Name="FB_HskMFunc.A_StirrCartridge">
+      <LineId Id="1" Count="0" />
+      <LineId Id="3" Count="0" />
+      <LineId Id="2" Count="0" />
+      <LineId Id="8" Count="11" />
+      <LineId Id="33" Count="1" />
+      <LineId Id="20" Count="7" />
+      <LineId Id="7" Count="0" />
+      <LineId Id="6" Count="0" />
+    </LineIds>
+    <LineIds Name="FB_HskMFunc.A_SwitchPress">
+      <LineId Id="152" Count="92" />
+      <LineId Id="1" Count="0" />
+    </LineIds>
+    <LineIds Name="FB_HskMFunc.A_UniDispense">
+      <LineId Id="2" Count="11" />
+      <LineId Id="97" Count="0" />
+      <LineId Id="91" Count="0" />
+      <LineId Id="95" Count="0" />
+      <LineId Id="19" Count="4" />
+      <LineId Id="98" Count="0" />
+      <LineId Id="24" Count="19" />
+      <LineId Id="99" Count="0" />
+      <LineId Id="44" Count="2" />
+      <LineId Id="100" Count="0" />
+      <LineId Id="47" Count="11" />
+      <LineId Id="101" Count="0" />
+      <LineId Id="59" Count="7" />
+      <LineId Id="1" Count="0" />
+    </LineIds>
+    <LineIds Name="FB_HskMFunc.A_WaitAtPoint">
+      <LineId Id="2" Count="100" />
+      <LineId Id="1" Count="0" />
+    </LineIds>
+    <LineIds Name="FB_HskMFunc.A_WaitForUser">
+      <LineId Id="54" Count="30" />
+      <LineId Id="4" Count="0" />
+    </LineIds>
+    <LineIds Name="FB_HskMFunc.M_Reset">
+      <LineId Id="3" Count="8" />
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="FB_HskMFunc.M_ValidateTargetNr">
+      <LineId Id="5" Count="0" />
+      <LineId Id="9" Count="0" />
+      <LineId Id="19" Count="0" />
+      <LineId Id="12" Count="0" />
+      <LineId Id="10" Count="0" />
+    </LineIds>
+  </POU>
+</TcPlcObject>

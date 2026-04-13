@@ -1,0 +1,1372 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<TcPlcObject Version="1.1.0.1">
+  <POU Name="FB_MzHead" Id="{24d30e2b-2418-4f0d-b51b-90cfd7dde3bd}" SpecialFunc="None">
+    <Declaration><![CDATA[FUNCTION_BLOCK FB_MzHead EXTENDS FB_MzBase
+
+VAR
+	nHeadBoardType 	: USINT;
+	nHeadNr			: SINT;		//Nummer des Heads (1 bzw -1 (untere Ebene)
+	nParentSlotNr	: UINT;		//Head befindet sich zwar an keinem Slot, aber virtuell in der GUI (am Root)
+	
+	pFbZAxisRef		: POINTER TO FB_ZAxisRef;
+	
+	pCoHead			: POINTER TO FB_MzHead;
+	pErrorChild 	: POINTER TO FB_MzTool;
+	
+	nStateA_InitAxisNext : USINT;
+	
+	pTempTool		: POINTER TO FB_MzTool;
+	
+	pExcludedTool	: POINTER TO FB_MzTool;
+	
+	pFlag			: BOOL;
+	
+	iterFlat		: FB_ObjCollectIterator;
+	iterDeep		: FB_ObjCollectIteratorDeep;
+	pDebugSlot		: POINTER TO FB_Slot;
+	nDebugSlotNr	: UINT := 1;
+END_VAR
+
+VAR CONSTANT
+	cNumberOfSlots : UINT := 7;
+END_VAR]]></Declaration>
+    <Implementation>
+      <ST><![CDATA[SUPER^();	//FB_MzBase aufrufen
+pDebugSlot := fbSlotList.M_GetAtNr(nDebugSlotNr);
+
+//Prozessdaten aktualisieren
+stProcessData.n32Data[3] := REAL_TO_DINT(pXDrive^.P_rActPos);
+stProcessData.n32Data[4] := REAL_TO_DINT(pYDrive^.P_rActPos);
+stCurrentPos := P_stCurrentPosTotal;
+stProcessData.n32Data[5] := REAL_TO_DINT(stCurrentPos.X);
+stProcessData.n32Data[6] := REAL_TO_DINT(stCurrentPos.Y);
+//ist nur für 2-Ebenen relevant
+stProcessData.n32Data[7] := BOOL_TO_DINT(pYDrive^.P_bCoupled);
+
+aObjProcData[nNotifyId] := stProcessData;]]></ST>
+    </Implementation>
+    <Property Name="P_stCurrentPosPhys" Id="{11e24b9c-405f-455b-a3f8-b49d42d19ba5}">
+      <Declaration><![CDATA[PROPERTY P_stCurrentPosPhys : ST_3DPoint]]></Declaration>
+      <Get Name="Get" Id="{c5a6a960-7183-42ad-92f8-02c5939453ad}">
+        <Declaration><![CDATA[VAR
+	stTemp		: ST_3DPoint;
+	stAbsPos : ST_3DPoint;
+END_VAR
+]]></Declaration>
+        <Implementation>
+          <ST><![CDATA[stAbsPos := P_stAbsPosPhys;
+stTemp.X := pXDrive^.P_rActPos + stAbsPos.X;
+stTemp.Y := pYDrive^.P_rActPos + stAbsPos.Y;
+stTemp.Z := stAbsPos.Z;
+P_stCurrentPosPhys := stTemp;
+ 
+]]></ST>
+        </Implementation>
+      </Get>
+    </Property>
+    <Property Name="P_bCollFree" Id="{164ed98b-a590-4e1a-9366-af611568d424}">
+      <Declaration><![CDATA[PROPERTY P_bCollFree : BOOL]]></Declaration>
+      <Get Name="Get" Id="{f60a9880-6fc3-437d-a54e-04f41c8f2dd0}">
+        <Declaration><![CDATA[VAR
+	pTool : POINTER TO FB_MzTool;
+	iter : FB_ObjCollectIteratorDeep;
+END_VAR
+]]></Declaration>
+        <Implementation>
+          <ST><![CDATA[//Kollisionsfreihheit ist gegeben, wenn Unterkante Z-Wert von Tool >= kollissiongefährdete Höhe Workplate
+IF nHeadNr < 0 THEN //unterer Head
+	P_bCollFree := TRUE;
+ELSE
+	//alle ChildTools durchlaufen und checken, ob diese CollFree
+	P_bCollFree := TRUE;
+	pObjCollectNode^.nodes.M_GetIterator(iter);
+	WHILE iter.pNode > 0 DO
+		IF iter.pNode^.P_pObject > 0 and_then iter.pNode^.P_pObject^.M_bIsGroup(E_ObjectGroup.OBJECTGROUP_MzTool) THEN //schließt Pieces aus, da diese die Property 
+			pTool := iter.pNode^.P_pObject;											//P_bCollFree nicht implementieren
+			IF NOT pTool^.P_bCollFree THEN
+				P_bCollFree := FALSE;
+				RETURN;
+			END_IF			
+		END_IF
+ 	iter.M_Increment();
+	END_WHILE	
+END_IF]]></ST>
+        </Implementation>
+      </Get>
+    </Property>
+    <Method Name="M_CheckChildsForActionBusy" Id="{1b76ee87-abbe-42bb-b48f-5fb554a314dd}">
+      <Declaration><![CDATA[METHOD M_CheckChildsForActionBusy : BOOL
+VAR_INPUT
+	eAction : E_Action;
+END_VAR
+VAR
+	pTool : POINTER TO FB_MzTool;
+	iterDeep : FB_ObjCollectIteratorDeep;	
+END_VAR
+]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[//Alle Childs durchlaufen
+pObjCollectNode^.nodes.M_GetIterator(iterDeep);
+WHILE iterDeep.pNode > 0 DO
+	IF iterDeep.pNode^.P_pObject > 0 AND_THEN iterDeep.pNode^.P_pObject^.M_bIsGroup(E_ObjectGroup.OBJECTGROUP_MzTool) THEN
+		pTool := iterDeep.pNode^.P_pObject;
+		M_CheckChildsForActionBusy := pTool^.M_GetActionBusy(eAction);	
+		IF M_CheckChildsForActionBusy THEN
+			RETURN;
+		END_IF
+	END_IF
+	iterDeep.M_Increment();
+END_WHILE]]></ST>
+      </Implementation>
+    </Method>
+    <Method Name="M_SetAllProps" Id="{25a9a795-9097-47e8-8333-dbaf83821275}">
+      <Declaration><![CDATA[METHOD M_SetAllProps : ERRORID
+VAR_INPUT
+	refCmdData : REFERENCE TO  ST_CmdData;
+END_VAR
+
+VAR
+	nNoOfYDrives : UINT;
+	pDrive : POINTER TO FB_XYDriveBase;
+	stHardwareID : ST_HardwareId;
+END_VAR
+]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[M_SetAllProps := SUPER^.M_SetAllProps(refCmdData);
+IF M_SetAllProps > 0 THEN
+	RETURN;
+END_IF
+
+nParentSlotNr := DINT_TO_UINT(refCmdData.n32Data[1]);
+
+nCurrentPropIndex := nCurrentPropIndex + 1;
+nSpecPropIndex := nCurrentPropIndex;
+nHeadNr := DINT_TO_SINT(refCmdData.n32Data[nCurrentPropIndex]);
+
+nNoOfYDrives := fbXYDriveList.M_CountByGroup(E_HardwareGrp.AxisY);
+IF nHeadNr = 1 AND nNoOfYDrives = 1 THEN //Normalfall für Plattform C
+	stHardwareID.eGroup := E_HardwareGrp.AxisY;
+	stHardwareID.nParentItem := 1;
+	stHardwareID.nItem := 1;
+	pDrive := fbXYDriveList.M_GetByHwId(stHardwareID);
+	IF pDrive > 0 THEN
+		pYDrive := pDrive;
+	ELSE
+		M_SetAllProps := E_ErrorIdObjMgmt.ERRORID_InvalidHardwareRef;
+		RETURN;
+	END_IF
+ELSIF nHeadNr = 1 AND nNoOfYDrives = 2 THEN //Plattform D oberer Head
+	stHardwareID.eGroup := E_HardwareGrp.AxisY;
+	stHardwareID.nParentItem := 1;
+	stHardwareID.nItem := 2;
+	pDrive := fbXYDriveList.M_GetByHwId(stHardwareID);
+	IF pDrive > 0 THEN
+		pYDrive := pDrive;
+	ELSE
+		M_SetAllProps := E_ErrorIdObjMgmt.ERRORID_InvalidHardwareRef;
+		RETURN;
+	END_IF	
+	
+ELSIF nHeadNr = -1 AND nNoOfYDrives = 2 THEN //Plattform D unterer Head
+	stHardwareID.eGroup := E_HardwareGrp.AxisY;
+	stHardwareID.nParentItem := 1;
+	stHardwareID.nItem := 1;
+	pDrive := fbXYDriveList.M_GetByHwId(stHardwareID);
+	IF pDrive > 0 THEN
+		pYDrive := pDrive;
+	ELSE
+		M_SetAllProps := E_ErrorIdObjMgmt.ERRORID_InvalidHardwareRef;
+		RETURN;
+	END_IF
+ELSE
+	M_SetAllProps := E_ErrorIdObjMgmt.ERRORID_InvalidMultiZNr;
+	RETURN;
+END_IF
+
+pFbMultiZ := pDrive^.P_pMultiZRef;
+
+//X
+stHardwareID.eGroup := E_HardwareGrp.AxisX;
+stHardwareID.nParentItem := 0;
+stHardwareID.nItem := 1;
+pDrive := fbXYDriveList.M_GetByHwId(stHardwareID);
+IF pDrive > 0 THEN
+	pXDrive := pDrive;
+ELSE
+	M_SetAllProps := E_ErrorIdObjMgmt.ERRORID_InvalidHardwareRef;
+	RETURN;
+END_IF
+
+//Type der ZBasis-Platine (derzeit nur 0 oder 1)
+//0= keine BasisPlatine vorhanden, es können auch keine Achsen betrieben werden
+//1= BasisPlatine vorhanden
+nCurrentPropIndex := nCurrentPropIndex + 1;
+nHeadBoardType := DINT_TO_USINT(refCmdData.n32Data[nCurrentPropIndex]);
+IF NOT (nHeadBoardType >= 0 AND nHeadBoardType <= 1) THEN
+	M_SetAllProps := E_ErrorIdObjMgmt.ERRORID_InvalidHeadBoardType;
+	RETURN;	
+END_IF
+
+IF nHeadBoardType = 1 AND pFbMultiZ = 0 THEN
+	M_SetAllProps := E_ErrorIdObjMgmt.ERRORID_HeadBoardNotAvailable;
+	RETURN;		
+END_IF
+
+nNoOfProps := nCurrentPropIndex + 1;]]></ST>
+      </Implementation>
+    </Method>
+    <Method Name="M_CheckMoveLimit" Id="{2d2c73fe-11c4-4871-89c1-bee57a1702b8}">
+      <Declaration><![CDATA[METHOD M_CheckMoveLimit : BOOL
+VAR_INPUT
+	sAxis			: STRING[2];
+	eMoveMode		: E_MoveMode;
+	rMovePosition	: REAL;
+END_VAR
+
+VAR
+	st3DPoint		: ST_3DPoint;
+	rMovePosTemp	: REAL;
+END_VAR
+]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[IF sAxis = 'Z' THEN //Head gibt in "Z" immer TRUE zurück, da er sich in Z nicht bewegt
+	M_CheckMoveLimit := TRUE;
+ELSE
+	M_CheckMoveLimit := SUPER^.M_CheckMoveLimit(sAxis,eMoveMode,rMovePosition);
+END_IF
+]]></ST>
+      </Implementation>
+    </Method>
+    <Method Name="M_ClearAllProps" Id="{2deb7499-45b3-4c18-a4e4-442b8fe248ee}">
+      <Declaration><![CDATA[METHOD M_ClearAllProps
+VAR_INPUT
+	bIgnoreParent : BOOL; //Es wird das gesamte OD gelöscht. -> Zeiger auf Parent nicht mehr gültig!
+END_VAR]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[nHeadNr := 0;
+SUPER^.M_ClearAllProps(bIgnoreParent);]]></ST>
+      </Implementation>
+    </Method>
+    <Property Name="P_bZIsMoving" Id="{48880b53-2aca-4dd8-9722-48eb8d706aad}">
+      <Declaration><![CDATA[PROPERTY P_bZIsMoving : BOOL]]></Declaration>
+      <Set Name="Set" Id="{bc8c62de-d5e1-4230-9733-41e634994937}">
+        <Declaration><![CDATA[VAR
+END_VAR
+]]></Declaration>
+        <Implementation>
+          <ST><![CDATA[]]></ST>
+        </Implementation>
+      </Set>
+      <Get Name="Get" Id="{c8dc3b38-f087-4c6b-ac72-eec39897b10a}">
+        <Declaration><![CDATA[VAR
+	iter : FB_ObjCollectIteratorDeep;
+	pTool : POINTER TO FB_MzTool;
+	bTemp : BOOL;
+END_VAR]]></Declaration>
+        <Implementation>
+          <ST><![CDATA[pObjCollectNode^.nodes.M_GetIterator(iter);
+WHILE iter.pNode > 0 DO
+	IF iter.pNode^.P_pObject > 0 AND_THEN iter.pNode^.P_pObject^.M_bIsGroup(E_ObjectGroup.OBJECTGROUP_MzTool) THEN
+		pTool := iter.pNode^.P_pObject;
+		IF pTool^.P_bZIsMoving THEN
+			bTemp := TRUE;
+			EXIT;
+		END_IF
+	END_IF
+	iter.M_Increment();
+END_WHILE
+P_bZIsMoving:= bZIsMoving OR bTemp;]]></ST>
+        </Implementation>
+      </Get>
+    </Property>
+    <Method Name="FB_init" Id="{4f4230d9-c597-441b-b603-8292329a4964}">
+      <Declaration><![CDATA[METHOD FB_init : BOOL
+VAR_INPUT
+	bInitRetains : BOOL; // if TRUE, the retain variables are initialized (warm start / cold start)
+	bInCopyCode : BOOL;  // if TRUE, the instance afterwards gets moved into the copy code (online change)
+END_VAR
+]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[eObjectType := E_ObjectType.OBJECTTYPE_MZHead;
+eObjectGroup := E_ObjectGroup.OBJECTGROUP_MzTool OR E_ObjectGroup.OBJECTGROUP_Device;]]></ST>
+      </Implementation>
+    </Method>
+    <Method Name="M_GetMinMaxActPos" Id="{520306af-3c65-4ae3-abc8-27147517e6d1}">
+      <Declaration><![CDATA[METHOD M_GetMinMaxActPos
+VAR_INPUT
+	pData : POINTER TO ARRAY[0..19] OF DINT;
+END_VAR
+VAR
+	stCurrPosTotal : ST_3DPoint;
+END_VAR]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[SUPER^.M_GetMinMaxActPos(pData);
+
+stCurrPosTotal := P_stCurrentPosTotal;
+pData^[6] := REAL_TO_DINT(stCurrPosTotal.X);
+pData^[7] := REAL_TO_DINT(stCurrPosTotal.Y);
+pData^[8] := REAL_TO_DINT(stCurrPosTotal.Z);]]></ST>
+      </Implementation>
+    </Method>
+    <Property Name="P_bIsInit" Id="{5f58916f-536a-4ec6-9650-d3520c9b2795}">
+      <Declaration><![CDATA[PROPERTY P_bIsInit : BOOL]]></Declaration>
+      <Get Name="Get" Id="{fc288581-cf5a-4f8b-b035-410ca974adb0}">
+        <Declaration><![CDATA[VAR
+END_VAR
+]]></Declaration>
+        <Implementation>
+          <ST><![CDATA[P_bIsInit := bInitAxisOk AND pXDrive^.P_bHomed AND pYDrive^.P_bHomed;]]></ST>
+        </Implementation>
+      </Get>
+    </Property>
+    <Property Name="P_stAbsPosPhys" Id="{604f1e41-8d11-4811-aaca-e3cb0a496e91}">
+      <Declaration><![CDATA[PROPERTY P_stAbsPosPhys : ST_3DPoint]]></Declaration>
+      <Get Name="Get" Id="{6a17a2f3-6613-4939-987a-d38d8cff839b}">
+        <Declaration><![CDATA[VAR
+	stTemp	: ST_3DPoint;
+END_VAR
+]]></Declaration>
+        <Implementation>
+          <ST><![CDATA[//X und Y beziehen sich auf den Koordinatenursprung, wenn die Achsen theoretischn aus Antrieb (0;0) stehen
+P_stAbsPosPhys := F_Add3DPoints(stRelPos,stOffset);
+
+
+
+]]></ST>
+        </Implementation>
+      </Get>
+    </Property>
+    <Property Name="P_nParentSlotNr" Id="{6141463d-4276-4b6d-9e7a-e4d91aa38739}">
+      <Declaration><![CDATA[PROPERTY P_nParentSlotNr : UINT]]></Declaration>
+      <Get Name="Get" Id="{5e25990a-6f86-4ccc-a643-67818648228e}">
+        <Declaration><![CDATA[VAR
+END_VAR
+]]></Declaration>
+        <Implementation>
+          <ST><![CDATA[P_nParentSlotNr := nParentSlotNr;]]></ST>
+        </Implementation>
+      </Get>
+    </Property>
+    <Property Name="P_bHasZSensorSlot" Id="{66e2865d-222b-4d0c-8348-6e9468520c68}">
+      <Declaration><![CDATA[PROPERTY P_bHasZSensorSlot : BOOL]]></Declaration>
+      <Get Name="Get" Id="{62c8361c-00c4-4d8f-a411-e42ddd436299}">
+        <Declaration><![CDATA[VAR
+END_VAR
+]]></Declaration>
+        <Implementation>
+          <ST><![CDATA[P_bHasZSensorSlot := TRUE;]]></ST>
+        </Implementation>
+      </Get>
+    </Property>
+    <Action Name="A_Init" Id="{688bf76c-ef75-4aa7-9244-97a90d806580}">
+      <Implementation>
+        <ST><![CDATA[stError.POUState := nStateA_InitAxis;
+
+CASE nStateA_InitAxis OF
+	0:
+		bInitAxisOk := FALSE;
+		bInitReadyX := FALSE;
+		bInitReadyY := FALSE;
+		bInitErrorX := FALSE;
+		bInitErrorY := FALSE;
+		nStateA_InitAxis := 1;
+		nCurInitZAxis := 0;
+
+		IF nHeadBoardType = 0 THEN	//Head besitzt keine HeadBoard und somit auch keine Z-Achsen		
+			nStateA_InitAxis := 4;	//weiter zum Dispacher
+		END_IF
+		
+	1:	//ALLE Z-Achsen die noch nicht zur Initalisierung durch andere Tools angestoßen wurde, initialisieren
+		nCurInitZAxis := nCurInitZAxis + 1;	
+		FOR i := nCurInitZAxis TO 7 BY 1 DO
+			//Ist Achse auch physikalisch vorhanden und ist sie keine SubAchse (wird von Stamp gesteuert)
+			pFbZAxisRef := ADR(pFbMultiZ^.aFbZAxisRef[i]);
+			IF pFbZAxisRef^.stInput.nStatus.7 AND NOT pFbZAxisRef^.bIsSubAxis THEN
+				IF (NOT pFbZAxisRef^.stStatus.bIsHoming AND NOT pFbZAxisRef^.stStatus.bIsHomed)
+					OR (NOT pFbZAxisRef^.stStatus.bIsHoming AND (pFbZAxisRef^.P_rHomePos - pFbZAxisRef^.P_rCurrentPos) > 20) THEN
+					nCurInitZAxis := UINT_TO_USINT(i);
+					nStateA_InitAxis := 2; //Init Z-Achse anstoßen
+					fbZmHome(bExecute:= TRUE, pFbZAxisRef:= pFbZAxisRef, bMoveToHome:= TRUE);
+					RETURN;
+				ELSE
+					IF nCurInitZAxis = 7 THEN
+						nStateA_InitAxis := 3;	//weiter zu Check eigene Tools
+					END_IF
+				END_IF
+			ELSE
+				IF nCurInitZAxis = 7 THEN
+					nStateA_InitAxis := 3;	//weiter zu Check eigene Tools
+				END_IF				
+			END_IF
+		END_FOR
+		
+	2:	//Z-Achse initialisieren
+		fbZmHome(bExecute:= TRUE, pFbZAxisRef:= pFbZAxisRef, bMoveToHome:= TRUE);
+		IF NOT fbZmHome.bBusy THEN
+			IF fbZmHome.bError THEN
+				stError.ErrorId := fbZmHome.nErrorId;
+				stError.HardwareGrp := E_HardwareGrp.AxisZ;
+				stError.HardwareNr	:= nCurInitZAxis;
+				nStateA_InitAxis := 99;
+			ELSE
+				IF nCurInitZAxis = 7 THEN
+					nStateA_InitAxis := 3;	//weiter zu check
+				ELSE
+					nStateA_InitAxis := 1;	//nächste Z-Achse
+				END_IF
+			END_IF
+			fbZmHome(bExecute:= FALSE);
+		END_IF
+		
+	3:	//alle eigenen Tools auf Fehlerfreiheit checken
+		IF P_bNoChildBusy THEN
+			pErrorChild := M_GetFirstErrorChild(FALSE);
+			IF pErrorChild > 0 THEN
+				stError.ErrorId := pErrorChild^.P_nErrorId;
+				nStateA_InitAxis := 99;
+			ELSE
+				//Test CrashSafe
+				IF P_bCollFree THEN
+					nStateA_InitAxis := 4;
+				ELSE
+					stError.ErrorId := E_ErrorIdCmd.ERRORID_AnyToolNotCrashSafe;
+					stError.HardwareGrp := E_HardwareGrp.AxisZ;
+					nStateA_InitAxis := 99;
+				END_IF
+			END_IF
+		END_IF
+
+	4:	//Dispacher!!!!!!!!!!!!!!!!!!!!
+		IF nHeadNr = 1 THEN  //oberer Head
+			IF pXDrive^.P_bHoming THEN //X-bereits homing -> Y-Homing
+				//kein weiterer Check notwendig
+				nStateA_InitAxis := 20;	//Y-Homing
+				nStateA_InitAxisNext := 40;
+			ELSE //XY-Homing
+				//falls es einen unteren Head gibt, muss dieser auch sicher sein
+				IF pCoHead > 0 THEN
+					IF pCoHead^.P_bNoChildBusy THEN
+						pErrorChild := pCoHead^.M_GetFirstErrorChild(FALSE);
+						IF pErrorChild > 0 THEN
+							stError.ErrorId := pErrorChild^.P_nErrorId;
+							nStateA_InitAxis := 99;
+						ELSE
+							//Test CrashSafety
+							IF pCoHead^.P_bCollFree THEN
+								nStateA_InitAxis := 30;
+								nStateA_InitAxisNext := 40;
+							ELSE
+								stError.ErrorId := E_ErrorIdCmd.ERRORID_AnyToolNotCrashSafe;
+								stError.HardwareGrp := E_HardwareGrp.AxisZ;
+								nStateA_InitAxis := 99;
+							END_IF
+						END_IF
+					END_IF
+				END_IF
+				nStateA_InitAxis := 30; //XY-Homing
+				nStateA_InitAxisNext := 40;
+			END_IF
+		ELSIF nHeadNr = -1 THEN  //unterer Head
+			IF pXDrive^.P_bHoming THEN  //X-bereits homing und homingzeit > 3s -> Y-Homing
+				//Abfrage Zeit???
+				IF pXDrive^.P_tHomingTime >= T#3S THEN
+					nStateA_InitAxis := 20;	//Y-Homing
+					nStateA_InitAxisNext := 40;
+				END_IF
+			ELSE
+				IF pXDrive^.P_bHomed THEN
+					IF (pXDrive^.P_rActPos > pXDrive^.P_rMinPos) THEN
+						nStateA_InitAxis := 20;	//Y-Homing
+						nStateA_InitAxisNext := 40;
+					END_IF
+				ELSE
+					//Oberer Head ChrashSafety?
+					IF pCoHead^.P_bCollFree THEN
+						//zuerst X-Homing anstoßen und nach 5s Y-Homing anstoßen
+						nStateA_InitAxis := 10;	//X-Homing
+						nStateA_InitAxisNext := 5;
+					END_IF
+				END_IF
+			END_IF
+		END_IF
+		
+	5:	//Waiting bis X-Homing aktiv - Dieser Schritt wird nur für unteren Head benötigt
+		IF pXDrive^.P_tHomingTime > T#0S THEN
+			nStateA_InitAxis := 4; //zurück zum Dispacher
+		END_IF
+		
+	10:	//X-Homing
+		nStateA_InitAxis := nStateA_InitAxisNext;
+		IF NOT pXDrive^.P_bHoming THEN
+			stError.ErrorId := pXDrive^.M_Init(bReInit);	
+		END_IF
+		IF stError.ErrorId > 0 THEN
+			nStateA_InitAxis := 99;
+		END_IF
+	
+	20:	//Y-Homing
+		nStateA_InitAxis := nStateA_InitAxisNext;
+		stError.ErrorId := pYDrive^.M_Init(bReInit);
+		IF stError.ErrorId > 0 THEN
+			nStateA_InitAxis := 99;
+		END_IF
+	
+	30:	//XY-Homing
+		nStateA_InitAxis := nStateA_InitAxisNext;
+		IF NOT pXDrive^.P_bHoming THEN
+			stError.ErrorId := pXDrive^.M_Init(bReInit);	
+		END_IF
+		IF stError.ErrorId > 0 THEN
+			nStateA_InitAxis := 99;
+		ELSE
+			stError.ErrorId := pYDrive^.M_Init(bReInit);
+		END_IF
+		
+	40:	//XY-Homing ready?
+		IF NOT pXDrive^.P_bBusy THEN
+			IF pXDrive^.P_bError THEN
+				stError.ErrorId := pXDrive^.P_nErrorId;
+				stError.HardwareGrp := E_HardwareGrp.AxisX;
+				stError.HardwareNr	:= 1;
+				IF pYDrive^.P_bBusy THEN
+					pYDrive^.M_Stop();	
+				END_IF
+				bInitErrorX := TRUE;
+			ELSE
+				bInitReadyX := TRUE;
+			END_IF
+		END_IF
+
+		IF NOT pYDrive^.P_bBusy THEN
+			IF pYDrive^.P_bError THEN
+				stError.ErrorId := pYDrive^.P_nErrorId;
+				stError.HardwareGrp := E_HardwareGrp.AxisY;
+				stError.HardwareNr	:= 1;
+				IF pXDrive^.P_bBusy THEN
+					pXDrive^.M_Stop();	
+				END_IF
+				bInitErrorY := TRUE;
+			ELSE
+				bInitReadyY := TRUE;
+			END_IF
+		END_IF
+
+		IF bInitReadyX AND bInitReadyY THEN	//beide Achsen ohne Fehler initialisiert
+			bInitAxisOk := TRUE;
+			nStateA_InitAxis := 80;
+		ELSIF (bInitReadyX AND bInitErrorY) OR (bInitErrorX AND bInitReadyY) OR (bInitErrorX AND bInitErrorY) THEN //mind. 1 Achse in Fehler
+			//Problem: wenn beide Achsen in Fehler gehen, dann wird nur die zweite als Fehler angezeigt?
+			stError.POUState := nStateA_InitAxis;
+			nStateA_InitAxis := 99;
+		END_IF
+
+	70:	//Abbrechen
+		//Die Initialisierung der Z-Achsen lässt sich nicht stoppen
+		fbZmHome(bExecute:= FALSE);
+		
+		//Die XY-Achsen können gestoppt werden
+		IF pXDrive^.P_bBusy THEN
+			pXDrive^.M_Stop();	
+		END_IF
+		
+		IF pYDrive^.P_bBusy THEN
+			pYDrive^.M_Stop();	
+		END_IF
+
+		IF NOT (pXDrive^.P_bBusy OR pYDrive^.P_bBusy) THEN
+			bInitReadyX := FALSE;
+			bInitReadyY := FALSE;
+			bInitErrorX := FALSE;
+			bInitErrorY := FALSE;
+			nStateA_InitAxis := 80;
+		END_IF	
+END_CASE
+
+//Errorhandling
+IF nStateA_InitAxis = 99 THEN
+	bInitErrorX := FALSE;
+	bInitErrorY := FALSE;
+	stError.ObjectId := nObjectID;
+	stError.Cmd := E_Action.ACTION_Init;
+	stError.POU := E_POU.POU_FB_MzHead;
+	stError.POUAction := E_POUACT.POUACT_A_Init;
+	fbErrorList.M_Add(stError);
+END_IF]]></ST>
+      </Implementation>
+    </Action>
+    <Method Name="M_CheckAction" Id="{735e09d1-646d-4500-a635-6afed42b6f5a}">
+      <Declaration><![CDATA[METHOD M_CheckAction : ERRORID
+VAR_INPUT
+	refActionData 	: REFERENCE TO ST_ActionData;
+	pCorrelObject	: POINTER TO FB_Object;
+END_VAR
+]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[IF refActionData.eAction = E_Action.ACTION_MoveToTarget THEN
+	//Diese Action wird nur für den unteren Head benötigt, wenn er keine Z-Achsen hat. (Collimator)
+	//Es erfolgt keine Z-Zustellung.
+	RETURN;
+ELSE
+	M_CheckAction := SUPER^.M_CheckAction(refActionData,pCorrelObject);
+END_IF
+]]></ST>
+      </Implementation>
+    </Method>
+    <Method Name="M_GetCollFree" Id="{7538e59f-3c04-4bb9-8aac-a426e99b7916}">
+      <Declaration><![CDATA[METHOD M_GetCollFree : BOOL
+VAR_INPUT
+	rDistanceX : REAL;
+	rDistanceY : REAL;
+END_VAR
+
+VAR
+	pTool : POINTER TO FB_MzTool;
+	iter : FB_ObjCollectIteratorDeep;
+END_VAR
+]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[//Ermittlung, ob anhängende Tools in kollisionsfreiem Bereich
+//Kollisionsfreihheit ist gegeben, wenn Unterkante Z-Wert von Tool >= kollissiongefährdete Höhe Workplate
+IF P_bIsTopHead THEN
+	//alle ChildTools durchlaufen und checken, ob diese CollFree
+	M_GetCollFree := TRUE;
+	pObjCollectNode^.nodes.M_GetIterator(iter);
+	WHILE iter.pNode > 0 AND_THEN iter.pNode^.P_pObject > 0 DO
+		IF iter.pNode^.P_pObject^.M_bIsGroup(E_ObjectGroup.OBJECTGROUP_MzTool) THEN
+			pTool := iter.pNode^.P_pObject;
+			IF NOT pTool^.M_GetCollFree(rDistanceX,rDistanceY) THEN
+				M_GetCollFree := FALSE;
+				RETURN;
+			END_IF			
+		END_IF	
+		iter.M_Increment();
+	END_WHILE	
+ELSE
+	 M_GetCollFree := TRUE;
+END_IF]]></ST>
+      </Implementation>
+    </Method>
+    <Method Name="M_ExeAction" Id="{76ae64ad-9e1d-42c5-b0d1-fb83bfb2b771}">
+      <Declaration><![CDATA[METHOD M_ExeAction : ERRORID
+VAR_INPUT
+	refActionData : REFERENCE TO ST_ActionData;	
+END_VAR]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[IF NOT (eCurrentState = E_MachineState.MACHINESTATE_Idle OR
+	eCurrentState = E_MachineState.MACHINESTATE_Active OR
+	eCurrentState = E_MachineState.MACHINESTATE_Ready) THEN
+	M_ExeAction := E_ErrorIdCmd.ERRORID_InvalidState;
+	RETURN;
+END_IF
+
+CASE refActionData.eAction OF
+	
+	E_Action.ACTION_MoveZ:
+		IF NOT bMoveZ THEN
+			//Dient nur zum freifahren aller Tools die, an diesem Head hängen	
+			eMoveModeZ := DINT_TO_USINT(refActionData.aParams[1]);
+			
+			//Head darf nur alle in ihm hängende Tools freifahren oder auf "0" fahren
+			IF NOT (eMoveModeZ = E_MoveMode.MODE_Free OR eMoveModeZ = E_MoveMode.MODE_Home) THEN
+				M_ExeAction := E_ErrorIdCmd.ERRORID_InvalidMoveMode;
+				RETURN;
+			END_IF
+			
+			bZIsMoving := TRUE;
+			bMoveZ := TRUE;			
+			fbList.A_AddHeadValue(hList := hList, putValue := E_Action.ACTION_MoveZ);
+			
+		ELSE
+			M_ExeAction := E_ErrorIdCmd.ERRORID_BasicActionActive;  //Error
+			RETURN;				
+		END_IF	
+
+	ELSE
+		M_ExeAction := SUPER^.M_ExeAction(refActionData);
+		RETURN;
+END_CASE
+bBusy := TRUE;
+eCurrentState := E_MachineState.MACHINESTATE_Active;]]></ST>
+      </Implementation>
+    </Method>
+    <Property Name="P_bIsTopHead" Id="{7b744cea-8077-4f57-a060-fdfd5b0b20e9}">
+      <Declaration><![CDATA[PROPERTY P_bIsTopHead : BOOL]]></Declaration>
+      <Get Name="Get" Id="{31abe74d-7bd1-4331-a3ba-a448b1519c62}">
+        <Declaration><![CDATA[VAR
+END_VAR
+]]></Declaration>
+        <Implementation>
+          <ST><![CDATA[IF nHeadNr = 1 THEN	// Besagt, dass es ein oberer Head ist.
+	P_bIsTopHead := TRUE;
+END_IF]]></ST>
+        </Implementation>
+      </Get>
+    </Property>
+    <Property Name="P_pCoHead" Id="{9e793aa9-19e9-4393-812d-a0bb870b5d42}">
+      <Declaration><![CDATA[PROPERTY P_pCoHead : POINTER TO FB_MzHead]]></Declaration>
+      <Get Name="Get" Id="{4b658b6d-22d3-4064-9e33-d51ce959a22a}">
+        <Declaration><![CDATA[VAR
+END_VAR
+]]></Declaration>
+        <Implementation>
+          <ST><![CDATA[P_pCoHead := pCoHead;]]></ST>
+        </Implementation>
+      </Get>
+    </Property>
+    <Property Name="P_bIsHot" Id="{9eede519-042f-4b16-bf97-cf768bc35a00}">
+      <Declaration><![CDATA[PROPERTY P_bIsHot : BOOL]]></Declaration>
+      <Get Name="Get" Id="{952e6adf-0372-4bda-9f8a-70afbc0453d4}">
+        <Declaration><![CDATA[VAR
+	pTool : POINTER TO FB_MzTool;
+	iter : FB_ObjCollectIteratorDeep;
+END_VAR
+]]></Declaration>
+        <Implementation>
+          <ST><![CDATA[//Alle Childs durchlaufen
+pObjCollectNode^.nodes.M_GetIterator(iter);
+WHILE iter.pNode > 0 AND_THEN iter.pNode^.P_pObject > 0 DO
+	IF iter.pNode^.P_pObject^.M_bIsGroup(E_ObjectGroup.OBJECTGROUP_MzTool) THEN
+		pTool := iter.pNode^.P_pObject;
+		IF pTool^.P_bIsHot THEN
+			P_bIsHot := TRUE;
+			RETURN;
+		END_IF
+	END_IF
+	iter.M_Increment();
+END_WHILE]]></ST>
+        </Implementation>
+      </Get>
+    </Property>
+    <Method Name="M_CheckChildsForError" Id="{a229db7b-fe8e-43ff-83ae-09b2a76e59b5}">
+      <Declaration><![CDATA[METHOD M_CheckChildsForError : ERRORID
+VAR_INPUT
+END_VAR
+VAR
+	pTool : POINTER TO FB_MzTool;
+	iterDeep : FB_ObjCollectIteratorDeep;	
+END_VAR
+]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[//Alle Childs durchlaufen
+pObjCollectNode^.nodes.M_GetIterator(iterDeep);
+WHILE iterDeep.pNode > 0 DO
+	IF iterDeep.pNode^.P_pObject > 0 AND_THEN iterDeep.pNode^.P_pObject^.M_bIsGroup(E_ObjectGroup.OBJECTGROUP_MzTool) THEN
+		pTool := iterDeep.pNode^.P_pObject;
+		M_CheckChildsForError := pTool^.P_nErrorId;
+		IF M_CheckChildsForError > 0 THEN
+			RETURN;			
+		END_IF
+	END_IF
+	iterDeep.M_Increment();
+END_WHILE]]></ST>
+      </Implementation>
+    </Method>
+    <Property Name="P_rMaxCollFreeHeight" Id="{a4251437-a88f-42d8-bb3e-b5aa88873721}">
+      <Declaration><![CDATA[PROPERTY P_rMaxCollFreeHeight : REAL]]></Declaration>
+      <Get Name="Get" Id="{d369c460-5eef-4dc7-986a-09be748caeb1}">
+        <Declaration><![CDATA[VAR
+	pTool	: POINTER TO FB_MzTool;
+	iter : FB_ObjCollectIteratorDeep;
+	stPos	: ST_3DPoint;
+END_VAR
+]]></Declaration>
+        <Implementation>
+          <ST><![CDATA[stPos := P_stAbsPosPhys;
+P_rMaxCollFreeHeight := stPos.Z;
+pObjCollectNode^.nodes.M_GetIterator(iter);
+WHILE iter.pNode > 0 DO
+	IF iter.pNode^.P_pObject > 0 AND_THEN iter.pNode^.P_pObject^.M_bIsGroup(E_ObjectGroup.OBJECTGROUP_MzTool) THEN
+		pTool := iter.pNode^.P_pObject;
+		stPos := pTool^.P_stAbsPosTotal;
+		stPos.Z := stPos.Z + pTool^.P_pZAxisRef^.P_rMaxPos;
+		IF stPos.Z < P_rMaxCollFreeHeight THEN
+			P_rMaxCollFreeHeight := stPos.Z;
+		END_IF
+	END_IF
+	iter.M_Increment();
+END_WHILE
+]]></ST>
+        </Implementation>
+      </Get>
+    </Property>
+    <Method Name="M_GetAllProps" Id="{a6822bf3-0dca-4fc9-9220-1a49112555c8}">
+      <Declaration><![CDATA[METHOD M_GetAllProps : ERRORID
+VAR_INPUT
+	refCmdData : REFERENCE TO  ST_CmdData;
+END_VAR]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[//Basisproperties lesen
+SUPER^.M_GetAllProps(refCmdData);
+
+refCmdData.n32Data[1] := nParentSlotNr;
+
+//Specialproperties lesen
+nCurrentPropIndex := nCurrentPropIndex + 1;
+refCmdData.n32Data[nCurrentPropIndex] := nHeadNr;
+nCurrentPropIndex := nCurrentPropIndex + 1;
+refCmdData.n32Data[nCurrentPropIndex] := nHeadBoardType;
+
+]]></ST>
+      </Implementation>
+    </Method>
+    <Property Name="P_bNoChildBusy" Id="{b7dd6caa-3363-4d76-876f-fc50bbd0d530}">
+      <Declaration><![CDATA[PROPERTY P_bNoChildBusy : BOOL]]></Declaration>
+      <Get Name="Get" Id="{74056bc2-bf17-45c8-8a4b-50b392219241}">
+        <Declaration><![CDATA[VAR
+	pTool : POINTER TO FB_MzTool;
+	iter : FB_ObjCollectIteratorDeep;
+END_VAR
+]]></Declaration>
+        <Implementation>
+          <ST><![CDATA[P_bNoChildBusy := TRUE;
+pObjCollectNode^.nodes.M_GetIterator(iter);
+WHILE iter.pNode > 0 DO
+	IF iter.pNode^.P_pObject > 0 AND_THEN iter.pNode^.P_pObject^.M_bIsGroup(E_ObjectGroup.OBJECTGROUP_MzTool) THEN
+		pTool := iter.pNode^.P_pObject;
+		IF pTool^.P_bBusy THEN
+			P_bNoChildBusy := FALSE;
+			RETURN;
+		END_IF
+	END_IF
+	iter.M_Increment();
+END_WHILE]]></ST>
+        </Implementation>
+      </Get>
+    </Property>
+    <Method Name="M_AddChild" Id="{baceb59d-8889-4fd3-a51b-6849e71aaf9b}">
+      <Declaration><![CDATA[METHOD M_AddChild : ERRORID
+VAR_INPUT
+	pObject : POINTER TO FB_Object;
+	nSlotNr	: UINT;
+	nIndex 	: INT;
+END_VAR
+
+VAR
+	pSlot : POINTER TO FB_Slot;
+END_VAR]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[//Mögliche Childs sind nur MzTools
+//muss unbedingt an ein Slot (in diesem Fall die Achse)
+IF pObject > 0 AND_THEN pObject^.M_bIsGroup(E_ObjectGroup.OBJECTGROUP_MzTool) THEN
+	//Slot holen
+	pSlot := fbSlotList.M_GetAtNr(nSlotNr);
+	IF pSlot > 0 THEN
+		IF pSlot^.P_pChild = 0 THEN
+			//Object darf selber noch an keinem Parent hängen
+			IF pObject^.P_pParentObject = 0 THEN
+				pSlot^.P_pChild := pObject;
+				pObject^.P_pObjCollectNode := pObjCollectNode^.nodes.M_AddNewNode(pObject,nIndex);
+				pObject^.M_UpdateParent();
+			ELSE
+				M_AddChild := E_ErrorIdObjMgmt.ERRORID_ObjectAlreadyOnAnotherParent;
+			END_IF
+		ELSE //Slot bereits belegt
+			M_AddChild := E_ErrorIdObjMgmt.ERRORID_SlotIsAlreadyOccupied;
+		END_IF
+	ELSE
+		M_AddChild := E_ErrorIdObjMgmt.ERRORID_InvalidSlotNumber;	
+	END_IF
+ELSE
+	M_AddChild := E_ErrorIdObjMgmt.ERRORID_InvalidObject;
+END_IF]]></ST>
+      </Implementation>
+    </Method>
+    <Action Name="A_Reset" Id="{be02d3d1-418b-4911-8e65-6a2441124501}">
+      <Implementation>
+        <ST><![CDATA[nStateA_ResetTool := 80;
+SUPER^.A_Reset();]]></ST>
+      </Implementation>
+    </Action>
+    <Property Name="P_bXYIsMoving" Id="{c12438a5-16e9-4a78-a19a-91058d6dc17c}">
+      <Declaration><![CDATA[PROPERTY P_bXYIsMoving : BOOL]]></Declaration>
+      <Get Name="Get" Id="{01a091cf-e252-4b62-9420-3bbd9f071cb8}">
+        <Declaration><![CDATA[VAR
+	iter : FB_ObjCollectIteratorDeep;
+	pTool : POINTER TO FB_MzTool;
+	bTemp : BOOL;
+END_VAR
+]]></Declaration>
+        <Implementation>
+          <ST><![CDATA[pObjCollectNode^.nodes.M_GetIterator(iter);
+WHILE iter.pNode > 0 DO
+	IF iter.pNode^.P_pObject > 0 AND_THEN iter.pNode^.P_pObject^.M_bIsGroup(E_ObjectGroup.OBJECTGROUP_MzTool) THEN
+		pTool := iter.pNode^.P_pObject;
+		IF pTool^.P_bXYIsMoving THEN
+			bTemp := TRUE;
+			EXIT;
+		END_IF
+	END_IF
+	iter.M_Increment();
+END_WHILE
+P_bXYIsMoving:= bXYIsMoving OR bTemp;]]></ST>
+        </Implementation>
+      </Get>
+      <Set Name="Set" Id="{10574f8a-0d3b-469b-9d7f-0808c264c6a8}">
+        <Declaration><![CDATA[VAR
+END_VAR
+]]></Declaration>
+        <Implementation>
+          <ST><![CDATA[bXYIsMoving := P_bXYIsMoving; ]]></ST>
+        </Implementation>
+      </Set>
+    </Property>
+    <Method Name="M_CheckProps" Id="{d7254e45-d54d-4347-888b-e35d292fde35}">
+      <Declaration><![CDATA[METHOD M_CheckProps : ERRORID
+VAR_INPUT
+END_VAR
+]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[M_CheckProps := SUPER^.M_CheckProps();
+IF M_CheckProps > 0 THEN
+	RETURN;
+END_IF
+
+IF nHeadNr > 0 THEN	//oben
+	IF stRelPos.Z < 40000 THEN
+		M_CheckProps := E_ErrorIdObjMgmt.ERRORID_InvalidRelPosZ;
+		RETURN;
+	END_IF
+ELSIF nHeadNr < 0 THEN	//unten
+	IF stRelPos.Z > -200000 THEN
+		M_CheckProps := E_ErrorIdObjMgmt.ERRORID_InvalidRelPosZ;
+		RETURN;
+	END_IF
+END_IF
+
+pCoHead := fbObjectDirectory.M_GetCoHead(THIS);
+
+IF afbWorkplate[1].P_nObjectID > 0 THEN
+	pAssignWorkplate := ADR(afbWorkplate[1]); 
+ELSE
+	M_CheckProps := E_ErrorIdObjMgmt.ERRORID_NoWorkplateCreated;
+END_IF]]></ST>
+      </Implementation>
+    </Method>
+    <Action Name="A_MoveZ" Id="{dca6de80-773e-4b51-9916-d1dd4564d8c2}">
+      <Implementation>
+        <ST><![CDATA[CASE nStateA_MoveZ OF
+	0:	//Tools ermitteln, bei denen nReducedDist gesetzt ist und diese freifahren
+		//das sind die Tools, die durch Dock in einem Target bzw. Piece eingeführt sind und wieder langsam herausgefahren
+		//werden müssen
+		stActionData.eAction := E_Action.ACTION_MoveZ;
+		stActionData.aParams[1] := eMoveModeZ;
+		stActionData.aParams[3] := -1; //Max Speed
+	
+		nStateA_MoveZ := 2;
+		pObjCollectNode^.nodes.M_GetIterator(iterDeep);
+		WHILE iterDeep.pNode > 0 DO
+			IF iterDeep.pNode^.P_pObject > 0 AND_THEN iterDeep.pNode^.P_pObject^.M_bIsGroup(E_ObjectGroup.OBJECTGROUP_MzTool) THEN
+				pTempTool := iterDeep.pNode^.P_pObject;
+				IF pTempTool^.P_nReducedMoveZDist <> 0 THEN
+					IF NOT pTempTool^.P_bIsInit THEN
+						stError.ErrorId := E_ErrorIdCmd.ERRORID_DeviceNotInitialized;
+						stError.POUState := nStateA_MoveZ;
+						nStateA_MoveZ := 99;
+						EXIT;
+					ELSE
+						IF (NOT pTempTool^.P_bCollFree) OR (eMoveModeZ = E_MoveMode.MODE_Home) THEN
+							stError.ErrorId := pTempTool^.M_ExeAction(stActionData);
+							IF stError.ErrorId > 0 THEN
+								stError.POUState := nStateA_MoveZ;
+								nStateA_MoveZ := 99;
+								EXIT;
+							ELSE
+								nStateA_MoveZ := 1;	
+							END_IF
+						END_IF					
+					END_IF
+				END_IF
+			END_IF
+			iterDeep.M_Increment();
+		END_WHILE
+		
+	1:	//warten, bis diese Tools fertig
+		nStateA_MoveZ := 2;
+		pObjCollectNode^.nodes.M_GetIterator(iterDeep);
+		WHILE iterDeep.pNode > 0 DO
+			IF iterDeep.pNode^.P_pObject > 0 AND_THEN iterDeep.pNode^.P_pObject^.M_bIsGroup(E_ObjectGroup.OBJECTGROUP_MzTool) THEN
+				pTempTool := iterDeep.pNode^.P_pObject;
+				IF pTempTool^.P_bError THEN
+					stError.POUState := nStateA_MoveZ;
+					nStateA_MoveZ := 99;
+					EXIT;
+				ELSE
+					IF pTempTool^.M_GetActionBusy(E_Action.ACTION_MoveZ) THEN
+						nStateA_MoveZ := 1;
+					END_IF
+				END_IF
+			END_IF
+			iterDeep.M_Increment();
+		END_WHILE
+		
+	2:	//auf alle Tools anwenden
+		//neu! pro Achse nur noch das Tool freifahren, welches am nächsten zur Workplate befindet
+		stActionData.eAction := E_Action.ACTION_MoveZ;
+		stActionData.aParams[1] := eMoveModeZ;
+		stActionData.aParams[3] := -1; //Max Speed
+		nStateA_MoveZ := 80;
+		//nicht mehr alle Tools durchlaufen, sondern nur noch die direkten Childs an den Achsen
+		pObjCollectNode^.nodes.M_GetIterator(iterFlat);
+		WHILE iterFlat.pNode > 0 DO
+			IF iterFlat.pNode^.P_pObject > 0 AND_THEN iterFlat.pNode^.P_pObject^.M_bIsGroup(E_ObjectGroup.OBJECTGROUP_MzTool) THEN
+				//Hier steht das obers Tool, welches sich an der Achse befinder zur Verfügung
+				pFlag := FALSE;
+				pTempTool := iterFlat.pNode^.P_pObject;
+				pTempTool := pTempTool^.M_GetClosestTool(FALSE);
+				IF pExcludedTool > 0 THEN				
+					//Falls sich pTempTool auf der gleichen Achse wie pExcluded Tool befindet, dann dieses auch auschließen
+					IF pTempTool^.P_nZAxisNr <> pExcludedTool^.P_nZAxisNr THEN
+						pFlag := TRUE;
+					END_IF					
+				ELSE
+					pFlag := TRUE;
+				END_IF
+				
+				IF pFlag THEN
+					IF NOT pTempTool^.P_bIsInit THEN
+						stError.ErrorId := E_ErrorIdCmd.ERRORID_DeviceNotInitialized;
+						stError.POUState := nStateA_MoveZ;
+						nStateA_MoveZ := 99;
+						EXIT;
+					ELSE
+						IF (NOT pTempTool^.P_bCollFree) OR (eMoveModeZ = E_MoveMode.MODE_Home) THEN
+							stError.ErrorId := pTempTool^.M_ExeAction(stActionData);
+							IF stError.ErrorId > 0 THEN
+								stError.POUState := nStateA_MoveZ;
+								nStateA_MoveZ := 99;
+								EXIT;
+							ELSE
+								nStateA_MoveZ := 3;	
+							END_IF
+						END_IF
+					END_IF
+				END_IF				
+				
+			END_IF
+			iterFlat.M_Increment();
+		END_WHILE
+		
+		pExcludedTool := 0;
+	
+	3:	//warten bis alle Tools fertig
+		nStateA_MoveZ := 80;
+		pObjCollectNode^.nodes.M_GetIterator(iterDeep);
+		WHILE iterDeep.pNode > 0 DO
+			IF iterDeep.pNode^.P_pObject > 0 AND_THEN iterDeep.pNode^.P_pObject^.M_bIsGroup(E_ObjectGroup.OBJECTGROUP_MzTool) THEN
+				pTempTool := iterDeep.pNode^.P_pObject;
+				IF pTempTool^.P_bError THEN
+					stError.POUState := nStateA_MoveZ;
+					nStateA_MoveZ := 99;
+					EXIT;
+				ELSE
+					IF pTempTool^.M_GetActionBusy(E_Action.ACTION_MoveZ) THEN
+						nStateA_MoveZ := 3;
+					END_IF
+				END_IF
+			END_IF
+			iterDeep.M_Increment();
+		END_WHILE
+		
+	70:	//Stoppen
+		pObjCollectNode^.nodes.M_GetIterator(iterDeep);
+		WHILE iterDeep.pNode > 0 DO
+			IF iterDeep.pNode^.P_pObject > 0 AND_THEN iterDeep.pNode^.P_pObject^.M_bIsGroup(E_ObjectGroup.OBJECTGROUP_MzTool) THEN
+				pTempTool := iterDeep.pNode^.P_pObject;
+				pTempTool^.M_CancelAction(E_ACTION.ACTION_MoveZ);
+			END_IF
+			iterDeep.M_Increment();
+		END_WHILE
+		nStateA_MoveZ := 71;
+		
+	71: //Alles Tools ready?
+		nStateA_MoveZ := 80;
+		pObjCollectNode^.nodes.M_GetIterator(iterDeep);
+		WHILE iterDeep.pNode > 0 DO
+			IF iterDeep.pNode^.P_pObject > 0 AND_THEN iterDeep.pNode^.P_pObject^.M_bIsGroup(E_ObjectGroup.OBJECTGROUP_MzTool) THEN
+				pTempTool := iterDeep.pNode^.P_pObject;
+				IF pTempTool^.P_bError THEN
+					stError.POUState := nStateA_MoveZ;
+					nStateA_MoveZ := 99;
+					EXIT;
+				ELSE
+					IF pTempTool^.M_GetActionBusy(E_Action.ACTION_MoveZ) THEN
+						nStateA_MoveZ := 71;
+					END_IF
+				END_IF
+			END_IF
+			iterDeep.M_Increment();
+		END_WHILE
+END_CASE
+
+//Errorhandling
+IF nStateA_MoveZ = 99 THEN
+	stError.ObjectId := nObjectID;
+	stError.Cmd := E_Action.ACTION_MoveZ;
+	stError.POU := E_POU.POU_FB_MzHead;
+	stError.POUAction := E_POUACT.POUACT_A_MoveZ;
+	fbErrorList.M_Add(stError);
+END_IF]]></ST>
+      </Implementation>
+    </Action>
+    <Method Name="M_GetZAxisRef" Id="{e8805613-3876-41ab-a969-61f1ee64501d}">
+      <Declaration><![CDATA[METHOD M_GetZAxisRef : POINTER TO FB_ZAxisRef
+VAR_INPUT
+	pTool : POINTER TO FB_MzTool;
+	pToolSlot : POINTER TO FB_Slot;
+END_VAR
+]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[IF pToolSlot > 0 THEN
+	M_GetZAxisRef := ADR(pFbMultiZ^.aFbZAxisRef[pToolSlot^.P_nNr]);
+END_IF]]></ST>
+      </Implementation>
+    </Method>
+    <Method Name="M_MoveFree" Id="{ebc4e94a-4f31-4001-8f72-3d8267fe073b}">
+      <Declaration><![CDATA[METHOD M_MoveFree : ERRORID
+VAR_INPUT
+	pExcludedTool : POINTER TO FB_MzTool;
+END_VAR
+]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[stActionData.eAction := E_Action.ACTION_MoveZ;
+stActionData.aParams[1] := E_MoveMode.MODE_Free;
+THIS^.pExcludedTool := pExcludedTool;
+M_MoveFree := M_ExeAction(stActionData);]]></ST>
+      </Implementation>
+    </Method>
+    <Property Name="P_pMzHead" Id="{f8c4789f-2d72-4acf-a964-6701a9f2d0b7}">
+      <Declaration><![CDATA[PROPERTY P_pMzHead : POINTER TO FB_MzHead]]></Declaration>
+      <Get Name="Get" Id="{aec9457d-48a6-4d11-bac4-94afc1adeab2}">
+        <Declaration><![CDATA[VAR
+END_VAR
+]]></Declaration>
+        <Implementation>
+          <ST><![CDATA[P_pMzHead := THIS;]]></ST>
+        </Implementation>
+      </Get>
+    </Property>
+    <LineIds Name="FB_MzHead">
+      <LineId Id="80" Count="11" />
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="FB_MzHead.P_stCurrentPosPhys.Get">
+      <LineId Id="3" Count="5" />
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="FB_MzHead.P_bCollFree.Get">
+      <LineId Id="3" Count="6" />
+      <LineId Id="30" Count="0" />
+      <LineId Id="22" Count="0" />
+      <LineId Id="25" Count="3" />
+      <LineId Id="23" Count="1" />
+      <LineId Id="16" Count="1" />
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="FB_MzHead.M_CheckChildsForActionBusy">
+      <LineId Id="98" Count="10" />
+      <LineId Id="5" Count="0" />
+    </LineIds>
+    <LineIds Name="FB_MzHead.M_SetAllProps">
+      <LineId Id="3" Count="3" />
+      <LineId Id="170" Count="0" />
+      <LineId Id="169" Count="0" />
+      <LineId Id="7" Count="2" />
+      <LineId Id="49" Count="1" />
+      <LineId Id="115" Count="0" />
+      <LineId Id="63" Count="0" />
+      <LineId Id="75" Count="9" />
+      <LineId Id="117" Count="0" />
+      <LineId Id="132" Count="8" />
+      <LineId Id="119" Count="0" />
+      <LineId Id="118" Count="0" />
+      <LineId Id="54" Count="0" />
+      <LineId Id="97" Count="8" />
+      <LineId Id="58" Count="2" />
+      <LineId Id="55" Count="1" />
+      <LineId Id="158" Count="0" />
+      <LineId Id="157" Count="0" />
+      <LineId Id="142" Count="11" />
+      <LineId Id="141" Count="0" />
+      <LineId Id="16" Count="8" />
+      <LineId Id="155" Count="0" />
+      <LineId Id="26" Count="0" />
+      <LineId Id="29" Count="1" />
+      <LineId Id="32" Count="0" />
+      <LineId Id="36" Count="0" />
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="FB_MzHead.M_CheckMoveLimit">
+      <LineId Id="3" Count="4" />
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="FB_MzHead.M_ClearAllProps">
+      <LineId Id="5" Count="1" />
+    </LineIds>
+    <LineIds Name="FB_MzHead.P_bZIsMoving.Set">
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="FB_MzHead.P_bZIsMoving.Get">
+      <LineId Id="3" Count="1" />
+      <LineId Id="16" Count="0" />
+      <LineId Id="5" Count="4" />
+      <LineId Id="17" Count="0" />
+      <LineId Id="10" Count="1" />
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="FB_MzHead.FB_init">
+      <LineId Id="7" Count="1" />
+    </LineIds>
+    <LineIds Name="FB_MzHead.M_GetMinMaxActPos">
+      <LineId Id="3" Count="4" />
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="FB_MzHead.P_bIsInit.Get">
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="FB_MzHead.P_stAbsPosPhys.Get">
+      <LineId Id="3" Count="4" />
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="FB_MzHead.P_nParentSlotNr.Get">
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="FB_MzHead.P_bHasZSensorSlot.Get">
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="FB_MzHead.A_Init">
+      <LineId Id="232" Count="136" />
+      <LineId Id="459" Count="2" />
+      <LineId Id="370" Count="12" />
+      <LineId Id="462" Count="2" />
+      <LineId Id="384" Count="74" />
+      <LineId Id="1" Count="0" />
+    </LineIds>
+    <LineIds Name="FB_MzHead.M_CheckAction">
+      <LineId Id="10" Count="0" />
+      <LineId Id="29" Count="1" />
+      <LineId Id="16" Count="0" />
+      <LineId Id="11" Count="0" />
+      <LineId Id="14" Count="0" />
+      <LineId Id="12" Count="0" />
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="FB_MzHead.M_GetCollFree">
+      <LineId Id="29" Count="3" />
+      <LineId Id="55" Count="0" />
+      <LineId Id="61" Count="0" />
+      <LineId Id="73" Count="0" />
+      <LineId Id="91" Count="0" />
+      <LineId Id="94" Count="3" />
+      <LineId Id="93" Count="0" />
+      <LineId Id="92" Count="0" />
+      <LineId Id="70" Count="0" />
+      <LineId Id="56" Count="0" />
+      <LineId Id="44" Count="1" />
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="FB_MzHead.M_ExeAction">
+      <LineId Id="3" Count="19" />
+      <LineId Id="24" Count="13" />
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="FB_MzHead.P_bIsTopHead.Get">
+      <LineId Id="3" Count="1" />
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="FB_MzHead.P_pCoHead.Get">
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="FB_MzHead.P_bIsHot.Get">
+      <LineId Id="16" Count="10" />
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="FB_MzHead.M_CheckChildsForError">
+      <LineId Id="96" Count="10" />
+      <LineId Id="5" Count="0" />
+    </LineIds>
+    <LineIds Name="FB_MzHead.P_rMaxCollFreeHeight.Get">
+      <LineId Id="3" Count="13" />
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="FB_MzHead.M_GetAllProps">
+      <LineId Id="3" Count="1" />
+      <LineId Id="15" Count="0" />
+      <LineId Id="5" Count="0" />
+      <LineId Id="16" Count="0" />
+      <LineId Id="6" Count="5" />
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="FB_MzHead.P_bNoChildBusy.Get">
+      <LineId Id="3" Count="2" />
+      <LineId Id="16" Count="0" />
+      <LineId Id="6" Count="4" />
+      <LineId Id="17" Count="0" />
+      <LineId Id="11" Count="0" />
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="FB_MzHead.M_AddChild">
+      <LineId Id="8" Count="1" />
+      <LineId Id="30" Count="0" />
+      <LineId Id="14" Count="0" />
+      <LineId Id="18" Count="1" />
+      <LineId Id="24" Count="0" />
+      <LineId Id="32" Count="1" />
+      <LineId Id="41" Count="0" />
+      <LineId Id="47" Count="0" />
+      <LineId Id="35" Count="1" />
+      <LineId Id="38" Count="0" />
+      <LineId Id="31" Count="0" />
+      <LineId Id="28" Count="0" />
+      <LineId Id="25" Count="0" />
+      <LineId Id="21" Count="1" />
+      <LineId Id="20" Count="0" />
+      <LineId Id="12" Count="1" />
+      <LineId Id="11" Count="0" />
+      <LineId Id="7" Count="0" />
+    </LineIds>
+    <LineIds Name="FB_MzHead.A_Reset">
+      <LineId Id="2" Count="0" />
+      <LineId Id="1" Count="0" />
+    </LineIds>
+    <LineIds Name="FB_MzHead.P_bXYIsMoving.Get">
+      <LineId Id="3" Count="1" />
+      <LineId Id="17" Count="0" />
+      <LineId Id="5" Count="4" />
+      <LineId Id="20" Count="0" />
+      <LineId Id="10" Count="1" />
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="FB_MzHead.P_bXYIsMoving.Set">
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="FB_MzHead.M_CheckProps">
+      <LineId Id="20" Count="9" />
+      <LineId Id="31" Count="4" />
+      <LineId Id="37" Count="1" />
+      <LineId Id="2" Count="0" />
+      <LineId Id="43" Count="0" />
+      <LineId Id="42" Count="0" />
+      <LineId Id="46" Count="0" />
+      <LineId Id="44" Count="0" />
+      <LineId Id="47" Count="0" />
+      <LineId Id="45" Count="0" />
+    </LineIds>
+    <LineIds Name="FB_MzHead.A_MoveZ">
+      <LineId Id="571" Count="160" />
+      <LineId Id="1" Count="0" />
+    </LineIds>
+    <LineIds Name="FB_MzHead.M_GetZAxisRef">
+      <LineId Id="3" Count="1" />
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="FB_MzHead.M_MoveFree">
+      <LineId Id="3" Count="0" />
+      <LineId Id="9" Count="0" />
+      <LineId Id="4" Count="0" />
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="FB_MzHead.P_pMzHead.Get">
+      <LineId Id="2" Count="0" />
+    </LineIds>
+  </POU>
+</TcPlcObject>

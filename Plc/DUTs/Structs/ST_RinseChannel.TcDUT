@@ -1,0 +1,14 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<TcPlcObject Version="1.1.0.1" ProductVersion="3.1.4020.6">
+  <DUT Name="ST_RinseChannel" Id="{a72cf7d4-5ee0-4bb5-bfa8-667d2c02c963}">
+    <Declaration><![CDATA[TYPE ST_RinseChannel :
+STRUCT
+	nPumpNr	 	: USINT;
+	nValveNr	: USINT;
+	nStartSpeed	: USINT;
+	nRatedSpeed : USINT;
+	nStartTime	: UINT;
+END_STRUCT
+END_TYPE]]></Declaration>
+  </DUT>
+</TcPlcObject>

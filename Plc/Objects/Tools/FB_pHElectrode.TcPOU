@@ -1,0 +1,479 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<TcPlcObject Version="1.1.0.1" ProductVersion="3.1.4022.18">
+  <POU Name="FB_pHElectrode" Id="{f88375d2-7afe-4f11-943e-f6a7cc6726e1}" SpecialFunc="None">
+    <Declaration><![CDATA[FUNCTION_BLOCK FB_pHElectrode EXTENDS FB_MzTool
+VAR_INPUT
+END_VAR
+VAR_OUTPUT
+END_VAR
+VAR
+	//Specproperties
+	nDigiOutChannelMz	: USINT;	//24V-Versorung für Messwertverstärker
+	nAnaInputChannelMz	: USINT;	//Messwert (0-5V entsprechen pH0-14)
+	
+	pFbGPInputRef			: POINTER TO FB_GPInputRef;
+	
+	//****************************************Aktionvariablen****************************************************
+	stActionDataSpec	: ST_ActionData;
+	
+	//Action: "InitTool"
+	bInitTool			: BOOL;
+	nStateA_InitTool	: USINT;
+	
+	//"Measure pH"
+	bMeasurepH : BOOL;
+	nStateA_MeasurepH : USINT;
+	tTime 	: TIME;
+	timer	: TON;
+	
+	
+	rCurrentpHValue	: REAL;
+END_VAR
+]]></Declaration>
+    <Implementation>
+      <ST><![CDATA[IF eCurrentState = E_MachineState.MACHINESTATE_Active THEN
+	IF bInitTool THEN
+		A_InitTool();
+		IF nStateA_InitTool >= 80 THEN
+			IF nStateA_InitTool >= 99 THEN
+				bError := TRUE;		
+			END_IF
+			bInitTool := FALSE;
+			nStateA_InitTool := 0;
+			M_RemoveListEntry(nSearchValue:= E_Action.ACTION_Init);
+		END_IF		
+	END_IF
+	
+	IF bMeasurepH THEN
+		A_MeasurepH();
+		IF nStateA_MeasurepH >= 80 THEN
+			IF nStateA_MeasurepH >= 99 THEN
+				bError := TRUE;
+			END_IF
+			bMeasurepH := FALSE;
+			nStateA_MeasurepH := 0;
+			M_RemoveListEntry(nSearchValue:= E_Action.ACTION_MeasurepH);
+		END_IF
+	END_IF
+
+END_IF
+
+//FB_MzTool aufrufen
+SUPER^();
+
+//Prozessdaten aktualisieren
+IF pFbGPInputRef > 0 THEN
+	rCurrentpHValue := 14.0 / 65535.0 * pFbGPInputRef^.nValue;
+END_IF
+stProcessData.n32Data[7] := REAL_TO_DINT(rCurrentpHValue * 1000.0);
+
+aObjProcData[nNotifyId] := stProcessData;
+]]></ST>
+    </Implementation>
+    <Action Name="A_InitTool" Id="{bf211aec-97f0-4490-86b0-76e95c3473c9}">
+      <Implementation>
+        <ST><![CDATA[IF nStateA_InitTool = 0 THEN
+	pFbMultiZ^.aDigiOut[nDigiOutChannelMz] := TRUE;
+	pFbGPInputRef^(eMode:= E_GPInputMode.Analog, bInit:= TRUE);
+	IF NOT pFbGPInputRef^.bBusy THEN
+		IF pFbGPInputRef^.bError THEN
+			nStateA_InitTool := 99;
+		ELSE
+			nStateA_InitTool := 80;
+		END_IF
+		pFbGPInputRef^(bInit:= FALSE);
+	END_IF
+END_IF
+]]></ST>
+      </Implementation>
+    </Action>
+    <Action Name="A_MeasurepH" Id="{27e51e59-d726-4b17-95ea-ec83019c31c0}">
+      <Implementation>
+        <ST><![CDATA[IF nStateA_MeasurepH = 0 THEN
+	timer(IN:= TRUE,PT:= tTime);
+	IF timer.Q THEN
+		timer(IN:= FALSE);
+		nStateA_MeasurepH := 80;
+	END_IF
+ELSIF nStateA_MeasurepH = 70 THEN
+		timer(IN:= FALSE);
+		nStateA_MeasurepH := 80;
+END_IF]]></ST>
+      </Implementation>
+    </Action>
+    <Action Name="A_Reset" Id="{360892b4-2a57-459d-9288-07e6ca929a19}">
+      <Implementation>
+        <ST><![CDATA[//Ist noch eine Aktion aktiv?
+IF nStateA_ResetSpec = 0 THEN 
+	(*IF bExpose THEN
+		bExpose := FALSE;
+		nStateA_Expose := 0;
+	END_IF*)
+	
+	nStateA_ResetSpec := 80;
+END_IF
+
+SUPER^.A_Reset();]]></ST>
+      </Implementation>
+    </Action>
+    <Action Name="A_Stop" Id="{71d0bbb2-fcee-4ebe-9adf-dea6cd7dbdbc}">
+      <Implementation>
+        <ST><![CDATA[IF nStateA_Stop = 0 THEN
+
+	IF bMeasurepH AND nStateA_MeasurepH < 70 THEN
+		nStateA_MeasurepH := 70;
+	END_IF
+	
+	nStateA_Stop := 1;
+END_IF
+
+SUPER^.A_Stop();]]></ST>
+      </Implementation>
+    </Action>
+    <Method Name="FB_init" Id="{3f40d2e7-7d7a-4ba7-9537-615179f1ac06}">
+      <Declaration><![CDATA[METHOD FB_init : BOOL
+VAR_INPUT
+	bInitRetains : BOOL; // if TRUE, the retain variables are initialized (warm start / cold start)
+	bInCopyCode : BOOL;  // if TRUE, the instance afterwards gets moved into the copy code (online change)
+END_VAR
+]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[eObjectType := E_ObjectType.OBJECTTYPE_pHElectrode;
+eObjectGroup := E_ObjectGroup.OBJECTGROUP_MzTool OR E_ObjectGroup.OBJECTGROUP_Device;]]></ST>
+      </Implementation>
+    </Method>
+    <Method Name="M_AddChild" Id="{a7ccb2d0-cd7d-4a5f-9194-324154c21da4}">
+      <Declaration><![CDATA[METHOD M_AddChild : ERRORID
+VAR_INPUT
+	pObject : POINTER TO FB_Object;
+	nSlotNr	: UINT;
+	nIndex 	: INT;	
+END_VAR
+]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[//Kann folgende Objekt-Typen aufnehmen
+//pH-ElektrodeCAP
+IF pObject > 0 THEN
+	IF pObject^.P_eObjectType = E_ObjectType.OBJECTTYPE_pHElectrodeCap THEN
+		M_AddChild := SUPER^.M_AddChild(pObject,nSlotNr,nIndex);
+	ELSE
+		M_AddChild := E_ErrorIdObjMgmt.ERRORID_InvalidParentObject;
+	END_IF
+ELSE
+	M_AddChild := E_ErrorIdObjMgmt.ERRORID_InvalidParentObject;
+END_IF]]></ST>
+      </Implementation>
+    </Method>
+    <Method Name="M_AnswerSiblingForAction" Id="{92cc8ba1-587b-4eaa-a2f7-91f528110891}">
+      <Declaration><![CDATA[METHOD M_AnswerSiblingForAction : ERRORID
+VAR_INPUT
+	eAction : E_Action;
+END_VAR
+]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[IF eAction = E_Action.ACTION_MoveToTarget THEN
+	IF pPiece > 0 THEN
+		M_AnswerSiblingForAction := E_ErrorIdCmd.ERRORID_CapOnElectrode;
+	END_IF
+END_IF]]></ST>
+      </Implementation>
+    </Method>
+    <Method Name="M_CancelAction" Id="{8c3391cf-839d-488c-8c88-8f2a80cfd358}">
+      <Declaration><![CDATA[METHOD M_CancelAction
+VAR_INPUT
+	eAction : E_Action;
+END_VAR
+]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[IF eAction = E_Action.ACTION_MeasurepH THEN
+	IF bMeasurepH AND nStateA_MeasurepH < 70 THEN
+		nStateA_MeasurepH := 70;
+	END_IF
+ELSE
+	SUPER^.M_CancelAction(eAction);
+END_IF]]></ST>
+      </Implementation>
+    </Method>
+    <Method Name="M_CheckAction" Id="{1f0dd8ed-94e9-4d7e-979c-92e8acf716a9}">
+      <Declaration><![CDATA[METHOD M_CheckAction : ERRORID
+VAR_INPUT
+	refActionData 	: REFERENCE TO ST_ActionData;
+	pCorrelObject	: POINTER TO FB_Object;
+END_VAR
+
+VAR
+	pTarget 	: POINTER TO FB_TargetBase;
+	pPieceEx	: POINTER TO FB_PieceBase;
+END_VAR]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[CASE refActionData.eAction OF
+	E_Action.ACTION_ExchangePiece:
+		pTarget := fbObjectDirectory.M_GetObjPointer(refActionData.nTarget);
+		IF pTarget^.P_eObjectType <> E_ObjectType.OBJECTTYPE_pHElectrodeCapRack THEN
+			M_CheckAction := E_ErrorIdCmd.ERRORID_UnsuitableTarget;
+		ELSE
+			pPieceEx := pCorrelObject;
+			IF pPieceEx^.P_eObjectType <> E_ObjectType.OBJECTTYPE_pHElectrodeCap THEN
+				M_CheckAction := E_ErrorIdCmd.ERRORID_InvalidPieceType;
+				RETURN;
+			END_IF
+			IF refActionData.aParams[2] = 0 THEN //Drop -> es muss ein Cap an pH-Elektrode sein
+				IF pPiece = 0 THEN	 
+					M_CheckAction := E_ErrorIdCmd.ERRORID_NoPieceOnTool;
+					RETURN;	
+				END_IF
+			ELSIF refActionData.aParams[2] = 1 THEN //Take
+				IF pPiece > 0 THEN	//Drop -> es darf kein Cap an pH-Elektrode sein
+					M_CheckAction := E_ErrorIdCmd.ERRORID_PieceAlreadyOnTool;
+					RETURN;
+				END_IF
+			ELSE
+				M_CheckAction := E_ErrorIdCmd.ERRORID_InvalidCtrl;			
+			END_IF
+		END_IF
+	E_Action.ACTION_MeasurepH:
+		//1.Cap darf nicht am Tool sein
+		IF pPiece > 0 THEN
+			M_CheckAction := E_ErrorIdCmd.ERRORID_CapOnElectrode;
+		END_IF	
+ELSE
+	M_CheckAction := SUPER^.M_CheckAction(refActionData, pCorrelObject);
+END_CASE]]></ST>
+      </Implementation>
+    </Method>
+    <Method Name="M_ExeAction" Id="{5d3f0347-3bb4-4a7d-87e1-d5213ee73b75}">
+      <Declaration><![CDATA[METHOD M_ExeAction : ERRORID
+VAR_INPUT
+	refActionData : REFERENCE TO ST_ActionData;	
+END_VAR]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[IF NOT (eCurrentState = E_MachineState.MACHINESTATE_Idle OR
+	eCurrentState = E_MachineState.MACHINESTATE_Active OR
+	eCurrentState = E_MachineState.MACHINESTATE_Ready) THEN
+	M_ExeAction := E_ErrorIdCmd.ERRORID_InvalidState;
+	RETURN;
+END_IF
+
+CASE refActionData.eAction OF
+	
+	E_Action.ACTION_Init:
+		IF NOT bInitAxis AND NOT bInitTool THEN
+			bInitAxis := TRUE;
+			bInitTool := TRUE;
+			fbList.A_AddHeadValue( hList := hList, putValue := E_Action.ACTION_Init);	//InitAxis
+			fbList.A_AddHeadValue( hList := hList, putValue := E_Action.ACTION_Init);	//InitTool
+		ELSE
+			RETURN;
+		END_IF
+		
+	E_Action.ACTION_MeasurepH:
+		IF NOT bMeasurepH THEN
+			tTime := DINT_TO_TIME(refActionData.aParams[1]);
+			fbList.A_AddHeadValue( hList := hList, putValue := E_Action.ACTION_MeasurepH);
+			bMeasurepH := TRUE;
+		ELSE
+			M_ExeAction := E_ErrorIdCmd.ERRORID_BasicActionActive;
+		END_IF
+		
+	ELSE
+		M_ExeAction := SUPER^.M_ExeAction(refActionData);
+		RETURN;
+END_CASE
+bBusy := TRUE;
+eCurrentState := E_MachineState.MACHINESTATE_Active;]]></ST>
+      </Implementation>
+    </Method>
+    <Method Name="M_GetAllProps" Id="{601ccfba-547b-4688-852e-7d439a15ad22}">
+      <Declaration><![CDATA[METHOD M_GetAllProps : ERRORID
+VAR_INPUT
+	refCmdData : REFERENCE TO  ST_CmdData;
+END_VAR
+]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[SUPER^.M_GetAllProps(refCmdData);
+nCurrentPropIndex := nCurrentPropIndex + 1;
+refCmdData.n32Data[nCurrentPropIndex] := nDigiOutChannelMz;
+nCurrentPropIndex := nCurrentPropIndex + 1;
+refCmdData.n32Data[nCurrentPropIndex] := nAnaInputChannelMz;]]></ST>
+      </Implementation>
+    </Method>
+    <Method Name="M_SetAllProps" Id="{392b55c7-cd43-48f5-9162-c1735e654762}">
+      <Declaration><![CDATA[METHOD M_SetAllProps : ERRORID
+VAR_INPUT
+	refCmdData : REFERENCE TO  ST_CmdData;
+END_VAR
+]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[M_SetAllProps := SUPER^.M_SetAllProps(refCmdData);
+
+IF M_SetAllProps > 0 THEN
+	RETURN;
+END_IF
+
+//Digitaler Ausgang für Messverstärker
+nCurrentPropIndex := nCurrentPropIndex + 1;
+nSpecPropIndex := nCurrentPropIndex;
+nDigiOutChannelMz := DINT_TO_USINT(refCmdData.n32Data[nCurrentPropIndex]);
+IF NOT (nDigiOutChannelMz >= 1 AND nDigiOutChannelMz <= 7) THEN
+	M_SetAllProps := E_ErrorIdObjMgmt.ERRORID_InvalidMzDOutChannel;
+	RETURN;
+END_IF
+
+//Analoger Eingang für Messverstärker
+nCurrentPropIndex := nCurrentPropIndex + 1;
+nAnaInputChannelMz := DINT_TO_USINT(refCmdData.n32Data[nCurrentPropIndex]);
+IF NOT (nAnaInputChannelMz >= 1 AND nAnaInputChannelMz <= 6) THEN
+	M_SetAllProps := E_ErrorIdObjMgmt.ERRORID_InvalidAnaInputChannel;
+	RETURN;
+END_IF
+
+pFbGPInputRef := ADR(pFbMultiZ^.aFbGPInputRef[nAnaInputChannelMz]);
+
+nNoOfProps := nCurrentPropIndex + 1;]]></ST>
+      </Implementation>
+    </Method>
+    <Method Name="M_SetSingleProp" Id="{5fa1070f-62e1-4e3d-90ce-83a5fdeda122}">
+      <Declaration><![CDATA[METHOD M_SetSingleProp : ERRORID
+VAR_INPUT
+	refCmdData : REFERENCE TO  ST_CmdData;
+END_VAR
+]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[IF nSpecPropIndex = refCmdData.aHeader[1] THEN
+	IF NOT (refCmdData.n32Data[0] >= 1 AND refCmdData.n32Data[0] <= 7) THEN
+		M_SetSingleProp := E_ErrorIdObjMgmt.ERRORID_InvalidMzDOutChannel;
+		RETURN;
+	END_IF
+	nDigiOutChannelMz := DINT_TO_USINT(refCmdData.n32Data[0]);
+ELSIF (nSpecPropIndex + 1) = refCmdData.aHeader[1] THEN
+	IF NOT (refCmdData.n32Data[0] >= 1 AND refCmdData.n32Data[0] <= 6) THEN
+		M_SetSingleProp := E_ErrorIdObjMgmt.ERRORID_InvalidAnaInputChannel;
+		RETURN;
+	END_IF	
+	nAnaInputChannelMz := DINT_TO_USINT(refCmdData.n32Data[0]);
+	pFbGPInputRef := ADR(pFbMultiZ^.aFbGPInputRef[nAnaInputChannelMz]);
+ELSE
+	M_SetSingleProp := SUPER^.M_SetSingleProp(refCmdData);
+END_IF]]></ST>
+      </Implementation>
+    </Method>
+    <Property Name="P_nCurrentpHValue" Id="{bbe54368-5243-4d96-8632-01012ba17db2}">
+      <Declaration><![CDATA[PROPERTY P_nCurrentpHValue : DINT]]></Declaration>
+      <Get Name="Get" Id="{a21d0a13-a5fa-4138-981a-ff98c3c4de50}">
+        <Declaration><![CDATA[VAR
+END_VAR
+]]></Declaration>
+        <Implementation>
+          <ST><![CDATA[P_nCurrentpHValue := REAL_TO_DINT(rCurrentpHValue * 1000.0);]]></ST>
+        </Implementation>
+      </Get>
+    </Property>
+    <Property Name="P_rToolRadius" Id="{468a4e0f-3eca-4ce7-b58c-c933e27a8d43}">
+      <Declaration><![CDATA[PROPERTY P_rToolRadius : REAL]]></Declaration>
+      <Get Name="Get" Id="{89794f12-24cc-4280-a525-cb603977407e}">
+        <Declaration><![CDATA[VAR
+	stDim : ST_3DDimension;
+END_VAR
+]]></Declaration>
+        <Implementation>
+          <ST><![CDATA[P_rToolRadius := 3000.0;]]></ST>
+        </Implementation>
+      </Get>
+    </Property>
+    <LineIds Name="FB_pHElectrode">
+      <LineId Id="125" Count="36" />
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="FB_pHElectrode.A_InitTool">
+      <LineId Id="3" Count="0" />
+      <LineId Id="16" Count="0" />
+      <LineId Id="6" Count="0" />
+      <LineId Id="8" Count="0" />
+      <LineId Id="11" Count="1" />
+      <LineId Id="14" Count="1" />
+      <LineId Id="13" Count="0" />
+      <LineId Id="9" Count="1" />
+      <LineId Id="5" Count="0" />
+      <LineId Id="1" Count="0" />
+    </LineIds>
+    <LineIds Name="FB_pHElectrode.A_MeasurepH">
+      <LineId Id="2" Count="8" />
+      <LineId Id="1" Count="0" />
+    </LineIds>
+    <LineIds Name="FB_pHElectrode.A_Reset">
+      <LineId Id="2" Count="9" />
+      <LineId Id="1" Count="0" />
+    </LineIds>
+    <LineIds Name="FB_pHElectrode.A_Stop">
+      <LineId Id="11" Count="8" />
+      <LineId Id="1" Count="0" />
+    </LineIds>
+    <LineIds Name="FB_pHElectrode.FB_init">
+      <LineId Id="7" Count="1" />
+    </LineIds>
+    <LineIds Name="FB_pHElectrode.M_AddChild">
+      <LineId Id="19" Count="0" />
+      <LineId Id="8" Count="1" />
+      <LineId Id="22" Count="0" />
+      <LineId Id="17" Count="1" />
+      <LineId Id="15" Count="0" />
+      <LineId Id="11" Count="0" />
+      <LineId Id="13" Count="0" />
+      <LineId Id="12" Count="0" />
+      <LineId Id="5" Count="0" />
+    </LineIds>
+    <LineIds Name="FB_pHElectrode.M_AnswerSiblingForAction">
+      <LineId Id="6" Count="1" />
+      <LineId Id="9" Count="1" />
+      <LineId Id="8" Count="0" />
+    </LineIds>
+    <LineIds Name="FB_pHElectrode.M_CancelAction">
+      <LineId Id="13" Count="5" />
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="FB_pHElectrode.M_CheckAction">
+      <LineId Id="99" Count="0" />
+      <LineId Id="144" Count="0" />
+      <LineId Id="103" Count="0" />
+      <LineId Id="109" Count="20" />
+      <LineId Id="107" Count="0" />
+      <LineId Id="130" Count="0" />
+      <LineId Id="132" Count="2" />
+      <LineId Id="131" Count="0" />
+      <LineId Id="105" Count="1" />
+      <LineId Id="104" Count="0" />
+    </LineIds>
+    <LineIds Name="FB_pHElectrode.M_ExeAction">
+      <LineId Id="45" Count="10" />
+      <LineId Id="57" Count="21" />
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="FB_pHElectrode.M_GetAllProps">
+      <LineId Id="3" Count="1" />
+      <LineId Id="2" Count="0" />
+      <LineId Id="10" Count="0" />
+      <LineId Id="9" Count="0" />
+    </LineIds>
+    <LineIds Name="FB_pHElectrode.M_SetAllProps">
+      <LineId Id="3" Count="5" />
+      <LineId Id="62" Count="0" />
+      <LineId Id="85" Count="0" />
+      <LineId Id="63" Count="2" />
+      <LineId Id="67" Count="1" />
+      <LineId Id="74" Count="3" />
+      <LineId Id="79" Count="1" />
+      <LineId Id="82" Count="2" />
+      <LineId Id="91" Count="0" />
+      <LineId Id="90" Count="0" />
+      <LineId Id="60" Count="0" />
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="FB_pHElectrode.M_SetSingleProp">
+      <LineId Id="31" Count="14" />
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="FB_pHElectrode.P_nCurrentpHValue.Get">
+      <LineId Id="2" Count="0" />
+    </LineIds>
+  </POU>
+</TcPlcObject>

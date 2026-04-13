@@ -1,0 +1,284 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<TcPlcObject Version="1.1.0.1" ProductVersion="3.1.4022.18">
+  <POU Name="FB_ActionList" Id="{bacdaf0b-df02-4cab-946f-116c2c59f873}" SpecialFunc="None">
+    <Declaration><![CDATA[FUNCTION_BLOCK FB_ActionList
+VAR_INPUT
+END_VAR
+VAR_OUTPUT
+END_VAR
+VAR
+	pHead	: POINTER TO ST_Pointer;
+	pTail	: POINTER TO ST_Pointer;
+	pCurrent: POINTER TO ST_Pointer;
+	nCount	: UINT;
+	pAction : POINTER TO ST_Action;
+END_VAR
+]]></Declaration>
+    <Implementation>
+      <ST><![CDATA[]]></ST>
+    </Implementation>
+    <Method Name="M_Add" Id="{687a756e-ae44-478f-bd6d-40372b486ff4}">
+      <Declaration><![CDATA[METHOD M_Add
+VAR_INPUT
+	stAction : REFERENCE TO ST_Action;
+END_VAR
+
+VAR
+	pNew : POINTER TO ST_Pointer;
+	pAction : POINTER TO ST_Action;
+END_VAR
+]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[pNew := pHead;
+WHILE pNew > 0 DO
+	pAction := pNew^.pContent;
+	//Action für das Device schon in Liste? Es sei denn, die Action ist bereits schon in Idle versetzt.
+	IF (pAction^.eAction >= 50) AND (pAction^.iDevice = stAction.iDevice) AND (pAction^.eAction = stAction.eAction) AND pAction^.eActionStatus <> E_ActionStatus.ACTIONSTATUS_Idle THEN
+		RETURN;
+	END_IF
+	pNew := pNew^.pNext;
+END_WHILE
+
+pNew := __NEW(ST_Pointer);
+MEMSET(pNew,0,SIZEOF(ST_Pointer));
+pAction := __NEW(ST_Action);
+MEMCPY(pAction,ADR(stAction),SIZEOF(stAction));
+pNew^.pContent := pAction;
+IF pHead = 0 THEN
+	pHead := pTail := pNew;
+ELSE
+	pNew^.pPrev := pTail; 
+	pTail^.pNext := pNew;
+	pTail := pNew;
+END_IF
+nCount := nCount + 1;]]></ST>
+      </Implementation>
+    </Method>
+    <Method Name="M_CleanUp" Id="{46a07fb6-d3be-4bbe-84dd-5ef3b3784531}">
+      <Declaration><![CDATA[METHOD M_CleanUp
+VAR_INPUT
+END_VAR
+VAR
+	pSeek : POINTER TO ST_Pointer;
+	pTemp : POINTER TO ST_Pointer;
+	pAction : POINTER TO ST_Action;
+END_VAR]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[//Actions, welche Ready oder in Error gegangen sind in Idle setzen (werden beim nächsten Aufruf gelöscht)
+pSeek := pHead;
+WHILE (pSeek > 0) DO
+	pAction := pSeek^.pContent;
+	IF pAction^.eActionStatus = E_ActionStatus.ACTIONSTATUS_Ready OR pAction^.eActionStatus = E_ActionStatus.ACTIONSTATUS_Error THEN
+		pAction^.eActionStatus := E_ActionStatus.ACTIONSTATUS_Idle;
+		pSeek := pSeek^.pNext;
+	ELSIF pAction^.eActionStatus = E_ActionStatus.ACTIONSTATUS_Idle THEN
+		IF pSeek = pHead THEN	//Gesuchter ist Head
+			IF pSeek^.pNext > 0 THEN //hat Nachfolger
+				//Nachfolger wird zum Head
+				pHead := pSeek^.pNext;
+				pHead^.pPrev := 0; //Head hat keinen Vorgänger
+				IF pSeek = pCurrent THEN
+					pCurrent := 0;
+				END_IF
+			ELSE //hat keinen Nachfolger
+				pHead := 0;
+				pTail := 0;
+				pCurrent := 0;				
+			END_IF
+		ELSIF pSeek = pTail THEN //pSeek ist Tail
+			//Vorgänger wird Tail
+			pTail := pTail^.pPrev;
+			pTail^.pNext := 0; //Tail hat keinen Nachfolger
+			IF pSeek = pCurrent THEN
+				pCurrent := 0;
+			END_IF
+		ELSE //pSeek ist in der Mitte
+			//Vorgänger beim Nachfolger eintragen
+			pTemp := pSeek^.pPrev;
+			pTemp^.pNext := pSeek^.pNext;
+			//Vorganger beim Nachfolger eintragen
+			pTemp := pSeek^.pNext;
+			pTemp^.pPrev := pSeek^.pPrev;
+			IF pSeek = pCurrent THEN
+				pCurrent := pSeek^.pNext;
+			END_IF			
+		END_IF
+		pTemp := pSeek;
+		pSeek := pSeek^.pNext;
+		__DELETE(pTemp);
+		__DELETE(pAction);
+		nCount := nCount - 1;		
+	ELSE
+		pSeek := pSeek^.pNext;
+	END_IF
+END_WHILE]]></ST>
+      </Implementation>
+    </Method>
+    <Method Name="M_GetFromId" Id="{43f37ace-69c8-42bb-90f5-e2b9c18d08eb}">
+      <Declaration><![CDATA[METHOD M_GetFromId : POINTER TO ST_Action
+VAR_INPUT
+	nActionId : UINT;
+END_VAR
+
+VAR
+	pTemp : POINTER TO ST_Pointer;
+	pAction : POINTER TO ST_Action;
+END_VAR]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[pTemp := pHead;
+WHILE (pTemp > 0) DO
+	pAction := pTemp^.pContent;
+	IF pAction^.nActionId = nActionId THEN
+		M_GetFromId := pAction;
+		RETURN;
+	ELSE
+		pTemp := pTemp^.pNext;
+	END_IF
+END_WHILE]]></ST>
+      </Implementation>
+    </Method>
+    <Method Name="M_GetNext" Id="{9d6fb1e0-1263-4fca-94c5-4bb3875e2559}">
+      <Declaration><![CDATA[METHOD M_GetNext : POINTER TO ST_Action
+VAR_INPUT
+END_VAR
+
+]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[IF pCurrent > 0 THEN
+	M_GetNext := pCurrent^.pContent;
+	pCurrent := pCurrent^.pNext;
+END_IF]]></ST>
+      </Implementation>
+    </Method>
+    <Method Name="M_Reset" Id="{27377d0f-816d-4bd3-99ad-496f9d533ca2}">
+      <Declaration><![CDATA[METHOD M_Reset
+VAR_INPUT
+END_VAR
+
+VAR
+	pDelete : POINTER TO ST_Pointer;
+	pNext	: POINTER TO ST_Pointer;
+	pAction : POINTER TO ST_Action;
+END_VAR]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[pDelete := pHead;
+WHILE  pDelete > 0 DO
+	pAction := pDelete^.pContent;
+	pNext := pDelete^.pNext;
+	__DELETE(pAction);
+	__DELETE(pDelete);
+	pDelete := pNext;
+END_WHILE
+pHead := 0;
+pTail := 0;
+pCurrent := 0;
+nCount := 0;]]></ST>
+      </Implementation>
+    </Method>
+    <Method Name="M_SetCurrentToHead" Id="{42f4134a-553c-434c-945c-2dc22e7172fe}">
+      <Declaration><![CDATA[METHOD M_SetCurrentToHead
+VAR_INPUT
+END_VAR]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[pCurrent := pHead;]]></ST>
+      </Implementation>
+    </Method>
+    <Property Name="P_bActionsAvailable" Id="{792cdb94-b6e8-4a4f-959f-c5da98f11706}">
+      <Declaration><![CDATA[PROPERTY P_bActionsAvailable : BOOL]]></Declaration>
+      <Get Name="Get" Id="{e281ba32-670d-437b-9753-34fe9cd1165c}">
+        <Declaration><![CDATA[VAR
+	pTemp : POINTER TO ST_Pointer;
+	pAction : POINTER TO ST_Action;
+END_VAR
+]]></Declaration>
+        <Implementation>
+          <ST><![CDATA[//Actions vorhanden die in Active, Pause oder Pause Request sind ?
+pTemp := pHead;
+WHILE (pTemp > 0) DO
+	pAction := pTemp^.pContent;
+	IF pAction^.eActionStatus >= E_ActionStatus.ACTIONSTATUS_Active AND pAction^.eActionStatus <= E_ActionStatus.ACTIONSTATUS_Pause THEN
+		P_bActionsAvailable := TRUE;
+		RETURN;
+	ELSE
+		pTemp := pTemp^.pNext;
+	END_IF
+END_WHILE]]></ST>
+        </Implementation>
+      </Get>
+    </Property>
+    <LineIds Name="FB_ActionList">
+      <LineId Id="9" Count="0" />
+    </LineIds>
+    <LineIds Name="FB_ActionList.M_Add">
+      <LineId Id="12" Count="0" />
+      <LineId Id="31" Count="1" />
+      <LineId Id="13" Count="6" />
+      <LineId Id="44" Count="0" />
+      <LineId Id="42" Count="1" />
+      <LineId Id="20" Count="0" />
+      <LineId Id="22" Count="7" />
+      <LineId Id="5" Count="0" />
+    </LineIds>
+    <LineIds Name="FB_ActionList.M_CleanUp">
+      <LineId Id="5" Count="0" />
+      <LineId Id="14" Count="3" />
+      <LineId Id="105" Count="0" />
+      <LineId Id="18" Count="0" />
+      <LineId Id="20" Count="0" />
+      <LineId Id="58" Count="0" />
+      <LineId Id="61" Count="0" />
+      <LineId Id="65" Count="0" />
+      <LineId Id="81" Count="0" />
+      <LineId Id="86" Count="0" />
+      <LineId Id="83" Count="1" />
+      <LineId Id="106" Count="0" />
+      <LineId Id="67" Count="0" />
+      <LineId Id="73" Count="1" />
+      <LineId Id="68" Count="0" />
+      <LineId Id="66" Count="0" />
+      <LineId Id="63" Count="0" />
+      <LineId Id="76" Count="2" />
+      <LineId Id="88" Count="2" />
+      <LineId Id="70" Count="1" />
+      <LineId Id="91" Count="6" />
+      <LineId Id="72" Count="0" />
+      <LineId Id="107" Count="1" />
+      <LineId Id="62" Count="0" />
+      <LineId Id="60" Count="0" />
+      <LineId Id="118" Count="0" />
+      <LineId Id="26" Count="0" />
+      <LineId Id="23" Count="0" />
+      <LineId Id="21" Count="1" />
+      <LineId Id="13" Count="0" />
+    </LineIds>
+    <LineIds Name="FB_ActionList.M_GetFromId">
+      <LineId Id="10" Count="1" />
+      <LineId Id="14" Count="1" />
+      <LineId Id="17" Count="2" />
+      <LineId Id="16" Count="0" />
+      <LineId Id="12" Count="0" />
+      <LineId Id="5" Count="0" />
+    </LineIds>
+    <LineIds Name="FB_ActionList.M_GetNext">
+      <LineId Id="10" Count="0" />
+      <LineId Id="12" Count="0" />
+      <LineId Id="11" Count="0" />
+      <LineId Id="5" Count="0" />
+    </LineIds>
+    <LineIds Name="FB_ActionList.M_Reset">
+      <LineId Id="10" Count="0" />
+      <LineId Id="20" Count="0" />
+      <LineId Id="11" Count="0" />
+      <LineId Id="21" Count="0" />
+      <LineId Id="12" Count="6" />
+      <LineId Id="5" Count="0" />
+    </LineIds>
+    <LineIds Name="FB_ActionList.M_SetCurrentToHead">
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="FB_ActionList.P_bActionsAvailable.Get">
+      <LineId Id="3" Count="9" />
+      <LineId Id="2" Count="0" />
+    </LineIds>
+  </POU>
+</TcPlcObject>

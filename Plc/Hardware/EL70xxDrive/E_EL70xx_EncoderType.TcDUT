@@ -1,0 +1,14 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<TcPlcObject Version="1.1.0.1" ProductVersion="3.1.4024.11">
+  <DUT Name="E_EL70xx_EncoderType" Id="{928aa0a4-076c-430b-900d-09cda5681499}">
+    <Declaration><![CDATA[{attribute 'qualified_only'}
+TYPE E_EL70xx_EncoderType :
+(
+	InternEncoder := 0,
+	InternCounter := 1,
+	ExternSingleturnAbs := 2
+) USINT;
+END_TYPE
+]]></Declaration>
+  </DUT>
+</TcPlcObject>

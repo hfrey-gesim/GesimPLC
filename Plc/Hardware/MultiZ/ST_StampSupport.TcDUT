@@ -1,0 +1,27 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<TcPlcObject Version="1.1.0.1" ProductVersion="3.1.0.25">
+  <DUT Name="ST_StampSupport" Id="{7651494b-e8a1-4996-8ffa-62a37f3163c8}">
+    <Declaration><![CDATA[TYPE ST_StampSupport :
+STRUCT
+	bAngleReached 		AT %I* : BOOL; //PDO (Bit0 StampState)
+	bLocked				AT %I* : BOOL; //PDO (Bit1 StampState)
+	bInitSpinOk			AT %I* : BOOL; //PDO (Bit2 StampState)
+	bInitLockOk			AT %I* : BOOL; //PDO (Bit3 StampState)
+	bError				AT %I* : BOOL; //PDO (Bit4 StampState)
+	bStampInMagazine 	AT %I* : BOOL; //PDO (Bit5 StampState)
+	bStampInSupport 	AT %I* : BOOL; //PDO (Bit6 StampState)
+	
+	bCtrl			: BOOL;		//SDO(RW)
+	nMode			: USINT;	//SDO(RW)
+	nAngleSetpoint	: INT;		//SDO(RW)
+	nAngleMax		: INT;		//SDO(RO)
+	nSpinSpeed		: UDINT; 	//SDO(RW)
+	bLock			: BOOL;		//SDO(RW)
+	nUnlockOffset	: DINT;		//SDO(RW)
+	bLight			: BOOL;		//SDO(RW)
+END_STRUCT
+END_TYPE
+]]></Declaration>
+    <ObjectProperties />
+  </DUT>
+</TcPlcObject>

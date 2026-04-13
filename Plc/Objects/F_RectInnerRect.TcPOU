@@ -1,0 +1,35 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<TcPlcObject Version="1.1.0.1" ProductVersion="3.1.4020.12">
+  <POU Name="F_RectInnerRect" Id="{5e2e5a50-e706-47f0-91a6-807caf2bbdb1}" SpecialFunc="None">
+    <Declaration><![CDATA[FUNCTION F_RectInnerRect : BOOL
+VAR_INPUT
+	stRect1 : FB_Rectangle;
+	stRect2 : FB_Rectangle;
+END_VAR
+VAR
+END_VAR
+]]></Declaration>
+    <Implementation>
+      <ST><![CDATA[//Rechteck1 innerhalb Rechteck2?
+F_RectInnerRect :=
+
+(stRect1.X1 >= stRect2.X1) AND 
+(stRect1.X1 <= stRect2.X2) AND
+(stRect1.X2 >= stRect2.X1) AND
+(stRect1.X2 <= stRect2.X2) AND
+
+(stRect1.Y1 >= stRect2.Y1) AND 
+(stRect1.Y1 <= stRect2.Y2) AND
+(stRect1.Y2 >= stRect2.Y1) AND
+(stRect1.Y2 <= stRect2.Y2);
+]]></ST>
+    </Implementation>
+    <LineIds Name="F_RectInnerRect">
+      <LineId Id="10" Count="3" />
+      <LineId Id="15" Count="1" />
+      <LineId Id="14" Count="0" />
+      <LineId Id="17" Count="4" />
+      <LineId Id="7" Count="0" />
+    </LineIds>
+  </POU>
+</TcPlcObject>

@@ -1,0 +1,935 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<TcPlcObject Version="1.1.0.1" ProductVersion="3.1.4024.9">
+  <POU Name="FB_HybridDispenser" Id="{66f767df-9f17-4ced-a0df-52e824ae2671}" SpecialFunc="None">
+    <Declaration><![CDATA[FUNCTION_BLOCK FB_HybridDispenser EXTENDS FB_GCodeTool IMPLEMENTS I_Dispenser
+VAR_INPUT
+END_VAR
+VAR_OUTPUT
+END_VAR
+VAR
+	//Specproperties
+	aiDispenser		: ARRAY[1..3] OF I_Dispenser;
+	nMasterSlotNr	: USINT;
+
+	//****************************************Aktionsvariablen****************************************************
+	bBasicDispense			: BOOL;
+	nStateA_BasicDispense 	: USINT;
+	
+	n : INT; //Zählvariablen
+	m : INT; //Zählvariablen
+
+END_VAR
+]]></Declaration>
+    <Implementation>
+      <ST><![CDATA[IF eCurrentState = E_MachineState.MACHINESTATE_Active THEN
+	IF bBasicDispense THEN
+		A_HybridDispense();
+		IF nStateA_BasicDispense >= 80 THEN
+			IF nStateA_BasicDispense >= 99 THEN
+				bError := TRUE;
+			END_IF
+			bBasicDispense := FALSE;
+			nStateA_BasicDispense := 0;
+			M_RemoveListEntry(nSearchValue:= E_Action.ACTION_BasicDispense);
+		END_IF
+	END_IF
+END_IF
+
+SUPER^();	//FB_MzTool aufrufen
+
+//Prozessdaten aktualisieren
+stProcessData.n32Data[7] := BOOL_TO_DINT(bBasicDispense);
+aObjProcData[nNotifyId] := stProcessData;]]></ST>
+    </Implementation>
+    <Action Name="A_HybridDispense" Id="{8d936772-d544-4aa1-b19b-e969ff87b9cd}">
+      <Implementation>
+        <ST><![CDATA[IF nStateA_BasicDispense = 0 THEN	//alle Dispenser starten
+	FOR n := 1 TO 3 BY 1 DO
+		IF aiDispenser[n] <> 0 THEN
+			stError.ErrorId := aiDispenser[n].M_DispenserStart();
+			stError.ObjectId := aiDispenser[n].P_pObject^.P_nObjectID;
+			IF stError.ErrorId > 0 THEN
+				//Bereits gestartete Tools wieder stoppen
+				FOR m := 1 TO n - 1 BY 1 DO
+					aiDispenser[m].M_DispenserStop();
+				END_FOR
+				nStateA_BasicDispense := 99;
+				EXIT;
+			END_IF
+		END_IF
+	END_FOR
+	IF nStateA_BasicDispense = 0 THEN
+		nStateA_BasicDispense := 1;	
+	END_IF
+END_IF
+
+IF nStateA_BasicDispense = 1 THEN	//alle Dispenser laufen -> permanent auf Fehler überwachen
+	//Das Verlassen dieses States erfolgt durch die Action "HybridDispense" mit Parameter "off" oder durch Stop bzw. Cancel
+	FOR n := 1 TO 3 BY 1 DO
+		IF aiDispenser[n] <> 0 THEN
+			IF aiDispenser[n].P_bError THEN
+				stError.ErrorId := aiDispenser[n].P_nErrorId;
+				stError.ObjectId := aiDispenser[n].P_pObject^.P_nObjectID;
+				nStateA_BasicDispense := 2; //weiter zu stoppen
+				EXIT;
+			END_IF
+		END_IF
+	END_FOR	
+END_IF
+
+IF nStateA_BasicDispense = 2 THEN //übrige Dispenser nach Fehler stoppen
+	nStateA_BasicDispense := 99;
+	FOR n := 1 TO 3 BY 1 DO
+		IF aiDispenser[n] <> 0 THEN
+			IF NOT aiDispenser[n].P_bError THEN
+				aiDispenser[n].M_DispenserStop();
+			END_IF
+		END_IF
+	END_FOR	
+END_IF
+
+IF nStateA_BasicDispense = 70 THEN //Dispenser stoppen
+	nStateA_BasicDispense := 71;
+	FOR n := 1 TO 3 BY 1 DO
+		IF aiDispenser[n] <> 0 THEN
+			aiDispenser[n].M_DispenserStop();
+		END_IF
+	END_FOR	
+ELSIF nStateA_BasicDispense = 71 THEN //warten bis alle Dispenser gestoppt
+	nStateA_BasicDispense := 80;
+	FOR n := 1 TO 3 BY 1 DO
+		IF aiDispenser[n] <> 0 THEN
+			IF NOT aiDispenser[n].P_eDispenserState = E_DispenserState.Idle THEN 
+				nStateA_BasicDispense := 71;
+			END_IF
+		END_IF
+	END_FOR	
+END_IF
+
+//Errorhandling
+IF nStateA_BasicDispense = 99 THEN
+	stError.Cmd := E_Action.ACTION_BasicDispense;
+	stError.POU := E_POU.POU_FB_HybridDispenser;
+	stError.POUAction := E_POUACT.POUACT_A_BasicDispense;
+	fbErrorList.M_Add(stError);
+END_IF]]></ST>
+      </Implementation>
+    </Action>
+    <Action Name="A_Reset" Id="{a482625e-95ff-4fc4-a8cf-cf30f2fadff5}">
+      <Implementation>
+        <ST><![CDATA[//Ist noch eine Aktion aktiv?
+IF nStateA_ResetSpec = 0 THEN 
+	(*IF bHeating THEN
+		bHeating := FALSE;
+		nStateA_Heating := 0;
+	END_IF*)
+	nStateA_ResetSpec := 80;
+END_IF
+
+SUPER^.A_Reset();]]></ST>
+      </Implementation>
+    </Action>
+    <Action Name="A_Stop" Id="{89cdf597-595e-4299-9c5d-649fedd30289}">
+      <Implementation>
+        <ST><![CDATA[IF nStateA_Stop = 0 THEN
+	IF bBasicDispense AND nStateA_BasicDispense = 1 THEN
+		nStateA_BasicDispense := 70;
+	END_IF
+	nStateA_Stop := 1;	
+END_IF
+
+SUPER^.A_Stop();]]></ST>
+      </Implementation>
+    </Action>
+    <Method Name="FB_init" Id="{2333ea12-39e9-4cf7-bea4-0fef2cd95c61}">
+      <Declaration><![CDATA[METHOD FB_init : BOOL
+VAR_INPUT
+	bInitRetains : BOOL; // if TRUE, the retain variables are initialized (warm start / cold start)
+	bInCopyCode : BOOL;  // if TRUE, the instance afterwards gets moved into the copy code (online change)
+END_VAR
+]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[eObjectType := E_ObjectType.OBJECTTYPE_HybridDispenser;
+eObjectGroup := E_ObjectGroup.OBJECTGROUP_MzTool OR E_ObjectGroup.OBJECTGROUP_Device;]]></ST>
+      </Implementation>
+    </Method>
+    <Method Name="M_AddChild" Id="{7f082068-4121-4e0b-b214-b6ed87056bd0}">
+      <Declaration><![CDATA[METHOD M_AddChild : ERRORID
+VAR_INPUT
+	pObject : POINTER TO FB_Object;
+	nSlotNr	: UINT;
+	nIndex : INT;
+END_VAR
+]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[//Der HybridDispenser kann folgende Objekttypen aufnehmen
+//Extruder, PassivePip, CartDispenser
+IF pObject > 0 THEN
+	IF pObject^.P_eObjectType = E_ObjectType.OBJECTTYPE_Extruder OR
+		pObject^.P_eObjectType = E_ObjectType.OBJECTTYPE_CartDispenser OR
+		pObject^.P_eObjectType = E_ObjectType.OBJECTTYPE_CartDispStirrer OR
+		pObject^.P_eObjectType = E_ObjectType.OBJECTTYPE_PassivPip THEN
+		M_AddChild := SUPER^.M_AddChild(pObject,nSlotNr,nIndex);
+	ELSE
+		M_AddChild := E_ErrorIdObjMgmt.ERRORID_InvalidParentObject;
+	END_IF
+ELSE
+	M_AddChild := E_ErrorIdObjMgmt.ERRORID_InvalidParentObject;
+END_IF]]></ST>
+      </Implementation>
+    </Method>
+    <Method Name="M_CancelAction" Id="{0eb8483b-a2c5-4a27-8b71-cdc358ad185a}">
+      <Declaration><![CDATA[METHOD M_CancelAction
+VAR_INPUT
+	eAction : E_Action;
+END_VAR
+]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[CASE eAction OF
+	E_Action.ACTION_BasicDispense:
+		IF bBasicDispense AND nStateA_BasicDispense = 1 THEN
+			nStateA_BasicDispense := 70;
+		END_IF
+ELSE
+	SUPER^.M_CancelAction(eAction);
+END_CASE]]></ST>
+      </Implementation>
+    </Method>
+    <Method Name="M_CheckAction" Id="{3cce8f03-648c-4a92-a172-ac413395076f}">
+      <Declaration><![CDATA[METHOD M_CheckAction : ERRORID
+VAR_INPUT
+	refActionData 	: REFERENCE TO ST_ActionData;
+	pCorrelObject	: POINTER TO FB_Object;
+END_VAR
+]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[CASE refActionData.eAction OF
+	E_Action.ACTION_Dispense,
+	E_Action.ACTION_CleanTip,
+	E_Action.ACTION_MeasureTool,
+	E_Action.ACTION_TeachTarget:
+		RETURN;
+ELSE
+	M_CheckAction := SUPER^.M_CheckAction(refActionData, pCorrelObject);
+END_CASE]]></ST>
+      </Implementation>
+    </Method>
+    <Method Name="M_CheckGCodeStart" Id="{530f3c3b-309f-4d22-b9c7-d04106859303}">
+      <Declaration><![CDATA[METHOD M_CheckGCodeStart : ERRORID
+VAR_INPUT
+END_VAR
+
+VAR
+	i : USINT;
+	pGCodeTool : POINTER TO FB_GCodeTool;
+END_VAR
+]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[FOR i := 1 TO 3 BY 1 DO
+	IF aiDispenser[i] <> 0 AND_THEN aiDispenser[i].P_pObject^.P_eObjectType = E_ObjectType.OBJECTTYPE_Extruder THEN
+		pGCodeTool := aiDispenser[i].P_pObject;
+		M_CheckGCodeStart := pGCodeTool^.M_CheckGCodeStart();
+		IF M_CheckGCodeStart > 0 THEN
+			RETURN;
+		END_IF
+	END_IF
+END_FOR
+]]></ST>
+      </Implementation>
+    </Method>
+    <Method Name="M_CheckProcDataType" Id="{ffc69ed7-3e8a-4196-8a81-99fce50d3127}">
+      <Declaration><![CDATA[METHOD M_CheckProcDataType : BOOL
+VAR_INPUT
+	eProcDataType : E_ProcDataType;
+END_VAR
+]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[]]></ST>
+      </Implementation>
+    </Method>
+    <Method Name="M_CheckProps" Id="{8bfd8b2d-e3c6-4785-a17a-f0537452959e}">
+      <Declaration><![CDATA[METHOD M_CheckProps : ERRORID
+VAR_INPUT
+END_VAR
+
+VAR
+	i 				: UINT;
+	pSlot 			: POINTER TO FB_Slot;
+	pExtruder 		: POINTER TO FB_Extruder;
+	pCartDispenser 	: POINTER TO FB_CartDispenser;
+	pPassivePip 	: POINTER TO FB_PassivPip;
+END_VAR]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[M_CheckProps := SUPER^.M_CheckProps();
+//Kann bis zu 3 CartDispenser enthalten
+aiDispenser[1] := 0;
+aiDispenser[2] := 0;
+aiDispenser[3] := 0;
+FOR i:= 1 TO nNumberOfSlots BY 1 DO
+	pSlot := fbSlotList.M_GetAtNr(i);
+	IF pSlot > 0 AND_THEN pSlot^.P_pChild > 0  THEN
+		//Achtung, nur Tools die das Interface "I_HybridDispenser" implementieren sind erlaubt!
+		IF pSlot^.P_pChild^.P_eObjectType = E_ObjectType.OBJECTTYPE_Extruder THEN
+			pExtruder := pSlot^.P_pChild;
+			aiDispenser[pSlot^.P_nNr] := pExtruder^;
+		ELSIF pSlot^.P_pChild^.P_eObjectType = E_ObjectType.OBJECTTYPE_CartDispenser OR 
+				pSlot^.P_pChild^.P_eObjectType = E_ObjectType.OBJECTTYPE_CartDispStirrer THEN
+			pCartDispenser := pSlot^.P_pChild;
+			aiDispenser[pSlot^.P_nNr] := pCartDispenser^;
+		ELSIF pSlot^.P_pChild^.P_eObjectType = E_ObjectType.OBJECTTYPE_PassivPip THEN
+			pPassivePip := pSlot^.P_pChild;
+			aiDispenser[pSlot^.P_nNr] := pPassivePip^;
+		END_IF
+	END_IF
+END_FOR
+//MasterSlotNr auswerten
+//1. kann nur 1,2 oder 3 sein
+//2. entsprechender Slot muss belegt sein
+IF nMasterSlotNr >= 1 AND nMasterSlotNr <= 3 THEN
+	IF aiDispenser[nMasterSlotNr] = 0 THEN
+		M_CheckProps := E_ErrorIdObjMgmt.ERRORID_NoToolOnMasterSlot;	
+	END_IF
+ELSE
+	M_CheckProps := E_ErrorIdObjMgmt.ERRORID_InvalidSlotNumber;
+END_IF]]></ST>
+      </Implementation>
+    </Method>
+    <Method Name="M_ClearAllProps" Id="{8920eafd-edd7-4aba-9df0-5e19972f99e9}">
+      <Declaration><![CDATA[METHOD M_ClearAllProps
+VAR_INPUT
+	bIgnoreParent : BOOL; //Es wird das gesamte OD gelöscht. -> Zeiger auf Parent nicht mehr gültig!
+END_VAR
+]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[aiDispenser[1] := 0;
+aiDispenser[2] := 0;
+aiDispenser[3] := 0;
+SUPER^.M_ClearAllProps(bIgnoreParent);]]></ST>
+      </Implementation>
+    </Method>
+    <Method Name="M_DispenserPrepare" Id="{2fc4be12-cb16-4947-9f14-9c42df44b7e5}">
+      <Declaration><![CDATA[METHOD M_DispenserPrepare : ERRORID
+VAR_INPUT
+END_VAR
+]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[//do nothing]]></ST>
+      </Implementation>
+    </Method>
+    <Method Name="M_DispenserStart" Id="{90b2ab18-a6a9-473a-86a5-e8c5651168e4}">
+      <Declaration><![CDATA[METHOD M_DispenserStart : ERRORID
+VAR_INPUT
+END_VAR
+
+]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[IF NOT (eCurrentState = E_MachineState.MACHINESTATE_Idle OR
+	eCurrentState = E_MachineState.MACHINESTATE_Active OR
+	eCurrentState = E_MachineState.MACHINESTATE_Ready) THEN
+	M_DispenserStart := E_ErrorIdCmd.ERRORID_InvalidState;
+	RETURN;
+END_IF
+			
+IF NOT bBasicDispense THEN
+	bBasicDispense := TRUE;
+	fbList.A_AddHeadValue(hList := hList, putValue := E_Action.ACTION_BasicDispense);
+ELSE //Bereits Ein -> Error werfen
+	M_DispenserStart := E_ErrorIdCmd.ERRORID_BasicActionActive;
+	RETURN;
+END_IF
+
+bBusy := TRUE;
+eCurrentState := E_MachineState.MACHINESTATE_Active;]]></ST>
+      </Implementation>
+    </Method>
+    <Method Name="M_DispenserStop" Id="{99c96599-5de0-44af-985a-e499f40f70e6}">
+      <Declaration><![CDATA[METHOD M_DispenserStop : ERRORID
+VAR_INPUT
+END_VAR
+]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[IF bBasicDispense AND nStateA_BasicDispense = 1 THEN
+	nStateA_BasicDispense := 70;
+END_IF
+]]></ST>
+      </Implementation>
+    </Method>
+    <Method Name="M_ExeAction" Id="{e570641e-3944-4e20-a230-a7e777f8d928}">
+      <Declaration><![CDATA[METHOD M_ExeAction : ERRORID
+VAR_INPUT
+	refActionData : REFERENCE TO ST_ActionData;	
+END_VAR]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[IF NOT (eCurrentState = E_MachineState.MACHINESTATE_Idle OR
+	eCurrentState = E_MachineState.MACHINESTATE_Active OR
+	eCurrentState = E_MachineState.MACHINESTATE_Ready) THEN
+	M_ExeAction := E_ErrorIdCmd.ERRORID_InvalidState;
+	RETURN;
+END_IF
+
+CASE refActionData.eAction OF
+	E_Action.ACTION_BasicDispense:
+		IF refActionData.aParams[1] = 0 THEN //Aus
+			M_ExeAction := M_DispenserStop();
+		ELSE //Ein
+			M_ExeAction := M_DispenserStart();
+		END_IF
+	ELSE
+		M_ExeAction := SUPER^.M_ExeAction(refActionData);
+		RETURN;
+END_CASE
+]]></ST>
+      </Implementation>
+    </Method>
+    <Method Name="M_GetAllProps" Id="{0ade4717-60a7-43c1-a3b2-f1d00a3babc7}">
+      <Declaration><![CDATA[METHOD M_GetAllProps : ERRORID
+VAR_INPUT
+	refCmdData : REFERENCE TO  ST_CmdData;
+END_VAR
+]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[SUPER^.M_GetAllProps(refCmdData);
+nCurrentPropIndex := nCurrentPropIndex + 1;
+refCmdData.n32Data[nCurrentPropIndex] := nMasterSlotNr;]]></ST>
+      </Implementation>
+    </Method>
+    <Method Name="M_GetNozzle" Id="{54003e9d-1a7e-4518-9f82-a0e4bed7ffa2}">
+      <Declaration><![CDATA[METHOD M_GetNozzle : POINTER TO FB_Nozzle
+VAR_INPUT
+END_VAR]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[IF P_pMasterTool > 0 THEN
+	M_GetNozzle := P_pMasterTool^.M_GetNozzle();
+END_IF]]></ST>
+      </Implementation>
+    </Method>
+    <Method Name="M_GetProcData" Id="{b91c04bd-1aaf-4af8-ac63-dcb82cd99d8e}">
+      <Declaration><![CDATA[METHOD M_GetProcData : DINT
+VAR_INPUT
+	eProcDataType : E_ProcDataType;
+END_VAR
+]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[]]></ST>
+      </Implementation>
+    </Method>
+    <Method Name="M_GetZAxisRef" Id="{1218632a-890c-4c63-be50-c700c3f80add}">
+      <Declaration><![CDATA[METHOD M_GetZAxisRef : POINTER TO FB_ZAxisRef
+VAR_INPUT
+	pTool : POINTER TO FB_MzTool;
+	pToolSlot : POINTER TO FB_Slot;
+END_VAR
+
+VAR
+	nSlotDiff : INT;
+	nAxisNr : INT;
+END_VAR
+]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[//Diese Methode überschreibt sie Methode von FB_MzTool und wird derzeit nur vom SyringeExtruder (Child) aufgerufen
+IF pTool^.P_eObjectType = E_ObjectType.OBJECTTYPE_Extruder THEN
+	nSlotDiff :=  UINT_TO_INT(pToolSlot^.P_nNr) - UINT_TO_INT(nMasterSlotNr);
+	nAxisNr := pZAxisRef^.nChannel + nSlotDiff * 2; //Es muss immer eine freie Achse dazwischen sein.
+	M_GetZAxisRef := ADR(pFbMultiZ^.aFbZAxisRef[nAxisNr]);
+	IF M_GetZAxisRef^.eDetectedToolType <> E_MzToolType.TOOL_TYPE_SyringeExtruder THEN
+		M_GetZAxisRef := 0;
+	END_IF
+ELSE
+	M_GetZAxisRef := SUPER^.M_GetZAxisRef(pTool, pParentSlot);
+END_IF
+
+
+ 
+]]></ST>
+      </Implementation>
+    </Method>
+    <Method Name="M_Prepare" Id="{66ee8406-4dd6-4e43-a22f-1912ca01857b}">
+      <Declaration><![CDATA[METHOD M_Prepare : ST_MethResult
+VAR_INPUT
+	bExecute : BOOL;
+END_VAR
+
+VAR
+ 	i : USINT;	
+END_VAR
+
+VAR_INST
+	nState : USINT;	
+END_VAR
+
+]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[IF bExecute THEN
+	IF nState = 0 THEN
+		nState := 80;
+		FOR i := 1 TO 3 BY 1 DO
+			IF aiDispenser[i] <> 0 THEN
+				M_Prepare.nErrorId := aiDispenser[i].M_DispenserPrepare();
+				IF M_Prepare.nErrorId > 0 THEN
+					M_Prepare.bError := TRUE;
+					M_Prepare.bBusy := FALSE;
+					RETURN;
+				END_IF
+				IF aiDispenser[i].P_eDispenserState = E_DispenserState.Preparing THEN
+					nState := 1;
+					M_Prepare.bBusy := TRUE;				
+					RETURN;
+				END_IF
+			END_IF
+		END_FOR
+	ELSIF nState = 1 THEN
+		FOR i := 1 TO 3 BY 1 DO
+			IF aiDispenser[i] <> 0 THEN
+				IF aiDispenser[i].P_bError THEN
+					M_Prepare.bError := TRUE;
+					M_Prepare.bBusy := FALSE;
+					RETURN;
+				END_IF
+				IF aiDispenser[i].P_eDispenserState = E_DispenserState.Preparing THEN
+					nState := 1;
+					M_Prepare.bBusy := TRUE;
+					RETURN;
+				END_IF				
+			END_IF
+		END_FOR
+	END_IF
+ELSE
+	nState := 0;	
+END_IF]]></ST>
+      </Implementation>
+    </Method>
+    <Method Name="M_SetAllProps" Id="{d76f5aa1-fc0f-4796-96ae-7d0ae9669b6e}">
+      <Declaration><![CDATA[METHOD M_SetAllProps : ERRORID
+VAR_INPUT
+	refCmdData : REFERENCE TO  ST_CmdData;
+END_VAR
+]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[M_SetAllProps := SUPER^.M_SetAllProps(refCmdData);
+
+IF M_SetAllProps > 0 THEN
+	RETURN;
+END_IF
+
+nCurrentPropIndex := nCurrentPropIndex + 1;
+nSpecPropIndex := nCurrentPropIndex;
+nMasterSlotNr := DINT_TO_USINT(refCmdData.n32Data[nCurrentPropIndex]);
+nNoOfProps := nCurrentPropIndex + 1;]]></ST>
+      </Implementation>
+    </Method>
+    <Method Name="M_SetPrintParams" Id="{97f76bc7-a6d8-4827-b068-a6c6aae97478}">
+      <Declaration><![CDATA[METHOD M_SetPrintParams : ST_MethResult
+VAR_INPUT
+	eType 		: E_PrintParamType;
+	nNumerator	: USINT;
+	nValue		: DINT;
+END_VAR
+
+VAR
+	pGCodeTool		: POINTER TO FB_GCodeTool;
+END_VAR
+
+]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[CASE eType OF
+	E_PrintParamType.Pressure:
+		CASE nNumerator OF
+			1:	IF aiDispenser[1] <> 0 AND_THEN 
+					(aiDispenser[1].P_pObject^.P_eObjectType = E_ObjectType.OBJECTTYPE_CartDispenser OR	aiDispenser[1].P_pObject^.P_eObjectType = E_ObjectType.OBJECTTYPE_CartDispStirrer) THEN
+					pGCodeTool := aiDispenser[1].P_pObject;
+					M_SetPrintParams := pGCodeTool^.M_SetPrintParams(E_PrintParamType.Pressure, 1, nValue);
+				ELSE
+					M_SetPrintParams.bError := TRUE;
+					M_SetPrintParams.nErrorId := E_ErrorIdCmd.ERRORID_InvalidPrintParamType;
+				END_IF
+				
+			2:	IF aiDispenser[2] <> 0 AND_THEN
+					(aiDispenser[2].P_pObject^.P_eObjectType = E_ObjectType.OBJECTTYPE_CartDispenser OR aiDispenser[2].P_pObject^.P_eObjectType = E_ObjectType.OBJECTTYPE_CartDispStirrer) THEN
+					pGCodeTool := aiDispenser[2].P_pObject;
+					M_SetPrintParams := pGCodeTool^.M_SetPrintParams(E_PrintParamType.Pressure, 1, nValue);
+				ELSE
+					M_SetPrintParams.bError := TRUE;
+					M_SetPrintParams.nErrorId := E_ErrorIdCmd.ERRORID_InvalidPrintParamType;
+				END_IF
+			
+			3: IF aiDispenser[3] <> 0 AND_THEN
+					(aiDispenser[3].P_pObject^.P_eObjectType = E_ObjectType.OBJECTTYPE_CartDispenser OR aiDispenser[3].P_pObject^.P_eObjectType = E_ObjectType.OBJECTTYPE_CartDispStirrer) THEN
+					pGCodeTool := aiDispenser[3].P_pObject;
+					M_SetPrintParams := pGCodeTool^.M_SetPrintParams(E_PrintParamType.Pressure, 1, nValue);
+				ELSE
+					M_SetPrintParams.bError := TRUE;
+					M_SetPrintParams.nErrorId := E_ErrorIdCmd.ERRORID_InvalidPrintParamType;
+				END_IF
+		ELSE
+			M_SetPrintParams.bError := TRUE;
+			M_SetPrintParams.nErrorId := E_ErrorIdCmd.ERRORID_InvalidPrintParamNumerator;
+		END_CASE
+		
+	E_PrintParamType.Feed:
+		CASE nNumerator OF
+			1:	IF aiDispenser[1] <> 0 AND_THEN aiDispenser[1].P_pObject^.P_eObjectType = E_ObjectType.OBJECTTYPE_Extruder THEN
+					pGCodeTool := aiDispenser[1].P_pObject;
+					M_SetPrintParams := pGCodeTool^.M_SetPrintParams(E_PrintParamType.Feed, 1, nValue);
+				ELSE
+					M_SetPrintParams.bError := TRUE;
+					M_SetPrintParams.nErrorId := E_ErrorIdCmd.ERRORID_InvalidPrintParamType;
+				END_IF
+			
+			2:	IF aiDispenser[2] <> 0 AND_THEN aiDispenser[2].P_pObject^.P_eObjectType = E_ObjectType.OBJECTTYPE_Extruder THEN
+					pGCodeTool := aiDispenser[2].P_pObject;
+					M_SetPrintParams := pGCodeTool^.M_SetPrintParams(E_PrintParamType.Feed, 1, nValue);
+				ELSE
+					M_SetPrintParams.bError := TRUE;
+					M_SetPrintParams.nErrorId := E_ErrorIdCmd.ERRORID_InvalidPrintParamType;
+				END_IF
+			
+			3:	IF aiDispenser[3] <> 0 AND_THEN aiDispenser[3].P_pObject^.P_eObjectType = E_ObjectType.OBJECTTYPE_Extruder THEN
+					pGCodeTool := aiDispenser[3].P_pObject;
+					M_SetPrintParams := pGCodeTool^.M_SetPrintParams(E_PrintParamType.Feed, 1, nValue);			
+				ELSE
+					M_SetPrintParams.bError := TRUE;
+					M_SetPrintParams.nErrorId := E_ErrorIdCmd.ERRORID_InvalidPrintParamType;
+				END_IF
+			
+		ELSE
+			M_SetPrintParams.bError := TRUE;
+			M_SetPrintParams.nErrorId := E_ErrorIdCmd.ERRORID_InvalidPrintParamNumerator;
+		END_CASE
+		
+	E_PrintParamType.Flow:
+		CASE nNumerator OF
+			1:	IF aiDispenser[1] <> 0 AND_THEN aiDispenser[1].P_pObject^.P_eObjectType = E_ObjectType.OBJECTTYPE_PassivPip THEN
+					pGCodeTool := aiDispenser[1].P_pObject;
+					M_SetPrintParams := pGCodeTool^.M_SetPrintParams(E_PrintParamType.Flow, 1, nValue);			
+				ELSE
+					M_SetPrintParams.bError := TRUE;
+					M_SetPrintParams.nErrorId := E_ErrorIdCmd.ERRORID_InvalidPrintParamType;
+				END_IF
+			
+			2:	IF aiDispenser[2] <> 0 AND_THEN aiDispenser[2].P_pObject^.P_eObjectType = E_ObjectType.OBJECTTYPE_PassivPip THEN
+					pGCodeTool := aiDispenser[2].P_pObject;
+					M_SetPrintParams := pGCodeTool^.M_SetPrintParams(E_PrintParamType.Flow, 1, nValue);			
+				ELSE
+					M_SetPrintParams.bError := TRUE;
+					M_SetPrintParams.nErrorId := E_ErrorIdCmd.ERRORID_InvalidPrintParamType;
+				END_IF
+			
+			3:	IF aiDispenser[3] <> 0 AND_THEN aiDispenser[3].P_pObject^.P_eObjectType = E_ObjectType.OBJECTTYPE_PassivPip THEN
+					pGCodeTool := aiDispenser[3].P_pObject;
+					M_SetPrintParams := pGCodeTool^.M_SetPrintParams(E_PrintParamType.Flow, 1, nValue);
+				ELSE
+					M_SetPrintParams.bError := TRUE;
+					M_SetPrintParams.nErrorId := E_ErrorIdCmd.ERRORID_InvalidPrintParamType;
+				END_IF
+		ELSE
+			M_SetPrintParams.bError := TRUE;
+			M_SetPrintParams.nErrorId := E_ErrorIdCmd.ERRORID_InvalidPrintParamNumerator;
+		END_CASE
+	
+ELSE
+	M_SetPrintParams.bError := TRUE;
+	M_SetPrintParams.nErrorId := E_ErrorIdCmd.ERRORID_InvalidPrintParamType;	
+END_CASE]]></ST>
+      </Implementation>
+    </Method>
+    <Method Name="M_ToolIsOnMasterSlot" Id="{8d748c99-386e-4952-9a33-6e5d28b55d4f}">
+      <Declaration><![CDATA[METHOD M_ToolIsOnMasterSlot : BOOL
+VAR_INPUT
+	pTool : POINTER TO FB_MzTool;
+END_VAR
+]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[IF aiDispenser[nMasterSlotNr] <> 0 THEN
+	M_ToolIsOnMasterSlot := aiDispenser[nMasterSlotNr].P_pObject = pTool;
+END_IF]]></ST>
+      </Implementation>
+    </Method>
+    <Property Name="P_bSensorMounted" Id="{c961256e-9310-4dd8-80f5-ab8fb1f9164e}">
+      <Declaration><![CDATA[PROPERTY P_bSensorMounted : BOOL]]></Declaration>
+      <Get Name="Get" Id="{83023f0a-84ac-4614-93f5-de90902b0709}">
+        <Declaration><![CDATA[VAR
+	i : USINT;
+	pTool : POINTER TO FB_MzTool;
+END_VAR
+]]></Declaration>
+        <Implementation>
+          <ST><![CDATA[FOR i := 1 TO 3 BY 1 DO
+	IF aiDispenser[i] <> 0 THEN
+		pTool := aiDispenser[i].P_pObject;
+		IF pTool^.P_bSensorMounted THEN
+			P_bSensorMounted := TRUE;
+			RETURN;
+		END_IF
+	END_IF
+END_FOR]]></ST>
+        </Implementation>
+      </Get>
+    </Property>
+    <Property Name="P_eDispenserState" Id="{deb289a2-725e-4a6e-be13-6d6c9b05232f}">
+      <Declaration><![CDATA[PROPERTY P_eDispenserState : E_DispenserState]]></Declaration>
+      <Get Name="Get" Id="{e212129a-ab1c-4bef-873c-92ba9aa69152}">
+        <Declaration><![CDATA[VAR
+END_VAR
+]]></Declaration>
+        <Implementation>
+          <ST><![CDATA[IF bBasicDispense THEN
+	//falls ein Dispenser in Preparing ist, dann bleibt es auch so
+	P_eDispenserState := E_DispenserState.Dispensing;
+END_IF]]></ST>
+        </Implementation>
+      </Get>
+    </Property>
+    <Property Name="P_pMasterTool" Id="{630fdeaa-fa3b-4de2-a160-0f7c814075f0}">
+      <Declaration><![CDATA[PROPERTY P_pMasterTool : POINTER TO FB_MzTool]]></Declaration>
+      <Get Name="Get" Id="{8fe4ec90-7ed9-444e-ac0c-3e8bfbf4077b}">
+        <Declaration><![CDATA[VAR
+END_VAR
+]]></Declaration>
+        <Implementation>
+          <ST><![CDATA[P_pMasterTool := aiDispenser[nMasterSlotNr].P_pObject;]]></ST>
+        </Implementation>
+      </Get>
+    </Property>
+    <Property Name="P_stAbsPosPhys" Id="{433a5fc6-1111-403e-ade2-9ac65768d9e2}">
+      <Declaration><![CDATA[PROPERTY P_stAbsPosPhys : ST_3DPoint]]></Declaration>
+      <Get Name="Get" Id="{a5246394-6913-468b-9907-2dff676decc7}">
+        <Declaration><![CDATA[VAR
+	pMzTool : POINTER TO FB_MzTool;
+END_VAR]]></Declaration>
+        <Implementation>
+          <ST><![CDATA[IF aiDispenser[nMasterSlotNr] <> 0 THEN
+	pMzTool := aiDispenser[nMasterSlotNr].P_pObject;
+	P_stAbsPosPhys := pMzTool^.P_stAbsPosPhys;
+ELSE
+	P_stAbsPosPhys := SUPER^.P_stAbsPosPhys;
+END_IF]]></ST>
+        </Implementation>
+      </Get>
+    </Property>
+    <LineIds Name="FB_HybridDispenser">
+      <LineId Id="429" Count="17" />
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="FB_HybridDispenser.A_HybridDispense">
+      <LineId Id="103" Count="3" />
+      <LineId Id="111" Count="1" />
+      <LineId Id="119" Count="3" />
+      <LineId Id="113" Count="0" />
+      <LineId Id="123" Count="0" />
+      <LineId Id="114" Count="0" />
+      <LineId Id="107" Count="1" />
+      <LineId Id="116" Count="2" />
+      <LineId Id="101" Count="0" />
+      <LineId Id="23" Count="1" />
+      <LineId Id="92" Count="0" />
+      <LineId Id="38" Count="2" />
+      <LineId Id="85" Count="1" />
+      <LineId Id="66" Count="0" />
+      <LineId Id="88" Count="0" />
+      <LineId Id="67" Count="0" />
+      <LineId Id="42" Count="0" />
+      <LineId Id="37" Count="0" />
+      <LineId Id="26" Count="0" />
+      <LineId Id="28" Count="0" />
+      <LineId Id="126" Count="8" />
+      <LineId Id="124" Count="0" />
+      <LineId Id="44" Count="1" />
+      <LineId Id="75" Count="0" />
+      <LineId Id="52" Count="1" />
+      <LineId Id="55" Count="1" />
+      <LineId Id="50" Count="0" />
+      <LineId Id="47" Count="0" />
+      <LineId Id="64" Count="0" />
+      <LineId Id="57" Count="1" />
+      <LineId Id="60" Count="0" />
+      <LineId Id="62" Count="1" />
+      <LineId Id="61" Count="0" />
+      <LineId Id="46" Count="0" />
+      <LineId Id="43" Count="0" />
+      <LineId Id="77" Count="6" />
+      <LineId Id="76" Count="0" />
+    </LineIds>
+    <LineIds Name="FB_HybridDispenser.A_Reset">
+      <LineId Id="2" Count="5" />
+      <LineId Id="29" Count="2" />
+      <LineId Id="1" Count="0" />
+    </LineIds>
+    <LineIds Name="FB_HybridDispenser.A_Stop">
+      <LineId Id="2" Count="0" />
+      <LineId Id="23" Count="0" />
+      <LineId Id="26" Count="1" />
+      <LineId Id="20" Count="2" />
+      <LineId Id="1" Count="0" />
+    </LineIds>
+    <LineIds Name="FB_HybridDispenser.FB_init">
+      <LineId Id="7" Count="1" />
+    </LineIds>
+    <LineIds Name="FB_HybridDispenser.M_AddChild">
+      <LineId Id="28" Count="12" />
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="FB_HybridDispenser.M_CancelAction">
+      <LineId Id="3" Count="1" />
+      <LineId Id="30" Count="2" />
+      <LineId Id="24" Count="1" />
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="FB_HybridDispenser.M_CheckAction">
+      <LineId Id="41" Count="0" />
+      <LineId Id="44" Count="0" />
+      <LineId Id="34" Count="0" />
+      <LineId Id="26" Count="0" />
+      <LineId Id="33" Count="0" />
+      <LineId Id="29" Count="2" />
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="FB_HybridDispenser.M_CheckGCodeStart">
+      <LineId Id="12" Count="1" />
+      <LineId Id="18" Count="0" />
+      <LineId Id="15" Count="0" />
+      <LineId Id="19" Count="2" />
+      <LineId Id="16" Count="0" />
+      <LineId Id="14" Count="0" />
+      <LineId Id="7" Count="0" />
+    </LineIds>
+    <LineIds Name="FB_HybridDispenser.M_CheckProcDataType">
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="FB_HybridDispenser.M_CheckProps">
+      <LineId Id="109" Count="30" />
+      <LineId Id="94" Count="0" />
+    </LineIds>
+    <LineIds Name="FB_HybridDispenser.M_ClearAllProps">
+      <LineId Id="11" Count="0" />
+      <LineId Id="15" Count="1" />
+      <LineId Id="6" Count="0" />
+    </LineIds>
+    <LineIds Name="FB_HybridDispenser.M_DispenserPrepare">
+      <LineId Id="5" Count="0" />
+    </LineIds>
+    <LineIds Name="FB_HybridDispenser.M_DispenserStart">
+      <LineId Id="28" Count="4" />
+      <LineId Id="20" Count="0" />
+      <LineId Id="33" Count="0" />
+      <LineId Id="27" Count="0" />
+      <LineId Id="21" Count="5" />
+      <LineId Id="35" Count="1" />
+      <LineId Id="34" Count="0" />
+    </LineIds>
+    <LineIds Name="FB_HybridDispenser.M_DispenserStop">
+      <LineId Id="13" Count="1" />
+      <LineId Id="17" Count="0" />
+      <LineId Id="5" Count="0" />
+    </LineIds>
+    <LineIds Name="FB_HybridDispenser.M_ExeAction">
+      <LineId Id="3" Count="7" />
+      <LineId Id="25" Count="0" />
+      <LineId Id="27" Count="0" />
+      <LineId Id="152" Count="0" />
+      <LineId Id="130" Count="0" />
+      <LineId Id="155" Count="0" />
+      <LineId Id="129" Count="0" />
+      <LineId Id="83" Count="3" />
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="FB_HybridDispenser.M_GetAllProps">
+      <LineId Id="7" Count="1" />
+      <LineId Id="6" Count="0" />
+    </LineIds>
+    <LineIds Name="FB_HybridDispenser.M_GetNozzle">
+      <LineId Id="17" Count="0" />
+      <LineId Id="19" Count="1" />
+    </LineIds>
+    <LineIds Name="FB_HybridDispenser.M_GetProcData">
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="FB_HybridDispenser.M_GetZAxisRef">
+      <LineId Id="42" Count="0" />
+      <LineId Id="30" Count="0" />
+      <LineId Id="55" Count="0" />
+      <LineId Id="83" Count="1" />
+      <LineId Id="86" Count="2" />
+      <LineId Id="34" Count="4" />
+      <LineId Id="41" Count="0" />
+      <LineId Id="7" Count="0" />
+    </LineIds>
+    <LineIds Name="FB_HybridDispenser.M_Prepare">
+      <LineId Id="207" Count="35" />
+      <LineId Id="156" Count="0" />
+    </LineIds>
+    <LineIds Name="FB_HybridDispenser.M_SetAllProps">
+      <LineId Id="7" Count="5" />
+      <LineId Id="14" Count="1" />
+      <LineId Id="6" Count="0" />
+      <LineId Id="16" Count="0" />
+    </LineIds>
+    <LineIds Name="FB_HybridDispenser.M_SetPrintParams">
+      <LineId Id="296" Count="0" />
+      <LineId Id="300" Count="0" />
+      <LineId Id="302" Count="0" />
+      <LineId Id="309" Count="0" />
+      <LineId Id="341" Count="6" />
+      <LineId Id="356" Count="0" />
+      <LineId Id="311" Count="0" />
+      <LineId Id="349" Count="6" />
+      <LineId Id="314" Count="0" />
+      <LineId Id="312" Count="0" />
+      <LineId Id="359" Count="6" />
+      <LineId Id="315" Count="0" />
+      <LineId Id="317" Count="1" />
+      <LineId Id="310" Count="0" />
+      <LineId Id="411" Count="0" />
+      <LineId Id="303" Count="0" />
+      <LineId Id="319" Count="1" />
+      <LineId Id="367" Count="5" />
+      <LineId Id="321" Count="1" />
+      <LineId Id="374" Count="5" />
+      <LineId Id="323" Count="1" />
+      <LineId Id="382" Count="5" />
+      <LineId Id="380" Count="0" />
+      <LineId Id="325" Count="3" />
+      <LineId Id="410" Count="0" />
+      <LineId Id="305" Count="0" />
+      <LineId Id="330" Count="1" />
+      <LineId Id="389" Count="5" />
+      <LineId Id="332" Count="1" />
+      <LineId Id="396" Count="5" />
+      <LineId Id="334" Count="1" />
+      <LineId Id="404" Count="5" />
+      <LineId Id="336" Count="3" />
+      <LineId Id="329" Count="0" />
+      <LineId Id="306" Count="0" />
+      <LineId Id="308" Count="0" />
+      <LineId Id="307" Count="0" />
+      <LineId Id="301" Count="0" />
+    </LineIds>
+    <LineIds Name="FB_HybridDispenser.M_ToolIsOnMasterSlot">
+      <LineId Id="5" Count="0" />
+      <LineId Id="12" Count="0" />
+      <LineId Id="8" Count="0" />
+    </LineIds>
+    <LineIds Name="FB_HybridDispenser.P_bSensorMounted.Get">
+      <LineId Id="10" Count="2" />
+      <LineId Id="20" Count="1" />
+      <LineId Id="23" Count="0" />
+      <LineId Id="22" Count="0" />
+      <LineId Id="17" Count="1" />
+    </LineIds>
+    <LineIds Name="FB_HybridDispenser.P_eDispenserState.Get">
+      <LineId Id="2" Count="0" />
+      <LineId Id="9" Count="0" />
+      <LineId Id="5" Count="1" />
+    </LineIds>
+    <LineIds Name="FB_HybridDispenser.P_pMasterTool.Get">
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="FB_HybridDispenser.P_stAbsPosPhys.Get">
+      <LineId Id="2" Count="0" />
+      <LineId Id="9" Count="0" />
+      <LineId Id="5" Count="0" />
+      <LineId Id="3" Count="0" />
+      <LineId Id="6" Count="0" />
+      <LineId Id="4" Count="0" />
+    </LineIds>
+  </POU>
+</TcPlcObject>

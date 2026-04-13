@@ -1,0 +1,17 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<TcPlcObject Version="1.1.0.1" ProductVersion="3.1.4020.6">
+  <DUT Name="ST_ZAxisStatus" Id="{024fe719-1700-4dea-9694-11648bf6155e}">
+    <Declaration><![CDATA[TYPE ST_ZAxisStatus :
+STRUCT
+	bError			: BOOL;	//Achse ist in Fehler
+	bCmdAborted 	: BOOL;	//Achse wurde gestoppt
+	bHasJob			: BOOL;	//Achse hat einen Fahrauftrag
+	bIsMoving		: BOOL;	//Achse ist gerade in Bewegung
+	bIsHoming		: BOOL;	//Achse wird gerade referenziert
+	bIsHomed		: BOOL;	//Achse ist referenziert
+	nADSError		: UINT;	
+END_STRUCT
+END_TYPE
+]]></Declaration>
+  </DUT>
+</TcPlcObject>

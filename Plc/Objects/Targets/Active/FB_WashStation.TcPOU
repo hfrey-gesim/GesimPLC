@@ -1,0 +1,1076 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<TcPlcObject Version="1.1.0.1" ProductVersion="3.1.4024.11">
+  <POU Name="FB_WashStation" Id="{74c93849-545a-474b-be2c-5e6d2b44bc2d}" SpecialFunc="None">
+    <Declaration><![CDATA[FUNCTION_BLOCK FB_WashStation EXTENDS FB_ActiveTarget
+VAR
+	bLevelSensor		AT %I* : BOOL;
+	
+	//Spec-Properties
+	nNoOfWashPoints 	: USINT;
+	nNoOfRinseChannels 	: USINT;
+	nPumpNrWastePump	: USINT;
+	nSysLiquidBottle 	: USINT;
+	nWasteBottle 		: USINT;
+	nValveNrAirShower	: USINT;	
+	aStRinseChannels	: ARRAY[1..cMaxRinseChannels] OF ST_RinseChannel;
+	aStWashPoints		: ARRAY[1..cMaxWashPoints] OF ST_WashPoint;
+
+
+	//****************************************Aktionvariablen****************************************************
+	
+	//Action: "SwitchPump"
+	bSwitchPump			: BOOL;
+	nStateA_SwitchPump	: USINT;
+	nSwitchChannel		: USINT;	//0=WasteChannel, 1,2...RinseChannels
+	nPumpNrRinsePump	: USINT;
+	bSwitchOn			: BOOL;
+	bRinsePumpOn		: BOOL;
+	
+	//Action: "EmptyFluid"
+	bEmptyWaste			: BOOL;
+	nStateA_EmptyWaste	: USINT;
+	tmrEmptyFluid		: TON;
+	
+	//Action:	"Rinse"
+	bRinse				: BOOL;
+	nStateA_Rinse		: USINT;
+	nRinseChannel		: USINT;
+	bRinseOn			: BOOL;
+	tmrRinsePause		: TON;
+	tmrRinse			: TON;
+	bKeepWastePumpOn	: BOOL;
+	nGCodeTargetNr		: UINT;
+END_VAR
+
+VAR CONSTANT
+	cMaxWashPoints 		: USINT := 6;
+	cMaxRinseChannels 	: USINT := 2;
+END_VAR
+]]></Declaration>
+    <Implementation>
+      <ST><![CDATA[IF bInitFB THEN
+	bInitFB := FALSE;
+	//Fehlerstruktur vorausfüllen
+	stError.ObjectId := nObjectID;
+	stError.HardwareGrp := E_HardwareGrp.Nothing;
+	stError.POU := E_POU.POU_FB_WashStation;
+END_IF
+
+CASE eCurrentState OF
+	E_MachineState.MACHINESTATE_Idle:
+	//Levelsensor checken
+	IF NOT bLevelSensor THEN 	//Leeren
+		bEmptyWaste := TRUE;
+		bBusy := TRUE;
+		eCurrentState := E_MachineState.MACHINESTATE_Active;	
+	END_IF
+
+	E_MachineState.MACHINESTATE_Active:
+	//BasicActions ausführen
+	IF bSwitchPump THEN
+		A_SwitchPump();
+		IF nStateA_SwitchPump >= 80 THEN
+			IF nStateA_SwitchPump >= 99 THEN
+				bError := TRUE;	
+			END_IF
+			bSwitchPump := FALSE;
+			nStateA_SwitchPump := 0;
+		END_IF
+	END_IF
+	
+	IF bEmptyWaste THEN
+		A_EmptyWaste();
+		IF nStateA_EmptyWaste >= 80 THEN
+			IF nStateA_EmptyWaste >= 99 THEN
+				bError := TRUE;	
+			END_IF
+			bEmptyWaste := FALSE;
+			nStateA_EmptyWaste := 0;
+		END_IF
+	END_IF
+	
+	IF bRinse THEN
+		A_Rinse();
+		IF nStateA_Rinse >= 80 THEN
+			IF nStateA_Rinse >= 99 THEN
+				bError := TRUE;	
+			END_IF
+			bRinse := FALSE;
+			nStateA_Rinse := 0;
+		END_IF
+	END_IF
+	
+	IF NOT (bSwitchPump OR bEmptyWaste OR bRinse) THEN
+		bBusy := FALSE;
+		eCurrentState := E_MachineState.MACHINESTATE_Idle;
+	END_IF
+	
+	E_MachineState.MACHINESTATE_Reset:
+		bError := FALSE;
+		
+END_CASE
+
+IF bError THEN
+	eCurrentState := E_MachineState.MACHINESTATE_Error;
+	bBusy := FALSE;
+	aPumps[nPumpNrRinsePump].M_Off();
+	aPumps[nPumpNrWastePump].M_Off();
+END_IF
+
+//Prozessdaten aktualisieren
+stProcessData.nObjId := nObjectID;
+stProcessData.n32Data[0] := BOOL_TO_DINT(bIsInit);
+stProcessData.n32Data[1] := eCurrentState;
+stProcessData.n32Data[2] := stError.ErrorId;
+
+stProcessData.n32Data[3] := BOOL_TO_DINT(bRinse);
+
+stProcessData.n32Data[4] := BOOL_TO_DINT(aPumps[nPumpNrWastePump].P_bIsOn);
+aObjProcData[nNotifyId] := stProcessData;]]></ST>
+    </Implementation>
+    <Action Name="A_EmptyWaste" Id="{c852df9e-b688-47ea-9198-a5918752b055}">
+      <Implementation>
+        <ST><![CDATA[IF nStateA_EmptyWaste = 0 THEN	//Wastepumpe einschalten
+	aPumps[nPumpNrWastePump].M_On();
+	tmrEmptyFluid(IN:= TRUE, PT:= T#10S);
+	nStateA_EmptyWaste := 1;
+ELSIF nStateA_EmptyWaste = 1 THEN //Warten auf Timer und Wastepumpe ausschalten
+	tmrEmptyFluid();
+	IF tmrEmptyFluid.Q THEN
+		tmrEmptyFluid(IN:= FALSE);
+		aPumps[nPumpNrWastePump].M_Off();
+		IF NOT bLevelSensor THEN	//Leeren
+			IF nPumpNrRinsePump > 0 THEN
+				aPumps[nPumpNrRinsePump].M_Off();	
+			END_IF
+			stError.ErrorId := E_ErrorIdCmd.ERRORID_TimeOut;
+			stError.POUState := nStateA_EmptyWaste;
+			nStateA_EmptyWaste := 99;
+		END_IF
+		nStateA_EmptyWaste := 80;
+	END_IF
+ELSIF nStateA_EmptyWaste = 70 THEN
+	tmrEmptyFluid(IN:= FALSE);
+	nStateA_EmptyWaste := 80;
+END_IF
+
+//Errorhandling
+IF nStateA_EmptyWaste = 99 THEN
+	stError.Cmd := E_Action.ACTION_EmptyWaste;
+	stError.POUAction := E_POUACT.POUACT_A_EmptyWaste;
+	fbErrorList.M_Add(stError);
+END_IF]]></ST>
+      </Implementation>
+    </Action>
+    <Action Name="A_Rinse" Id="{910f6942-e7e9-4206-b9d1-cf3a7463d4ab}">
+      <Implementation>
+        <ST><![CDATA[//Überwachung des Wastebottles
+stError.ErrorId := M_CheckBottles();
+IF stError.ErrorId > 0 THEN
+	stError.POUState := nStateA_Rinse;
+	nStateA_Rinse := 99;
+END_IF
+
+CASE nStateA_Rinse OF
+	0:	IF bRinseOn THEN
+			//WastePump EIN
+			//RinsePump EIN
+			aPumps[nPumpNrWastePump].M_On();
+			aPumps[nPumpNrRinsePump].P_nStartSpeed := aStRinseChannels[nRinseChannel].nStartSpeed;
+			aPumps[nPumpNrRinsePump].P_nRatedSpeed := aStRinseChannels[nRinseChannel].nRatedSpeed;
+			aPumps[nPumpNrRinsePump].P_nDelay := aStRinseChannels[nRinseChannel].nStartTime;
+			IF aStRinseChannels[nRinseChannel].nValveNr > 0 THEN
+				aValves[aStRinseChannels[nRinseChannel].nValveNr].M_On(1);
+			END_IF
+			
+			IF aPumps[nPumpNrRinsePump].M_On() THEN
+				IF tmrRinse.PT > T#0MS THEN
+					tmrRinse.IN := TRUE;
+					nStateA_Rinse := 1;
+				ELSE
+					nStateA_Rinse := 1;
+				END_IF
+			END_IF
+		ELSE
+			bEmptyWaste := TRUE;
+			M_RinsePumpOff();
+			nStateA_Rinse := 80;
+		END_IF
+
+	1:	//Rinse aktiv (Überwachung des LevelSensors und des Rinse-Timers
+		tmrRinse();
+		IF bRinseOn THEN
+			IF tmrRinse.Q THEN
+				nStateA_Rinse := 3;
+				RETURN;	
+			END_IF
+		
+			IF NOT bLevelSensor THEN	//RinsePumpe für 2s "AUS" und dann wieder "EIN"
+				M_RinsePumpOff();
+				tmrRinsePause(IN:= TRUE, PT:= T#2S);
+				nStateA_Rinse := 2;
+			END_IF
+		ELSE
+			tmrRinsePause(IN:= FALSE);
+			nStateA_Rinse := 3;
+		END_IF
+		
+	2:	//Warten bis Timer abgelaufen
+		IF bRinseOn THEN
+			tmrRinse();
+			IF tmrRinse.Q THEN
+				tmrRinsePause(IN:= FALSE);
+				//Hier sollte der Sensor spätestens wieder frei sein
+				IF NOT bLevelSensor THEN
+					stError.ErrorId := E_ErrorIdCmd.ERRORID_TimeOut;
+					stError.POUState := nStateA_Rinse;
+					nStateA_Rinse := 99; //Error
+				ELSE
+					nStateA_Rinse := 0; //Pumpe wieder einschalten??	
+				END_IF
+			END_IF
+		ELSE
+			tmrRinse(IN:= FALSE);
+			nStateA_Rinse := 3;
+		END_IF
+		
+	3:	//Aus
+		tmrRinse(IN:=FALSE);
+		IF NOT bKeepWastePumpOn THEN
+			bEmptyWaste := TRUE;
+		END_IF
+		M_RinsePumpOff();
+		nStateA_Rinse := 80;
+		
+	70:	//Abbrechen
+		aPumps[nPumpNrWastePump].M_Off();
+		M_RinsePumpOff();
+
+		tmrRinse(IN:= FALSE);
+		nStateA_Rinse := 80;
+
+	90: //Error - Abbrechen
+		aPumps[nPumpNrWastePump].M_Off();
+		M_RinsePumpOff();
+		tmrRinse(IN:= FALSE);
+		tmrRinsePause(IN:= FALSE);
+END_CASE
+
+//Errorhandling
+IF nStateA_Rinse = 99 THEN
+	aPumps[nPumpNrWastePump].M_Off();
+	M_RinsePumpOff();
+	tmrRinse(IN:= FALSE);
+	tmrRinsePause(IN:= FALSE);
+	stError.Cmd := E_Action.ACTION_Rinse;
+	stError.POUAction := E_POUACT.POUACT_A_Rinse;
+	fbErrorList.M_Add(stError);
+END_IF]]></ST>
+      </Implementation>
+    </Action>
+    <Action Name="A_SwitchPump" Id="{9eba4200-a3c6-484d-b91e-fe9407581e20}">
+      <Implementation>
+        <ST><![CDATA[IF nStateA_SwitchPump = 0 THEN
+	//Welche Pumpe soll geschalten werden?
+	//0= Waste
+	//>0 = RinseChannel
+	IF nSwitchChannel = 0 THEN
+		IF bSwitchOn THEN	//Waste-Pumpe einschalten
+			//Falls EmptyWaste noch aktiv ist, dieses abbrechen, da EmptyWaste die Pumpe wieder abschaltet
+			M_CancelAction(E_Action.ACTION_EmptyWaste);
+			aPumps[nPumpNrWastePump].M_On();
+		ELSE	//Ausschalten
+			aPumps[nPumpNrWastePump].M_Off();
+		END_IF
+		nStateA_SwitchPump := 80;
+	ELSIF nSwitchChannel > 0 THEN
+		IF bSwitchOn THEN	//Einschalten
+			aPumps[nPumpNrRinsePump].P_nStartSpeed := aStRinseChannels[nRinseChannel].nStartSpeed;
+			aPumps[nPumpNrRinsePump].P_nRatedSpeed := aStRinseChannels[nRinseChannel].nRatedSpeed;
+			aPumps[nPumpNrRinsePump].P_nDelay := aStRinseChannels[nRinseChannel].nStartTime;
+			IF aStRinseChannels[nRinseChannel].nValveNr > 0 THEN
+				aValves[aStRinseChannels[nRinseChannel].nValveNr].M_On(1);
+			END_IF				
+		ELSE	//Ausschalten
+			M_RinsePumpOff();
+		END_IF
+			nStateA_SwitchPump := 80;
+	END_IF
+ELSIF nStateA_SwitchPump = 70 THEN
+	aPumps[nPumpNrWastePump].M_Off();
+	M_RinsePumpOff();
+	nStateA_SwitchPump := 80;
+END_IF]]></ST>
+      </Implementation>
+    </Action>
+    <Method Name="FB_init" Id="{060e6e02-5320-4ffb-ba7f-68b18adff7e8}">
+      <Declaration><![CDATA[METHOD FB_init : BOOL
+VAR_INPUT
+	bInitRetains : BOOL; // if TRUE, the retain variables are initialized (warm start / cold start)
+	bInCopyCode : BOOL;  // if TRUE, the instance afterwards gets moved into the copy code (online change)
+END_VAR
+]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[eObjectType := E_ObjectType.OBJECTTYPE_WashStation;
+eObjectGroup := E_ObjectGroup.OBJECTGROUP_Target OR E_ObjectGroup.OBJECTGROUP_Device;]]></ST>
+      </Implementation>
+    </Method>
+    <Method Name="M_ApplyPos" Id="{b74f195d-e4a7-4e5d-a40c-849cb056c0e9}">
+      <Declaration><![CDATA[METHOD M_ApplyPos : ERRORID
+VAR_INPUT
+	eTargetRef 		: E_TargetRef;
+	nPointSlotNr	: UINT;
+	stPos 			: ST_3DPoint;
+	bXPos			: BOOL;
+	bYPos			: BOOL;
+	bZPos			: BOOL;	
+END_VAR
+
+VAR
+	stAbsPos		: ST_3DPoint;
+END_VAR]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[IF eTargetRef = E_TargetRef.TARGETREF_SpecPoint THEN
+	stAbsPos := P_stAbsPosLB;
+	IF bXPos THEN
+		aStWashPoints[nPointSlotNr].X := stPos.X - stAbsPos.X;
+	END_IF
+	IF bYPos THEN
+		aStWashPoints[nPointSlotNr].Y := stPos.Y - stAbsPos.Y;
+	END_IF
+	IF bZPos THEN
+		aStWashPoints[nPointSlotNr].Z := stPos.Z - stAbsPos.Z;
+	END_IF		
+ELSE
+	M_ApplyPos := SUPER^.M_ApplyPos(eTargetRef, nPointSlotNr, stPos,bXPos, bYPos, bZPos);	
+END_IF
+
+
+]]></ST>
+      </Implementation>
+    </Method>
+    <Method Name="M_CancelAction" Id="{bd9aa91c-becc-4d97-9b68-874ca0070fae}">
+      <Declaration><![CDATA[METHOD M_CancelAction
+VAR_INPUT
+	eAction : E_Action;
+END_VAR
+]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[CASE eAction OF
+	E_Action.ACTION_Rinse:
+		IF bRinse AND nStateA_Rinse < 70 THEN
+			nStateA_Rinse := 70;
+		END_IF
+	E_Action.ACTION_SwitchPump:
+		IF bSwitchPump AND nStateA_SwitchPump < 70 THEN
+			nStateA_SwitchPump := 70;
+		END_IF
+	E_Action.ACTION_EmptyWaste:
+		IF bEmptyWaste AND nStateA_EmptyWaste < 70 THEN
+			nStateA_EmptyWaste := 70;
+		END_IF
+END_CASE]]></ST>
+      </Implementation>
+    </Method>
+    <Method Name="M_CheckAction" Id="{855576d9-75f8-4002-9968-a583563b53d4}">
+      <Declaration><![CDATA[METHOD M_CheckAction : ERRORID
+VAR_INPUT
+	refActionData 	: REFERENCE TO ST_ActionData;
+	pCorrelObject	: POINTER TO FB_Object;
+END_VAR
+]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[IF refActionData.eAction = E_Action.ACTION_TeachTarget THEN
+	IF NOT DINT_TO_UINT(refActionData.aParams[1]) = E_TargetRef.TARGETREF_SpecPoint AND (refActionData.aParams[2] = 1 AND refActionData.aParams[2] = 2) THEN
+		M_CheckAction := E_ErrorIdCmd.ERRORID_InvalidTargetPointRef;
+	END_IF
+ELSIF refActionData.eAction = E_Action.ACTION_WashTool THEN
+	//SpecPoint prüfen
+	IF NOT (refActionData.aParams[1] > 0 AND refActionData.aParams[1] <= nNoOfWashPoints) THEN
+		M_CheckAction := E_ErrorIdCmd.ERRORID_InvalidTargetPointNr;
+		RETURN;
+	END_IF
+	//Washmode prüfen
+	IF NOT(refActionData.aParams[2] = E_WashMode.MODE_WashInside OR
+		refActionData.aParams[2] = E_WashMode.MODE_WashOutside OR
+		refActionData.aParams[2] = E_WashMode.MODE_WashInOutside OR
+		refActionData.aParams[2] = E_WashMode.MODE_DryOutside) THEN
+		M_CheckAction := E_ErrorIdCmd.ERRORID_InvalidWashMode;
+		RETURN;
+	END_IF
+	//BottleState prüfen
+	M_CheckAction := M_CheckBottles();
+END_IF]]></ST>
+      </Implementation>
+    </Method>
+    <Method Name="M_CheckBottles" Id="{6bac3e79-0dfd-4448-bf5b-79d9f4c53a66}">
+      <Declaration><![CDATA[METHOD M_CheckBottles : ERRORID
+VAR_INPUT
+END_VAR
+]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[//Systemliquidbottle OK?
+IF nSysLiquidBottle > 0 THEN
+	IF NOT aSensSysLiquidBottle[nSysLiquidBottle] THEN //Leer
+		M_CheckBottles := E_ErrorIdCmd.ERRORID_LiquidBottleEmpty;
+		RETURN;
+	END_IF
+END_IF
+//Wastebottle OK?
+IF nWasteBottle > 0 THEN
+	IF NOT aSensWasteBottle[nWasteBottle] THEN //Voll
+		M_CheckBottles := E_ErrorIdCmd.ERRORID_WasteBottleFull;
+		RETURN;
+	END_IF
+END_IF 			]]></ST>
+      </Implementation>
+    </Method>
+    <Method Name="M_CheckProcDataType" Id="{fd167cbe-c16b-4528-93f7-c0a035ef0fc5}">
+      <Declaration><![CDATA[METHOD M_CheckProcDataType : BOOL
+VAR_INPUT
+	eProcDataType : E_ProcDataType;
+END_VAR
+]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[]]></ST>
+      </Implementation>
+    </Method>
+    <Method Name="M_ExeAction" Id="{17a5e8c8-abfb-48ad-94f9-1f7ce707419f}">
+      <Declaration><![CDATA[METHOD M_ExeAction : ERRORID
+VAR_INPUT
+	refActionData : REFERENCE TO ST_ActionData;	
+END_VAR]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[IF refActionData.eAction = E_Action.ACTION_Init THEN
+	bIsInit := TRUE;
+	RETURN;
+ELSIF refActionData.eAction = E_Action.ACTION_SwitchPump THEN
+	IF NOT bSwitchPump THEN
+		nSwitchChannel := DINT_TO_USINT(refActionData.aParams[1]);
+		IF NOT(nSwitchChannel >= 0 AND nSwitchChannel <= nNoOfRinseChannels) THEN
+			M_ExeAction := E_ErrorIdCmd.ERRORID_InvalidPumpNr;
+			RETURN;			
+		END_IF
+		bSwitchOn := DINT_TO_BOOL(refActionData.aParams[2]);
+		bSwitchPump := TRUE;
+	ELSE
+		RETURN;
+	END_IF
+	
+ELSIF refActionData.eAction = E_Action.ACTION_EmptyWaste THEN
+	IF NOT aSensWasteBottle[nWasteBottle] THEN
+		M_ExeAction := E_ErrorIdCmd.ERRORID_WasteBottleFull;
+		RETURN;
+	END_IF
+	IF NOT bEmptyWaste THEN
+		bEmptyWaste := TRUE;
+	ELSE
+		RETURN;
+	END_IF
+
+ELSIF refActionData.eAction = E_Action.ACTION_Stop THEN
+	IF bRinse THEN
+		bRinseOn := FALSE;
+	ELSE
+		aPumps[nPumpNrWastePump].M_Off();
+		M_RinsePumpOff();
+	END_IF	
+	
+ELSIF refActionData.eAction = E_Action.ACTION_Rinse THEN
+	nRinseChannel := DINT_TO_USINT(refActionData.aParams[1]);
+	tmrRinse.PT := DINT_TO_TIME(refActionData.aParams[3]);
+	IF NOT(nRinseChannel >= 1 AND nRinseChannel <= nNoOfRinseChannels) THEN
+		M_ExeAction := E_ErrorIdCmd.ERRORID_InvalidRinseChannel;
+		RETURN;
+	END_IF
+	nPumpNrRinsePump := aStRinseChannels[nRinseChannel].nPumpNr;
+	bRinseOn := DINT_TO_BOOL(refActionData.aParams[2]);
+	bKeepWastePumpOn := DINT_TO_BOOL(refActionData.aParams[4]);
+	bRinse := TRUE;
+ELSE
+	M_ExeAction := E_ErrorIdCmd.ERRORID_InvalidAction;
+	RETURN;
+END_IF
+bBusy := TRUE;
+eCurrentState:= E_MachineState.MACHINESTATE_Active;]]></ST>
+      </Implementation>
+    </Method>
+    <Method Name="M_GetAbsPos" Id="{72d30569-c649-4eb2-9ead-dc9b3e8c1e10}">
+      <Declaration><![CDATA[METHOD M_GetAbsPos : ST_3DPoint
+VAR_INPUT
+	pChildPos	: POINTER TO ST_3DPoint;
+	eTargetRef 	: E_TargetRef;
+	nParam1		: UINT;
+ 	nParam2		: UINT;
+	nParam3		: USINT;
+	nZLevel		: USINT;
+END_VAR
+VAR_OUTPUT
+	nErrorId 	: ERRORID;
+	lrAngle		: LREAL;
+END_VAR
+VAR
+	stLocPosLB : ST_3DPoint;
+END_VAR
+]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[IF eTargetRef = E_TargetRef.TARGETREF_SpecPoint THEN
+	IF nParam1 > 0 AND nParam1 <= cMaxWashPoints THEN
+		stLocPosLB := P_stRelPosLB;
+		stLocPosLB := F_Add3DPoints(stLocPosLB,aStWashPoints[nParam1]);
+		M_GetAbsPos := pParentTarget^.M_GetAbsPos(pChildPos := ADR(stLocPosLB), eTargetRef:= E_TargetRef.TARGETREF_LeftBottom,
+														nParam1:= 0,
+														nParam2:= 0, nParam3:= 0,nZLevel:= 0,
+														lrAngle => lrAngle, nErrorId=> nErrorId);		
+	ELSE
+		nErrorId := E_ErrorIdCmd.ERRORID_InvalidTargetPointNr;
+	END_IF
+ELSE
+	M_GetAbsPos := SUPER^.M_GetAbsPos(pChildPos := pChildPos, eTargetRef:= eTargetRef,
+													nParam1:= nParam1,
+													nParam2:= nParam2, nParam3:= nParam3, nZLevel:= nZLevel,
+													lrAngle => lrAngle, nErrorId=> nErrorId);	
+END_IF]]></ST>
+      </Implementation>
+    </Method>
+    <Method Name="M_GetActionBusy" Id="{b07ff5b1-ab55-439c-9c93-88cfc7816843}">
+      <Declaration><![CDATA[METHOD M_GetActionBusy : BOOL
+VAR_INPUT
+	eAction : E_Action;
+END_VAR
+]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[IF eAction = E_Action.ACTION_SwitchPump THEN
+	M_GetActionBusy := bSwitchPump;
+ELSIF eAction = E_Action.ACTION_EmptyWaste THEN
+	M_GetActionBusy := bEmptyWaste;
+ELSIF eAction = E_Action.ACTION_Rinse THEN
+	M_GetActionBusy := bRinse;
+END_IF]]></ST>
+      </Implementation>
+    </Method>
+    <Method Name="M_GetAllProps" Id="{271cd46b-acfd-432f-a977-d202ee2f65c1}">
+      <Declaration><![CDATA[METHOD M_GetAllProps : ERRORID
+VAR_INPUT
+	refCmdData : REFERENCE TO  ST_CmdData;
+END_VAR
+
+VAR
+	i : USINT;
+END_VAR]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[SUPER^.M_GetAllProps(refCmdData); 
+
+//RinseChannels
+nCurrentPropIndex := nCurrentPropIndex + 1;
+refCmdData.n32Data[nCurrentPropIndex] := nNoOfRinseChannels;
+//In Abhängigkeit von der Anzahl der RinseChannels , diese aus RinseChannel-Array lesen
+FOR i:= 1 TO nNoOfRinseChannels BY 1 DO
+	nCurrentPropIndex := nCurrentPropIndex + 1;	//PumpNr
+	refCmdData.n32Data[nCurrentPropIndex] := aStRinseChannels[i].nPumpNr;
+	nCurrentPropIndex := nCurrentPropIndex + 1;	//ValveNr
+	refCmdData.n32Data[nCurrentPropIndex] := aStRinseChannels[i].nValveNr;
+	nCurrentPropIndex := nCurrentPropIndex + 1;	//StartSpeed in %
+	refCmdData.n32Data[nCurrentPropIndex] := aStRinseChannels[i].nStartSpeed;
+	nCurrentPropIndex := nCurrentPropIndex + 1;	//RatedSpeed in %
+	refCmdData.n32Data[nCurrentPropIndex] := aStRinseChannels[i].nRatedSpeed;
+	nCurrentPropIndex := nCurrentPropIndex + 1;	//StartTime in ms
+	refCmdData.n32Data[nCurrentPropIndex] := aStRinseChannels[i].nStartTime;
+END_FOR
+
+//WashPoints
+nCurrentPropIndex := nCurrentPropIndex + 1;
+refCmdData.n32Data[nCurrentPropIndex] := nNoOfWashPoints; 
+//In Abhängigkeit von der Anzahl der Waschpunkte , diese aus WashPoint-Array lesen
+FOR i:= 1 TO nNoOfWashPoints BY 1 DO
+	nCurrentPropIndex := nCurrentPropIndex + 1;
+	refCmdData.n32Data[nCurrentPropIndex] := REAL_TO_DINT(aStWashPoints[i].X);
+	nCurrentPropIndex := nCurrentPropIndex + 1;
+	refCmdData.n32Data[nCurrentPropIndex] := REAL_TO_DINT(aStWashPoints[i].Y);
+	nCurrentPropIndex := nCurrentPropIndex + 1;
+	refCmdData.n32Data[nCurrentPropIndex] := REAL_TO_DINT(aStWashPoints[i].Z);
+	nCurrentPropIndex := nCurrentPropIndex + 1;
+	refCmdData.n32Data[nCurrentPropIndex] := REAL_TO_DINT(aStWashPoints[i].nRinseChannel);
+END_FOR
+
+nCurrentPropIndex := nCurrentPropIndex + 1;
+refCmdData.n32Data[nCurrentPropIndex] := nPumpNrWastePump;
+nCurrentPropIndex := nCurrentPropIndex + 1;
+refCmdData.n32Data[nCurrentPropIndex] := nSysLiquidBottle;
+nCurrentPropIndex := nCurrentPropIndex + 1;
+refCmdData.n32Data[nCurrentPropIndex] := nWasteBottle;
+nCurrentPropIndex := nCurrentPropIndex + 1;
+refCmdData.n32Data[nCurrentPropIndex] := nValveNrAirShower;
+nCurrentPropIndex := nCurrentPropIndex + 1;
+refCmdData.n32Data[nCurrentPropIndex] := nGCodeTargetNr;]]></ST>
+      </Implementation>
+    </Method>
+    <Method Name="M_GetProcData" Id="{73c52bfa-d781-415a-ac03-ea5226f3f3a1}">
+      <Declaration><![CDATA[METHOD M_GetProcData : DINT
+VAR_INPUT
+	eProcDataType : E_ProcDataType;
+END_VAR
+]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[]]></ST>
+      </Implementation>
+    </Method>
+    <Method Name="M_GetRinseChannel" Id="{5b902177-28b9-4c67-b5eb-54f79253e6d9}">
+      <Declaration><![CDATA[METHOD M_GetRinseChannel : USINT
+VAR_INPUT
+	nWashPointNr : USINT;
+END_VAR
+]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[IF nWashPointNr > 0 AND nWashPointNr <= nNoOfWashPoints THEN
+	M_GetRinseChannel := aStWashPoints[nWashPointNr].nRinseChannel;
+END_IF]]></ST>
+      </Implementation>
+    </Method>
+    <Method Name="M_Reset" Id="{64d00841-2781-4f45-b7d6-f89628158e83}">
+      <Declaration><![CDATA[METHOD M_Reset
+]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[bError := FALSE;
+bBusy := FALSE;
+eCurrentState := E_MachineState.MACHINESTATE_Idle;
+
+]]></ST>
+      </Implementation>
+    </Method>
+    <Method Name="M_RinsePumpOff" Id="{28094c90-6df2-4abc-b8fa-c581e2a260db}">
+      <Declaration><![CDATA[METHOD PRIVATE M_RinsePumpOff
+VAR_INPUT
+END_VAR
+
+VAR
+	i		: USINT;
+	nTemp 	: USINT;
+END_VAR]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[FOR i := 1 TO nNoOfRinseChannels BY 1 DO
+	nTemp := aStRinseChannels[i].nPumpNr;
+	IF nTemp > 0 THEN
+		aPumps[nTemp].M_Off();
+	END_IF
+	nTemp := aStRinseChannels[i].nValveNr;
+	IF nTemp > 0 THEN
+		aValves[nTemp].M_Off();
+	END_IF
+END_FOR]]></ST>
+      </Implementation>
+    </Method>
+    <Method Name="M_SetAllProps" Id="{29571213-f9db-4cb6-bd3d-41915b661ccb}">
+      <Declaration><![CDATA[METHOD M_SetAllProps : ERRORID
+VAR_INPUT
+	refCmdData : REFERENCE TO  ST_CmdData;
+END_VAR
+
+VAR
+	i : USINT;
+END_VAR]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[M_SetAllProps := SUPER^.M_SetAllProps(refCmdData);
+
+IF M_SetAllProps > 0 THEN
+	RETURN;
+END_IF
+
+//RinseChannels
+nCurrentPropIndex := nCurrentPropIndex + 1;
+nSpecPropIndex := nCurrentPropIndex;
+nNoOfRinseChannels := DINT_TO_USINT(refCmdData.n32Data[nCurrentPropIndex]); 
+//In Abhängigkeit von der Anzahl der RinseChannels , diese in RinseChannel-Array schreiben
+IF NOT (nNoOfRinseChannels > 0 AND nNoOfRinseChannels <= cMaxRinseChannels) THEN
+	M_SetAllProps := E_ErrorIdObjMgmt.ERRORID_InvalidNoOfRinseChannels;
+	RETURN;
+END_IF
+
+FOR i:= 1 TO nNoOfRinseChannels BY 1 DO
+	nCurrentPropIndex := nCurrentPropIndex + 1; //PumpNr
+	IF refCmdData.n32Data[nCurrentPropIndex] >= 0 AND refCmdData.n32Data[nCurrentPropIndex] <= cNoOfPumps THEN
+		aStRinseChannels[i].nPumpNr := DINT_TO_USINT(refCmdData.n32Data[nCurrentPropIndex]);
+	ELSE
+		M_SetAllProps := E_ErrorIdCmd.ERRORID_InvalidPumpNr;
+		RETURN;
+	END_IF
+	nCurrentPropIndex := nCurrentPropIndex + 1;	//ValveNr
+	IF refCmdData.n32Data[nCurrentPropIndex] >= 0 AND refCmdData.n32Data[nCurrentPropIndex] <= cNoOfValves THEN
+		aStRinseChannels[i].nValveNr := DINT_TO_USINT(refCmdData.n32Data[nCurrentPropIndex]);
+	ELSE
+		M_SetAllProps := E_ErrorIdObjMgmt.ERRORID_InvalidValveNumber;
+		RETURN;
+	END_IF
+	nCurrentPropIndex := nCurrentPropIndex + 1;	//StartSpeed in %
+	aStRinseChannels[i].nStartSpeed := DINT_TO_USINT(refCmdData.n32Data[nCurrentPropIndex]);
+	nCurrentPropIndex := nCurrentPropIndex + 1;	//RatedSpeed in %
+	aStRinseChannels[i].nRatedSpeed := DINT_TO_USINT(refCmdData.n32Data[nCurrentPropIndex]);
+	nCurrentPropIndex := nCurrentPropIndex + 1;	//StartTime in ms
+	aStRinseChannels[i].nStartTime := DINT_TO_UINT(refCmdData.n32Data[nCurrentPropIndex]);
+END_FOR
+
+//WashPoints
+nCurrentPropIndex := nCurrentPropIndex + 1;
+nNoOfWashPoints := DINT_TO_USINT(refCmdData.n32Data[nCurrentPropIndex]); 
+//In Abhängigkeit von der Anzahl der Waschpunkte , diese in WashPoint-Array schreiben
+IF NOT (nNoOfWashPoints > 0 AND nNoOfWashPoints <= cMaxWashPoints) THEN
+	M_SetAllProps := E_ErrorIdObjMgmt.ERRORID_InvalidNoOfSpecPoints;
+	RETURN;
+END_IF
+
+FOR i:= 1 TO nNoOfWashPoints BY 1 DO
+	nCurrentPropIndex := nCurrentPropIndex + 1;
+	aStWashPoints[i].X := DINT_TO_REAL(refCmdData.n32Data[nCurrentPropIndex]);
+	nCurrentPropIndex := nCurrentPropIndex + 1;
+	aStWashPoints[i].Y := DINT_TO_REAL(refCmdData.n32Data[nCurrentPropIndex]);
+	nCurrentPropIndex := nCurrentPropIndex + 1;
+	aStWashPoints[i].Z := DINT_TO_REAL(refCmdData.n32Data[nCurrentPropIndex]);
+	nCurrentPropIndex := nCurrentPropIndex + 1;
+	//Zugeordneter RinseChannel
+	aStWashPoints[i].nRinseChannel := DINT_TO_USINT(refCmdData.n32Data[nCurrentPropIndex]);;
+END_FOR
+
+//WastePump
+nCurrentPropIndex := nCurrentPropIndex + 1;
+IF refCmdData.n32Data[nCurrentPropIndex] >= 1 AND refCmdData.n32Data[nCurrentPropIndex] <= cNoOfPumps THEN
+	nPumpNrWastePump := DINT_TO_USINT(refCmdData.n32Data[nCurrentPropIndex]);
+ELSE
+	M_SetAllProps := E_ErrorIdCmd.ERRORID_InvalidPumpNr;
+END_IF
+
+//LiquidBottle
+nCurrentPropIndex := nCurrentPropIndex + 1;
+IF refCmdData.n32Data[nCurrentPropIndex] >= 1 AND refCmdData.n32Data[nCurrentPropIndex] <= cNoOfLiquidBottles THEN
+	nSysLiquidBottle := DINT_TO_USINT(refCmdData.n32Data[nCurrentPropIndex]);
+ELSE
+	M_SetAllProps := E_ErrorIdObjMgmt.ERRORID_InvalidLiquidbottle;
+END_IF
+
+//WasteBottle
+nCurrentPropIndex := nCurrentPropIndex + 1;
+IF refCmdData.n32Data[nCurrentPropIndex] >= 1 AND refCmdData.n32Data[nCurrentPropIndex] <= cNoOfWasteBottles THEN
+	nWasteBottle := DINT_TO_USINT(refCmdData.n32Data[nCurrentPropIndex]);
+ELSE
+	M_SetAllProps := E_ErrorIdObjMgmt.ERRORID_InvalidWastebottle;
+END_IF
+
+//ValveNrDrying (Trockendusche für pH Elektrode)
+nCurrentPropIndex := nCurrentPropIndex + 1;
+IF refCmdData.n32Data[nCurrentPropIndex] >= 0 AND refCmdData.n32Data[nCurrentPropIndex] <= cNoOfValves THEN
+	nValveNrAirShower := DINT_TO_USINT(refCmdData.n32Data[nCurrentPropIndex]);
+ELSE
+	M_SetAllProps := E_ErrorIdObjMgmt.ERRORID_InvalidValveNumber;
+END_IF
+nCurrentPropIndex := nCurrentPropIndex + 1;
+nGCodeTargetNr := DINT_TO_UINT(refCmdData.n32Data[nCurrentPropIndex]);
+nNoOfProps := nCurrentPropIndex + 1;]]></ST>
+      </Implementation>
+    </Method>
+    <Method Name="M_SetSingleProp" Id="{5dcc14a3-7e18-4f72-8be2-1ce1c9682f09}">
+      <Declaration><![CDATA[METHOD M_SetSingleProp : ERRORID
+VAR_INPUT
+	refCmdData : REFERENCE TO  ST_CmdData;
+END_VAR
+
+VAR
+	i : UINT;
+	nIndex					: UINT;
+	nIndexRinseChannels	 	: UINT;
+	nIndexWashPoints 	 	: UINT;
+	nIndexRestProps 	 	: UINT;
+END_VAR]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[nIndexRinseChannels := nSpecPropIndex;
+nIndexWashPoints := nIndexRinseChannels + nNoOfRinseChannels * 5 + 1;
+nIndexRestProps := nIndexWashPoints + nNoOfWashPoints * 4 + 1;
+
+//Section: RinseChannels
+IF refCmdData.aHeader[1] > nIndexRinseChannels AND refCmdData.aHeader[1] < nIndexWashPoints THEN
+	FOR i:= 1 TO nNoOfRinseChannels BY 1 DO
+		//ersten Index innerhalb der Section ermitteln
+		nIndex := nIndexRinseChannels + ((i - 1) * 5) + 1;
+		IF refCmdData.aHeader[1] = nIndex THEN	//PumpNr
+			IF refCmdData.n32Data[0] >= 0 AND refCmdData.n32Data[0] <= cNoOfPumps THEN
+				aStRinseChannels[i].nPumpNr := DINT_TO_USINT(refCmdData.n32Data[0]);
+			ELSE
+				M_SetSingleProp := E_ErrorIdCmd.ERRORID_InvalidPumpNr;
+				RETURN;
+			END_IF
+			RETURN;
+		ELSIF refCmdData.aHeader[1] = nIndex + 1 THEN	//ValveNr
+			IF refCmdData.n32Data[0] >= 0 AND refCmdData.n32Data[0] <= cNoOfValves THEN
+				aStRinseChannels[i].nValveNr := DINT_TO_USINT(refCmdData.n32Data[0]);
+			ELSE
+				M_SetSingleProp := E_ErrorIdObjMgmt.ERRORID_InvalidValveNumber;
+				RETURN;
+			END_IF
+		ELSIF refCmdData.aHeader[1] = nIndex + 2 THEN	//StartSpeed in %
+			aStRinseChannels[i].nStartSpeed := DINT_TO_USINT(refCmdData.n32Data[0]);	
+		ELSIF refCmdData.aHeader[1] = nIndex + 3 THEN	//RatedSpeed in %
+			aStRinseChannels[i].nRatedSpeed := DINT_TO_USINT(refCmdData.n32Data[0]);
+		ELSIF refCmdData.aHeader[1] = nIndex + 4 THEN	//StartTime in ms
+			aStRinseChannels[i].nStartTime := DINT_TO_UINT(refCmdData.n32Data[0]);
+		END_IF		
+	END_FOR
+//Section: Washpoints	
+ELSIF refCmdData.aHeader[1] > nIndexWashPoints AND refCmdData.aHeader[1] < nIndexRestProps THEN
+	FOR i:= 1 TO nNoOfWashPoints BY 1 DO
+		//ersten Index innerhalb der Section ermitteln
+		nIndex := nIndexWashPoints + ((i - 1) * 4) + 1;
+		IF refCmdData.aHeader[1] = nIndex THEN
+			aStWashPoints[i].X := DINT_TO_REAL(refCmdData.n32Data[0]);
+		ELSIF refCmdData.aHeader[1] = nIndex + 1 THEN
+			aStWashPoints[i].Y := DINT_TO_REAL(refCmdData.n32Data[0]);
+		ELSIF refCmdData.aHeader[1] = nIndex + 2 THEN
+			aStWashPoints[i].Z := DINT_TO_REAL(refCmdData.n32Data[0]);
+		ELSIF refCmdData.aHeader[1] = nIndex + 3 THEN
+			M_SetSingleProp := E_ErrorIdCmd.ERRORID_InvalidProperty;
+		END_IF			
+	END_FOR
+//Restliche Props
+ELSIF refCmdData.aHeader[1] >= nIndexRestProps AND refCmdData.aHeader[1] < nNoOfProps THEN
+	CASE (refCmdData.aHeader[1] - nIndexRestProps) OF
+		0: //PumpNrWaste
+			IF refCmdData.n32Data[0] > 0 AND refCmdData.n32Data[0] <= cNoOfPumps THEN
+				nPumpNrWastePump := DINT_TO_USINT(refCmdData.n32Data[0]);
+			ELSE
+				M_SetSingleProp := E_ErrorIdCmd.ERRORID_InvalidPumpNr;
+			END_IF			
+		1: //LiquidBottle
+			IF refCmdData.n32Data[0] > 0 AND refCmdData.n32Data[0] <= cNoOfLiquidBottles THEN
+				nSysLiquidBottle := DINT_TO_USINT(refCmdData.n32Data[0]);
+			ELSE
+				M_SetSingleProp := E_ErrorIdObjMgmt.ERRORID_InvalidLiquidbottle;
+			END_IF			
+		2: //WasteBottle
+			IF refCmdData.n32Data[0] > 0 AND refCmdData.n32Data[0] <= cNoOfWasteBottles THEN
+				nWasteBottle := DINT_TO_USINT(refCmdData.n32Data[0]);
+			ELSE
+				M_SetSingleProp := E_ErrorIdObjMgmt.ERRORID_InvalidWastebottle;
+			END_IF
+		3: //ValveNrDrying (Trockendusche für pH Elektrode)
+			IF refCmdData.n32Data[0] >= 0 AND refCmdData.n32Data[0] <= cNoOfValves THEN
+				nValveNrAirShower := DINT_TO_USINT(refCmdData.n32Data[0]);
+			ELSE
+				M_SetSingleProp := E_ErrorIdObjMgmt.ERRORID_InvalidValveNumber;
+			END_IF			
+	END_CASE	
+ELSE
+	M_SetSingleProp := SUPER^.M_SetSingleProp(refCmdData);
+END_IF]]></ST>
+      </Implementation>
+    </Method>
+    <Method Name="M_Stop" Id="{f1032c13-1dde-4ab6-b694-54b9c38a0073}">
+      <Declaration><![CDATA[METHOD M_Stop : ERRORID
+VAR_INPUT
+END_VAR
+]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[IF bRinse AND nStateA_Rinse < 70 THEN
+	nStateA_Rinse := 70;
+END_IF
+
+IF bSwitchPump AND nStateA_SwitchPump < 70 THEN
+	nStateA_SwitchPump := 70;
+END_IF
+
+aPumps[nPumpNrWastePump].M_Off();
+
+M_SwitchAirShower(FALSE);
+
+(*IF bEmptyFluid AND nStateA_EmptyFluid < 70 THEN
+	nStateA_EmptyFluid := 70;
+END_IF*)]]></ST>
+      </Implementation>
+    </Method>
+    <Method Name="M_SwitchAirShower" Id="{7fcda5bf-0e4a-44f8-8df4-663812a54781}">
+      <Declaration><![CDATA[METHOD M_SwitchAirShower : ERRORID
+VAR_INPUT
+	bOn	: BOOL;
+END_VAR
+]]></Declaration>
+      <Implementation>
+        <ST><![CDATA[IF bOn THEN
+	IF nValveNrAirShower > 0 THEN
+		aValves[nValveNrAirShower].M_On(1);
+	ELSE
+		M_SwitchAirShower := E_ErrorIdCmd.ERRORID_WashStationHasNoAirShower;
+	END_IF
+ELSE
+	IF nValveNrAirShower > 0 THEN
+		aValves[nValveNrAirShower].M_Off();
+	END_IF
+END_IF]]></ST>
+      </Implementation>
+    </Method>
+    <Property Name="P_nGCodeTargetNr" Id="{0065c5de-62bb-448b-99cd-8f9a161ff327}">
+      <Declaration><![CDATA[PROPERTY P_nGCodeTargetNr : UINT]]></Declaration>
+      <Get Name="Get" Id="{a73a6c48-9bca-4b0f-9d5b-22c335cce98f}">
+        <Declaration><![CDATA[VAR
+END_VAR
+]]></Declaration>
+        <Implementation>
+          <ST><![CDATA[P_nGCodeTargetNr := nGCodeTargetNr;]]></ST>
+        </Implementation>
+      </Get>
+    </Property>
+    <LineIds Name="FB_WashStation">
+      <LineId Id="3" Count="77" />
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="FB_WashStation.A_EmptyWaste">
+      <LineId Id="30" Count="9" />
+      <LineId Id="57" Count="2" />
+      <LineId Id="41" Count="15" />
+      <LineId Id="29" Count="0" />
+    </LineIds>
+    <LineIds Name="FB_WashStation.A_Rinse">
+      <LineId Id="2" Count="70" />
+      <LineId Id="103" Count="2" />
+      <LineId Id="73" Count="1" />
+      <LineId Id="78" Count="24" />
+      <LineId Id="1" Count="0" />
+    </LineIds>
+    <LineIds Name="FB_WashStation.A_SwitchPump">
+      <LineId Id="2" Count="27" />
+      <LineId Id="1" Count="0" />
+      <LineId Id="31" Count="1" />
+    </LineIds>
+    <LineIds Name="FB_WashStation.FB_init">
+      <LineId Id="7" Count="1" />
+    </LineIds>
+    <LineIds Name="FB_WashStation.M_ApplyPos">
+      <LineId Id="3" Count="15" />
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="FB_WashStation.M_CancelAction">
+      <LineId Id="3" Count="8" />
+      <LineId Id="2" Count="0" />
+      <LineId Id="13" Count="3" />
+    </LineIds>
+    <LineIds Name="FB_WashStation.M_CheckAction">
+      <LineId Id="3" Count="13" />
+      <LineId Id="27" Count="0" />
+      <LineId Id="17" Count="4" />
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="FB_WashStation.M_CheckBottles">
+      <LineId Id="3" Count="12" />
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="FB_WashStation.M_CheckProcDataType">
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="FB_WashStation.M_ExeAction">
+      <LineId Id="3" Count="42" />
+      <LineId Id="56" Count="0" />
+      <LineId Id="46" Count="6" />
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="FB_WashStation.M_GetAbsPos">
+      <LineId Id="18" Count="0" />
+      <LineId Id="26" Count="0" />
+      <LineId Id="30" Count="1" />
+      <LineId Id="33" Count="2" />
+      <LineId Id="32" Count="0" />
+      <LineId Id="28" Count="1" />
+      <LineId Id="27" Count="0" />
+      <LineId Id="19" Count="0" />
+      <LineId Id="23" Count="2" />
+      <LineId Id="22" Count="0" />
+      <LineId Id="20" Count="0" />
+    </LineIds>
+    <LineIds Name="FB_WashStation.M_GetActionBusy">
+      <LineId Id="3" Count="5" />
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="FB_WashStation.M_GetAllProps">
+      <LineId Id="3" Count="38" />
+      <LineId Id="2" Count="0" />
+      <LineId Id="50" Count="0" />
+      <LineId Id="49" Count="0" />
+      <LineId Id="59" Count="0" />
+      <LineId Id="58" Count="0" />
+    </LineIds>
+    <LineIds Name="FB_WashStation.M_GetProcData">
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="FB_WashStation.M_GetRinseChannel">
+      <LineId Id="3" Count="1" />
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="FB_WashStation.M_Reset">
+      <LineId Id="3" Count="3" />
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="FB_WashStation.M_RinsePumpOff">
+      <LineId Id="3" Count="8" />
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="FB_WashStation.M_SetAllProps">
+      <LineId Id="3" Count="66" />
+      <LineId Id="116" Count="0" />
+      <LineId Id="70" Count="14" />
+      <LineId Id="94" Count="0" />
+      <LineId Id="93" Count="0" />
+      <LineId Id="96" Count="4" />
+      <LineId Id="95" Count="0" />
+      <LineId Id="108" Count="0" />
+      <LineId Id="85" Count="0" />
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="FB_WashStation.M_SetSingleProp">
+      <LineId Id="101" Count="1" />
+      <LineId Id="3" Count="0" />
+      <LineId Id="100" Count="0" />
+      <LineId Id="87" Count="1" />
+      <LineId Id="124" Count="0" />
+      <LineId Id="126" Count="2" />
+      <LineId Id="131" Count="7" />
+      <LineId Id="143" Count="4" />
+      <LineId Id="149" Count="0" />
+      <LineId Id="148" Count="0" />
+      <LineId Id="139" Count="3" />
+      <LineId Id="130" Count="0" />
+      <LineId Id="125" Count="0" />
+      <LineId Id="95" Count="0" />
+      <LineId Id="90" Count="1" />
+      <LineId Id="150" Count="3" />
+      <LineId Id="215" Count="0" />
+      <LineId Id="155" Count="2" />
+      <LineId Id="160" Count="1" />
+      <LineId Id="158" Count="1" />
+      <LineId Id="96" Count="0" />
+      <LineId Id="92" Count="0" />
+      <LineId Id="97" Count="0" />
+      <LineId Id="162" Count="6" />
+      <LineId Id="175" Count="11" />
+      <LineId Id="199" Count="4" />
+      <LineId Id="198" Count="0" />
+      <LineId Id="98" Count="1" />
+      <LineId Id="93" Count="0" />
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="FB_WashStation.M_Stop">
+      <LineId Id="3" Count="8" />
+      <LineId Id="19" Count="0" />
+      <LineId Id="21" Count="0" />
+      <LineId Id="12" Count="2" />
+      <LineId Id="2" Count="0" />
+    </LineIds>
+    <LineIds Name="FB_WashStation.M_SwitchAirShower">
+      <LineId Id="12" Count="0" />
+      <LineId Id="18" Count="2" />
+      <LineId Id="22" Count="0" />
+      <LineId Id="16" Count="0" />
+      <LineId Id="14" Count="0" />
+      <LineId Id="17" Count="0" />
+      <LineId Id="25" Count="0" />
+      <LineId Id="24" Count="0" />
+      <LineId Id="15" Count="0" />
+    </LineIds>
+    <LineIds Name="FB_WashStation.P_nGCodeTargetNr.Get">
+      <LineId Id="2" Count="0" />
+    </LineIds>
+  </POU>
+</TcPlcObject>

@@ -1,0 +1,27 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<TcPlcObject Version="1.1.0.1" ProductVersion="3.1.0.25">
+  <POU Name="F_GetCheckSumFromString" Id="{e7185b91-b79d-419e-b466-eedbbc228e59}">
+    <Declaration><![CDATA[FUNCTION F_GetCheckSumFromString : BYTE
+VAR_INPUT
+	Data	: STRING[100];	//String, aus dem die Checksumme gebildet werden soll
+END_VAR
+VAR
+	nLenStr		:INT;		(*Länge Eingangsstring*)
+	sTemp		:STRING;
+	nTemp		:BYTE := 0;
+	i			:INT; 	(*allg. Zählvariable*)	
+END_VAR
+]]></Declaration>
+    <Implementation>
+      <ST><![CDATA[nLenStr := LEN(Data);	//Länge des Strings
+
+FOR i := 1 TO nLenStr BY 1 DO
+	sTemp := MID(STR:= Data, LEN:= 1, POS:= i );
+	nTemp := USINT_TO_BYTE(ASC(sTemp)) XOR nTemp;
+END_FOR
+
+F_GetCheckSumFromString := nTemp;]]></ST>
+    </Implementation>
+    <ObjectProperties />
+  </POU>
+</TcPlcObject>
