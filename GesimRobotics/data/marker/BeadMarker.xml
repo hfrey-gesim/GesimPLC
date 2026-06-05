@@ -1,0 +1,20 @@
+<?xml version="1.0" encoding="utf-8"?>
+<Marker xmlns:xsd="http://www.w3.org/2001/XMLSchema" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance">
+  <ThresholdPercentageMin>500</ThresholdPercentageMin>
+  <ThresholdPercentageMax>1000</ThresholdPercentageMax>
+  <ApplyMedianFilter>true</ApplyMedianFilter>
+  <MedianfilterRadius>4</MedianfilterRadius>
+  <AreaThresholdMin>35000</AreaThresholdMin>
+  <AreaThresholdMax>75000</AreaThresholdMax>
+  <ApplyNoiseReduction>true</ApplyNoiseReduction>
+  <NoiseReduction>600</NoiseReduction>
+  <ApplyRatio>true</ApplyRatio>
+  <Ratio>1000</Ratio>
+  <MaxRatioDeviation>200</MaxRatioDeviation>
+  <Negate>false</Negate>
+  <ApplyMarkerRect>false</ApplyMarkerRect>
+  <MarkerRectPercTop>0</MarkerRectPercTop>
+  <MarkerRectPercBot>0</MarkerRectPercBot>
+  <MarkerRectPercLeft>0</MarkerRectPercLeft>
+  <MarkerRectPercRight>0</MarkerRectPercRight>
+</Marker>

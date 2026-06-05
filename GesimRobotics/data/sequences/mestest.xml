@@ -1,0 +1,66 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<Root>
+  <Objects>
+    <Object>
+      <Model Type="STL" FillRule="Positive">
+        <FileName>C:\Users\he\Desktop\Ear_left - Kopie.stl</FileName>
+        <Factor>1000</Factor>
+      </Model>
+      <Position Type="CenterOnOrigin">
+        <X>2</X>
+        <Y>-1</Y>
+        <Z>0</Z>
+        <Rotate>false</Rotate>
+        <RotationAngle>0</RotationAngle>
+      </Position>
+      <Materials>
+        <Material>
+          <Infill>
+            <StartAngle>0</StartAngle>
+            <AngleChange>90</AngleChange>
+            <RepeatAngleChange>1</RepeatAngleChange>
+            <StrandDistance>1200</StrandDistance>
+            <MinDistance>500</MinDistance>
+            <MinLength>1000</MinLength>
+          </Infill>
+          <Layers OutlineFirst="true">
+            <Layer>
+              <Infill>1</Infill>
+              <Outline></Outline>
+            </Layer>
+          </Layers>
+        </Material>
+      </Materials>
+    </Object>
+  </Objects>
+  <Tools>
+    <Tool Type="Extruder" ObjectId="4">
+      <Identifier>1</Identifier>
+      <Color>#FF7F2A6A</Color>
+      <Speed>6000</Speed>
+      <Connection>OutlinePlus</Connection>
+      <StrandHeight>400</StrandHeight>
+      <StrandWidth>400</StrandWidth>
+      <StartBreak>0</StartBreak>
+      <EndBreak>0</EndBreak>
+      <TearOffDirection>None</TearOffDirection>
+      <TearOffSpeed>115000</TearOffSpeed>
+      <TearOffDistance>1000</TearOffDistance>
+      <SetInactive>true</SetInactive>
+      <CleanTipBeforeUsage>false</CleanTipBeforeUsage>
+      <CleanTipAfterUsage>false</CleanTipAfterUsage>
+      <RepeatTipCleaning>1</RepeatTipCleaning>
+    </Tool>
+  </Tools>
+  <Options>
+    <ToolOrder>1</ToolOrder>
+    <IsPartialPrint>false</IsPartialPrint>
+    <MinZHeight>0</MinZHeight>
+    <MaxZHeight>11599</MaxZHeight>
+    <Pausing>false</Pausing>
+    <LayerPause>0</LayerPause>
+    <RepeatPause>1</RepeatPause>
+    <Smoothing>false</Smoothing>
+    <SmoothingMinAngle>45</SmoothingMinAngle>
+  </Options>
+</Root>

@@ -1,0 +1,70 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<Root Version="2" Mode="Advanced">
+  <Objects>
+    <Object>
+      <Model Type="ThreeMF" FillRule="Positive">
+        <FileName>Z:\Thiele\INTAKT Deckel V7.1.3mf</FileName>
+      </Model>
+      <Position Type="CenterOnOrigin">
+        <X>1</X>
+        <Y>1</Y>
+        <Z>499</Z>
+        <Rotate>true</Rotate>
+        <RotationAngle>45000</RotationAngle>
+      </Position>
+      <Materials>
+        <Material>
+          <Infill>
+            <StartAngle>30</StartAngle>
+            <AngleChange>90</AngleChange>
+            <RepeatAngleChange>1</RepeatAngleChange>
+            <StrandDistance>300</StrandDistance>
+            <MinDistance>300</MinDistance>
+            <MinLength>450</MinLength>
+          </Infill>
+          <Layers OutlineFirst="false">
+            <Layer>
+              <Infill>1</Infill>
+              <Outline></Outline>
+            </Layer>
+          </Layers>
+        </Material>
+      </Materials>
+    </Object>
+  </Objects>
+  <Tools>
+    <Tool Type="Extruder" ObjectId="e0a4d80f-f721-46d6-abe4-a8f870953f11">
+      <Identifier>1</Identifier>
+      <Feed>350</Feed>
+      <Color>#FF7F2A6A</Color>
+      <Speed>5000</Speed>
+      <ZOffset>300</ZOffset>
+      <Height>250</Height>
+      <Width>300</Width>
+      <Connection>OutlinePlus</Connection>
+      <StartBreak>2000</StartBreak>
+      <EndBreak>0</EndBreak>
+      <TearOffDirection>None</TearOffDirection>
+      <TearOffSpeed>115000</TearOffSpeed>
+      <TearOffDistance>1000</TearOffDistance>
+      <CleanTipBeforeUsage>false</CleanTipBeforeUsage>
+      <CleanTipAfterUsage>false</CleanTipAfterUsage>
+      <RepeatTipCleaning>1</RepeatTipCleaning>
+    </Tool>
+  </Tools>
+  <Options>
+    <CustomToolOrder>false</CustomToolOrder>
+    <ToolOrder>1</ToolOrder>
+    <IsPartialPrint>false</IsPartialPrint>
+    <MinZHeight>0</MinZHeight>
+    <MaxZHeight>8999</MaxZHeight>
+    <Pausing>false</Pausing>
+    <LayerPause>30000</LayerPause>
+    <RepeatPause>10</RepeatPause>
+    <Smoothing>false</Smoothing>
+    <SmoothingMinAngle>45</SmoothingMinAngle>
+    <SmoothingMaxDistance>100</SmoothingMaxDistance>
+    <DistanceLimit>false</DistanceLimit>
+    <PointMaxDistance>10000</PointMaxDistance>
+  </Options>
+</Root>

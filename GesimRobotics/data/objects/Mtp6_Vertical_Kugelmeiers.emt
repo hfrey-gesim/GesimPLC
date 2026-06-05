@@ -1,0 +1,2 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<Item Id="00000000-0000-0000-0000-000000000000" TemplateId="97b4d149-7598-419a-8269-4ade13c97dca" Name="Mtp6_Vertical_Kugelmeiers" ObjType="Mtp" ParentSlotNr="2" RelPos.X="0" RelPos.Y="0" RelPos.Z="0" Width="85470" Depth="127760" Heigth="20150" FreeHeight="0" Cols="2" Rows="3" Used="0" OffsetCol1="25480" OffsetRow1="23535" SpaceCols="38400" SpaceRows="38400" WellDiameter="35000" WellDepth="17250" WellDepthActual="14650" OffsetWell1.X="0" OffsetWell1.Y="0" OffsetWell1.Z="0" FactorCols="1000000" FactorRows="1000000" />

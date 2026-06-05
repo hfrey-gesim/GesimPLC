@@ -1,0 +1,25 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<Root>
+  <Header Version="2.0.18.5239" Id="0" />
+  <Steps>
+    <Item Id="bf27a371-dc6a-4eae-8097-a57d9c34145d" Description="" ObjectType="Root" ObjectId="86b22962-7217-4771-80b2-5ac7d60ba3ba" ActionType="RunGCode" TargetId="16d88d5d-3b48-443e-a729-ccd5d8ccda7a" TargetRef="Center" FileName="YURI_Stift_Test_Viereck1x" WaitPointId="b044b0c7-f2b2-4304-bcea-13704f31f376" Offset.Z="0" />
+    <Item Id="fb19edb2-4f53-4c4f-91bc-fb0b9d7986ec" Description="" ObjectType="Root" ObjectId="86b22962-7217-4771-80b2-5ac7d60ba3ba" ActionType="RunGCode" TargetId="87918a9a-ba5f-436a-87fa-37f6d0f03db2" TargetRef="Center" FileName="YURI_Stift_Test_Viereck100x" WaitPointId="b044b0c7-f2b2-4304-bcea-13704f31f376" Offset.Z="0">
+      <Condition Type="StepReady" Operator="AND" StepId="0" />
+    </Item>
+    <Item Id="7ad4cdd3-5a6a-48fa-8a72-021d26da4152" Description="" ObjectType="Root" ObjectId="86b22962-7217-4771-80b2-5ac7d60ba3ba" ActionType="RunGCode" TargetId="ef945281-2a37-4f78-8c16-d09d1bc0cd38" TargetRef="Center" FileName="YURI_Stift_Test_Kreis1x" WaitPointId="b044b0c7-f2b2-4304-bcea-13704f31f376" Offset.Z="0">
+      <Condition Type="StepReady" Operator="AND" StepId="0" />
+    </Item>
+    <Item Id="749ec951-01a9-4522-8f82-6e19f7ea9b02" Description="" ObjectType="Root" ObjectId="86b22962-7217-4771-80b2-5ac7d60ba3ba" ActionType="RunGCode" TargetId="b85a75ba-c22d-4823-87c3-f625bcfb013e" TargetRef="Center" FileName="YURI_Stift_Test_Kreis100x" WaitPointId="b044b0c7-f2b2-4304-bcea-13704f31f376" Offset.Z="0">
+      <Condition Type="StepReady" Operator="AND" StepId="0" />
+    </Item>
+    <Item Id="48e0c226-4e48-4372-a199-e89fc04c14a0" Description="" ObjectType="Root" ObjectId="86b22962-7217-4771-80b2-5ac7d60ba3ba" ActionType="RunGCode" TargetId="a12ce15b-16af-4d43-9ce8-6cd2d434448e" TargetRef="Center" FileName="YURI_Stift_Test_Linie" WaitPointId="b044b0c7-f2b2-4304-bcea-13704f31f376" Offset.Z="0">
+      <Condition Type="StepReady" Operator="AND" StepId="0" />
+    </Item>
+    <Item Id="59b75ede-11b0-4083-8437-952d6109e765" Description="" ObjectType="Root" ObjectId="86b22962-7217-4771-80b2-5ac7d60ba3ba" ActionType="RunGCode" TargetId="532c4b00-d3d4-4fc5-bd99-0811380c9de8" TargetRef="Center" FileName="YURI_Stift_Test_Linie" WaitPointId="b044b0c7-f2b2-4304-bcea-13704f31f376" Offset.Z="0">
+      <Condition Type="StepReady" Operator="AND" StepId="0" />
+    </Item>
+    <Item Id="5708654b-0c5e-42bb-9eab-f072f3d51ab2" Description="" ObjectType="Root" ObjectId="86b22962-7217-4771-80b2-5ac7d60ba3ba" ActionType="RunGCode" TargetId="532c4b00-d3d4-4fc5-bd99-0811380c9de8" TargetRef="Center" FileName="YURI_Stift_Test_Linie" WaitPointId="b044b0c7-f2b2-4304-bcea-13704f31f376" Offset.Z="0">
+      <Condition Type="StepReady" Operator="AND" StepId="0" />
+    </Item>
+  </Steps>
+</Root>

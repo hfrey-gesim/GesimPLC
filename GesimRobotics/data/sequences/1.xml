@@ -1,0 +1,98 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<Root>
+  <Objects>
+    <Object>
+      <Model Type="Block">
+        <Radius>10000</Radius>
+        <IsHollow>false</IsHollow>
+        <InnerRadius>3500</InnerRadius>
+        <Corners>4</Corners>
+        <Height>100</Height>
+      </Model>
+      <Position Type="CenterOnOrigin">
+        <X>0</X>
+        <Y>0</Y>
+        <Z>0</Z>
+        <Rotate>false</Rotate>
+        <RotationAngle>0</RotationAngle>
+      </Position>
+      <Materials>
+        <Material>
+          <Infill Print="true">
+            <StartAngle>0</StartAngle>
+            <AngleChange>90</AngleChange>
+            <RepeatAngleChange>1</RepeatAngleChange>
+            <StrandDistance>1000</StrandDistance>
+            <MinLength>500</MinLength>
+          </Infill>
+          <Layers>
+            <Layer>
+              <Infill>2</Infill>
+              <Outline></Outline>
+            </Layer>
+          </Layers>
+        </Material>
+      </Materials>
+    </Object>
+  </Objects>
+  <Tools>
+    <Tool Type="CartridgeDisp" ObjectId="8">
+      <Identifier>1</Identifier>
+      <Color>#FF89A336</Color>
+      <Speed>3000</Speed>
+      <Connection>OutlinePlus</Connection>
+      <Pressure>100</Pressure>
+      <StrandHeight>580</StrandHeight>
+      <StrandWidth>580</StrandWidth>
+      <StartBreak>0</StartBreak>
+      <EndBreak>0</EndBreak>
+      <TearOffDirection>None</TearOffDirection>
+      <TearOffSpeed>115000</TearOffSpeed>
+      <TearOffDistance>1000</TearOffDistance>
+      <SetInactive>true</SetInactive>
+      <CleanTipBeforeUsage>false</CleanTipBeforeUsage>
+      <CleanTipAfterUsage>false</CleanTipAfterUsage>
+      <RepeatTipCleaning>0</RepeatTipCleaning>
+    </Tool>
+    <Tool Type="TwinPiezoHolder" ObjectId="5">
+      <Identifier>2</Identifier>
+      <Color>#FF89A336</Color>
+      <Speed>10000</Speed>
+      <Connection>None</Connection>
+    </Tool>
+    <Tool Type="PiezoPip" ObjectId="6">
+      <Identifier>3</Identifier>
+      <Color>#FF7F2A6A</Color>
+      <Speed>10000</Speed>
+      <Connection>None</Connection>
+      <ZOffset>500</ZOffset>
+      <SpotHeight>10</SpotHeight>
+      <SpotRadius>250</SpotRadius>
+      <Spotting>true</Spotting>
+      <Drops>22</Drops>
+      <SpotDistance>500</SpotDistance>
+    </Tool>
+    <Tool Type="PiezoPip" ObjectId="7">
+      <Identifier>4</Identifier>
+      <Color>#FF7F2A6A</Color>
+      <Speed>10000</Speed>
+      <Connection>None</Connection>
+      <ZOffset>500</ZOffset>
+      <SpotHeight>10</SpotHeight>
+      <SpotRadius>250</SpotRadius>
+      <Spotting>true</Spotting>
+      <Drops>22</Drops>
+      <SpotDistance>500</SpotDistance>
+    </Tool>
+  </Tools>
+  <Options>
+    <ToolOrder>2334</ToolOrder>
+    <IsPartialPrint>false</IsPartialPrint>
+    <MaxZHeight>0</MaxZHeight>
+    <Pausing>false</Pausing>
+    <LayerPause>0</LayerPause>
+    <RepeatPause>1</RepeatPause>
+    <Smoothing>false</Smoothing>
+    <SmoothingMinAngle>45</SmoothingMinAngle>
+  </Options>
+</Root>

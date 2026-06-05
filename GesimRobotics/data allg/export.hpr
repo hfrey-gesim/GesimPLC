@@ -1,0 +1,90 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<Root>
+  <Header />
+  <HwModule Id="0x10001" Name="XAxis">
+    <Property PropType="WorkplateDim" Value="588000" />
+    <Property PropType="NullPosDist" Value="70800" />
+    <Property PropType="MaxPosDist" Value="112200" />
+    <Property PropType="SetupPosDist" Value="138000" />
+    <Property PropType="RefPos1" Value="200374" />
+    <Property PropType="RefPos2" Value="200448" />
+    <Property PropType="MaxSpeed" Value="115000" />
+    <Property PropType="LimitMargeNeg" Value="20000" />
+    <Property PropType="LimitMargePos" Value="0" />
+  </HwModule>
+  <HwModule Id="0x20101" Name="YAxis">
+    <Property PropType="WorkplateDim" Value="420000" />
+    <Property PropType="NullPosDist" Value="2700" />
+    <Property PropType="MaxPosDist" Value="129200" />
+    <Property PropType="SetupPosDist" Value="1700" />
+    <Property PropType="RefPos1" Value="145996" />
+    <Property PropType="InvertInitDir" Value="1" />
+    <Property PropType="MaxSpeed" Value="115000" />
+    <Property PropType="LimitMargeNeg" Value="0" />
+    <Property PropType="LimitMargePos" Value="0" />
+  </HwModule>
+  <HwModule Id="0x40101" Name="ZAxis1">
+    <Property PropType="RefPos1" Value="10490" />
+    <Property PropType="HomePos" Value="107900" />
+    <Property PropType="AxisLength" Value="152500" />
+    <Property PropType="SliderLength" Value="34000" />
+    <Property PropType="InvertInitDir" Value="0" />
+    <Property PropType="MinPos" Value="9000" />
+    <Property PropType="MaxPos" Value="108000" />
+    <Property PropType="MaxSpeed" Value="72000" />
+  </HwModule>
+  <HwModule Id="0x40103" Name="ZAxis3">
+    <Property PropType="RefPos1" Value="9620" />
+    <Property PropType="HomePos" Value="107900" />
+    <Property PropType="AxisLength" Value="152500" />
+    <Property PropType="SliderLength" Value="34000" />
+    <Property PropType="InvertInitDir" Value="0" />
+    <Property PropType="MinPos" Value="9000" />
+    <Property PropType="MaxPos" Value="108000" />
+    <Property PropType="MaxSpeed" Value="72000" />
+  </HwModule>
+  <HwModule Id="0x40105" Name="ZAxis5">
+    <Property PropType="RefPos1" Value="9870" />
+    <Property PropType="HomePos" Value="107900" />
+    <Property PropType="AxisLength" Value="152500" />
+    <Property PropType="SliderLength" Value="34000" />
+    <Property PropType="InvertInitDir" Value="0" />
+    <Property PropType="MinPos" Value="9000" />
+    <Property PropType="MaxPos" Value="108000" />
+    <Property PropType="MaxSpeed" Value="72000" />
+  </HwModule>
+  <HwModule Id="0x40107" Name="ZAxis7">
+    <Property PropType="RefPos1" Value="10820" />
+    <Property PropType="HomePos" Value="107900" />
+    <Property PropType="AxisLength" Value="152500" />
+    <Property PropType="SliderLength" Value="34000" />
+    <Property PropType="InvertInitDir" Value="0" />
+    <Property PropType="MinPos" Value="9000" />
+    <Property PropType="MaxPos" Value="108000" />
+    <Property PropType="MaxSpeed" Value="72000" />
+  </HwModule>
+  <HwModule Id="0x60001" Name="PneuChan1(ITV-Press)">
+    <Property PropType="MinPress" Value="1" />
+    <Property PropType="MaxPress" Value="900" />
+    <Property PropType="MinPressCV" Value="0" />
+    <Property PropType="MaxPressCV" Value="10000" />
+    <Property PropType="MinPressMV" Value="1000" />
+    <Property PropType="MaxPressMV" Value="5000" />
+    <Property PropType="FactorSetPress" Value="995700" />
+    <Property PropType="FactorCurrPress" Value="1007500" />
+    <Property PropType="OffsetSetPress" Value="5" />
+    <Property PropType="OffsetCurrPress" Value="-5" />
+  </HwModule>
+  <HwModule Id="0x60002" Name="PneuChan2(ITV-Press)">
+    <Property PropType="MinPress" Value="1" />
+    <Property PropType="MaxPress" Value="900" />
+    <Property PropType="MinPressCV" Value="0" />
+    <Property PropType="MaxPressCV" Value="10000" />
+    <Property PropType="MinPressMV" Value="1000" />
+    <Property PropType="MaxPressMV" Value="5000" />
+    <Property PropType="FactorSetPress" Value="993400" />
+    <Property PropType="FactorCurrPress" Value="1007600" />
+    <Property PropType="OffsetSetPress" Value="4" />
+    <Property PropType="OffsetCurrPress" Value="-4" />
+  </HwModule>
+</Root>

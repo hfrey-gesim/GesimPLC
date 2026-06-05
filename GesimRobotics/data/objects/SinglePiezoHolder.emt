@@ -1,0 +1,36 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<Item Id="00000000-0000-0000-0000-000000000000" TemplateId="0bcb50d9-7fe1-40f6-8d15-c5da51ceb547" Name="SinglePiezoHolder" ObjType="SinglePiezoHolder" ParentSlotNr="2" RelPos.X="-15000" RelPos.Y="0" RelPos.Z="-77500" Offset.X="0" Offset.Y="0" Offset.Z="0">
+  <Slots>
+    <Item Nr="1" Name="ZSensor" RelPos.X="0" RelPos.Y="4250" RelPos.Z="52500" />
+    <Item Nr="2" Name="Pipette" RelPos.X="-10600" RelPos.Y="13050" RelPos.Z="6600" />
+  </Slots>
+  <Item Id="00000000-0000-0000-0000-000000000000" TemplateId="3c8f331f-4230-453d-9e75-b4e49ebe5bee" Name="ZSensor" ObjType="ZSensor" ParentSlotNr="1" RelPos.X="-12200" RelPos.Y="0" RelPos.Z="-82500" Offset.X="0" Offset.Y="0" Offset.Z="0">
+    <Slots />
+    <ActionSettings>
+      <Item Name="Jog" SlowSpeedXY="5000" NormalSpeedXY="10000" FastSpeedXY="115000" ManuSpeedXY="115000" SlowSpeedZ="5000" NormalSpeedZ="10000" FastSpeedZ="72000" ManuSpeedZ="72000" InchingDistShort="25" InchingDistMedium="1000" InchingDistLong="10000" InchingDistManuXY="10000" InchingDistManuZ="10000" RecentSpeedChoice="Slow" RecentDistChoice="Short" />
+      <Item Name="MoveToTarget" SpeedX="115000" SpeedY="115000" SpeedZ="72000" />
+      <Item Name="MoveXY" HiddenInManu="True" DistanceX="0" DistanceY="0" SpeedX="10000" SpeedY="10000" />
+      <Item Name="MoveZ" HiddenInManu="True" Mode="Free" SpeedZ="1000" Distance="1" />
+      <Item Name="Measure" Option="SlowApproach" />
+    </ActionSettings>
+  </Item>
+  <Item Id="00000000-0000-0000-0000-000000000000" TemplateId="48b27fb9-5183-4e78-af0c-816ac5b37f2f" Name="PiezoNanoWithHeater" ObjType="PiezoPip" ParentSlotNr="2" RelPos.X="0" RelPos.Y="0" RelPos.Z="-31500" Offset.X="0" Offset.Y="0" Offset.Z="0" GCodeToolNr="0" DiluterId="25b1c102-82ad-4715-81c5-ac61c1465ba6" Frequency="500" Pulse="90" Voltage="70" DryPadArea="1" DryTime="100" HeaterExist="True" SerialNumber="">
+    <Slots />
+    <ActionSettings>
+      <Item Name="Jog" SlowSpeedXY="5000" NormalSpeedXY="10000" FastSpeedXY="115000" ManuSpeedXY="115000" SlowSpeedZ="5000" NormalSpeedZ="10000" FastSpeedZ="72000" ManuSpeedZ="72000" InchingDistShort="25" InchingDistMedium="1000" InchingDistLong="10000" InchingDistManuXY="10000" InchingDistManuZ="10000" RecentSpeedChoice="Slow" RecentDistChoice="Short" />
+      <Item Name="MoveToTarget" SpeedX="115000" SpeedY="115000" SpeedZ="72000" />
+      <Item Name="MoveXY" DistanceX="0" DistanceY="0" SpeedX="10000" SpeedY="10000" />
+      <Item Name="MoveZ" HiddenInManu="True" Mode="Free" SpeedZ="1000" Distance="1000" />
+      <Item Name="Aspirate" Quantity="100" Flow="100" />
+      <Item Name="Dispense" Quantity="100" Flow="100" />
+      <Item Name="DispenseDrops" Drops="1" />
+      <Item Name="DryPip" TimeOverride="0" Offset.Z="0" />
+      <Item Name="GetPipSample" Quantity="100" Flow="100" Delay="0" QuantityAirGap="0" />
+      <Item Name="WashTool" Mode="WashOutside" Quantity="100" Flow="100" Time="1000" />
+      <Item Name="Heating" Temp="520" Temp2="0" Temp3="0" />
+      <Item Name="TeachTarget" Offset.Z="2000" />
+      <Item Name="DispenseTest" HiddenInManu="True" Drops="10" Interaction="False" />
+      <Item Name="ActionOnArray" SpeedX="115000" SpeedY="115000" SpeedZ="72000" SpeedZRelease="72000" ZOffsetAction="1000" ZDistanceRelease="0" ZOffsetXYMove="1000" ReleaseMoveDelay="0" />
+    </ActionSettings>
+  </Item>
+</Item>

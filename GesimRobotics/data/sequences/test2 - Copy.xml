@@ -1,0 +1,120 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<Root>
+  <Objects>
+    <Object>
+      <Model Type="Block">
+        <Radius>10000</Radius>
+        <IsHollow>false</IsHollow>
+        <InnerRadius>3500</InnerRadius>
+        <Corners>4</Corners>
+        <Height>10000</Height>
+      </Model>
+      <Position Type="CenterOnOrigin">
+        <X>0</X>
+        <Y>0</Y>
+        <Z>0</Z>
+      </Position>
+      <Materials>
+        <Material>
+          <Infill Print="true">
+            <StartAngle>0</StartAngle>
+            <AngleChange>90</AngleChange>
+            <RepeatAngleChange>1</RepeatAngleChange>
+            <StrandDistance>1000</StrandDistance>
+            <MinLength>500</MinLength>
+          </Infill>
+          <Layers>
+            <Layer>
+              <Infill>1-2</Infill>
+              <Outline></Outline>
+            </Layer>
+          </Layers>
+        </Material>
+      </Materials>
+    </Object>
+  </Objects>
+  <Tools>
+    <Tool Type="PiezoPip" ObjectId="5">
+      <Identifier>1</Identifier>
+      <Connection>None</Connection>
+      <Speed>10000</Speed>
+      <ZOffset>500</ZOffset>
+      <SpotHeight>10</SpotHeight>
+      <SpotRadius>250</SpotRadius>
+      <Spotting>true</Spotting>
+      <Drops>22</Drops>
+      <SpotDistance>500</SpotDistance>
+    </Tool>
+    <Tool Type="CartridgeDisp" ObjectId="6">
+      <Identifier>2</Identifier>
+      <Connection>OutlinePlus</Connection>
+      <Speed>10000</Speed>
+      <Pressure>100</Pressure>
+      <StrandHeight>250</StrandHeight>
+      <StrandWidth>250</StrandWidth>
+      <StartBreak>0</StartBreak>
+      <EndBreak>0</EndBreak>
+      <TearOffDirection>None</TearOffDirection>
+      <TearOffSpeed>115000</TearOffSpeed>
+      <TearOffDistance>1000</TearOffDistance>
+      <SetInactive>true</SetInactive>
+      <CleanTipBeforeUsage>false</CleanTipBeforeUsage>
+      <CleanTipAfterUsage>false</CleanTipAfterUsage>
+      <RepeatTipCleaning>0</RepeatTipCleaning>
+    </Tool>
+    <Tool Type="CartridgeDisp" ObjectId="8">
+      <Identifier>3</Identifier>
+      <Connection>OutlinePlus</Connection>
+      <Speed>10000</Speed>
+      <Pressure>100</Pressure>
+      <StrandHeight>250</StrandHeight>
+      <StrandWidth>250</StrandWidth>
+      <StartBreak>0</StartBreak>
+      <EndBreak>0</EndBreak>
+      <TearOffDirection>None</TearOffDirection>
+      <TearOffSpeed>115000</TearOffSpeed>
+      <TearOffDistance>1000</TearOffDistance>
+      <SetInactive>true</SetInactive>
+      <CleanTipBeforeUsage>false</CleanTipBeforeUsage>
+      <CleanTipAfterUsage>false</CleanTipAfterUsage>
+      <RepeatTipCleaning>0</RepeatTipCleaning>
+    </Tool>
+    <Tool Type="CartridgeDisp" ObjectId="11">
+      <Identifier>4</Identifier>
+      <Connection>OutlinePlus</Connection>
+      <Speed>10000</Speed>
+      <Pressure>100</Pressure>
+      <StrandHeight>250</StrandHeight>
+      <StrandWidth>250</StrandWidth>
+      <StartBreak>0</StartBreak>
+      <EndBreak>0</EndBreak>
+      <TearOffDirection>None</TearOffDirection>
+      <TearOffSpeed>115000</TearOffSpeed>
+      <TearOffDistance>1000</TearOffDistance>
+      <SetInactive>true</SetInactive>
+      <CleanTipBeforeUsage>false</CleanTipBeforeUsage>
+      <CleanTipAfterUsage>false</CleanTipAfterUsage>
+      <RepeatTipCleaning>0</RepeatTipCleaning>
+    </Tool>
+    <Tool Type="Exposure" ObjectId="13">
+      <Identifier>5</Identifier>
+      <Connection>OutlinePlus</Connection>
+      <Speed>10000</Speed>
+      <ZOffset>0</ZOffset>
+      <Brightness>50</Brightness>
+      <ExposeWidth>300</ExposeWidth>
+      <ExposeOnCenter>false</ExposeOnCenter>
+      <Time>1</Time>
+      <RepeatExposure>1</RepeatExposure>
+    </Tool>
+  </Tools>
+  <Options>
+    <ToolOrder>23451</ToolOrder>
+    <IsPartialPrint>false</IsPartialPrint>
+    <MaxZHeight>0</MaxZHeight>
+    <LayerPause>0</LayerPause>
+    <RepeatPause>1</RepeatPause>
+    <Smoothing>false</Smoothing>
+    <SmoothingMinAngle>45</SmoothingMinAngle>
+  </Options>
+</Root>

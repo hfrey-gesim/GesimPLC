@@ -1,0 +1,94 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<Root>
+  <Header />
+  <HwModule Id="0x010001" Name="XAxis">
+    <Property PropType="WorkplateDim" WriteAccess="TRUE" Min="588000" Max="588000" Default="588000" ScaleFactor="0.001" Decimals="3" Unit="mm" />
+    <Property PropType="NullPosDist" WriteAccess="TRUE" Min="70800" Max="70800" Default="70800" ScaleFactor="0.001" Decimals="3" Unit="mm" />
+    <Property PropType="MaxPosDist" WriteAccess="TRUE" Min="112200" Max="112200" Default="112200" ScaleFactor="0.001" Decimals="3" Unit="mm" />
+    <Property PropType="SetupPosDist" WriteAccess="TRUE" Min="138000" Max="138000" Default="138000" ScaleFactor="0.001" Decimals="3" Unit="mm" />
+    <Property PropType="RefPos1" WriteAccess="TRUE" Min="0" Max="300000" Default="200000" ScaleFactor="0.001" Decimals="3" Unit="mm" />
+    <Property PropType="RefPos2" WriteAccess="TRUE" Min="0" Max="300000" Default="200000" ScaleFactor="0.001" Decimals="3" Unit="mm" />
+    <Property PropType="MinPos" WriteAccess="FALSE" ScaleFactor="0.001" Decimals="3" Unit="mm"></Property>
+    <Property PropType="MaxPos" WriteAccess="FALSE" ScaleFactor="0.001" Decimals="3" Unit="mm" />
+    <Property PropType="MaxSpeed" WriteAccess="TRUE" Min="1000" Max="115000" Default="115000" ScaleFactor="0.001" Decimals="3" Unit="mm/s" />
+    <Property PropType="LimitMargeNeg" WriteAccess="TRUE" Min="0" Max="50000" Default="20000" ScaleFactor="0.001" Decimals="3" Unit="mm" />
+    <Property PropType="LimitMargePos" WriteAccess="TRUE" Min="0" Max="50000" Default="0" ScaleFactor="0.001" Decimals="3" Unit="mm" />
+  </HwModule>
+  <HwModule Id="0x020101" Name="YAxis">
+    <Property PropType="WorkplateDim" WriteAccess="TRUE" Min="420000" Max="420000" Default="420000" ScaleFactor="0.001" Decimals="3" Unit="mm" />
+    <Property PropType="NullPosDist" WriteAccess="TRUE" Min="2700" Max="2700" Default="2700" ScaleFactor="0.001" Decimals="3" Unit="mm" />
+    <Property PropType="MaxPosDist" WriteAccess="TRUE" Min="129200" Max="129200" Default="129200" ScaleFactor="0.001" Decimals="3" Unit="mm" />
+    <Property PropType="SetupPosDist" WriteAccess="TRUE" Min="1700" Max="1700" Default="1700" ScaleFactor="0.001" Decimals="3" Unit="mm" />
+    <Property PropType="RefPos1" WriteAccess="TRUE" Min="145000" Max="160000" Default="151000" ScaleFactor="0.001" Decimals="3" Unit="mm" />
+	<Property PropType="InvertInitDir" WriteAccess="TRUE" Min="0" Max="1" Default="1" ScaleFactor="1" Decimals="0" />
+    <Property PropType="MinPos" WriteAccess="FALSE" ScaleFactor="0.001" Decimals="3" Unit="mm" />
+    <Property PropType="MaxPos" WriteAccess="FALSE" ScaleFactor="0.001" Decimals="3" Unit="mm" />
+    <Property PropType="MaxSpeed" WriteAccess="TRUE" Min="1000" Max="115000" Default="115000" ScaleFactor="0.001" Decimals="3" Unit="mm/s" />
+    <Property PropType="LimitMargeNeg" WriteAccess="TRUE" Min="0" Max="50000" Default="20000" ScaleFactor="0.001" Decimals="3" Unit="mm" />
+    <Property PropType="LimitMargePos" WriteAccess="TRUE" Min="0" Max="50000" Default="0" ScaleFactor="0.001" Decimals="3" Unit="mm" />
+  </HwModule>
+  <HwModule Id="0x040101" Name="ZAxis1">
+    <Property PropType="RefPos1" WriteAccess="TRUE" Min="9000" Max="11500" Default="10500" ScaleFactor="0.001" Decimals="3" Unit="mm" />
+    <Property PropType="HomePos" WriteAccess="TRUE" Min="20000" Max="110000" Default="107900" ScaleFactor="0.001" Decimals="3" Unit="mm" />
+    <Property PropType="AxisLength" WriteAccess="TRUE" Min="152500" Max="152500" Default="152500" ScaleFactor="0.001" Decimals="3" Unit="mm" />
+    <Property PropType="SliderLength" WriteAccess="TRUE" Min="34000" Max="34000" Default="34000" ScaleFactor="0.001" Decimals="3" Unit="mm" />
+    <Property PropType="InvertInitDir" WriteAccess="TRUE" Min="0" Max="1" Default="0" ScaleFactor="1" Decimals="0" />
+    <Property PropType="MinPos" WriteAccess="TRUE" Min="9000" Max="100000" Default="9000" ScaleFactor="0.001" Decimals="3" Unit="mm" />
+    <Property PropType="MaxPos" WriteAccess="TRUE" Min="30000" Max="110000" Default="108000" ScaleFactor="0.001" Decimals="3" Unit="mm" />
+    <Property PropType="MaxSpeed" WriteAccess="TRUE" Min="1000" Max="75000" Default="72000" ScaleFactor="0.001" Decimals="3" Unit="mm/s" />
+  </HwModule>
+  <HwModule Id="0x040103" Name="ZAxis3">
+    <Property PropType="RefPos1" WriteAccess="TRUE" Min="9000" Max="11500" Default="10500" ScaleFactor="0.001" Decimals="3" Unit="mm" />
+    <Property PropType="HomePos" WriteAccess="TRUE" Min="20000" Max="110000" Default="107900" ScaleFactor="0.001" Decimals="3" Unit="mm" />
+    <Property PropType="AxisLength" WriteAccess="TRUE" Min="152500" Max="152500" Default="152500" ScaleFactor="0.001" Decimals="3" Unit="mm" />
+    <Property PropType="SliderLength" WriteAccess="TRUE" Min="34000" Max="34000" Default="34000" ScaleFactor="0.001" Decimals="3" Unit="mm" />
+    <Property PropType="InvertInitDir" WriteAccess="TRUE" Min="0" Max="1" Default="0" ScaleFactor="1" Decimals="0" />
+    <Property PropType="MinPos" WriteAccess="TRUE" Min="9000" Max="100000" Default="9000" ScaleFactor="0.001" Decimals="3" Unit="mm" />
+    <Property PropType="MaxPos" WriteAccess="TRUE" Min="30000" Max="110000" Default="108000" ScaleFactor="0.001" Decimals="3" Unit="mm" />
+    <Property PropType="MaxSpeed" WriteAccess="TRUE" Min="1000" Max="75000" Default="72000" ScaleFactor="0.001" Decimals="3" Unit="mm/s" />
+  </HwModule>
+  <HwModule Id="0x040105" Name="ZAxis5">
+    <Property PropType="RefPos1" WriteAccess="TRUE" Min="9000" Max="11500" Default="10500" ScaleFactor="0.001" Decimals="3" Unit="mm" />
+    <Property PropType="HomePos" WriteAccess="TRUE" Min="20000" Max="110000" Default="107900" ScaleFactor="0.001" Decimals="3" Unit="mm" />
+    <Property PropType="AxisLength" WriteAccess="TRUE" Min="152500" Max="152500" Default="152500" ScaleFactor="0.001" Decimals="3" Unit="mm" />
+    <Property PropType="SliderLength" WriteAccess="TRUE" Min="34000" Max="34000" Default="34000" ScaleFactor="0.001" Decimals="3" Unit="mm" />
+    <Property PropType="InvertInitDir" WriteAccess="TRUE" Min="0" Max="1" Default="0" ScaleFactor="1" Decimals="0" />
+    <Property PropType="MinPos" WriteAccess="TRUE" Min="9000" Max="100000" Default="9000" ScaleFactor="0.001" Decimals="3" Unit="mm" />
+    <Property PropType="MaxPos" WriteAccess="TRUE" Min="30000" Max="110000" Default="108000" ScaleFactor="0.001" Decimals="3" Unit="mm" />
+    <Property PropType="MaxSpeed" WriteAccess="TRUE" Min="1000" Max="75000" Default="72000" ScaleFactor="0.001" Decimals="3" Unit="mm/s" />
+  </HwModule>
+  <HwModule Id="0x040107" Name="ZAxis7">
+    <Property PropType="RefPos1" WriteAccess="TRUE" Min="9000" Max="11500" Default="10500" ScaleFactor="0.001" Decimals="3" Unit="mm" />
+    <Property PropType="HomePos" WriteAccess="TRUE" Min="20000" Max="110000" Default="107900" ScaleFactor="0.001" Decimals="3" Unit="mm" />
+    <Property PropType="AxisLength" WriteAccess="TRUE" Min="152500" Max="152500" Default="152500" ScaleFactor="0.001" Decimals="3" Unit="mm" />
+    <Property PropType="SliderLength" WriteAccess="TRUE" Min="34000" Max="34000" Default="34000" ScaleFactor="0.001" Decimals="3" Unit="mm" />
+    <Property PropType="InvertInitDir" WriteAccess="TRUE" Min="0" Max="1" Default="0" ScaleFactor="1" Decimals="0" />
+    <Property PropType="MinPos" WriteAccess="TRUE" Min="9000" Max="100000" Default="9000" ScaleFactor="0.001" Decimals="3" Unit="mm" />
+    <Property PropType="MaxPos" WriteAccess="TRUE" Min="30000" Max="110000" Default="108000" ScaleFactor="0.001" Decimals="3" Unit="mm" />
+    <Property PropType="MaxSpeed" WriteAccess="TRUE" Min="1000" Max="75000" Default="72000" ScaleFactor="0.001" Decimals="3" Unit="mm/s" />
+  </HwModule>
+  <HwModule Id="0x060001" Name="PneuChan1(ITV-Press)">
+    <Property PropType="MinPress" WriteAccess="TRUE" Min="1" Max="1" Default="1" ScaleFactor="1.000" Decimals="0" Unit="kPa" />
+    <Property PropType="MaxPress" WriteAccess="TRUE" Min="900" Max="900" Default="900" ScaleFactor="1.000" Decimals="0" Unit="kPa"></Property>
+    <Property PropType="MinPressCV" WriteAccess="TRUE" Min="0" Max="0" Default="0" ScaleFactor="0.001" Decimals="3" Unit="V" />
+    <Property PropType="MaxPressCV" WriteAccess="TRUE" Min="5000" Max="10000" Default="10000" ScaleFactor="0.001" Decimals="3" Unit="V"></Property>
+    <Property PropType="MinPressMV" WriteAccess="TRUE" Min="1000" Max="1000" Default="1000" ScaleFactor="0.001" Decimals="3" Unit="V" />
+    <Property PropType="MaxPressMV" WriteAccess="TRUE" Min="5000" Max="5000" Default="5000" ScaleFactor="0.001" Decimals="3" Unit="V" />
+    <Property PropType="FactorSetPress" WriteAccess="TRUE" Min="900000" Max="1500000" Default="1000000" ScaleFactor="0.000001" Decimals="6" />
+    <Property PropType="FactorCurrPress" WriteAccess="TRUE" Min="900000" Max="1500000" Default="1000000" ScaleFactor="0.000001" Decimals="6" />
+    <Property PropType="OffsetSetPress" WriteAccess="TRUE" Min="-15" Max="15" Default="0" ScaleFactor="1" Decimals="0" />
+    <Property PropType="OffsetCurrPress" WriteAccess="TRUE" Min="-15" Max="15" Default="0" ScaleFactor="1" Decimals="0" />	
+  </HwModule>
+  <HwModule Id="0x060002" Name="PneuChan2(ITV-Press)">
+    <Property PropType="MinPress" WriteAccess="TRUE" Min="1" Max="1" Default="1" ScaleFactor="1.000" Decimals="0" Unit="kPa" />
+    <Property PropType="MaxPress" WriteAccess="TRUE" Min="900" Max="900" Default="900" ScaleFactor="1.000" Decimals="0" Unit="kPa"></Property>
+    <Property PropType="MinPressCV" WriteAccess="TRUE" Min="0" Max="0" Default="0" ScaleFactor="0.001" Decimals="3" Unit="V" />
+    <Property PropType="MaxPressCV" WriteAccess="TRUE" Min="5000" Max="10000" Default="10000" ScaleFactor="0.001" Decimals="3" Unit="V"></Property>
+    <Property PropType="MinPressMV" WriteAccess="TRUE" Min="1000" Max="1000" Default="1000" ScaleFactor="0.001" Decimals="3" Unit="V" />
+    <Property PropType="MaxPressMV" WriteAccess="TRUE" Min="5000" Max="5000" Default="5000" ScaleFactor="0.001" Decimals="3" Unit="V" />
+    <Property PropType="FactorSetPress" WriteAccess="TRUE" Min="900000" Max="1500000" Default="1000000" ScaleFactor="0.000001" Decimals="6" />
+    <Property PropType="FactorCurrPress" WriteAccess="TRUE" Min="900000" Max="1500000" Default="1000000" ScaleFactor="0.000001" Decimals="6" />
+    <Property PropType="OffsetSetPress" WriteAccess="TRUE" Min="-15" Max="15" Default="0" ScaleFactor="1" Decimals="0" />
+    <Property PropType="OffsetCurrPress" WriteAccess="TRUE" Min="-15" Max="15" Default="0" ScaleFactor="1" Decimals="0" />	
+  </HwModule>
+</Root>

@@ -1,0 +1,98 @@
+<Objects>
+	<Object>
+		<Model Type="Block">
+			<Radius>10000</Radius>
+			<IsBlockHollow>FALSE</IsBlockHollow>
+			<InnerRadius>3500</InnerRadius>
+			<Corners>4</Corners>
+			<Height>10000</Height>
+			<FileName>path/to/file.3mf</FileName>
+		</Model>
+		<Position Type="Manual">
+			<X>0</X>
+			<Y>0</Y>
+			<Z>0</Z>
+		</Position>
+		<Materials>
+			<Material>
+				<Infill>
+					<StartAngle>0</StartAngle>
+					<AngleChange>90</AngleChange>
+					<AngleChangeLayer>1</AngleChangeLayer>
+					<StrandDistance>1000</StrandDistance>
+					<MinLength>500</MinLength>
+				</Infill>
+				<Layers>
+					<Layer>
+						<Infill>2-3</Infill>
+						<Outline>2</Outline>
+					</Layer>
+				</Layers>
+			</Material>
+		</Materials>
+	</Object>
+</Objects>
+<Tools>
+	<Tool Type="Piezo">
+		<Speed>115000</Speed>
+		<ZOffset>500</ZOffset>
+		<SpotHeight>10</SpotHeight>
+		<SpotRadius>250</SpotRadius>
+		<Connection>None</Connection>
+		<Spotting>TRUE</Spotting>
+		<Drops>22</Drops>
+		<SpotDistance>500</SpotDistance>
+	</Tool>
+	<Tool Type="Cartridge">
+		<Speed>115000</Speed>
+		<Pressure>100</Pressure>
+		<StrandHeight>250</StrandHeight>
+		<StrandWidth>250</StrandWidth>
+		<Connection>OutlinePlus</Connection>
+		<StartBreak>0</StartBreak>
+		<EndBreak>0</EndBreak>
+		<TearOffDirection>None</TearOffDirection>
+		<TearOffSpeed>115000</TearOffSpeed>
+		<TearOffDistance>0</TearOffDistance>
+		<SetInactive>TRUE</SetInactive>
+		<CleanTipBeforeUsage>FALSE</CleanTipBeforeUsage>
+		<CleanTipAfterUsage>FALSE</CleanTipAfterUsage>
+		<RepeatTipCleaning>0</RepeatTipCleaning>
+	</Tool>
+	<Tool Type="CoreShell">
+		<Speed>115000</Speed>
+		<PressureCore>100</PressureCore>
+		<PressureShell>100</PressureShell>
+		<StrandHeight>250</StrandHeight>
+		<StrandWidth>250</StrandWidth>
+		<Connection>OutlinePlus</Connection>
+		<StartBreak>0</StartBreak>
+		<EndBreak>0</EndBreak>
+		<TearOffDirection>None</TearOffDirection>
+		<TearOffSpeed>115000</TearOffSpeed>
+		<TearOffDistance>0</TearOffDistance>
+		<SetInactive>TRUE</SetInactive>
+		<CleanTipBeforeUsage>FALSE</CleanTipBeforeUsage>
+		<CleanTipAfterUsage>FALSE</CleanTipAfterUsage>
+		<RepeatTipCleaning>0</RepeatTipCleaning>
+	</Tool>
+	<Tool Type="Exposure">
+		<Speed>115000</Speed>
+		<ZOffset>500</ZOffset>
+		<Brightness>50</Brightness>
+		<ExposeWidth>250</ExposeWidth>
+		<Connection>None</Connection>
+		<ExposeOnCenter>FALSE</ExposeOnCenter>
+		<Time>1</Time>
+		<RepeatExposure>1</RepeatExposure>
+	</Tool>
+</Tools>
+<Options>
+	<ToolOrder>23451</ToolOrder>
+	<IsPartialPrint></IsPartialPrint>
+	<MaxZHeight>0</MaxZHeight>
+	<LayerPause>0</LayerPause>
+	<RepeatPause>0</RepeatPause>
+	<Smoothing>TRUE</Smoothing>
+	<SmoothingMinAngle>45</SmoothingMinAngle>
+</Options>

@@ -1,0 +1,454 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<Root SoftwareVersion="1.18.4.5425">
+  <Nodes>
+    <Node>
+      <Uid>e6cba13477ee419391ca684c91c9e885</Uid>
+      <PosX>1101</PosX>
+      <PosY>1730</PosY>
+      <ReverseConnectors>false</ReverseConnectors>
+      <Type>Start</Type>
+      <Vars>
+        <Var Name="y" VarValueType="System.Int32" InitValue="2" />
+        <Var Name="x" VarValueType="System.Int32" InitValue="2" />
+        <Var Name="c" VarValueType="System.Int32" InitValue="1" />
+        <Var Name="v" VarValueType="System.Int32" InitValue="1" />
+      </Vars>
+    </Node>
+    <Node>
+      <Uid>34ebef753a1a47e794183d9afd33d3af</Uid>
+      <PosX>1146</PosX>
+      <PosY>1412</PosY>
+      <ReverseConnectors>false</ReverseConnectors>
+      <Type>DynamicSequence</Type>
+      <Targets />
+      <SequenceStep>
+        <Root>
+          <Header Version="2.0.18.5239" Id="0" />
+          <Steps>
+            <Item Id="be8ac666-010a-4b27-bb85-3abcc0580443" Description="" ObjectType="PassivePip" ObjectId="04feafd7-69af-4636-8236-c7a62b082c8f" ActionType="MoveToTarget" TargetId="d2e76191-f440-4c2e-8cda-831fe75150ec" TargetRef="ArrayRowCol" Col="45" Row="4" SpeedX="115000" SpeedY="115000" SpeedZ="72000" Offset.X="0" Offset.Y="0" Offset.Z="0" ZLevel="PrePos" />
+            <Item Id="40f57a4a-a35d-4add-bc36-567e04b7bfe3" Description="" ObjectType="PassivePip" ObjectId="04feafd7-69af-4636-8236-c7a62b082c8f" ActionType="Dispense" Quantity="30" Flow="400">
+              <Condition Type="StepReady" Operator="AND" StepId="0" />
+            </Item>
+            <Item Id="899cbb36-35d2-4952-9e7d-21e9edd3eb09" Description="" ObjectType="PassivePip" ObjectId="04feafd7-69af-4636-8236-c7a62b082c8f" ActionType="MoveZ" Mode="Relative" SpeedZ="3000" Distance="15000">
+              <Condition Type="StepReady" Operator="AND" StepId="0" />
+            </Item>
+            <Item Id="36a1e20f-dd3f-4c7b-b005-f6ab2623689b" Description="" ObjectType="Camera" ObjectId="09ae1511-5f1a-4256-b58b-3255427b2bb1" ActionType="MoveToTarget" TargetId="d2e76191-f440-4c2e-8cda-831fe75150ec" TargetRef="ArrayRowCol" Col="45" Row="4" SpeedX="150000" SpeedY="150000" SpeedZ="72000" Offset.X="0" Offset.Y="0" Offset.Z="0" ZLevel="PrePos">
+              <Condition Type="StepReady" Operator="AND" StepId="0" />
+            </Item>
+          </Steps>
+        </Root>
+      </SequenceStep>
+      <Parameters>
+        <Step Nr="1" />
+        <Step Nr="2" />
+        <Step Nr="3" />
+        <Step Nr="4" />
+      </Parameters>
+    </Node>
+    <Node>
+      <Uid>22f5109f2a764dfeab3d866f142b43c4</Uid>
+      <PosX>1466</PosX>
+      <PosY>1403</PosY>
+      <ReverseConnectors>false</ReverseConnectors>
+      <Type>DynamicSequence</Type>
+      <Targets />
+      <SequenceStep>
+        <Root>
+          <Header Version="2.0.18.5239" Id="0" />
+          <Steps>
+            <Item Id="04202546-e5c1-4d09-9e76-ac06c27187f7" Description="" ObjectType="PassivePip" ObjectId="04feafd7-69af-4636-8236-c7a62b082c8f" ActionType="MoveZ" Mode="Relative" SpeedZ="3000" Distance="15000" />
+          </Steps>
+        </Root>
+      </SequenceStep>
+      <Parameters>
+        <Step Nr="1" />
+      </Parameters>
+    </Node>
+    <Node>
+      <Uid>471df9560a364e1fbf145573946097a0</Uid>
+      <PosX>1542</PosX>
+      <PosY>1666</PosY>
+      <ReverseConnectors>false</ReverseConnectors>
+      <Type>DynamicSequence</Type>
+      <Targets />
+      <SequenceStep>
+        <Root>
+          <Header Version="2.0.18.5239" Id="0" />
+          <Steps>
+            <Item Id="b6f87490-e2e1-4c8f-bb61-c517a10f1428" Description="" ObjectType="Camera" ObjectId="09ae1511-5f1a-4256-b58b-3255427b2bb1" ActionType="MoveToTarget" TargetId="19e95ac0-f40d-44df-a02b-ee0b93396796" TargetRef="ArrayRowCol" Col="1" Row="1" SpeedX="150000" SpeedY="150000" SpeedZ="72000" Offset.X="0" Offset.Y="0" Offset.Z="0" ZLevel="PrePos" />
+          </Steps>
+        </Root>
+      </SequenceStep>
+      <Parameters>
+        <Step Nr="1">
+          <Parameter Name="Target_Reference_Col" Type="System.Int32" Var="y" />
+          <Parameter Name="Target_Reference_Row" Type="System.Int32" Var="x" />
+        </Step>
+      </Parameters>
+    </Node>
+    <Node>
+      <Uid>a74de23cb696478cb8a2282d0516a4d8</Uid>
+      <PosX>1771</PosX>
+      <PosY>1666</PosY>
+      <ReverseConnectors>false</ReverseConnectors>
+      <Type>DynamicSequence</Type>
+      <Targets />
+      <SequenceStep>
+        <Root>
+          <Header Version="2.0.18.5239" Id="0" />
+          <Steps>
+            <Item Id="e40d1e80-f05b-42fa-bb00-705f7ad79efb" Description="" ObjectType="PassivePip" ObjectId="04feafd7-69af-4636-8236-c7a62b082c8f" ActionType="MoveToTarget" TargetId="19e95ac0-f40d-44df-a02b-ee0b93396796" TargetRef="ArrayRowCol" Col="1" Row="1" SpeedX="115000" SpeedY="115000" SpeedZ="72000" Offset.X="0" Offset.Y="0" Offset.Z="-200" ZLevel="PrePos" />
+          </Steps>
+        </Root>
+      </SequenceStep>
+      <Parameters>
+        <Step Nr="1">
+          <Parameter Name="Target_Reference_Col" Type="System.Int32" Var="y" />
+          <Parameter Name="Target_Reference_Row" Type="System.Int32" Var="x" />
+        </Step>
+      </Parameters>
+    </Node>
+    <Node>
+      <Uid>0ed47578a65548d0883d742671c2853c</Uid>
+      <PosX>1553</PosX>
+      <PosY>1788</PosY>
+      <ReverseConnectors>false</ReverseConnectors>
+      <Type>DynamicSequence</Type>
+      <Targets />
+      <SequenceStep>
+        <Root>
+          <Header Version="2.0.18.5239" Id="0" />
+          <Steps>
+            <Item Id="b6f87490-e2e1-4c8f-bb61-c517a10f1428" Description="" ObjectType="Camera" ObjectId="09ae1511-5f1a-4256-b58b-3255427b2bb1" ActionType="MoveToTarget" TargetId="96ac909b-afb9-4cbc-bbf6-f143c4136679" TargetRef="ArrayRowCol" Col="1" Row="1" SpeedX="150000" SpeedY="150000" SpeedZ="72000" Offset.X="0" Offset.Y="0" Offset.Z="0" ZLevel="PrePos" />
+          </Steps>
+        </Root>
+      </SequenceStep>
+      <Parameters>
+        <Step Nr="1">
+          <Parameter Name="Target_Reference_Col" Type="System.Int32" Var="y" />
+          <Parameter Name="Target_Reference_Row" Type="System.Int32" Var="x" />
+        </Step>
+      </Parameters>
+    </Node>
+    <Node>
+      <Uid>eae50ae422cf4591a10faff7c9a238c5</Uid>
+      <PosX>1765</PosX>
+      <PosY>1788</PosY>
+      <ReverseConnectors>false</ReverseConnectors>
+      <Type>DynamicSequence</Type>
+      <Targets />
+      <SequenceStep>
+        <Root>
+          <Header Version="2.0.18.5239" Id="0" />
+          <Steps>
+            <Item Id="e40d1e80-f05b-42fa-bb00-705f7ad79efb" Description="" ObjectType="PassivePip" ObjectId="04feafd7-69af-4636-8236-c7a62b082c8f" ActionType="MoveToTarget" TargetId="96ac909b-afb9-4cbc-bbf6-f143c4136679" TargetRef="ArrayRowCol" Col="1" Row="1" SpeedX="115000" SpeedY="115000" SpeedZ="72000" Offset.X="0" Offset.Y="0" Offset.Z="-200" ZLevel="PrePos" />
+          </Steps>
+        </Root>
+      </SequenceStep>
+      <Parameters>
+        <Step Nr="1">
+          <Parameter Name="Target_Reference_Col" Type="System.Int32" Var="y" />
+          <Parameter Name="Target_Reference_Row" Type="System.Int32" Var="x" />
+        </Step>
+      </Parameters>
+    </Node>
+    <Node>
+      <Uid>847c71e9979847638d6860582eae0404</Uid>
+      <PosX>1971</PosX>
+      <PosY>1782</PosY>
+      <ReverseConnectors>false</ReverseConnectors>
+      <Type>DynamicSequence</Type>
+      <Targets />
+      <SequenceStep>
+        <Root>
+          <Header Version="2.0.18.5239" Id="0" />
+          <Steps>
+            <Item Id="60b79404-1f94-47fb-b10b-9e5192a68a4c" Description="" ObjectType="PassivePip" ObjectId="04feafd7-69af-4636-8236-c7a62b082c8f" ActionType="Dispense" Quantity="320" Flow="80" />
+          </Steps>
+        </Root>
+      </SequenceStep>
+      <Parameters>
+        <Step Nr="1" />
+      </Parameters>
+    </Node>
+    <Node>
+      <Uid>fea0226a3b524b02ab1bbb8f619b881d</Uid>
+      <PosX>2385</PosX>
+      <PosY>1675</PosY>
+      <ReverseConnectors>false</ReverseConnectors>
+      <Type>DynamicSequence</Type>
+      <Targets />
+      <SequenceStep>
+        <Root>
+          <Header Version="2.0.18.5239" Id="0" />
+          <Steps>
+            <Item Id="fea928e8-1a22-4a3e-9f00-33ff4ecc1bab" Description="" ObjectType="PassivePip" ObjectId="04feafd7-69af-4636-8236-c7a62b082c8f" ActionType="MoveZ" Mode="Relative" SpeedZ="3000" Distance="10000" />
+          </Steps>
+        </Root>
+      </SequenceStep>
+      <Parameters>
+        <Step Nr="1" />
+      </Parameters>
+    </Node>
+    <Node>
+      <Uid>7b4e737ad2554bd385ac6135d689e8a7</Uid>
+      <PosX>2346</PosX>
+      <PosY>1801</PosY>
+      <ReverseConnectors>false</ReverseConnectors>
+      <Type>DynamicSequence</Type>
+      <Targets />
+      <SequenceStep>
+        <Root>
+          <Header Version="2.0.18.5239" Id="0" />
+          <Steps>
+            <Item Id="fea928e8-1a22-4a3e-9f00-33ff4ecc1bab" Description="" ObjectType="PassivePip" ObjectId="04feafd7-69af-4636-8236-c7a62b082c8f" ActionType="MoveZ" Mode="Relative" SpeedZ="5000" Distance="2000" />
+          </Steps>
+        </Root>
+      </SequenceStep>
+      <Parameters>
+        <Step Nr="1" />
+      </Parameters>
+    </Node>
+    <Node>
+      <Uid>967b271404cb4c6ab03c0a0892f5436c</Uid>
+      <PosX>1749</PosX>
+      <PosY>1363</PosY>
+      <ReverseConnectors>false</ReverseConnectors>
+      <Type>DynamicSequence</Type>
+      <Targets />
+      <SequenceStep>
+        <Root>
+          <Header Version="2.0.18.5239" Id="0" />
+          <Steps>
+            <Item Id="b6f87490-e2e1-4c8f-bb61-c517a10f1428" Description="" ObjectType="Camera" ObjectId="226877d2-b454-45f1-bac4-8984fd2e1408" ActionType="MoveToTarget" TargetId="d2e76191-f440-4c2e-8cda-831fe75150ec" TargetRef="ArrayRowCol" Col="24" Row="22" SpeedX="150000" SpeedY="150000" SpeedZ="72000" Offset.X="0" Offset.Y="0" Offset.Z="0" ZLevel="PrePos" />
+          </Steps>
+        </Root>
+      </SequenceStep>
+      <Parameters>
+        <Step Nr="1" />
+      </Parameters>
+    </Node>
+    <Node>
+      <Uid>17a848b746344783988e1e373d5ed6dc</Uid>
+      <PosX>1974</PosX>
+      <PosY>1660</PosY>
+      <ReverseConnectors>false</ReverseConnectors>
+      <Type>DynamicSequence</Type>
+      <Targets />
+      <SequenceStep>
+        <Root>
+          <Header Version="2.0.18.5239" Id="0" />
+          <Steps>
+            <Item Id="60b79404-1f94-47fb-b10b-9e5192a68a4c" Description="" ObjectType="PassivePip" ObjectId="04feafd7-69af-4636-8236-c7a62b082c8f" ActionType="Aspirate" Quantity="320" Flow="400" />
+          </Steps>
+        </Root>
+      </SequenceStep>
+      <Parameters>
+        <Step Nr="1" />
+      </Parameters>
+    </Node>
+    <Node>
+      <Uid>e7a511cee3cc42879edf6459b533144e</Uid>
+      <PosX>2455</PosX>
+      <PosY>1412</PosY>
+      <ReverseConnectors>false</ReverseConnectors>
+      <Type>DynamicSequence</Type>
+      <Targets />
+      <SequenceStep>
+        <Root>
+          <Header Version="2.0.18.5239" Id="0" />
+          <Steps>
+            <Item Id="bb401d12-8ea4-411f-8f3c-ea2193f4f77e" Description="" ObjectType="PassivePip" ObjectId="04feafd7-69af-4636-8236-c7a62b082c8f" ActionType="WashTool" TargetId="eca0e5e5-30c0-4466-a3cd-cdfba6abc3cc" WashPointNr="3" Mode="WashInside" Quantity="40" Flow="20" Time="1000" />
+          </Steps>
+        </Root>
+      </SequenceStep>
+      <Parameters>
+        <Step Nr="1" />
+      </Parameters>
+    </Node>
+    <Node>
+      <Uid>f230b9803691458a938360043bbd71b9</Uid>
+      <PosX>1713</PosX>
+      <PosY>1260</PosY>
+      <ReverseConnectors>false</ReverseConnectors>
+      <Type>DynamicSequence</Type>
+      <Targets />
+      <SequenceStep>
+        <Root>
+          <Header Version="2.0.18.5239" Id="0" />
+          <Steps>
+            <Item Id="b6f87490-e2e1-4c8f-bb61-c517a10f1428" Description="" ObjectType="Camera" ObjectId="09ae1511-5f1a-4256-b58b-3255427b2bb1" ActionType="MoveToTarget" TargetId="d2e76191-f440-4c2e-8cda-831fe75150ec" TargetRef="ArrayRowCol" Col="58" Row="1" SpeedX="150000" SpeedY="150000" SpeedZ="72000" Offset.X="0" Offset.Y="0" Offset.Z="0" ZLevel="PrePos" />
+          </Steps>
+        </Root>
+      </SequenceStep>
+      <Parameters>
+        <Step Nr="1">
+          <Parameter Name="Target_Reference_Col" Type="System.Int32" Var="y" />
+          <Parameter Name="Target_Reference_Row" Type="System.Int32" Var="x" />
+        </Step>
+      </Parameters>
+    </Node>
+    <Node>
+      <Uid>42604dd306c342279a95cc30c4d5b9de</Uid>
+      <PosX>2771</PosX>
+      <PosY>1809</PosY>
+      <ReverseConnectors>false</ReverseConnectors>
+      <Type>VariableSet</Type>
+      <Formulas>y=y+1</Formulas>
+      <Indexer>x</Indexer>
+      <Targets />
+    </Node>
+    <Node>
+      <Uid>de6e131b495f4aca9fee49cd9c8ca057</Uid>
+      <PosX>2011</PosX>
+      <PosY>2007</PosY>
+      <ReverseConnectors>true</ReverseConnectors>
+      <Type>VariableCheck</Type>
+      <Formula>y&gt;=5</Formula>
+    </Node>
+    <Node>
+      <Uid>4b8138c24e34410194919829c8c6d549</Uid>
+      <PosX>1800</PosX>
+      <PosY>2167</PosY>
+      <ReverseConnectors>true</ReverseConnectors>
+      <Type>VariableSet</Type>
+      <Formulas>y=2;x=x+1</Formulas>
+      <Indexer>x</Indexer>
+      <Targets />
+    </Node>
+    <Node>
+      <Uid>cf3dd6e447dd4cfe82e8f0f30ae03bb1</Uid>
+      <PosX>2107</PosX>
+      <PosY>1260</PosY>
+      <ReverseConnectors>false</ReverseConnectors>
+      <Type>DynamicSequence</Type>
+      <Targets />
+      <SequenceStep>
+        <Root>
+          <Header Version="2.0.18.5239" Id="0" />
+          <Steps>
+            <Item Id="b6f87490-e2e1-4c8f-bb61-c517a10f1428" Description="" ObjectType="Camera" ObjectId="09ae1511-5f1a-4256-b58b-3255427b2bb1" ActionType="MoveToTarget" TargetId="cde18fec-8819-404f-af2e-047a1c60e5bb" TargetRef="ArrayRowCol" Col="1" Row="1" SpeedX="150000" SpeedY="150000" SpeedZ="72000" Offset.X="0" Offset.Y="0" Offset.Z="0" ZLevel="PrePos" />
+          </Steps>
+        </Root>
+      </SequenceStep>
+      <Parameters>
+        <Step Nr="1">
+          <Parameter Name="Target_Reference_Col" Type="System.Int32" Var="y" />
+          <Parameter Name="Target_Reference_Row" Type="System.Int32" Var="x" />
+        </Step>
+      </Parameters>
+    </Node>
+    <Node>
+      <Uid>61069217fd34401380eec0f14d93fc54</Uid>
+      <PosX>2299</PosX>
+      <PosY>1262</PosY>
+      <ReverseConnectors>false</ReverseConnectors>
+      <Type>Wait</Type>
+      <Time>2000</Time>
+    </Node>
+    <Node>
+      <Uid>aee1ff9bebd241c8a2fd486c904b880a</Uid>
+      <PosX>1944</PosX>
+      <PosY>1272</PosY>
+      <ReverseConnectors>false</ReverseConnectors>
+      <Type>Wait</Type>
+      <Time>2000</Time>
+    </Node>
+    <Node>
+      <Uid>117aea6d8aaf4c0c88e1a34ce09ef4f0</Uid>
+      <PosX>2187</PosX>
+      <PosY>1801</PosY>
+      <ReverseConnectors>false</ReverseConnectors>
+      <Type>Wait</Type>
+      <Time>3000</Time>
+    </Node>
+    <Node>
+      <Uid>1a1565218d6f42e98b1988c6cab11b75</Uid>
+      <PosX>1491</PosX>
+      <PosY>2175</PosY>
+      <ReverseConnectors>true</ReverseConnectors>
+      <Type>VariableCheck</Type>
+      <Formula>x&gt;=5</Formula>
+    </Node>
+    <Node>
+      <Uid>37b7fc77b5e84c339f098ac8c4a23bc6</Uid>
+      <PosX>2205</PosX>
+      <PosY>1675</PosY>
+      <ReverseConnectors>false</ReverseConnectors>
+      <Type>Wait</Type>
+      <Time>1000</Time>
+    </Node>
+    <Node>
+      <Uid>a763da88a4c547f294e79f8e7a2e8836</Uid>
+      <PosX>2341</PosX>
+      <PosY>1973</PosY>
+      <ReverseConnectors>true</ReverseConnectors>
+      <Type>DynamicSequence</Type>
+      <Targets />
+      <SequenceStep>
+        <Root>
+          <Header Version="2.0.18.5239" Id="0" />
+          <Steps>
+            <Item Id="60b79404-1f94-47fb-b10b-9e5192a68a4c" Description="" ObjectType="PassivePip" ObjectId="04feafd7-69af-4636-8236-c7a62b082c8f" ActionType="MoveToTarget" TargetId="19e95ac0-f40d-44df-a02b-ee0b93396796" TargetRef="ArrayRowCol" Col="3" Row="3" SpeedX="115000" SpeedY="115000" SpeedZ="72000" Offset.X="0" Offset.Y="0" Offset.Z="8000" ZLevel="PrePos" />
+            <Item Id="36945b95-2733-4940-a33a-6291022c6e8b" Description="" ObjectType="PassivePip" ObjectId="04feafd7-69af-4636-8236-c7a62b082c8f" ActionType="Dispense" Quantity="320" Flow="80">
+              <Condition Type="StepReady" Operator="AND" StepId="0" />
+            </Item>
+          </Steps>
+        </Root>
+      </SequenceStep>
+      <Parameters>
+        <Step Nr="1" />
+        <Step Nr="2" />
+      </Parameters>
+    </Node>
+    <Node>
+      <Uid>e109e2fb34f54a11a14b6aef86555858</Uid>
+      <PosX>2591</PosX>
+      <PosY>1973</PosY>
+      <ReverseConnectors>true</ReverseConnectors>
+      <Type>DynamicSequence</Type>
+      <Targets />
+      <SequenceStep>
+        <Root>
+          <Header Version="2.0.18.5239" Id="0" />
+          <Steps>
+            <Item Id="60b79404-1f94-47fb-b10b-9e5192a68a4c" Description="" ObjectType="PassivePip" ObjectId="04feafd7-69af-4636-8236-c7a62b082c8f" ActionType="MoveToTarget" TargetId="96ac909b-afb9-4cbc-bbf6-f143c4136679" TargetRef="ArrayRowCol" Col="3" Row="3" SpeedX="115000" SpeedY="115000" SpeedZ="72000" Offset.X="0" Offset.Y="0" Offset.Z="8000" ZLevel="PrePos" />
+            <Item Id="36945b95-2733-4940-a33a-6291022c6e8b" Description="" ObjectType="PassivePip" ObjectId="04feafd7-69af-4636-8236-c7a62b082c8f" ActionType="Aspirate" Quantity="320" Flow="80">
+              <Condition Type="StepReady" Operator="AND" StepId="0" />
+            </Item>
+          </Steps>
+        </Root>
+      </SequenceStep>
+      <Parameters>
+        <Step Nr="1" />
+        <Step Nr="2" />
+      </Parameters>
+    </Node>
+  </Nodes>
+  <Connections>
+    <Connection SourceUid="471df9560a364e1fbf145573946097a0" SourceConnectorIndex="0" DestUid="a74de23cb696478cb8a2282d0516a4d8" DestConnectorIndex="0" />
+    <Connection SourceUid="eae50ae422cf4591a10faff7c9a238c5" SourceConnectorIndex="0" DestUid="847c71e9979847638d6860582eae0404" DestConnectorIndex="0" />
+    <Connection SourceUid="a74de23cb696478cb8a2282d0516a4d8" SourceConnectorIndex="0" DestUid="17a848b746344783988e1e373d5ed6dc" DestConnectorIndex="0" />
+    <Connection SourceUid="de6e131b495f4aca9fee49cd9c8ca057" SourceConnectorIndex="0" DestUid="4b8138c24e34410194919829c8c6d549" DestConnectorIndex="0" />
+    <Connection SourceUid="fea0226a3b524b02ab1bbb8f619b881d" SourceConnectorIndex="0" DestUid="0ed47578a65548d0883d742671c2853c" DestConnectorIndex="0" />
+    <Connection SourceUid="cf3dd6e447dd4cfe82e8f0f30ae03bb1" SourceConnectorIndex="0" DestUid="61069217fd34401380eec0f14d93fc54" DestConnectorIndex="0" />
+    <Connection SourceUid="f230b9803691458a938360043bbd71b9" SourceConnectorIndex="0" DestUid="aee1ff9bebd241c8a2fd486c904b880a" DestConnectorIndex="0" />
+    <Connection SourceUid="aee1ff9bebd241c8a2fd486c904b880a" SourceConnectorIndex="0" DestUid="cf3dd6e447dd4cfe82e8f0f30ae03bb1" DestConnectorIndex="0" />
+    <Connection SourceUid="e6cba13477ee419391ca684c91c9e885" SourceConnectorIndex="0" DestUid="471df9560a364e1fbf145573946097a0" DestConnectorIndex="0" />
+    <Connection SourceUid="de6e131b495f4aca9fee49cd9c8ca057" SourceConnectorIndex="1" DestUid="471df9560a364e1fbf145573946097a0" DestConnectorIndex="0" />
+    <Connection SourceUid="0ed47578a65548d0883d742671c2853c" SourceConnectorIndex="0" DestUid="eae50ae422cf4591a10faff7c9a238c5" DestConnectorIndex="0" />
+    <Connection SourceUid="847c71e9979847638d6860582eae0404" SourceConnectorIndex="0" DestUid="117aea6d8aaf4c0c88e1a34ce09ef4f0" DestConnectorIndex="0" />
+    <Connection SourceUid="117aea6d8aaf4c0c88e1a34ce09ef4f0" SourceConnectorIndex="0" DestUid="7b4e737ad2554bd385ac6135d689e8a7" DestConnectorIndex="0" />
+    <Connection SourceUid="7b4e737ad2554bd385ac6135d689e8a7" SourceConnectorIndex="0" DestUid="42604dd306c342279a95cc30c4d5b9de" DestConnectorIndex="0" />
+    <Connection SourceUid="4b8138c24e34410194919829c8c6d549" SourceConnectorIndex="0" DestUid="1a1565218d6f42e98b1988c6cab11b75" DestConnectorIndex="0" />
+    <Connection SourceUid="1a1565218d6f42e98b1988c6cab11b75" SourceConnectorIndex="1" DestUid="471df9560a364e1fbf145573946097a0" DestConnectorIndex="0" />
+    <Connection SourceUid="17a848b746344783988e1e373d5ed6dc" SourceConnectorIndex="0" DestUid="37b7fc77b5e84c339f098ac8c4a23bc6" DestConnectorIndex="0" />
+    <Connection SourceUid="37b7fc77b5e84c339f098ac8c4a23bc6" SourceConnectorIndex="0" DestUid="fea0226a3b524b02ab1bbb8f619b881d" DestConnectorIndex="0" />
+    <Connection SourceUid="a763da88a4c547f294e79f8e7a2e8836" SourceConnectorIndex="0" DestUid="de6e131b495f4aca9fee49cd9c8ca057" DestConnectorIndex="0" />
+    <Connection SourceUid="42604dd306c342279a95cc30c4d5b9de" SourceConnectorIndex="0" DestUid="e109e2fb34f54a11a14b6aef86555858" DestConnectorIndex="0" />
+    <Connection SourceUid="e109e2fb34f54a11a14b6aef86555858" SourceConnectorIndex="0" DestUid="a763da88a4c547f294e79f8e7a2e8836" DestConnectorIndex="0" />
+  </Connections>
+  <Options>
+    <Camera>is_12520344</Camera>
+  </Options>
+</Root>

@@ -1,0 +1,7 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<Root>
+  <Header Version="2.0.18.5239" Id="0" />
+  <Steps>
+    <Item Id="3ba15451-1d91-4180-ac9b-f06ebe366663" Description="" ObjectType="ZSensor" ObjectId="d9d87849-ce11-4cee-8101-a3055cc01acc" ActionType="Measure" TargetId="4438e289-97c3-4419-a70b-273bfae83393" Option="FastApproach" />
+  </Steps>
+</Root>

@@ -1,0 +1,160 @@
+18.05.2026 10:06:36 - connect
+18.05.2026 10:06:36 - Connect Ads-Client with AmsNetId >5.112.92.220.1.1<
+18.05.2026 10:06:37 - Search device with IP >192.168.135.125<
+18.05.2026 10:06:37 - Device with IP >192.168.135.125< found
+18.05.2026 10:06:37 - Wait until Plc is running
+18.05.2026 10:06:37 - Plc is running
+18.05.2026 10:06:37 - Check Plc Version
+18.05.2026 10:06:37 - Plc version is 2.0.18.17
+18.05.2026 10:06:37 - Add general notifications
+18.05.2026 10:06:37 - Connected
+18.05.2026 10:06:37 - request 5: ConfigBigDifference
+18.05.2026 10:06:38 - response 2: DownloadConfigToPlc
+18.05.2026 10:06:38 - Download config to Plc - please wait!
+18.05.2026 10:06:40 - Activate configuration - please wait!
+18.05.2026 10:06:40 - Wait for machinestate "Idle"
+18.05.2026 10:06:40 - AddNotifications
+18.05.2026 10:06:40 - Add Objectnotifications
+18.05.2026 10:14:41 - connect
+18.05.2026 10:14:41 - Connect Ads-Client with AmsNetId >5.112.92.220.1.1<
+18.05.2026 10:14:41 - Search device with IP >192.168.135.125<
+18.05.2026 10:14:42 - Device with IP >192.168.135.125< found
+18.05.2026 10:14:42 - Wait until Plc is running
+18.05.2026 10:14:42 - Plc is running
+18.05.2026 10:14:42 - Check Plc Version
+18.05.2026 10:14:42 - Plc version is 2.0.18.17
+18.05.2026 10:14:42 - Add general notifications
+18.05.2026 10:14:42 - Connected
+18.05.2026 10:14:42 - request 5: ConfigBigDifference
+18.05.2026 10:14:43 - response 2: DownloadConfigToPlc
+18.05.2026 10:14:43 - Download config to Plc - please wait!
+18.05.2026 10:14:44 - Activate configuration - please wait!
+18.05.2026 10:14:44 - Wait for machinestate "Idle"
+18.05.2026 10:14:44 - Error
+18.05.2026 10:14:45 - request 3: Error
+18.05.2026 10:14:45 - 41995-InvalidToolConfig
+18.05.2026 10:14:58 - 41995-InvalidToolConfig
+18.05.2026 10:15:01 - response 256: Cancel
+18.05.2026 10:15:01 - disconnect
+18.05.2026 10:15:13 - connect
+18.05.2026 10:15:13 - Connect Ads-Client with AmsNetId >5.112.92.220.1.1<
+18.05.2026 10:15:13 - Search device with IP >192.168.135.125<
+18.05.2026 10:15:13 - Device with IP >192.168.135.125< found
+18.05.2026 10:15:13 - Wait until Plc is running
+18.05.2026 10:15:13 - Plc is running
+18.05.2026 10:15:13 - Check Plc Version
+18.05.2026 10:15:13 - Plc version is 2.0.18.17
+18.05.2026 10:15:13 - Add general notifications
+18.05.2026 10:15:13 - Connected
+18.05.2026 10:15:13 - request 5: ConfigBigDifference
+18.05.2026 10:15:14 - response 2: DownloadConfigToPlc
+18.05.2026 10:15:14 - Download config to Plc - please wait!
+18.05.2026 10:15:16 - Activate configuration - please wait!
+18.05.2026 10:15:16 - Wait for machinestate "Idle"
+18.05.2026 10:15:16 - AddNotifications
+18.05.2026 10:15:16 - Add Objectnotifications
+18.05.2026 10:59:30 - connect
+18.05.2026 10:59:30 - Connect Ads-Client with AmsNetId >5.112.92.220.1.1<
+18.05.2026 10:59:30 - Search device with IP >192.168.135.125<
+18.05.2026 10:59:30 - Device with IP >192.168.135.125< found
+18.05.2026 10:59:30 - Wait until Plc is running
+18.05.2026 10:59:30 - Plc is running
+18.05.2026 10:59:30 - Check Plc Version
+18.05.2026 10:59:30 - Plc version is 2.0.18.17
+18.05.2026 10:59:30 - Add general notifications
+18.05.2026 10:59:30 - Connected
+18.05.2026 10:59:30 - request 5: ConfigBigDifference
+18.05.2026 10:59:31 - response 2: DownloadConfigToPlc
+18.05.2026 10:59:31 - Download config to Plc - please wait!
+18.05.2026 10:59:33 - Activate configuration - please wait!
+18.05.2026 10:59:33 - Wait for machinestate "Idle"
+18.05.2026 10:59:33 - AddNotifications
+18.05.2026 10:59:33 - Add Objectnotifications
+18.05.2026 11:36:57 - connect
+18.05.2026 11:36:57 - Connect Ads-Client with AmsNetId >5.112.92.220.1.1<
+18.05.2026 11:36:57 - Search device with IP >192.168.135.125<
+18.05.2026 11:36:57 - Device with IP >192.168.135.125< found
+18.05.2026 11:36:57 - Wait until Plc is running
+18.05.2026 11:36:57 - Plc is running
+18.05.2026 11:36:57 - Check Plc Version
+18.05.2026 11:36:57 - Plc version is 2.0.18.17
+18.05.2026 11:36:57 - Add general notifications
+18.05.2026 11:36:58 - Connected
+18.05.2026 11:36:58 - request 5: ConfigBigDifference
+18.05.2026 11:36:59 - response 2: DownloadConfigToPlc
+18.05.2026 11:36:59 - Download config to Plc - please wait!
+18.05.2026 11:37:00 - Activate configuration - please wait!
+18.05.2026 11:37:00 - Wait for machinestate "Idle"
+18.05.2026 11:37:00 - AddNotifications
+18.05.2026 11:37:00 - Add Objectnotifications
+18.05.2026 12:06:19 - disconnect
+18.05.2026 12:06:21 - connect
+18.05.2026 12:06:21 - Connect Ads-Client with AmsNetId >5.112.92.220.1.1<
+18.05.2026 12:06:21 - Search device with IP >192.168.135.125<
+18.05.2026 12:06:21 - Device with IP >192.168.135.125< found
+18.05.2026 12:06:21 - Wait until Plc is running
+18.05.2026 12:06:21 - Plc is running
+18.05.2026 12:06:21 - Check Plc Version
+18.05.2026 12:06:21 - Plc version is 2.0.18.17
+18.05.2026 12:06:21 - Add general notifications
+18.05.2026 12:06:21 - Connected
+18.05.2026 12:06:21 - AddNotifications
+18.05.2026 12:06:21 - Add Objectnotifications
+18.05.2026 13:00:37 - connect
+18.05.2026 13:00:37 - Connect Ads-Client with AmsNetId >5.112.92.220.1.1<
+18.05.2026 13:00:37 - Search device with IP >192.168.135.125<
+18.05.2026 13:00:37 - Device with IP >192.168.135.125< found
+18.05.2026 13:00:37 - Wait until Plc is running
+18.05.2026 13:00:37 - Plc is running
+18.05.2026 13:00:37 - Check Plc Version
+18.05.2026 13:00:37 - Plc version is 2.0.18.17
+18.05.2026 13:00:37 - Add general notifications
+18.05.2026 13:00:37 - Connected
+18.05.2026 13:00:37 - AddNotifications
+18.05.2026 13:00:37 - Add Objectnotifications
+18.05.2026 13:29:26 - connect
+18.05.2026 13:29:26 - Connect Ads-Client with AmsNetId >5.112.92.220.1.1<
+18.05.2026 13:29:26 - Search device with IP >192.168.135.125<
+18.05.2026 13:29:26 - Device with IP >192.168.135.125< found
+18.05.2026 13:29:26 - Wait until Plc is running
+18.05.2026 13:29:26 - Plc is running
+18.05.2026 13:29:26 - Check Plc Version
+18.05.2026 13:29:26 - Plc version is 2.0.18.17
+18.05.2026 13:29:26 - Add general notifications
+18.05.2026 13:29:26 - Connected
+18.05.2026 13:29:26 - request 5: ConfigBigDifference
+18.05.2026 13:29:27 - response 2: DownloadConfigToPlc
+18.05.2026 13:29:27 - Download config to Plc - please wait!
+18.05.2026 13:29:28 - Activate configuration - please wait!
+18.05.2026 13:29:28 - Wait for machinestate "Idle"
+18.05.2026 13:29:28 - AddNotifications
+18.05.2026 13:29:28 - Add Objectnotifications
+18.05.2026 13:33:12 - connect
+18.05.2026 13:33:12 - Connect Ads-Client with AmsNetId >5.112.92.220.1.1<
+18.05.2026 13:33:13 - Search device with IP >192.168.135.125<
+18.05.2026 13:33:13 - Device with IP >192.168.135.125< found
+18.05.2026 13:33:13 - Wait until Plc is running
+18.05.2026 13:33:13 - Plc is running
+18.05.2026 13:33:13 - Check Plc Version
+18.05.2026 13:33:13 - Plc version is 2.0.18.17
+18.05.2026 13:33:13 - Add general notifications
+18.05.2026 13:33:13 - Connected
+18.05.2026 13:33:13 - request 5: ConfigBigDifference
+18.05.2026 13:33:14 - response 2: DownloadConfigToPlc
+18.05.2026 13:33:14 - Download config to Plc - please wait!
+18.05.2026 13:33:15 - Activate configuration - please wait!
+18.05.2026 13:33:15 - Wait for machinestate "Idle"
+18.05.2026 13:33:15 - AddNotifications
+18.05.2026 13:33:15 - Add Objectnotifications
+18.05.2026 14:54:42 - connect
+18.05.2026 14:54:42 - Connect Ads-Client with AmsNetId >5.112.92.220.1.1<
+18.05.2026 14:54:43 - Search device with IP >192.168.135.125<
+18.05.2026 14:54:43 - Device with IP >192.168.135.125< found
+18.05.2026 14:54:43 - Wait until Plc is running
+18.05.2026 14:54:43 - Plc is running
+18.05.2026 14:54:43 - Check Plc Version
+18.05.2026 14:54:43 - Plc version is 2.0.18.17
+18.05.2026 14:54:43 - Add general notifications
+18.05.2026 14:54:43 - Connected
+18.05.2026 14:54:43 - AddNotifications
+18.05.2026 14:54:43 - Add Objectnotifications

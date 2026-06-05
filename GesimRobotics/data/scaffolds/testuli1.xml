@@ -1,0 +1,126 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<Root Version="3" Mode="Advanced">
+  <Objects>
+    <Object>
+      <Model Type="Block" FillRule="Positive">
+        <Radius>5000</Radius>
+        <IsHollow>false</IsHollow>
+        <InnerRadius>3500</InnerRadius>
+        <Corners>3</Corners>
+        <Height>1500</Height>
+      </Model>
+      <Position Type="Manual">
+        <X>983</X>
+        <Y>20000</Y>
+        <Z>-3763</Z>
+        <Rotate>false</Rotate>
+        <RotationAngle>45000</RotationAngle>
+      </Position>
+      <Materials>
+        <Material>
+          <Infill>
+            <InfillType>Lines</InfillType>
+            <StartAngle>0</StartAngle>
+            <AngleChange>90</AngleChange>
+            <RepeatAngleChange>1</RepeatAngleChange>
+            <InfillOffset>0</InfillOffset>
+            <StrandDistance>150</StrandDistance>
+            <MinDistance>150</MinDistance>
+            <MinLength>150</MinLength>
+          </Infill>
+          <Outline>
+            <OutlineOffset>0</OutlineOffset>
+            <OutlineDistance>1000</OutlineDistance>
+            <OutlineMinDistance>500</OutlineMinDistance>
+            <FiniteOutlines>false</FiniteOutlines>
+            <OutlineNumber>1</OutlineNumber>
+          </Outline>
+          <Layers OutlineFirst="false">
+            <Layer>
+              <Infill>2</Infill>
+              <Outline></Outline>
+            </Layer>
+          </Layers>
+        </Material>
+      </Materials>
+    </Object>
+  </Objects>
+  <Tools>
+    <Tool Type="CartridgeDisp" Nr="1">
+      <Identifier>1</Identifier>
+      <UseExposure>false</UseExposure>
+      <Brightness>0</Brightness>
+      <Strand>
+        <Feed>100</Feed>
+        <StartBreak>0</StartBreak>
+        <EndBreak>0</EndBreak>
+        <SetInactive>true</SetInactive>
+      </Strand>
+      <Color>#FF7F2A6A</Color>
+      <Speed>10000</Speed>
+      <ZOffset>400</ZOffset>
+      <Height>400</Height>
+      <Width>400</Width>
+      <Connection>OutlinePlus</Connection>
+      <TearOffDirection>None</TearOffDirection>
+      <TearOffSpeed>115000</TearOffSpeed>
+      <TearOffDistance>1000</TearOffDistance>
+      <CleanTipBeforeUsage>false</CleanTipBeforeUsage>
+      <CleanTipAfterUsage>false</CleanTipAfterUsage>
+      <RepeatTipCleaning>1</RepeatTipCleaning>
+    </Tool>
+    <Tool Type="PiezoPip" Nr="2">
+      <Identifier>2</Identifier>
+      <Drops>1</Drops>
+      <DropsPerScript>false</DropsPerScript>
+      <DropsScript />
+      <Color>#FFAC7B39</Color>
+      <Speed>10000</Speed>
+      <ZOffset>1000</ZOffset>
+      <Height>10</Height>
+      <Width>250</Width>
+      <Connection>None</Connection>
+      <Spotting>true</Spotting>
+      <StartBreak>0</StartBreak>
+      <SpotAlignment>Center</SpotAlignment>
+      <SpotDistance>500</SpotDistance>
+      <RunSequence>false</RunSequence>
+      <Sequence>contact printing</Sequence>
+      <RepeatSequence>0</RepeatSequence>
+    </Tool>
+    <Tool Type="Camera" Nr="5">
+      <Identifier>C</Identifier>
+      <ShootOnCenter>false</ShootOnCenter>
+      <RepeatShooting>1</RepeatShooting>
+    </Tool>
+    <Tool Type="Exposure" Nr="4">
+      <Identifier>U</Identifier>
+      <Brightness>500</Brightness>
+      <ExposeOnCenter>false</ExposeOnCenter>
+      <Time>2000</Time>
+      <RepeatExposure>1</RepeatExposure>
+      <Color>#80000000</Color>
+      <Speed>10000</Speed>
+      <ZOffset>0</ZOffset>
+      <Height>0</Height>
+      <Width>300</Width>
+      <Connection>OutlinePlus</Connection>
+    </Tool>
+  </Tools>
+  <Options>
+    <CustomToolOrder>false</CustomToolOrder>
+    <ToolOrder>2</ToolOrder>
+    <IsPartialPrint>false</IsPartialPrint>
+    <MinZHeight>-3763</MinZHeight>
+    <MaxZHeight>-2264</MaxZHeight>
+    <Pausing>false</Pausing>
+    <LayerPause>30000</LayerPause>
+    <RepeatPause>10</RepeatPause>
+    <Smoothing>false</Smoothing>
+    <SmoothingMinAngle>45</SmoothingMinAngle>
+    <SmoothingMaxDistance>100</SmoothingMaxDistance>
+    <DistanceLimit>false</DistanceLimit>
+    <PointMaxDistance>10000</PointMaxDistance>
+    <DoNotSetPrintParms>false</DoNotSetPrintParms>
+  </Options>
+</Root>

@@ -1,0 +1,6 @@
+PLC Type   : CX_CB6263-CE
+PLC Serial : 000U7ADW
+PLC Version: 2.0.18.19
+PLC TwinCAT: 4024
+PC  TwinCAT: 3.1.4024.64
+GUI Version: 1.18.4.5406

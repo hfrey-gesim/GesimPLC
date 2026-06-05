@@ -1,0 +1,66 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<Root>
+  <Objects>
+    <Object>
+      <Model Type="STL" FillRule="EvenOdd">
+        <FileName>Z:\Bohatzsch\14-001-004-900_Einstecktubus 5ml_bearbeitet.stl</FileName>
+        <Factor>1000</Factor>
+      </Model>
+      <Position Type="CenterOnOrigin">
+        <X>0</X>
+        <Y>0</Y>
+        <Z>0</Z>
+        <Rotate>true</Rotate>
+        <RotationAngle>45000</RotationAngle>
+      </Position>
+      <Materials>
+        <Material>
+          <Infill>
+            <StartAngle>0</StartAngle>
+            <AngleChange>30</AngleChange>
+            <RepeatAngleChange>1</RepeatAngleChange>
+            <StrandDistance>450</StrandDistance>
+            <MinDistance>450</MinDistance>
+            <MinLength>1000</MinLength>
+          </Infill>
+          <Layers OutlineFirst="true">
+            <Layer>
+              <Infill>1</Infill>
+              <Outline></Outline>
+            </Layer>
+          </Layers>
+        </Material>
+      </Materials>
+    </Object>
+  </Objects>
+  <Tools>
+    <Tool Type="Extruder" ObjectId="4">
+      <Identifier>1</Identifier>
+      <Color>#FF7F2A6A</Color>
+      <Speed>30000</Speed>
+      <Connection>OutlinePlus</Connection>
+      <StrandHeight>320</StrandHeight>
+      <StrandWidth>400</StrandWidth>
+      <StartBreak>1500</StartBreak>
+      <EndBreak>0</EndBreak>
+      <TearOffDirection>None</TearOffDirection>
+      <TearOffSpeed>115000</TearOffSpeed>
+      <TearOffDistance>1000</TearOffDistance>
+      <SetInactive>true</SetInactive>
+      <CleanTipBeforeUsage>false</CleanTipBeforeUsage>
+      <CleanTipAfterUsage>false</CleanTipAfterUsage>
+      <RepeatTipCleaning>1</RepeatTipCleaning>
+    </Tool>
+  </Tools>
+  <Options>
+    <ToolOrder>1</ToolOrder>
+    <IsPartialPrint>true</IsPartialPrint>
+    <MinZHeight>0</MinZHeight>
+    <MaxZHeight>0</MaxZHeight>
+    <Pausing>false</Pausing>
+    <LayerPause>0</LayerPause>
+    <RepeatPause>1</RepeatPause>
+    <Smoothing>true</Smoothing>
+    <SmoothingMinAngle>45</SmoothingMinAngle>
+  </Options>
+</Root>

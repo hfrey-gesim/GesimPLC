@@ -1,0 +1,8 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<Item Id="00000000-0000-0000-0000-000000000000" TemplateId="be6487b8-7369-42aa-857e-7e6592b848c1" Name="Slide align JH" ObjType="Slide" RelPos.X="43210" RelPos.Y="58308" RelPos.Z="504" Width="25000" Depth="75000" Heigth="1000" FreeHeight="0" Offset.Z="0">
+  <Item Id="00000000-0000-0000-0000-000000000000" TemplateId="31dee62b-b1e5-4a80-95a9-581fd37f6ebb" Name="Point 1" ObjType="Point" RelPos.X="12500" RelPos.Y="37500" RelPos.Z="0" Width="0" Depth="0" Heigth="0" FreeHeight="0" Offset.Z="0" />
+  <SpecPoints>
+    <Item Nr="1" Name="AlignMark1" Visible="True" RelPos.X="2500" RelPos.Y="72500" RelPos.Z="0" />
+    <Item Nr="2" Name="AlignMark2" Visible="True" RelPos.X="22500" RelPos.Y="2500" RelPos.Z="0" />
+  </SpecPoints>
+</Item>

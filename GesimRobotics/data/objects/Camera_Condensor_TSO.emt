@@ -1,0 +1,9 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<Item Id="00000000-0000-0000-0000-000000000000" TemplateId="138974f8-51a4-48f4-9440-9db13d6555bb" Name="Camera_Condensor_TSO" ObjType="Camera" ParentSlotNr="1" RelPos.X="-57100" RelPos.Y="15150" RelPos.Z="-111500" Offset.X="-34240" Offset.Y="1318" Offset.Z="0" WorkingDistance="23000" InvertWorkingDistance="False" LightOutputChannel="0">
+  <Slots />
+  <ActionSettings>
+    <Item Name="Jog" SlowSpeedXY="5000" NormalSpeedXY="10000" FastSpeedXY="150000" ManuSpeedXY="150000" SlowSpeedZ="5000" NormalSpeedZ="10000" FastSpeedZ="72000" ManuSpeedZ="72000" InchingDistShort="25" InchingDistMedium="1000" InchingDistLong="10000" InchingDistManuXY="10000" InchingDistManuZ="10000" RecentSpeedChoice="Slow" RecentDistChoice="Medium" />
+    <Item Name="MoveToTarget" SpeedX="150000" SpeedY="150000" SpeedZ="72000" />
+    <Item Name="MoveZ" Mode="Free" SpeedZ="72000" Distance="1000" />
+  </ActionSettings>
+</Item>

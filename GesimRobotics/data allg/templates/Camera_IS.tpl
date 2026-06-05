@@ -1,0 +1,87 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<Root>
+  <Header Id="7e84fac6-2f53-488c-b05d-f93b36e7cb5b" ObjType="Camera" ObjName="IC" Version="V2.0.17" />
+  <Picture File="camera_axis.png">
+    <Dimension X="30000" Y="50000" />
+    <Offset X="-13750" Y="0" />
+  </Picture>
+  <PossibleParentTypes OnlySlots="TRUE">
+    <Item>MZHead</Item>
+  </PossibleParentTypes>
+  <DefaultProperties>
+    <RelPos.X Min="-100000" Max="0" Default="-29500" Step="100" />
+    <RelPos.Y Min="-5000" Max="8000" Default="3000" Step="100" />
+    <RelPos.Z Min="-1500000" Max="-50000" Default="-100550" Step="100" />
+    <WorkingDistance Min="5000" Max="250000" Default="15000" Step="100" />
+    <CamDirection>BirdViewRot180</CamDirection>
+  </DefaultProperties>
+  <ActionLimits>
+    <Jog ActionText="Jog" SequenceUsage="TRUE">
+      <SlowSpeedXY Min="10" Max="5000" Default="5000" Step="100" />
+      <NormalSpeedXY Min="10" Max="20000" Default="10000" Step="1000" />
+      <FastSpeedXY Min="10" Max="115000" Default="115000" Step="5000" />
+      <ManuSpeedXY Min="10" Max="115000" Default="115000" Step="1000" />
+      <SlowSpeedZ Min="10" Max="5000" Default="5000" Step="100" />
+      <NormalSpeedZ Min="10" Max="20000" Default="10000" Step="1000" />
+      <FastSpeedZ Min="10" Max="72000" Default="72000" Step="5000" />
+      <ManuSpeedZ Min="10" Max="72000" Default="72000" Step="1000" />
+      <InchingDistShort Min="1" Max="1000" Default="25" Step="10" />
+      <InchingDistMedium Min="1" Max="10000" Default="1000" Step="100" />
+      <InchingDistLong Min="1" Max="100000" Default="10000" Step="1000" />
+      <InchingDistManuXY Min="1" Max="100000" Default="10000" Step="25" />
+      <InchingDistManuZ Min="1" Max="100000" Default="10000" Step="25" />
+    </Jog>
+    <MoveToTarget SequenceUsage="TRUE" ActionText="Move to Target">
+      <SpeedX Min="10" Max="115000" Default="115000" Step="100" AllowZero="TRUE" />
+      <SpeedY Min="10" Max="115000" Default="115000" Step="100" AllowZero="TRUE" />
+      <SpeedZ Min="10" Max="72000" Default="72000" Step="100" AllowZero="TRUE" />
+      <Offset.Z Min="-2000" Max="50000" Default="0" Step="10" />
+      <TargetTypes>
+        <Item>Mtp</Item>
+        <Item>Slide</Item>
+        <Item>Point</Item>
+        <Item>SpotArray</Item>
+        <Item>TipCalibrator</Item>
+      </TargetTypes>
+    </MoveToTarget>
+    <MoveZ HiddenInManu="TRUE" SequenceUsage="TRUE" ActionText="Move Z">
+      <Mode Default="Free">
+        <Item>Free</Item>
+        <Item>Home</Item>
+      </Mode>
+      <Distance Min="-1000" Max="10000" Default="1000" Step="100" />
+      <SpeedZ Min="10" Max="72000" Default="1000" Step="100" />
+    </MoveZ>
+    <TeachTool ActionText="Teach Tool" SequenceUsage="FALSE" HiddenInManu="FALSE">
+      <TargetTypes>
+        <Item>Mtp</Item>
+        <Item>Slide</Item>
+        <Item>Point</Item>
+        <Item>TipCalibrator</Item>
+      </TargetTypes>
+      <Offset.Z Min="0" Max="10000" Default="2000" Step="10" />
+    </TeachTool>
+    <TeachTarget ActionText="Teach Target">
+      <Offset.Z Min="0" Max="10000" Default="2000" Step="10" />
+      <TargetTypes>
+        <Item>Slide</Item>
+        <Item>Point</Item>
+        <Item>SpotArray</Item>
+        <Item>Mtp</Item>
+      </TargetTypes>
+    </TeachTarget>
+    <TakePicture ActionText="Take Picture" SequenceUsage="TRUE"></TakePicture>
+    <MoveXY SequenceUsage="TRUE" HiddenInManu="FALSE" ActionText="Move XY">
+      <Mode Default="Relative">
+        <Item>Relative</Item>
+      </Mode>
+      <DistanceX Min="-50000" Max="50000" Default="0" Step="100" />
+      <DistanceY Min="-50000" Max="50000" Default="0" Step="100" />
+      <SpeedX Min="10" Max="115000" Default="10000" Step="100" />
+      <SpeedY Min="10" Max="115000" Default="10000" Step="100" />
+    </MoveXY>
+  </ActionLimits>
+  <Categories>
+    <Item>axis</Item>
+  </Categories>
+</Root>

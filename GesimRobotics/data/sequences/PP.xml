@@ -1,0 +1,72 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<Root>
+  <Objects>
+    <Object>
+      <Model Type="Block" FillRule="Positive">
+        <Radius>15000</Radius>
+        <IsHollow>false</IsHollow>
+        <InnerRadius>3500</InnerRadius>
+        <Corners>4</Corners>
+        <Height>10000</Height>
+      </Model>
+      <Position Type="CenterOnOrigin">
+        <X>0</X>
+        <Y>0</Y>
+        <Z>0</Z>
+        <Rotate>true</Rotate>
+        <RotationAngle>45000</RotationAngle>
+      </Position>
+      <Materials>
+        <Material>
+          <Infill>
+            <StartAngle>45</StartAngle>
+            <AngleChange>90</AngleChange>
+            <RepeatAngleChange>1</RepeatAngleChange>
+            <StrandDistance>1000</StrandDistance>
+            <MinDistance>450</MinDistance>
+            <MinLength>450</MinLength>
+          </Infill>
+          <Layers OutlineFirst="false">
+            <Layer>
+              <Infill>1</Infill>
+              <Outline></Outline>
+            </Layer>
+          </Layers>
+        </Material>
+      </Materials>
+    </Object>
+  </Objects>
+  <Tools>
+    <Tool Type="Extruder" ObjectId="2307e522-a3d6-44c7-b418-25a04baa1566">
+      <Identifier>1</Identifier>
+      <Color>#FF7F2A6A</Color>
+      <Speed>8000</Speed>
+      <Connection>OutlinePlus</Connection>
+      <Feed>275</Feed>
+      <StrandHeight>260</StrandHeight>
+      <StrandWidth>400</StrandWidth>
+      <StartBreak>100</StartBreak>
+      <EndBreak>100</EndBreak>
+      <TearOffDirection>Horizontal</TearOffDirection>
+      <TearOffSpeed>115000</TearOffSpeed>
+      <TearOffDistance>2000</TearOffDistance>
+      <SetInactive>true</SetInactive>
+      <CleanTipBeforeUsage>false</CleanTipBeforeUsage>
+      <CleanTipAfterUsage>false</CleanTipAfterUsage>
+      <RepeatTipCleaning>1</RepeatTipCleaning>
+    </Tool>
+  </Tools>
+  <Options>
+    <CustomToolOrder>false</CustomToolOrder>
+    <ToolOrder>1</ToolOrder>
+    <IsPartialPrint>false</IsPartialPrint>
+    <MinZHeight>0</MinZHeight>
+    <MaxZHeight>9879</MaxZHeight>
+    <Pausing>false</Pausing>
+    <LayerPause>30000</LayerPause>
+    <RepeatPause>10</RepeatPause>
+    <Smoothing>false</Smoothing>
+    <SmoothingMinAngle>45</SmoothingMinAngle>
+    <SmoothingMaxDistance>100</SmoothingMaxDistance>
+  </Options>
+</Root>

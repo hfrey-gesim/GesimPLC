@@ -1,0 +1,137 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<Root>
+  <Objects>
+    <Object>
+      <Model Type="ThreeMF">
+        <FileName>D:\Projekte\Plattform C\Software\GesimRobotics\trunk\bin\Scaffolder (Debug)\data\1.3mf</FileName>
+      </Model>
+      <Position Type="CenterOnOrigin">
+        <X>34452</X>
+        <Y>-3325</Y>
+        <Z>0</Z>
+      </Position>
+      <Materials>
+        <Material>
+          <Infill Print="true">
+            <StartAngle>0</StartAngle>
+            <AngleChange>90</AngleChange>
+            <RepeatAngleChange>1</RepeatAngleChange>
+            <StrandDistance>1000</StrandDistance>
+            <MinLength>500</MinLength>
+          </Infill>
+          <Layers>
+            <Layer>
+              <Infill>2</Infill>
+              <Outline></Outline>
+            </Layer>
+          </Layers>
+        </Material>
+        <Material>
+          <Infill Print="true">
+            <StartAngle>0</StartAngle>
+            <AngleChange>90</AngleChange>
+            <RepeatAngleChange>1</RepeatAngleChange>
+            <StrandDistance>1000</StrandDistance>
+            <MinLength>500</MinLength>
+          </Infill>
+          <Layers>
+            <Layer>
+              <Infill>3</Infill>
+              <Outline></Outline>
+            </Layer>
+          </Layers>
+        </Material>
+      </Materials>
+    </Object>
+  </Objects>
+  <Tools>
+    <Tool Type="PiezoPip" ObjectId="5">
+      <Identifier>1</Identifier>
+      <Color>#FF7F2A6A</Color>
+      <Speed>10000</Speed>
+      <Connection>None</Connection>
+      <ZOffset>500</ZOffset>
+      <SpotHeight>10</SpotHeight>
+      <SpotRadius>250</SpotRadius>
+      <Spotting>true</Spotting>
+      <Drops>22</Drops>
+      <SpotDistance>500</SpotDistance>
+    </Tool>
+    <Tool Type="CartridgeDisp" ObjectId="6">
+      <Identifier>2</Identifier>
+      <Color>#FF000000</Color>
+      <Speed>10000</Speed>
+      <Connection>OutlinePlus</Connection>
+      <Pressure>100</Pressure>
+      <StrandHeight>250</StrandHeight>
+      <StrandWidth>250</StrandWidth>
+      <StartBreak>0</StartBreak>
+      <EndBreak>0</EndBreak>
+      <TearOffDirection>None</TearOffDirection>
+      <TearOffSpeed>115000</TearOffSpeed>
+      <TearOffDistance>1000</TearOffDistance>
+      <SetInactive>true</SetInactive>
+      <CleanTipBeforeUsage>false</CleanTipBeforeUsage>
+      <CleanTipAfterUsage>false</CleanTipAfterUsage>
+      <RepeatTipCleaning>0</RepeatTipCleaning>
+    </Tool>
+    <Tool Type="CartridgeDisp" ObjectId="8">
+      <Identifier>3</Identifier>
+      <Color>#FFFFFF00</Color>
+      <Speed>10000</Speed>
+      <Connection>OutlinePlus</Connection>
+      <Pressure>100</Pressure>
+      <StrandHeight>250</StrandHeight>
+      <StrandWidth>250</StrandWidth>
+      <StartBreak>0</StartBreak>
+      <EndBreak>0</EndBreak>
+      <TearOffDirection>None</TearOffDirection>
+      <TearOffSpeed>115000</TearOffSpeed>
+      <TearOffDistance>1000</TearOffDistance>
+      <SetInactive>true</SetInactive>
+      <CleanTipBeforeUsage>false</CleanTipBeforeUsage>
+      <CleanTipAfterUsage>false</CleanTipAfterUsage>
+      <RepeatTipCleaning>0</RepeatTipCleaning>
+    </Tool>
+    <Tool Type="CartridgeDisp" ObjectId="11">
+      <Identifier>4</Identifier>
+      <Color>#FF00FF00</Color>
+      <Speed>10000</Speed>
+      <Connection>OutlinePlus</Connection>
+      <Pressure>100</Pressure>
+      <StrandHeight>250</StrandHeight>
+      <StrandWidth>250</StrandWidth>
+      <StartBreak>0</StartBreak>
+      <EndBreak>0</EndBreak>
+      <TearOffDirection>None</TearOffDirection>
+      <TearOffSpeed>115000</TearOffSpeed>
+      <TearOffDistance>1000</TearOffDistance>
+      <SetInactive>true</SetInactive>
+      <CleanTipBeforeUsage>false</CleanTipBeforeUsage>
+      <CleanTipAfterUsage>false</CleanTipAfterUsage>
+      <RepeatTipCleaning>0</RepeatTipCleaning>
+    </Tool>
+    <Tool Type="Exposure" ObjectId="12">
+      <Identifier>5</Identifier>
+      <Color>#80000000</Color>
+      <Speed>10000</Speed>
+      <Connection>OutlinePlus</Connection>
+      <ZOffset>0</ZOffset>
+      <Brightness>50</Brightness>
+      <ExposeWidth>300</ExposeWidth>
+      <ExposeOnCenter>false</ExposeOnCenter>
+      <Time>0</Time>
+      <RepeatExposure>1</RepeatExposure>
+    </Tool>
+  </Tools>
+  <Options>
+    <ToolOrder>23451</ToolOrder>
+    <IsPartialPrint>false</IsPartialPrint>
+    <MaxZHeight>0</MaxZHeight>
+    <Pausing>false</Pausing>
+    <LayerPause>0</LayerPause>
+    <RepeatPause>1</RepeatPause>
+    <Smoothing>false</Smoothing>
+    <SmoothingMinAngle>45</SmoothingMinAngle>
+  </Options>
+</Root>

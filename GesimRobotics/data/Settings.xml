@@ -1,0 +1,22 @@
+<?xml version="1.0" encoding="utf-8"?>
+<MinMaxDefault xmlns:xsd="http://www.w3.org/2001/XMLSchema" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance">
+  <CurrentConfiguration>GESIM_Config_TwinKopf_TwinPip</CurrentConfiguration>
+  <CurrentNetwork>PickandPlace2</CurrentNetwork>
+  <IsAutoConnect>false</IsAutoConnect>
+  <MachineName>LANGER-LULATSCH</MachineName>
+  <ConnectionOption xsi:nil="true" />
+  <CurrentScaffold>PickandPlace_Positionierung2</CurrentScaffold>
+  <CurrentSequence>Test</CurrentSequence>
+  <RunFiles />
+  <ConfigPageSetup>v1630;430;530;273;568.38</ConfigPageSetup>
+  <ManuPageSetup>v1635.670846394984;424.329153605016;530;173.697594501718;216;490.302405498282</ManuPageSetup>
+  <DaltonisationShader>v10;0;0;0;0;0</DaltonisationShader>
+  <FontSizeFactor>1</FontSizeFactor>
+  <Language>en</Language>
+  <ManuPageHideInactive>false</ManuPageHideInactive>
+  <ShowBirdViewAxes>false</ShowBirdViewAxes>
+  <ShowBirdViewGrid>false</ShowBirdViewGrid>
+  <BirdViewGridDistanceMicrometer>10000</BirdViewGridDistanceMicrometer>
+  <BirdViewGridDistanceMarkerEveryNSteps>5</BirdViewGridDistanceMarkerEveryNSteps>
+  <HideSlicer>false</HideSlicer>
+</MinMaxDefault>

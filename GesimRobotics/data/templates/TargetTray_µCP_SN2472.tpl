@@ -1,0 +1,52 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<Root>
+  <Header Id="a547c620-cc3f-4c32-bbb5-a3c8333f7755" ObjType="TargetTray" ObjName="TargetTray" Version="V2.0.17" />
+  <Picture File="target_tray_rpd_µcp.png">
+    <Dimension X="240000" Y="412000" />
+    <Offset X="0" Y="0" />
+  </Picture>
+  <PossibleParentTypes OnlySlots="TRUE">
+    <Item>Workplate</Item>
+  </PossibleParentTypes>
+  <DefaultProperties>
+    <RelPos.X Min="0" Max="0" Default="0" Step="500" />
+    <RelPos.Y Min="0" Max="0" Default="0" Step="500" />
+    <RelPos.Z Min="0" Max="0" Default="0" Step="500" />
+    <Width Min="240000" Max="240000" Default="240000" Step="100" />
+    <Depth Min="412000" Max="412000" Default="412000" Step="100" />
+    <Height Min="3000" Max="3000" Default="3000" Step="100" />
+    <FreeHeight Min="1" Max="100000" Default="8000" Step="100" AllowZero="TRUE" />
+  </DefaultProperties>
+  <Slots>
+    <Item Nr="1" Name="SubstrateHolder Slot" RelPos.X="20000" RelPos.Y="18100" RelPos.Z="0" Depth="0" Diameter="0" Disabled="FALSE">
+      <ChildLimit>
+        <Item ObjType="SubstHolder">
+          <Categories>
+            <Item>single+transparent</Item>
+          </Categories>
+        </Item>
+      </ChildLimit>
+    </Item>
+    <Item Nr="2" Name="StampMagazine_Slot1" RelPos.X="0" RelPos.Y="245000" RelPos.Z="0" Depth="0" Diameter="0" Disabled="FALSE">
+      <ChildLimit>
+        <Item ObjType="StampMagazine">
+          <Categories>
+            <Item>horizontal+3+womeasure</Item>
+          </Categories>
+        </Item>
+      </ChildLimit>
+    </Item>
+    <Item Nr="3" Name="StampMagazine_Slot2" RelPos.X="0" RelPos.Y="325000" RelPos.Z="0" Depth="0" Diameter="0" Disabled="FALSE">
+      <ChildLimit>
+        <Item ObjType="StampMagazine">
+          <Categories>
+            <Item>horizontal+3+womeasure</Item>
+          </Categories>
+        </Item>
+      </ChildLimit>
+    </Item>
+  </Slots>
+  <Categories>
+    <Item>target+µcp</Item>
+  </Categories>
+</Root>

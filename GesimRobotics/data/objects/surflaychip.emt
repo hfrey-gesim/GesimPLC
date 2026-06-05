@@ -1,0 +1,4 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<Item Id="00000000-0000-0000-0000-000000000000" TemplateId="7efea211-6ced-4104-8ca6-26f74abfc51a" Name="surflaychip" ObjType="Slide" RelPos.X="27885" RelPos.Y="68070" RelPos.Z="0" Width="15000" Depth="15000" Heigth="1000" FreeHeight="0" Offset.Z="0">
+  <Item Id="00000000-0000-0000-0000-000000000000" TemplateId="31dee62b-b1e5-4a80-95a9-581fd37f6ebb" Name="P1" ObjType="Point" RelPos.X="7200" RelPos.Y="7300" RelPos.Z="0" Width="0" Depth="0" Heigth="0" FreeHeight="0" Offset.Z="-123" />
+</Item>

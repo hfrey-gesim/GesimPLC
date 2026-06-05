@@ -1,0 +1,13 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<root>
+  <analyzer camera="is_08420193">
+    <filters>
+      <gauss enabled="true" />
+      <diffxy enabled="true" />
+      <blackwhite enabled="true" threshold="120" />
+    </filters>
+    <parameters minpixel="38" minradius="8" maxradius="60" />
+    <test maxtrials="3" predrops="25" tests="1" camerawarmup="1" />
+    <trigger enabled="true" />
+  </analyzer>
+</root>

@@ -1,0 +1,17 @@
+<?xml version="1.0" encoding="utf-8"?>
+<Target xmlns:xsd="http://www.w3.org/2001/XMLSchema" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance">
+  <Width>75000</Width>
+  <Height>1000</Height>
+  <Depth>25000</Depth>
+  <SpotPatterns />
+  <Marker1Enabled>true</Marker1Enabled>
+  <Marker1PosX>4500</Marker1PosX>
+  <Marker1PosY>4500</Marker1PosY>
+  <Marker1Type>test1</Marker1Type>
+  <Marker1CornerPos>LeftBottom</Marker1CornerPos>
+  <Marker2Enabled>true</Marker2Enabled>
+  <Marker2PosX>70500</Marker2PosX>
+  <Marker2PosY>20500</Marker2PosY>
+  <Marker2Type>test1</Marker2Type>
+  <Marker2CornerPos>RightTop</Marker2CornerPos>
+</Target>

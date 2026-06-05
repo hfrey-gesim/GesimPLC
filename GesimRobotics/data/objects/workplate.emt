@@ -1,0 +1,75 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<Item Id="00000000-0000-0000-0000-000000000000" TemplateId="f5fbb740-ecad-48d7-ab06-b08b579ed2f2" Name="workplate" ObjType="Workplate" ParentSlotNr="7" RelPos.X="0" RelPos.Y="0" RelPos.Z="0" Width="1014000" Depth="498000" Heigth="0" FreeHeight="0">
+  <Slots>
+    <Item Nr="1" Name="Tray Slot 1" RelPos.X="55000" RelPos.Y="43000" RelPos.Z="-3000" Dim.X="0" Dim.Y="0" />
+    <Item Nr="2" Name="Tray Slot 2" RelPos.X="315000" RelPos.Y="43000" RelPos.Z="-3000" Dim.X="0" Dim.Y="0" />
+    <Item Nr="3" Name="Tray Slot 3" RelPos.X="575000" RelPos.Y="43000" RelPos.Z="-3000" Dim.X="0" Dim.Y="0" />
+  </Slots>
+  <Item Id="00000000-0000-0000-0000-000000000000" TemplateId="05259a22-a796-49b5-bb81-91a5a9186444" Name="ServiceTray" ObjType="TargetTray" ParentSlotNr="3" RelPos.X="0" RelPos.Y="0" RelPos.Z="0" Width="240000" Depth="412000" Heigth="3000" FreeHeight="0">
+    <Slots>
+      <Item Nr="1" Name="TipRack Slot 1" RelPos.X="15250" RelPos.Y="14500" RelPos.Z="0" Dim.X="0" Dim.Y="0" />
+      <Item Nr="2" Name="TipRack Slot 2" RelPos.X="115250" RelPos.Y="14500" RelPos.Z="0" Dim.X="0" Dim.Y="0" />
+      <Item Nr="3" Name="Stroboscope Slot" RelPos.X="15000" RelPos.Y="159000" RelPos.Z="0" Dim.X="0" Dim.Y="0" />
+      <Item Nr="4" Name="WashStation Slot 1" RelPos.X="123000" RelPos.Y="159000" RelPos.Z="0" Dim.X="0" Dim.Y="0" />
+      <Item Nr="5" Name="WashStation Slot 2" RelPos.X="173500" RelPos.Y="243500" RelPos.Z="0" Dim.X="0" Dim.Y="0" />
+      <Item Nr="6" Name="LiquidReserve Slot" RelPos.X="173500" RelPos.Y="158750" RelPos.Z="8000" Dim.X="0" Dim.Y="0" />
+      <Item Nr="7" Name="TipCalibrator Slot" RelPos.X="15000" RelPos.Y="242000" RelPos.Z="0" Dim.X="0" Dim.Y="0" />
+      <Item Nr="8" Name="DryPad Slot" RelPos.X="106000" RelPos.Y="235250" RelPos.Z="0" Dim.X="0" Dim.Y="0" />
+      <Item Nr="9" Name="PowderStation Slot" RelPos.X="15000" RelPos.Y="342000" RelPos.Z="8000" Dim.X="0" Dim.Y="0" />
+    </Slots>
+    <Item Id="00000000-0000-0000-0000-000000000000" TemplateId="7ff60081-ff66-4bc8-91c8-f4111e8b5fdf" Name="Stroboscope" ObjType="Stroboscope" ParentSlotNr="3" RelPos.X="0" RelPos.Y="0" RelPos.Z="0" Width="100000" Depth="62700" Heigth="38000" FreeHeight="0" MultiZNrTrigger="1" CamDelay="15" StrobDelay="20" StrobDelay2="0" Droplist1_4="0" Droplist5_8="0" Droplist9_12="0" Droplist13_16="0">
+      <SpecPoints>
+        <Item Nr="1" Name="MeasurePoint" Visible="True" RelPos.X="22000" RelPos.Y="20000" RelPos.Z="-17000" />
+      </SpecPoints>
+    </Item>
+    <Item Id="00000000-0000-0000-0000-000000000000" TemplateId="e992e963-f030-4fa4-9d5b-bc2c7e5ff215" Name="WashStation" ObjType="WashStation" ParentSlotNr="4" RelPos.X="0" RelPos.Y="0" RelPos.Z="0" Width="30000" Depth="51000" Heigth="33000" FreeHeight="0" PumpNrWaste="3" ValveNrAirShower="0" LiquidBottle="1" WasteBottle="1">
+      <SpecPoints>
+        <Item Nr="1" Name="WashPoint_Out_Bottom" Visible="True" RelPos.X="20500" RelPos.Y="16500" RelPos.Z="-5000" RinseChannelNr="1" />
+        <Item Nr="2" Name="WashPoint_Out_Top" Visible="True" RelPos.X="20500" RelPos.Y="34500" RelPos.Z="-5000" RinseChannelNr="1" />
+        <Item Nr="3" Name="WashPoint_In_Bottom" Visible="True" RelPos.X="15000" RelPos.Y="16500" RelPos.Z="-2000" RinseChannelNr="0" />
+        <Item Nr="4" Name="WashPoint_In_Top" Visible="True" RelPos.X="15000" RelPos.Y="34500" RelPos.Z="-2000" RinseChannelNr="0" />
+      </SpecPoints>
+      <RinseChannels>
+        <Item Nr="1" PumpNr="2" ValveNr="0" StartSpeed="10" RatedSpeed="50" StartTime="1000" />
+      </RinseChannels>
+    </Item>
+    <Item Id="00000000-0000-0000-0000-000000000000" TemplateId="36ad8e13-8f6f-43a0-ad02-f5c363744bcd" Name="WashStation (AirBlade)" ObjType="WashStation" ParentSlotNr="5" RelPos.X="0" RelPos.Y="0" RelPos.Z="0" Width="42000" Depth="78500" Heigth="68500" FreeHeight="0" PumpNrWaste="5" ValveNrAirShower="1" LiquidBottle="1" WasteBottle="1">
+      <SpecPoints>
+        <Item Nr="1" Name="WashPoint1" Visible="True" RelPos.X="20000" RelPos.Y="17000" RelPos.Z="-5000" RinseChannelNr="0" />
+        <Item Nr="2" Name="WashPoint2" Visible="True" RelPos.X="20000" RelPos.Y="35000" RelPos.Z="-7500" RinseChannelNr="1" />
+        <Item Nr="3" Name="WashPoint3" Visible="True" RelPos.X="20000" RelPos.Y="55500" RelPos.Z="-7500" RinseChannelNr="2" />
+        <Item Nr="4" Name="DryPoint" Visible="True" RelPos.X="20000" RelPos.Y="17000" RelPos.Z="-15000" RinseChannelNr="0" />
+      </SpecPoints>
+      <RinseChannels>
+        <Item Nr="1" PumpNr="9" ValveNr="7" StartSpeed="10" RatedSpeed="50" StartTime="1000" />
+        <Item Nr="2" PumpNr="9" ValveNr="7" StartSpeed="10" RatedSpeed="50" StartTime="1000" />
+      </RinseChannels>
+    </Item>
+    <Item Id="00000000-0000-0000-0000-000000000000" TemplateId="5cd85de5-68a3-497f-8131-d6c95eab2abf" Name="DryPad" ObjType="DryPad" ParentSlotNr="8" RelPos.X="0" RelPos.Y="0" RelPos.Z="0" Width="56000" Depth="90000" Heigth="21500" FreeHeight="29000" Area1Point1.X="12500" Area1Point1.Y="3000" Area1Point2.X="43500" Area1Point2.Y="87000" Area1IntermedPoints.X="100" Area1IntermedPoints.Y="100" Area2Point1.X="8000" Area2Point1.Y="15000" Area2Point2.X="88000" Area2Point2.Y="25000" Area2IntermedPoints.X="100" Area2IntermedPoints.Y="100" Offset.Z="0" />
+    <Item Id="00000000-0000-0000-0000-000000000000" TemplateId="dab409d7-e9d4-4cde-9cc3-2de993573d03" Name="TipCalibrator" ObjType="TipCalibrator" ParentSlotNr="7" RelPos.X="0" RelPos.Y="0" RelPos.Z="0" Width="80000" Depth="80000" Heigth="33000" FreeHeight="0">
+      <SpecPoints>
+        <Item Nr="1" Name="IntersectPoint" Visible="False" RelPos.X="40000" RelPos.Y="40000" RelPos.Z="-3300" />
+        <Item Nr="2" Name="CalibPoint" Visible="False" RelPos.X="40000" RelPos.Y="40000" RelPos.Z="-3300" />
+      </SpecPoints>
+    </Item>
+  </Item>
+  <Item Id="00000000-0000-0000-0000-000000000000" TemplateId="f54aa050-6d8c-4786-8151-fc744fdb2737" Name="TargetTray" ObjType="TargetTray" ParentSlotNr="1" RelPos.X="0" RelPos.Y="0" RelPos.Z="0" Width="240000" Depth="412000" Heigth="3000" FreeHeight="8000">
+    <Slots>
+      <Item Nr="1" Name="Mtp Slot 1" RelPos.X="27200" RelPos.Y="72000" RelPos.Z="-19500" Dim.X="0" Dim.Y="0" />
+      <Item Nr="2" Name="Mtp Slot 2" RelPos.X="127400" RelPos.Y="72000" RelPos.Z="-19500" Dim.X="0" Dim.Y="0" />
+      <Item Nr="3" Name="Mtp Slot 3" RelPos.X="27200" RelPos.Y="212200" RelPos.Z="-19500" Dim.X="0" Dim.Y="0" />
+      <Item Nr="4" Name="Mtp Slot 4" RelPos.X="127400" RelPos.Y="212200" RelPos.Z="-19500" Dim.X="0" Dim.Y="0" />
+    </Slots>
+  </Item>
+  <Item Id="00000000-0000-0000-0000-000000000000" TemplateId="b8f1b59c-7482-444d-9182-7fe0601af83d" Name="TargetTray" ObjType="TargetTray" ParentSlotNr="2" RelPos.X="0" RelPos.Y="0" RelPos.Z="0" Width="240000" Depth="412000" Heigth="3000" FreeHeight="8000">
+    <Slots>
+      <Item Nr="1" Name="SubstrateHolder Slot" RelPos.X="20000" RelPos.Y="193900" RelPos.Z="0" Dim.X="0" Dim.Y="0" />
+    </Slots>
+    <Item Id="00000000-0000-0000-0000-000000000000" TemplateId="5a09a617-e5f1-4887-986f-a9422c95c274" Name="SingleSubstrateHolder" ObjType="SubstHolder" ParentSlotNr="1" RelPos.X="0" RelPos.Y="0" RelPos.Z="0" Width="200000" Depth="200000" Heigth="20000" FreeHeight="23000" HeaterChannel="0" HeaterKp="0" HeaterKi="0" HeaterKd="0" HeaterTa="0" ValveNrCooling="0" ValveNrVac="10">
+      <Slots />
+      <ActionSettings>
+        <Item Name="SwitchPressure" Time="0" />
+      </ActionSettings>
+    </Item>
+  </Item>
+</Item>
