@@ -1,7 +1,0 @@
-﻿<?xml version="1.0" encoding="utf-8"?>
-<Root>
-  <Header Version="2.0.18.5239" Id="0" />
-  <Steps>
-    <Item Id="21336a89-acf2-488f-9a48-e3ca77b9e83b" Description="" ObjectType="SubstHolder" ObjectId="8dc8adc8-69ec-446f-8287-e021e6a47c05" ActionType="Heating" Temp="420" Activate="false" />
-  </Steps>
-</Root>

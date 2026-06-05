@@ -1,7 +1,0 @@
-﻿<?xml version="1.0" encoding="utf-8"?>
-<Root>
-  <Header Version="2.0.18.5239" Id="0" />
-  <Steps>
-    <Item Id="629fa42e-a759-453b-b846-ba2161f1c1c8" Description="" ObjectType="Root" ObjectId="65116ea0-bb3d-435c-9b05-e79cb8b83081" ActionType="RunGCode" TargetId="53d911ea-aad6-47c6-8648-5c9fc6f242db" TargetRef="Center" FileName="Testroutine_RPC_RPD_ZAxes_1_3_5_7" WaitPointId="53d911ea-aad6-47c6-8648-5c9fc6f242db" Offset.Z="0" />
-  </Steps>
-</Root>

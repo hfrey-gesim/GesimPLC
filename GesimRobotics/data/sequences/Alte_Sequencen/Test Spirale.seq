@@ -1,7 +1,0 @@
-﻿<?xml version="1.0" encoding="utf-8"?>
-<Root>
-  <Header Version="2.0.16.1" Id="0" />
-  <Steps>
-    <Item Id="a66fa937-a13b-4e7d-a14c-11a7ea48cca0" Description="" ObjectType="Root" ObjectId="115af40e-3480-4e93-91ee-e518b5349e90" ActionType="RunGCode" TargetId="21edd852-7c4c-4425-96db-98de0f9fa5f6" TargetRef="Center" Col="0" Row="0" FileName="Spirale" WaitPointId="c133b1c2-b675-44a6-9c61-10fd4361f7c2" Offset.Z="100" />
-  </Steps>
-</Root>

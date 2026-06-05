@@ -1,7 +1,0 @@
-﻿<?xml version="1.0" encoding="utf-8"?>
-<Item Id="00000000-0000-0000-0000-000000000000" TemplateId="938431f0-b55d-2920-9331-21a593ee9de3" Name="Target_PhagenID_Objekterkennung" ObjType="Slide" RelPos.X="68574" RelPos.Y="5157" RelPos.Z="0" Width="25000" Depth="75000" Heigth="1000" FreeHeight="0" Offset.Z="756">
-  <Item Id="00000000-0000-0000-0000-000000000000" TemplateId="31dee62b-b1e5-4a80-95a9-581fd37f6ebb" Name="PrintPoint" ObjType="Point" RelPos.X="0" RelPos.Y="0" RelPos.Z="0" Width="0" Depth="0" Heigth="0" FreeHeight="0" Offset.Z="0" PType="Regular" />
-  <Item Id="00000000-0000-0000-0000-000000000000" TemplateId="31dee62b-b1e5-4a80-95a9-581fd37f6ebb" Name="1Point" ObjType="Point" RelPos.X="12500" RelPos.Y="5000" RelPos.Z="0" Width="0" Depth="0" Heigth="0" FreeHeight="0" Offset.Z="-17" PType="Regular" />
-  <Item Id="00000000-0000-0000-0000-000000000000" TemplateId="31dee62b-b1e5-4a80-95a9-581fd37f6ebb" Name="2Point" ObjType="Point" RelPos.X="12500" RelPos.Y="70000" RelPos.Z="0" Width="0" Depth="0" Heigth="0" FreeHeight="0" Offset.Z="-64" PType="Regular" />
-  <CameraDetection Marker1Offset.X="-10" Marker1Offset.Y="20" Marker2Offset.X="-2319" Marker2Offset.Y="2218" CamDetectionTarget="PhagenID_Chip2" />
-</Item>

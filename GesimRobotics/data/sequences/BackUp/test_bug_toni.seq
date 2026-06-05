@@ -1,7 +1,0 @@
-﻿<?xml version="1.0" encoding="utf-8"?>
-<Root>
-  <Header Version="2.0.18.5239" Id="0" />
-  <Steps>
-    <Item Id="7684efdb-3a5c-48c1-b179-30a585e24aa1" Description="" ObjectType="Root" ObjectId="e94c0ae7-f5eb-42b3-bf25-c6806131cff7" ActionType="RunGCode" TargetId="e0851116-5296-4a99-93c2-dc44fe6f67c7" TargetRef="Center" FileName="G-Code_3DPLTS_Y-Dichtung_V1" WaitPointId="6850fc48-cffb-43f8-a6d9-2421ecd72da7" Offset.Z="0" />
-  </Steps>
-</Root>

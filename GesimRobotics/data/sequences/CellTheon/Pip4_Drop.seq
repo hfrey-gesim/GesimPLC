@@ -1,7 +1,0 @@
-﻿<?xml version="1.0" encoding="utf-8"?>
-<Root>
-  <Header Version="2.0.18.5239" Id="0" />
-  <Steps>
-    <Item Id="2697ed16-9637-4176-ab9a-da8929acda0a" Description="" ObjectType="PiezoPip" ObjectId="8628f26f-8169-413f-8f2a-3a4a8484a73f" ActionType="DispenseDrops" Ctrl="On" Drops="1" />
-  </Steps>
-</Root>

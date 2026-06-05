@@ -1,7 +1,0 @@
-﻿<?xml version="1.0" encoding="utf-8"?>
-<Root>
-  <Header Version="2.0.18.5239" Id="0" />
-  <Steps>
-    <Item Id="e03a7495-a3d0-4f8d-a5cf-e30d56dc7333" Description="" ObjectType="PiezoPip" ObjectId="57e6b688-efaf-4b6f-ac20-ad25e48b79e8" ActionType="Measure" TargetId="aea50137-590f-44b1-b0d7-53552b21e8c5" Option="FastApproach" />
-  </Steps>
-</Root>

@@ -1,7 +1,0 @@
-﻿<?xml version="1.0" encoding="utf-8"?>
-<Root>
-  <Header Version="2.0.18.5239" Id="0" />
-  <Steps>
-    <Item Id="156d46f5-f177-4bf3-9e8c-ddf9ef9635f9" Description="" ObjectType="Root" ObjectId="e94c0ae7-f5eb-42b3-bf25-c6806131cff7" ActionType="RunGCode" TargetId="06edac3b-adc8-4657-b6f9-ad9b456f0a5f" TargetRef="Center" FileName="csv_schlange" WaitPointId="82db5aaf-82c0-4029-80ed-472a23fc094c" Offset.Z="0" />
-  </Steps>
-</Root>

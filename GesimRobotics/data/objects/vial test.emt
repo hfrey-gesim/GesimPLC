@@ -1,2 +1,0 @@
-﻿<?xml version="1.0" encoding="utf-8"?>
-<Item Id="00000000-0000-0000-0000-000000000000" TemplateId="034a9dfd-dc8a-44a4-8525-2aceed1d93dd" Name="vial test" ObjType="Vial" ParentSlotNr="9" Width="16000" Depth="16000" Heigth="35000" SlotDiameter="16000" OverlapTool="0" OverlapSlot="99999" Offset.X="0" Offset.Y="0" Offset.Z="0" MeasureDistance="0" DockOffset="0" Used="False" TopLevel="-10000" BottomLevel="-30000" />

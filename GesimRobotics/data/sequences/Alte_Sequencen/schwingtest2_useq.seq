@@ -1,7 +1,0 @@
-﻿<?xml version="1.0" encoding="utf-8"?>
-<Root>
-  <Header Version="2.0.17.2" Id="0" />
-  <Steps>
-    <Item Id="4db174c6-4bc8-47df-817c-d0d253eb68e9" Description="" ObjectType="PiezoPip" ObjectId="4c0dcd57-30d7-4c9c-a94e-85f6b71e7a6e" ActionType="MoveToTarget" TargetId="ed2b88cd-645d-4471-beb9-fb69e4666f22" TargetRef="ArrayCounter" SpeedX="115000" SpeedY="115000" SpeedZ="72000" Offset.X="0" Offset.Y="0" Offset.Z="0" ZLevel="PrePos" />
-  </Steps>
-</Root>

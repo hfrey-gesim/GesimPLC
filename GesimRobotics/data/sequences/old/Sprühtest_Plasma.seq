@@ -1,7 +1,0 @@
-﻿<?xml version="1.0" encoding="utf-8"?>
-<Root>
-  <Header Version="2.0.18.5239" Id="0" />
-  <Steps>
-    <Item Id="b5fc96a0-8564-4041-baa2-2e7519cec464" Description="" ObjectType="Root" ObjectId="e94c0ae7-f5eb-42b3-bf25-c6806131cff7" ActionType="RunGCode" TargetId="af9c06a9-0434-4aa8-bdb2-eb3a705c35f3" TargetRef="Center" FileName="Sprühventil_Plasmabehandlung" WaitPointId="b044bf59-fc3a-41e2-88ca-feaafdfdb8d0" Offset.Z="0" />
-  </Steps>
-</Root>

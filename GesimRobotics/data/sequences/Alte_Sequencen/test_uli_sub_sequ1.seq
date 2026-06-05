@@ -1,7 +1,0 @@
-﻿<?xml version="1.0" encoding="utf-8"?>
-<Root>
-  <Header Version="2.0.17.2" Id="0" />
-  <Steps>
-    <Item Id="8f771177-def4-479b-9614-689cd8e9adef" Description="" ObjectType="MultiCartridgeHolder" ObjectId="37b7fc12-6aa6-4022-b595-86f885a881f9" ActionType="MoveToTarget" TargetId="775600fe-2afd-4571-a748-8e0ff6c025fc" TargetRef="ArrayCounter" SpeedX="115000" SpeedY="115000" SpeedZ="72000" Offset.X="0" Offset.Y="0" Offset.Z="5000" ZLevel="PrePos" />
-  </Steps>
-</Root>

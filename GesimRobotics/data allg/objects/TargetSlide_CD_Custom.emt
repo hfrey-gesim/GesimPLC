@@ -1,5 +1,0 @@
-﻿<?xml version="1.0" encoding="utf-8"?>
-<Item Id="00000000-0000-0000-0000-000000000000" TemplateId="938431f0-b55d-2920-9331-21a593ee9de3" Name="TargetSlide_CD_Custom" ObjType="Slide" ParentSlotNr="1" RelPos.X="0" RelPos.Y="0" RelPos.Z="0" Width="75000" Depth="25000" Heigth="1000" FreeHeight="0" Offset.Z="0">
-  <Item Id="00000000-0000-0000-0000-000000000000" TemplateId="31dee62b-b1e5-4a80-95a9-581fd37f6ebb" Name="Point" ObjType="Point" RelPos.X="37500" RelPos.Y="12500" RelPos.Z="0" Width="0" Depth="0" Heigth="0" FreeHeight="0" Offset.Z="0" PType="Regular" />
-  <CameraDetection Marker1Position.X="0" Marker1Position.Y="0" Marker1Offset.X="0" Marker1Offset.Y="0" Marker1Offset.Z="0" Marker2Offset.X="0" Marker2Offset.Y="0" Marker2Offset.Z="0" Rotation="0" CamDetectionTarget="Target_test3" />
-</Item>

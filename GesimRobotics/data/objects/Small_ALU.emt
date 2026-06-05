@@ -1,8 +1,0 @@
-﻿<?xml version="1.0" encoding="utf-8"?>
-<Item Id="00000000-0000-0000-0000-000000000000" TemplateId="7efea211-6ced-4104-8ca6-26f74abfc51a" Name="Small_ALU" ObjType="Slide" RelPos.X="37025" RelPos.Y="88394" RelPos.Z="0" Width="70100" Depth="108000" Heigth="2500" FreeHeight="0" Offset.Z="0">
-  <Item Id="00000000-0000-0000-0000-000000000000" TemplateId="31dee62b-b1e5-4a80-95a9-581fd37f6ebb" Name="PrintPoint" ObjType="Point" RelPos.X="35050" RelPos.Y="54000" RelPos.Z="0" Width="0" Depth="0" Heigth="0" FreeHeight="0" Offset.Z="0" />
-  <Item Id="00000000-0000-0000-0000-000000000000" TemplateId="31dee62b-b1e5-4a80-95a9-581fd37f6ebb" Name="UL" ObjType="Point" RelPos.X="4000" RelPos.Y="4000" RelPos.Z="0" Width="0" Depth="0" Heigth="0" FreeHeight="0" Offset.Z="-224" />
-  <Item Id="00000000-0000-0000-0000-000000000000" TemplateId="31dee62b-b1e5-4a80-95a9-581fd37f6ebb" Name="UR" ObjType="Point" RelPos.X="66100" RelPos.Y="4000" RelPos.Z="0" Width="0" Depth="0" Heigth="0" FreeHeight="0" Offset.Z="-179" />
-  <Item Id="00000000-0000-0000-0000-000000000000" TemplateId="31dee62b-b1e5-4a80-95a9-581fd37f6ebb" Name="OR" ObjType="Point" RelPos.X="66100" RelPos.Y="104000" RelPos.Z="0" Width="0" Depth="0" Heigth="0" FreeHeight="0" Offset.Z="-226" />
-  <Item Id="00000000-0000-0000-0000-000000000000" TemplateId="31dee62b-b1e5-4a80-95a9-581fd37f6ebb" Name="OL" ObjType="Point" RelPos.X="4000" RelPos.Y="104000" RelPos.Z="0" Width="0" Depth="0" Heigth="0" FreeHeight="0" Offset.Z="-171" />
-</Item>

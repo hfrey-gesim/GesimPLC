@@ -1,7 +1,0 @@
-﻿<?xml version="1.0" encoding="utf-8"?>
-<Root>
-  <Header Version="2.0.18.5239" Id="0" />
-  <Steps>
-    <Item Id="5a6db284-91a7-4f15-ad78-390f7e432537" Description="" ObjectType="Root" ObjectId="e94c0ae7-f5eb-42b3-bf25-c6806131cff7" ActionType="RunGCode" TargetId="f1cd72c4-3b58-416e-9bf3-972f88f5c1cf" TargetRef="Center" FileName="LifeCare_Plasma_komplettes_Slide" WaitPointId="8edb73bb-347e-439a-bc63-195191b4b827" Offset.Z="0" />
-  </Steps>
-</Root>

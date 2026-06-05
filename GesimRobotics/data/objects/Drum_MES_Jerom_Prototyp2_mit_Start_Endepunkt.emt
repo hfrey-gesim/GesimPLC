@@ -1,9 +1,0 @@
-﻿<?xml version="1.0" encoding="utf-8"?>
-<Item Id="00000000-0000-0000-0000-000000000000" TemplateId="06d64534-1185-4b48-889b-842baabe3066" Name="Drum_MES_Jerom_Prototyp2_mit_Start_Endepunkt" ObjType="Slide" RelPos.X="45000" RelPos.Y="45000" RelPos.Z="-33000" Width="160000" Depth="260000" Heigth="56000" FreeHeight="0" Offset.Z="0">
-  <Item Id="00000000-0000-0000-0000-000000000000" TemplateId="31dee62b-b1e5-4a80-95a9-581fd37f6ebb" Name="MeasurePoint" ObjType="Point" RelPos.X="61875" RelPos.Y="109925" RelPos.Z="-8063" Width="0" Depth="0" Heigth="0" FreeHeight="0" Offset.Z="-185" PType="Regular">
-    <Item Id="00000000-0000-0000-0000-000000000000" TemplateId="31dee62b-b1e5-4a80-95a9-581fd37f6ebb" Name="StartPoint" ObjType="Point" RelPos.X="0" RelPos.Y="-15000" RelPos.Z="3100" Width="0" Depth="0" Heigth="0" FreeHeight="0" Offset.Z="0" PType="Regular">
-      <Item Id="00000000-0000-0000-0000-000000000000" TemplateId="b6f84478-a8db-496d-aed8-96e246230fba" Name="SpotArray5-29DrumMES" ObjType="SpotArray" RelPos.X="-15000" RelPos.Y="0" RelPos.Z="3750" Width="30000" Depth="210000" Heigth="0" FreeHeight="0" Cols="5" Rows="29" Used="0" />
-    </Item>
-    <Item Id="00000000-0000-0000-0000-000000000000" TemplateId="31dee62b-b1e5-4a80-95a9-581fd37f6ebb" Name="EndPoint" ObjType="Point" RelPos.X="0" RelPos.Y="-145000" RelPos.Z="3100" Width="0" Depth="0" Heigth="0" FreeHeight="0" Offset.Z="0" PType="Regular" />
-  </Item>
-</Item>

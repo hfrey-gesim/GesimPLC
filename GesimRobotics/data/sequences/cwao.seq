@@ -1,7 +1,0 @@
-﻿<?xml version="1.0" encoding="utf-8"?>
-<Root>
-  <Header Version="2.0.18.5239" Id="0" />
-  <Steps>
-    <Item Id="070e45c5-2621-46af-9858-796bb909f84b" Description="" ObjectType="Root" ObjectId="e94c0ae7-f5eb-42b3-bf25-c6806131cff7" ActionType="RunGCode" TargetId="87969f0d-74c9-4252-aff4-a0ff5a0f88a8" TargetRef="Center" FileName="bf04fd2aa1444eadb5e1b2c7fee247d1" WaitPointId="b2da0392-5e56-4c1c-ad4b-159c748b55dc" Offset.Z="10000" />
-  </Steps>
-</Root>

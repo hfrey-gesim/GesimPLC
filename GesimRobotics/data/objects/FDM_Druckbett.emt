@@ -1,9 +1,0 @@
-﻿<?xml version="1.0" encoding="utf-8"?>
-<Item Id="00000000-0000-0000-0000-000000000000" TemplateId="7efea211-6ced-4104-8ca6-26f74abfc51a" Name="FDM_Druckbett" ObjType="Slide" RelPos.X="3000" RelPos.Y="4000" RelPos.Z="0" Width="80000" Depth="100000" Heigth="6000" FreeHeight="0" Offset.Z="0">
-  <Item Id="00000000-0000-0000-0000-000000000000" TemplateId="31dee62b-b1e5-4a80-95a9-581fd37f6ebb" Name="Printpoint" ObjType="Point" RelPos.X="40000" RelPos.Y="50000" RelPos.Z="0" Width="0" Depth="0" Heigth="0" FreeHeight="0" Offset.Z="0" PType="Regular">
-    <Item Id="00000000-0000-0000-0000-000000000000" TemplateId="31dee62b-b1e5-4a80-95a9-581fd37f6ebb" Name="Point1" ObjType="Point" RelPos.X="-30000" RelPos.Y="-40000" RelPos.Z="0" Width="0" Depth="0" Heigth="0" FreeHeight="0" Offset.Z="-37" PType="Regular" />
-    <Item Id="00000000-0000-0000-0000-000000000000" TemplateId="31dee62b-b1e5-4a80-95a9-581fd37f6ebb" Name="Point2" ObjType="Point" RelPos.X="30000" RelPos.Y="-40000" RelPos.Z="0" Width="0" Depth="0" Heigth="0" FreeHeight="0" Offset.Z="8" PType="Regular" />
-    <Item Id="00000000-0000-0000-0000-000000000000" TemplateId="31dee62b-b1e5-4a80-95a9-581fd37f6ebb" Name="Point3" ObjType="Point" RelPos.X="-30000" RelPos.Y="40000" RelPos.Z="0" Width="0" Depth="0" Heigth="0" FreeHeight="0" Offset.Z="-74" PType="Regular" />
-    <Item Id="00000000-0000-0000-0000-000000000000" TemplateId="31dee62b-b1e5-4a80-95a9-581fd37f6ebb" Name="Point4" ObjType="Point" RelPos.X="30000" RelPos.Y="40000" RelPos.Z="0" Width="0" Depth="0" Heigth="0" FreeHeight="0" Offset.Z="8" PType="Regular" />
-  </Item>
-</Item>

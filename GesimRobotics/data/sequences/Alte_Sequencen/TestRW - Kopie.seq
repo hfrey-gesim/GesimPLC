@@ -1,7 +1,0 @@
-﻿<?xml version="1.0" encoding="utf-8"?>
-<Root>
-  <Header Version="2.0.18.5239" Id="0" />
-  <Steps>
-    <Item Id="10e69bfc-e485-4d8f-ad5e-75d33da15841" Description="" ObjectType="CartridgeDisp" ObjectId="b063620f-412d-4f7b-bb4b-c2376bcb0861" ActionType="MoveToTarget" TargetId="a352e9d6-362f-46cd-830d-2ac272f38256" TargetRef="Center" SpeedX="115000" SpeedY="115000" SpeedZ="72000" Offset.X="0" Offset.Y="0" Offset.Z="10000" ZLevel="PrePos" />
-  </Steps>
-</Root>

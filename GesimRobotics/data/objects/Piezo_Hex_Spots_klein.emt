@@ -1,5 +1,0 @@
-﻿<?xml version="1.0" encoding="utf-8"?>
-<Item Id="00000000-0000-0000-0000-000000000000" TemplateId="31dee62b-b1e5-4a80-95a9-581fd37f6ebb" Name="Piezo_Hex_Spots_klein" ObjType="Point" RelPos.X="20000" RelPos.Y="20000" RelPos.Z="0" Width="0" Depth="0" Heigth="0" FreeHeight="0" Offset.Z="0">
-  <Item Id="00000000-0000-0000-0000-000000000000" TemplateId="b6f84478-a8db-496d-aed8-96e246230fba" Name="4SpotArray_Hex_1" ObjType="SpotArray" RelPos.X="-3464" RelPos.Y="-500" RelPos.Z="0" Width="6928" Depth="0" Heigth="0" FreeHeight="0" Cols="3" Rows="1" />
-  <Item Id="00000000-0000-0000-0000-000000000000" TemplateId="b6f84478-a8db-496d-aed8-96e246230fba" Name="4SpotArray_Hex_2" ObjType="SpotArray" RelPos.X="-1732" RelPos.Y="-3500" RelPos.Z="0" Width="3464" Depth="6000" Heigth="0" FreeHeight="0" Cols="2" Rows="2" />
-</Item>
