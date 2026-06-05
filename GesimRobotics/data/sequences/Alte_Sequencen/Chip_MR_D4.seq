@@ -1,0 +1,52 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<Root>
+  <Header Version="2.0.18.5057" Id="0" />
+  <Steps>
+    <Item Id="10c26e11-344f-49c0-ab3f-d8adfd12b932" Description="" ObjectType="PiezoPip" ObjectId="d45d5eb1-f4bc-4ae0-b5fa-39faa04d8547" ActionType="MoveToTarget" TargetId="ddd67331-4ec1-45e0-8752-39a26ad0437b" TargetRef="Center" SpeedX="115000" SpeedY="115000" SpeedZ="72000" Offset.X="0" Offset.Y="0" Offset.Z="0" ZLevel="PrePos" />
+    <Item Id="288d0983-7cb9-4d6e-8dc6-bcc7dafae973" Description="" ObjectType="PiezoPip" ObjectId="d45d5eb1-f4bc-4ae0-b5fa-39faa04d8547" ActionType="DispenseDrops" Ctrl="On" Drops="500">
+      <Condition Type="StepReady" Operator="AND" StepId="0" />
+    </Item>
+    <Item Id="73eec485-cfbd-44e8-b77d-1fc99b62b60a" Description="" ObjectType="PiezoPip" ObjectId="d45d5eb1-f4bc-4ae0-b5fa-39faa04d8547" ActionType="MoveToTarget" TargetId="4fc69dec-315b-4990-a515-bf888c2a68d6" TargetRef="Center" SpeedX="115000" SpeedY="115000" SpeedZ="72000" Offset.X="0" Offset.Y="0" Offset.Z="0" ZLevel="PrePos">
+      <Condition Type="StepReady" Operator="AND" StepId="0" />
+    </Item>
+    <Item Id="96f49bff-b3eb-4679-8210-a3e224e81daa" Description="" ObjectType="PiezoPip" ObjectId="d45d5eb1-f4bc-4ae0-b5fa-39faa04d8547" ActionType="DispenseDrops" Ctrl="On" Drops="500">
+      <Condition Type="StepReady" Operator="AND" StepId="0" />
+    </Item>
+    <Item Id="69c993a3-71ff-4a77-ba07-feb5b3bed707" Description="" ObjectType="Camera" ObjectId="6965f26d-0836-4bb0-a1df-e48aa4b31dcd" ActionType="MoveToTarget" TargetId="e3baeed3-298e-4689-badf-f0c19ede9f4b" TargetRef="Center" SpeedX="115000" SpeedY="115000" SpeedZ="72000" Offset.X="0" Offset.Y="0" Offset.Z="0" ZLevel="PrePos">
+      <Condition Type="StepReady" Operator="AND" StepId="0" />
+    </Item>
+    <Item Id="9e96371f-5e37-478d-844b-3cbb523c4cbe" Description="" ActionType="Wait" Time="5000">
+      <Condition Type="StepReady" Operator="AND" StepId="0" />
+    </Item>
+    <Item Id="89ff03e4-753b-479e-82e8-7c3bdefbad02" Description="" ObjectType="Root" ObjectId="936f148b-455b-497c-b642-640f2ac1e6a8" ActionType="RunGCode" TargetId="e3baeed3-298e-4689-badf-f0c19ede9f4b" TargetRef="Center" FileName="test piezo" WaitPointId="04cfe3ac-a8b9-4b84-89a8-ee29eb055ec3" Offset.Z="1000">
+      <Condition Type="StepReady" Operator="AND" StepId="0" />
+    </Item>
+    <Item Id="c095e6f2-21aa-41d3-b6fc-b2f3185a9698" Description="" ObjectType="Camera" ObjectId="6965f26d-0836-4bb0-a1df-e48aa4b31dcd" ActionType="MoveToTarget" TargetId="e3baeed3-298e-4689-badf-f0c19ede9f4b" TargetRef="Center" SpeedX="115000" SpeedY="115000" SpeedZ="72000" Offset.X="0" Offset.Y="0" Offset.Z="0" ZLevel="PrePos">
+      <Condition Type="StepReady" Operator="AND" StepId="0" />
+    </Item>
+    <Item Id="8d8c751a-87a1-452f-8f97-e265b3e5b0e1" Description="" ActionType="Wait" Time="5000">
+      <Condition Type="StepReady" Operator="AND" StepId="0" />
+    </Item>
+    <Item Id="60fdb312-9e7a-4b3e-b74d-f6de44bac616" Description="" ObjectType="CartridgeDisp" ObjectId="7910ccbe-ba26-4461-a6f3-6fe3ecbc6ce7" ActionType="MoveToTarget" TargetId="115a56fd-b65a-4186-af83-d40e3a46e789" TargetRef="Center" SpeedX="115000" SpeedY="115000" SpeedZ="72000" Offset.X="0" Offset.Y="0" Offset.Z="0" ZLevel="PrePos">
+      <Condition Type="StepReady" Operator="AND" StepId="0" />
+    </Item>
+    <Item Id="4daa6f5f-0f06-4efa-8666-c001c64f85cb" Description="" ObjectType="CartridgeDisp" ObjectId="7910ccbe-ba26-4461-a6f3-6fe3ecbc6ce7" ActionType="MoveZ" Mode="Relative" SpeedZ="2000" Distance="-1500">
+      <Condition Type="StepReady" Operator="AND" StepId="0" />
+    </Item>
+    <Item Id="36fa38ba-f48a-47d2-8429-022123240628" Description="" ObjectType="CartridgeDisp" ObjectId="7910ccbe-ba26-4461-a6f3-6fe3ecbc6ce7" ActionType="SetPressure" Pressure="300">
+      <Condition Type="StepReady" Operator="AND" StepId="0" />
+    </Item>
+    <Item Id="223db6b6-bf58-4edc-a47b-3eb732fabbb6" Description="" ObjectType="CartridgeDisp" ObjectId="7910ccbe-ba26-4461-a6f3-6fe3ecbc6ce7" ActionType="SwitchPressure" Ctrl="PressOn" Time="0">
+      <Condition Type="StepReady" Operator="AND" StepId="0" />
+    </Item>
+    <Item Id="ba1dc224-64af-4c11-9c57-8dabc8f0eb3b" Description="" ObjectType="CartridgeDisp" ObjectId="7910ccbe-ba26-4461-a6f3-6fe3ecbc6ce7" ActionType="MoveToTarget" TargetId="e3baeed3-298e-4689-badf-f0c19ede9f4b" TargetRef="Center" SpeedX="115000" SpeedY="115000" SpeedZ="72000" Offset.X="0" Offset.Y="0" Offset.Z="0" ZLevel="PrePos">
+      <Condition Type="StepReady" Operator="AND" StepId="0" />
+    </Item>
+    <Item Id="6d93411f-d95f-4451-91f8-a0990f123952" Description="" ObjectType="CartridgeDisp" ObjectId="7910ccbe-ba26-4461-a6f3-6fe3ecbc6ce7" ActionType="SwitchPressure" Ctrl="Off" Time="0">
+      <Condition Type="StepReady" Operator="AND" StepId="0" />
+    </Item>
+    <Item Id="50a0b7e6-6788-4802-adf8-aeebbf610b57" Description="" ObjectType="CartridgeDisp" ObjectId="7910ccbe-ba26-4461-a6f3-6fe3ecbc6ce7" ActionType="MoveZ" Mode="Home" SpeedZ="10000" Distance="10000">
+      <Condition Type="StepReady" Operator="AND" StepId="0" />
+    </Item>
+  </Steps>
+</Root>

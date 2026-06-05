@@ -1,0 +1,140 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<Root Version="2" Mode="Basic">
+  <Objects>
+    <Object>
+      <Model Type="ThreeMF" FillRule="Positive">
+        <FileName>C:\Program Files\GeSiM\GesimRobotics\data\sphere.3mf</FileName>
+      </Model>
+      <Position Type="CenterOnOrigin">
+        <X>0</X>
+        <Y>0</Y>
+        <Z>0</Z>
+        <Rotate>false</Rotate>
+        <RotationAngle>0</RotationAngle>
+      </Position>
+      <Materials>
+        <Material>
+          <Infill>
+            <StartAngle>0</StartAngle>
+            <AngleChange>45</AngleChange>
+            <RepeatAngleChange>1</RepeatAngleChange>
+            <StrandDistance>400</StrandDistance>
+            <MinDistance>400</MinDistance>
+            <MinLength>1000</MinLength>
+          </Infill>
+          <Layers OutlineFirst="false">
+            <Layer>
+              <Infill>5</Infill>
+              <Outline></Outline>
+            </Layer>
+          </Layers>
+        </Material>
+        <Material>
+          <Infill>
+            <StartAngle>0</StartAngle>
+            <AngleChange>45</AngleChange>
+            <RepeatAngleChange>1</RepeatAngleChange>
+            <StrandDistance>400</StrandDistance>
+            <MinDistance>400</MinDistance>
+            <MinLength>1000</MinLength>
+          </Infill>
+          <Layers OutlineFirst="false">
+            <Layer>
+              <Infill>7</Infill>
+              <Outline></Outline>
+            </Layer>
+          </Layers>
+        </Material>
+      </Materials>
+    </Object>
+  </Objects>
+  <Tools>
+    <Tool Type="CartridgeDisp" ObjectId="e6c589be-b5c0-45bf-9777-cb44979d832f">
+      <Identifier>1</Identifier>
+      <Pressure>100</Pressure>
+      <Color>#FF7F2A6A</Color>
+      <Speed>10000</Speed>
+      <ZOffset>250</ZOffset>
+      <Height>250</Height>
+      <Width>250</Width>
+      <Connection>OutlinePlus</Connection>
+      <StartBreak>0</StartBreak>
+      <EndBreak>0</EndBreak>
+      <TearOffDirection>None</TearOffDirection>
+      <TearOffSpeed>115000</TearOffSpeed>
+      <TearOffDistance>1000</TearOffDistance>
+      <CleanTipBeforeUsage>false</CleanTipBeforeUsage>
+      <CleanTipAfterUsage>false</CleanTipAfterUsage>
+      <RepeatTipCleaning>1</RepeatTipCleaning>
+    </Tool>
+    <Tool Type="PiezoPip" ObjectId="577497f0-66e9-4525-a603-2549cf990ea4">
+      <Identifier>2</Identifier>
+      <Drops>1</Drops>
+      <DropsPerScript>false</DropsPerScript>
+      <DropsScript />
+      <Color>#FFAC7B39</Color>
+      <Speed>10000</Speed>
+      <ZOffset>1000</ZOffset>
+      <Height>10</Height>
+      <Width>250</Width>
+      <Connection>None</Connection>
+      <Spotting>true</Spotting>
+      <SpotAlignment>Center</SpotAlignment>
+      <SpotDistance>500</SpotDistance>
+      <RunSequence>false</RunSequence>
+      <Sequence>Test Spirale</Sequence>
+      <RepeatSequence>0</RepeatSequence>
+    </Tool>
+    <Tool Type="CartridgeDisp" ObjectId="60b6cb06-7620-4d8b-a766-31dd5a4da765">
+      <Identifier>5</Identifier>
+      <Pressure>100</Pressure>
+      <Color>#FF89A336</Color>
+      <Speed>10000</Speed>
+      <ZOffset>250</ZOffset>
+      <Height>250</Height>
+      <Width>250</Width>
+      <Connection>OutlinePlus</Connection>
+      <StartBreak>0</StartBreak>
+      <EndBreak>0</EndBreak>
+      <TearOffDirection>None</TearOffDirection>
+      <TearOffSpeed>115000</TearOffSpeed>
+      <TearOffDistance>1000</TearOffDistance>
+      <CleanTipBeforeUsage>false</CleanTipBeforeUsage>
+      <CleanTipAfterUsage>false</CleanTipAfterUsage>
+      <RepeatTipCleaning>1</RepeatTipCleaning>
+    </Tool>
+    <Tool Type="CartridgeDisp" ObjectId="9811455b-6b1f-4b99-aa3c-a316d6e9db70">
+      <Identifier>7</Identifier>
+      <Pressure>100</Pressure>
+      <Color>#FF2A506E</Color>
+      <Speed>10000</Speed>
+      <ZOffset>250</ZOffset>
+      <Height>250</Height>
+      <Width>250</Width>
+      <Connection>OutlinePlus</Connection>
+      <StartBreak>0</StartBreak>
+      <EndBreak>0</EndBreak>
+      <TearOffDirection>None</TearOffDirection>
+      <TearOffSpeed>115000</TearOffSpeed>
+      <TearOffDistance>1000</TearOffDistance>
+      <CleanTipBeforeUsage>false</CleanTipBeforeUsage>
+      <CleanTipAfterUsage>false</CleanTipAfterUsage>
+      <RepeatTipCleaning>1</RepeatTipCleaning>
+    </Tool>
+  </Tools>
+  <Options>
+    <CustomToolOrder>false</CustomToolOrder>
+    <ToolOrder>57</ToolOrder>
+    <IsPartialPrint>false</IsPartialPrint>
+    <MinZHeight>0</MinZHeight>
+    <MaxZHeight>9999</MaxZHeight>
+    <Pausing>false</Pausing>
+    <LayerPause>1000</LayerPause>
+    <RepeatPause>1</RepeatPause>
+    <Smoothing>false</Smoothing>
+    <SmoothingMinAngle>45</SmoothingMinAngle>
+    <SmoothingMaxDistance>100</SmoothingMaxDistance>
+    <DistanceLimit>false</DistanceLimit>
+    <PointMaxDistance>10000</PointMaxDistance>
+  </Options>
+</Root>

@@ -1,0 +1,2597 @@
+%Gelatine_Test
+
+(4-gon)
+(Sliced with Machete 2.1.0)
+(Created by GesimRobotics 1.18.3.5322)
+(Creation Date: 2023-11-02 11:14:12)
+(Estimated Time: 00:05:31)
+R120=-10000 (Min.X)
+R121=10000 (Max.X)
+R122=-10000 (Min.Y)
+R123=10000 (Max.Y)
+R124=410 (Min.Z)
+R125=11000 (Max.Z)
+
+(**********************)
+(* Tool Configuration *)
+(**********************)
+
+
+(Tool 5: CartridgeDispStirrer: Cartridge Dispenser with Stirrer)
+R101=5
+R500=2400 (Speed in mm/min)
+(Estimated Volume: 1.035 ml)
+
+(********)
+(* Init *)
+(********)
+
+G54
+M5
+ROT Z=R126
+
+(******************)
+(* Layer 1 [Z: 0] *)
+(******************)
+
+M102 R1=5 R2=1 R3=1 R4=7 @714 (Pressure in 1 kPa)
+T5 M6 @716 (Select Cartridge Dispenser with Stirrer)
+G1 F=R500
+G0 X1 Y9
+G0 Q1=0.41 M100 @717
+M103 R1=1 R2=50 @714
+G1 X0 Y10
+G1 X-1 Y9
+G1 X-2 Y8
+G1 X2 Y8
+G1 X3 Y7
+G1 X-3 Y7
+G1 X-4 Y6
+G1 X4 Y6
+G1 X5 Y5
+G1 X-5 Y5
+G1 X-6 Y4
+G1 X6 Y4
+G1 X7 Y3
+G1 X-7 Y3
+G1 X-8 Y2
+G1 X8 Y2
+G1 X9 Y1
+G1 X-9 Y1
+G1 X-10 Y0
+G1 X-10 Y0
+G1 X10 Y0
+G1 X9 Y-1
+G1 X-9 Y-1
+G1 X-8 Y-2
+G1 X8 Y-2
+G1 X7 Y-3
+G1 X-7 Y-3
+G1 X-6 Y-4
+G1 X6 Y-4
+G1 X5 Y-5
+G1 X-5 Y-5
+G1 X-4 Y-6
+G1 X4 Y-6
+G1 X3 Y-7
+G1 X-3 Y-7
+G1 X-2 Y-8
+G1 X2 Y-8
+G1 X1 Y-9
+G1 X0 Y-10
+G1 X-1 Y-9
+M104
+G0 Q1=1.2 M100 @717
+
+(********************)
+(* Layer 2 [Z: 0.2] *)
+(********************)
+
+M102 R1=5 R2=1 R3=1 R4=7 @714 (Pressure in 1 kPa)
+G0 X-9 Y1
+G0 Q1=0.61 M100 @717
+M103 R1=1 R2=50 @714
+G1 X-10 Y0
+G1 X-9 Y-1
+G1 X-8 Y-2
+G1 X-8 Y2
+G1 X-7 Y3
+G1 X-7 Y-3
+G1 X-6 Y-4
+G1 X-6 Y4
+G1 X-5 Y5
+G1 X-5 Y-5
+G1 X-4 Y-6
+G1 X-4 Y6
+G1 X-3 Y7
+G1 X-3 Y-7
+G1 X-2 Y-8
+G1 X-2 Y8
+G1 X-1 Y9
+G1 X-1 Y-9
+G1 X0 Y-10
+G1 X0 Y10
+G1 X1 Y9
+G1 X1 Y-9
+G1 X2 Y-8
+G1 X2 Y8
+G1 X3 Y7
+G1 X3 Y-7
+G1 X4 Y-6
+G1 X4 Y6
+G1 X5 Y5
+G1 X5 Y-5
+G1 X6 Y-4
+G1 X6 Y4
+G1 X7 Y3
+G1 X7 Y-3
+G1 X8 Y-2
+G1 X8 Y2
+G1 X9 Y1
+G1 X10 Y0
+G1 X9 Y-1
+M104
+G0 Q1=1.4 M100 @717
+
+(********************)
+(* Layer 3 [Z: 0.4] *)
+(********************)
+
+M102 R1=5 R2=1 R3=1 R4=7 @714 (Pressure in 1 kPa)
+G0 X-1 Y-9
+G0 Q1=0.81 M100 @717
+M103 R1=1 R2=50 @714
+G1 X0 Y-10
+G1 X1 Y-9
+G1 X2 Y-8
+G1 X-2 Y-8
+G1 X-3 Y-7
+G1 X3 Y-7
+G1 X4 Y-6
+G1 X-4 Y-6
+G1 X-5 Y-5
+G1 X5 Y-5
+G1 X6 Y-4
+G1 X-6 Y-4
+G1 X-7 Y-3
+G1 X7 Y-3
+G1 X8 Y-2
+G1 X-8 Y-2
+G1 X-9 Y-1
+G1 X9 Y-1
+G1 X10 Y0
+G1 X-10 Y0
+G1 X-9 Y1
+G1 X9 Y1
+G1 X8 Y2
+G1 X-8 Y2
+G1 X-7 Y3
+G1 X7 Y3
+G1 X6 Y4
+G1 X-6 Y4
+G1 X-5 Y5
+G1 X5 Y5
+G1 X4 Y6
+G1 X-4 Y6
+G1 X-3 Y7
+G1 X3 Y7
+G1 X2 Y8
+G1 X-2 Y8
+G1 X-1 Y9
+G1 X0 Y10
+G1 X1 Y9
+M104
+G0 Q1=1.6 M100 @717
+
+(********************)
+(* Layer 4 [Z: 0.6] *)
+(********************)
+
+M102 R1=5 R2=1 R3=1 R4=7 @714 (Pressure in 1 kPa)
+G0 X10 Y0
+G0 Q1=1.01 M100 @717
+M103 R1=1 R2=50 @714
+G1 X10 Y0
+G1 X10 Y0
+G1 X9 Y-1
+G1 X9 Y1
+G1 X8 Y2
+G1 X8 Y-2
+G1 X7 Y-3
+G1 X7 Y3
+G1 X6 Y4
+G1 X6 Y-4
+G1 X5 Y-5
+G1 X5 Y5
+G1 X4 Y6
+G1 X4 Y-6
+G1 X3 Y-7
+G1 X3 Y7
+G1 X2 Y8
+G1 X2 Y-8
+G1 X1 Y-9
+G1 X1 Y9
+G1 X0 Y10
+G1 X0 Y-10
+G1 X-1 Y-9
+G1 X-1 Y9
+G1 X-2 Y8
+G1 X-2 Y-8
+G1 X-3 Y-7
+G1 X-3 Y7
+G1 X-4 Y6
+G1 X-4 Y-6
+G1 X-5 Y-5
+G1 X-5 Y5
+G1 X-6 Y4
+G1 X-6 Y-4
+G1 X-7 Y-3
+G1 X-7 Y3
+G1 X-8 Y2
+G1 X-8 Y-2
+G1 X-9 Y-1
+G1 X-10 Y0
+G1 X-9 Y1
+M104
+G0 Q1=1.8 M100 @717
+
+(********************)
+(* Layer 5 [Z: 0.8] *)
+(********************)
+
+M102 R1=5 R2=1 R3=1 R4=7 @714 (Pressure in 1 kPa)
+G0 X1 Y9
+G0 Q1=1.21 M100 @717
+M103 R1=1 R2=50 @714
+G1 X0 Y10
+G1 X-1 Y9
+G1 X-2 Y8
+G1 X2 Y8
+G1 X3 Y7
+G1 X-3 Y7
+G1 X-4 Y6
+G1 X4 Y6
+G1 X5 Y5
+G1 X-5 Y5
+G1 X-6 Y4
+G1 X6 Y4
+G1 X7 Y3
+G1 X-7 Y3
+G1 X-8 Y2
+G1 X8 Y2
+G1 X9 Y1
+G1 X-9 Y1
+G1 X-10 Y0
+G1 X10 Y0
+G1 X9 Y-1
+G1 X-9 Y-1
+G1 X-8 Y-2
+G1 X8 Y-2
+G1 X7 Y-3
+G1 X-7 Y-3
+G1 X-6 Y-4
+G1 X6 Y-4
+G1 X5 Y-5
+G1 X-5 Y-5
+G1 X-4 Y-6
+G1 X4 Y-6
+G1 X3 Y-7
+G1 X-3 Y-7
+G1 X-2 Y-8
+G1 X2 Y-8
+G1 X1 Y-9
+G1 X0 Y-10
+G1 X-1 Y-9
+M104
+G0 Q1=2 M100 @717
+
+(******************)
+(* Layer 6 [Z: 1] *)
+(******************)
+
+M102 R1=5 R2=1 R3=1 R4=7 @714 (Pressure in 1 kPa)
+G0 X-9 Y1
+G0 Q1=1.41 M100 @717
+M103 R1=1 R2=50 @714
+G1 X-10 Y0
+G1 X-9 Y-1
+G1 X-8 Y-2
+G1 X-8 Y2
+G1 X-7 Y3
+G1 X-7 Y-3
+G1 X-6 Y-4
+G1 X-6 Y4
+G1 X-5 Y5
+G1 X-5 Y-5
+G1 X-4 Y-6
+G1 X-4 Y6
+G1 X-3 Y7
+G1 X-3 Y-7
+G1 X-2 Y-8
+G1 X-2 Y8
+G1 X-1 Y9
+G1 X-1 Y-9
+G1 X0 Y-10
+G1 X0 Y10
+G1 X1 Y9
+G1 X1 Y-9
+G1 X2 Y-8
+G1 X2 Y8
+G1 X3 Y7
+G1 X3 Y-7
+G1 X4 Y-6
+G1 X4 Y6
+G1 X5 Y5
+G1 X5 Y-5
+G1 X6 Y-4
+G1 X6 Y4
+G1 X7 Y3
+G1 X7 Y-3
+G1 X8 Y-2
+G1 X8 Y2
+G1 X9 Y1
+G1 X10 Y0
+G1 X9 Y-1
+M104
+G0 Q1=2.2 M100 @717
+
+(********************)
+(* Layer 7 [Z: 1.2] *)
+(********************)
+
+M102 R1=5 R2=1 R3=1 R4=7 @714 (Pressure in 1 kPa)
+G0 X-1 Y-9
+G0 Q1=1.61 M100 @717
+M103 R1=1 R2=50 @714
+G1 X0 Y-10
+G1 X1 Y-9
+G1 X2 Y-8
+G1 X-2 Y-8
+G1 X-3 Y-7
+G1 X3 Y-7
+G1 X4 Y-6
+G1 X-4 Y-6
+G1 X-5 Y-5
+G1 X5 Y-5
+G1 X6 Y-4
+G1 X-6 Y-4
+G1 X-7 Y-3
+G1 X7 Y-3
+G1 X8 Y-2
+G1 X-8 Y-2
+G1 X-9 Y-1
+G1 X9 Y-1
+G1 X10 Y0
+G1 X-10 Y0
+G1 X-9 Y1
+G1 X9 Y1
+G1 X8 Y2
+G1 X-8 Y2
+G1 X-7 Y3
+G1 X7 Y3
+G1 X6 Y4
+G1 X-6 Y4
+G1 X-5 Y5
+G1 X5 Y5
+G1 X4 Y6
+G1 X-4 Y6
+G1 X-3 Y7
+G1 X3 Y7
+G1 X2 Y8
+G1 X-2 Y8
+G1 X-1 Y9
+G1 X0 Y10
+G1 X1 Y9
+M104
+G0 Q1=2.4 M100 @717
+
+(********************)
+(* Layer 8 [Z: 1.4] *)
+(********************)
+
+M102 R1=5 R2=1 R3=1 R4=7 @714 (Pressure in 1 kPa)
+G0 X10 Y0
+G0 Q1=1.81 M100 @717
+M103 R1=1 R2=50 @714
+G1 X10 Y0
+G1 X10 Y0
+G1 X9 Y-1
+G1 X9 Y1
+G1 X8 Y2
+G1 X8 Y-2
+G1 X7 Y-3
+G1 X7 Y3
+G1 X6 Y4
+G1 X6 Y-4
+G1 X5 Y-5
+G1 X5 Y5
+G1 X4 Y6
+G1 X4 Y-6
+G1 X3 Y-7
+G1 X3 Y7
+G1 X2 Y8
+G1 X2 Y-8
+G1 X1 Y-9
+G1 X1 Y9
+G1 X0 Y10
+G1 X0 Y-10
+G1 X-1 Y-9
+G1 X-1 Y9
+G1 X-2 Y8
+G1 X-2 Y-8
+G1 X-3 Y-7
+G1 X-3 Y7
+G1 X-4 Y6
+G1 X-4 Y-6
+G1 X-5 Y-5
+G1 X-5 Y5
+G1 X-6 Y4
+G1 X-6 Y-4
+G1 X-7 Y-3
+G1 X-7 Y3
+G1 X-8 Y2
+G1 X-8 Y-2
+G1 X-9 Y-1
+G1 X-10 Y0
+G1 X-9 Y1
+M104
+G0 Q1=2.6 M100 @717
+
+(********************)
+(* Layer 9 [Z: 1.6] *)
+(********************)
+
+M102 R1=5 R2=1 R3=1 R4=7 @714 (Pressure in 1 kPa)
+G0 X1 Y9
+G0 Q1=2.01 M100 @717
+M103 R1=1 R2=50 @714
+G1 X0 Y10
+G1 X-1 Y9
+G1 X-2 Y8
+G1 X2 Y8
+G1 X3 Y7
+G1 X-3 Y7
+G1 X-4 Y6
+G1 X4 Y6
+G1 X5 Y5
+G1 X-5 Y5
+G1 X-6 Y4
+G1 X6 Y4
+G1 X7 Y3
+G1 X-7 Y3
+G1 X-8 Y2
+G1 X8 Y2
+G1 X9 Y1
+G1 X-9 Y1
+G1 X-10 Y0
+G1 X10 Y0
+G1 X9 Y-1
+G1 X-9 Y-1
+G1 X-8 Y-2
+G1 X8 Y-2
+G1 X7 Y-3
+G1 X-7 Y-3
+G1 X-6 Y-4
+G1 X6 Y-4
+G1 X5 Y-5
+G1 X-5 Y-5
+G1 X-4 Y-6
+G1 X4 Y-6
+G1 X3 Y-7
+G1 X-3 Y-7
+G1 X-2 Y-8
+G1 X2 Y-8
+G1 X1 Y-9
+G1 X0 Y-10
+G1 X-1 Y-9
+M104
+G0 Q1=2.8 M100 @717
+
+(*********************)
+(* Layer 10 [Z: 1.8] *)
+(*********************)
+
+M102 R1=5 R2=1 R3=1 R4=7 @714 (Pressure in 1 kPa)
+G0 X-9 Y1
+G0 Q1=2.21 M100 @717
+M103 R1=1 R2=50 @714
+G1 X-10 Y0
+G1 X-9 Y-1
+G1 X-8 Y-2
+G1 X-8 Y2
+G1 X-7 Y3
+G1 X-7 Y-3
+G1 X-6 Y-4
+G1 X-6 Y4
+G1 X-5 Y5
+G1 X-5 Y-5
+G1 X-4 Y-6
+G1 X-4 Y6
+G1 X-3 Y7
+G1 X-3 Y-7
+G1 X-2 Y-8
+G1 X-2 Y8
+G1 X-1 Y9
+G1 X-1 Y-9
+G1 X0 Y-10
+G1 X0 Y10
+G1 X1 Y9
+G1 X1 Y-9
+G1 X2 Y-8
+G1 X2 Y8
+G1 X3 Y7
+G1 X3 Y-7
+G1 X4 Y-6
+G1 X4 Y6
+G1 X5 Y5
+G1 X5 Y-5
+G1 X6 Y-4
+G1 X6 Y4
+G1 X7 Y3
+G1 X7 Y-3
+G1 X8 Y-2
+G1 X8 Y2
+G1 X9 Y1
+G1 X10 Y0
+G1 X9 Y-1
+M104
+G0 Q1=3 M100 @717
+
+(*******************)
+(* Layer 11 [Z: 2] *)
+(*******************)
+
+M102 R1=5 R2=1 R3=1 R4=7 @714 (Pressure in 1 kPa)
+G0 X-1 Y-9
+G0 Q1=2.41 M100 @717
+M103 R1=1 R2=50 @714
+G1 X0 Y-10
+G1 X1 Y-9
+G1 X2 Y-8
+G1 X-2 Y-8
+G1 X-3 Y-7
+G1 X3 Y-7
+G1 X4 Y-6
+G1 X-4 Y-6
+G1 X-5 Y-5
+G1 X5 Y-5
+G1 X6 Y-4
+G1 X-6 Y-4
+G1 X-7 Y-3
+G1 X7 Y-3
+G1 X8 Y-2
+G1 X-8 Y-2
+G1 X-9 Y-1
+G1 X9 Y-1
+G1 X10 Y0
+G1 X-10 Y0
+G1 X-9 Y1
+G1 X9 Y1
+G1 X8 Y2
+G1 X-8 Y2
+G1 X-7 Y3
+G1 X7 Y3
+G1 X6 Y4
+G1 X-6 Y4
+G1 X-5 Y5
+G1 X5 Y5
+G1 X4 Y6
+G1 X-4 Y6
+G1 X-3 Y7
+G1 X3 Y7
+G1 X2 Y8
+G1 X-2 Y8
+G1 X-1 Y9
+G1 X0 Y10
+G1 X1 Y9
+M104
+G0 Q1=3.2 M100 @717
+
+(*********************)
+(* Layer 12 [Z: 2.2] *)
+(*********************)
+
+M102 R1=5 R2=1 R3=1 R4=7 @714 (Pressure in 1 kPa)
+G0 X10 Y0
+G0 Q1=2.61 M100 @717
+M103 R1=1 R2=50 @714
+G1 X10 Y0
+G1 X10 Y0
+G1 X9 Y-1
+G1 X9 Y1
+G1 X8 Y2
+G1 X8 Y-2
+G1 X7 Y-3
+G1 X7 Y3
+G1 X6 Y4
+G1 X6 Y-4
+G1 X5 Y-5
+G1 X5 Y5
+G1 X4 Y6
+G1 X4 Y-6
+G1 X3 Y-7
+G1 X3 Y7
+G1 X2 Y8
+G1 X2 Y-8
+G1 X1 Y-9
+G1 X1 Y9
+G1 X0 Y10
+G1 X0 Y10
+G1 X0 Y-10
+G1 X0 Y-10
+G1 X-1 Y-9
+G1 X-1 Y9
+G1 X-2 Y8
+G1 X-2 Y-8
+G1 X-3 Y-7
+G1 X-3 Y7
+G1 X-4 Y6
+G1 X-4 Y-6
+G1 X-5 Y-5
+G1 X-5 Y5
+G1 X-6 Y4
+G1 X-6 Y-4
+G1 X-7 Y-3
+G1 X-7 Y3
+G1 X-8 Y2
+G1 X-8 Y-2
+G1 X-9 Y-1
+G1 X-10 Y0
+G1 X-9 Y1
+M104
+G0 Q1=3.4 M100 @717
+
+(*********************)
+(* Layer 13 [Z: 2.4] *)
+(*********************)
+
+M102 R1=5 R2=1 R3=1 R4=7 @714 (Pressure in 1 kPa)
+G0 X1 Y9
+G0 Q1=2.81 M100 @717
+M103 R1=1 R2=50 @714
+G1 X0 Y10
+G1 X-1 Y9
+G1 X-2 Y8
+G1 X2 Y8
+G1 X3 Y7
+G1 X-3 Y7
+G1 X-4 Y6
+G1 X4 Y6
+G1 X5 Y5
+G1 X-5 Y5
+G1 X-6 Y4
+G1 X6 Y4
+G1 X7 Y3
+G1 X-7 Y3
+G1 X-8 Y2
+G1 X8 Y2
+G1 X9 Y1
+G1 X-9 Y1
+G1 X-10 Y0
+G1 X10 Y0
+G1 X9 Y-1
+G1 X-9 Y-1
+G1 X-8 Y-2
+G1 X8 Y-2
+G1 X7 Y-3
+G1 X-7 Y-3
+G1 X-6 Y-4
+G1 X6 Y-4
+G1 X5 Y-5
+G1 X-5 Y-5
+G1 X-4 Y-6
+G1 X4 Y-6
+G1 X3 Y-7
+G1 X-3 Y-7
+G1 X-2 Y-8
+G1 X2 Y-8
+G1 X1 Y-9
+G1 X0 Y-10
+G1 X-1 Y-9
+M104
+G0 Q1=3.6 M100 @717
+
+(*********************)
+(* Layer 14 [Z: 2.6] *)
+(*********************)
+
+M102 R1=5 R2=1 R3=1 R4=7 @714 (Pressure in 1 kPa)
+G0 X-9 Y1
+G0 Q1=3.01 M100 @717
+M103 R1=1 R2=50 @714
+G1 X-10 Y0
+G1 X-9 Y-1
+G1 X-8 Y-2
+G1 X-8 Y2
+G1 X-7 Y3
+G1 X-7 Y-3
+G1 X-6 Y-4
+G1 X-6 Y4
+G1 X-5 Y5
+G1 X-5 Y-5
+G1 X-4 Y-6
+G1 X-4 Y6
+G1 X-3 Y7
+G1 X-3 Y-7
+G1 X-2 Y-8
+G1 X-2 Y8
+G1 X-1 Y9
+G1 X-1 Y-9
+G1 X0 Y-10
+G1 X0 Y-10
+G1 X0 Y10
+G1 X0 Y10
+G1 X1 Y9
+G1 X1 Y-9
+G1 X2 Y-8
+G1 X2 Y8
+G1 X3 Y7
+G1 X3 Y-7
+G1 X4 Y-6
+G1 X4 Y6
+G1 X5 Y5
+G1 X5 Y-5
+G1 X6 Y-4
+G1 X6 Y4
+G1 X7 Y3
+G1 X7 Y-3
+G1 X8 Y-2
+G1 X8 Y2
+G1 X9 Y1
+G1 X10 Y0
+G1 X9 Y-1
+M104
+G0 Q1=3.8 M100 @717
+
+(*********************)
+(* Layer 15 [Z: 2.8] *)
+(*********************)
+
+M102 R1=5 R2=1 R3=1 R4=7 @714 (Pressure in 1 kPa)
+G0 X-1 Y-9
+G0 Q1=3.21 M100 @717
+M103 R1=1 R2=50 @714
+G1 X0 Y-10
+G1 X1 Y-9
+G1 X2 Y-8
+G1 X-2 Y-8
+G1 X-3 Y-7
+G1 X3 Y-7
+G1 X4 Y-6
+G1 X-4 Y-6
+G1 X-5 Y-5
+G1 X5 Y-5
+G1 X6 Y-4
+G1 X-6 Y-4
+G1 X-7 Y-3
+G1 X7 Y-3
+G1 X8 Y-2
+G1 X-8 Y-2
+G1 X-9 Y-1
+G1 X9 Y-1
+G1 X10 Y0
+G1 X-10 Y0
+G1 X-9 Y1
+G1 X9 Y1
+G1 X8 Y2
+G1 X-8 Y2
+G1 X-7 Y3
+G1 X7 Y3
+G1 X6 Y4
+G1 X-6 Y4
+G1 X-5 Y5
+G1 X5 Y5
+G1 X4 Y6
+G1 X-4 Y6
+G1 X-3 Y7
+G1 X3 Y7
+G1 X2 Y8
+G1 X-2 Y8
+G1 X-1 Y9
+G1 X0 Y10
+G1 X1 Y9
+M104
+G0 Q1=4 M100 @717
+
+(*******************)
+(* Layer 16 [Z: 3] *)
+(*******************)
+
+M102 R1=5 R2=1 R3=1 R4=7 @714 (Pressure in 1 kPa)
+G0 X10 Y0
+G0 Q1=3.41 M100 @717
+M103 R1=1 R2=50 @714
+G1 X10 Y0
+G1 X10 Y0
+G1 X9 Y-1
+G1 X9 Y1
+G1 X8 Y2
+G1 X8 Y-2
+G1 X7 Y-3
+G1 X7 Y3
+G1 X6 Y4
+G1 X6 Y-4
+G1 X5 Y-5
+G1 X5 Y5
+G1 X4 Y6
+G1 X4 Y-6
+G1 X3 Y-7
+G1 X3 Y7
+G1 X2 Y8
+G1 X2 Y-8
+G1 X1 Y-9
+G1 X1 Y9
+G1 X0 Y10
+G1 X0 Y10
+G1 X0 Y-10
+G1 X0 Y-10
+G1 X-1 Y-9
+G1 X-1 Y9
+G1 X-2 Y8
+G1 X-2 Y-8
+G1 X-3 Y-7
+G1 X-3 Y7
+G1 X-4 Y6
+G1 X-4 Y-6
+G1 X-5 Y-5
+G1 X-5 Y5
+G1 X-6 Y4
+G1 X-6 Y-4
+G1 X-7 Y-3
+G1 X-7 Y3
+G1 X-8 Y2
+G1 X-8 Y-2
+G1 X-9 Y-1
+G1 X-10 Y0
+G1 X-9 Y1
+M104
+G0 Q1=4.2 M100 @717
+
+(*********************)
+(* Layer 17 [Z: 3.2] *)
+(*********************)
+
+M102 R1=5 R2=1 R3=1 R4=7 @714 (Pressure in 1 kPa)
+G0 X1 Y9
+G0 Q1=3.61 M100 @717
+M103 R1=1 R2=50 @714
+G1 X0 Y10
+G1 X-1 Y9
+G1 X-2 Y8
+G1 X2 Y8
+G1 X3 Y7
+G1 X-3 Y7
+G1 X-4 Y6
+G1 X4 Y6
+G1 X5 Y5
+G1 X-5 Y5
+G1 X-6 Y4
+G1 X6 Y4
+G1 X7 Y3
+G1 X-7 Y3
+G1 X-8 Y2
+G1 X8 Y2
+G1 X9 Y1
+G1 X-9 Y1
+G1 X-10 Y0
+G1 X10 Y0
+G1 X9 Y-1
+G1 X-9 Y-1
+G1 X-8 Y-2
+G1 X8 Y-2
+G1 X7 Y-3
+G1 X-7 Y-3
+G1 X-6 Y-4
+G1 X6 Y-4
+G1 X5 Y-5
+G1 X-5 Y-5
+G1 X-4 Y-6
+G1 X4 Y-6
+G1 X3 Y-7
+G1 X-3 Y-7
+G1 X-2 Y-8
+G1 X2 Y-8
+G1 X1 Y-9
+G1 X0 Y-10
+G1 X-1 Y-9
+M104
+G0 Q1=4.4 M100 @717
+
+(*********************)
+(* Layer 18 [Z: 3.4] *)
+(*********************)
+
+M102 R1=5 R2=1 R3=1 R4=7 @714 (Pressure in 1 kPa)
+G0 X-9 Y1
+G0 Q1=3.81 M100 @717
+M103 R1=1 R2=50 @714
+G1 X-10 Y0
+G1 X-9 Y-1
+G1 X-8 Y-2
+G1 X-8 Y2
+G1 X-7 Y3
+G1 X-7 Y-3
+G1 X-6 Y-4
+G1 X-6 Y4
+G1 X-5 Y5
+G1 X-5 Y-5
+G1 X-4 Y-6
+G1 X-4 Y6
+G1 X-3 Y7
+G1 X-3 Y-7
+G1 X-2 Y-8
+G1 X-2 Y8
+G1 X-1 Y9
+G1 X-1 Y-9
+G1 X0 Y-10
+G1 X0 Y-10
+G1 X0 Y10
+G1 X0 Y10
+G1 X1 Y9
+G1 X1 Y-9
+G1 X2 Y-8
+G1 X2 Y8
+G1 X3 Y7
+G1 X3 Y-7
+G1 X4 Y-6
+G1 X4 Y6
+G1 X5 Y5
+G1 X5 Y-5
+G1 X6 Y-4
+G1 X6 Y4
+G1 X7 Y3
+G1 X7 Y-3
+G1 X8 Y-2
+G1 X8 Y2
+G1 X9 Y1
+G1 X10 Y0
+G1 X9 Y-1
+M104
+G0 Q1=4.6 M100 @717
+
+(*********************)
+(* Layer 19 [Z: 3.6] *)
+(*********************)
+
+M102 R1=5 R2=1 R3=1 R4=7 @714 (Pressure in 1 kPa)
+G0 X-1 Y-9
+G0 Q1=4.01 M100 @717
+M103 R1=1 R2=50 @714
+G1 X0 Y-10
+G1 X1 Y-9
+G1 X2 Y-8
+G1 X-2 Y-8
+G1 X-3 Y-7
+G1 X3 Y-7
+G1 X4 Y-6
+G1 X-4 Y-6
+G1 X-5 Y-5
+G1 X5 Y-5
+G1 X6 Y-4
+G1 X-6 Y-4
+G1 X-7 Y-3
+G1 X7 Y-3
+G1 X8 Y-2
+G1 X-8 Y-2
+G1 X-9 Y-1
+G1 X9 Y-1
+G1 X10 Y0
+G1 X-10 Y0
+G1 X-9 Y1
+G1 X9 Y1
+G1 X8 Y2
+G1 X-8 Y2
+G1 X-7 Y3
+G1 X7 Y3
+G1 X6 Y4
+G1 X-6 Y4
+G1 X-5 Y5
+G1 X5 Y5
+G1 X4 Y6
+G1 X-4 Y6
+G1 X-3 Y7
+G1 X3 Y7
+G1 X2 Y8
+G1 X-2 Y8
+G1 X-1 Y9
+G1 X0 Y10
+G1 X1 Y9
+M104
+G0 Q1=4.8 M100 @717
+
+(*********************)
+(* Layer 20 [Z: 3.8] *)
+(*********************)
+
+M102 R1=5 R2=1 R3=1 R4=7 @714 (Pressure in 1 kPa)
+G0 X10 Y0
+G0 Q1=4.21 M100 @717
+M103 R1=1 R2=50 @714
+G1 X10 Y0
+G1 X10 Y0
+G1 X9 Y-1
+G1 X9 Y1
+G1 X8 Y2
+G1 X8 Y-2
+G1 X7 Y-3
+G1 X7 Y3
+G1 X6 Y4
+G1 X6 Y-4
+G1 X5 Y-5
+G1 X5 Y5
+G1 X4 Y6
+G1 X4 Y-6
+G1 X3 Y-7
+G1 X3 Y7
+G1 X2 Y8
+G1 X2 Y-8
+G1 X1 Y-9
+G1 X1 Y9
+G1 X0 Y10
+G1 X0 Y10
+G1 X0 Y-10
+G1 X0 Y-10
+G1 X-1 Y-9
+G1 X-1 Y9
+G1 X-2 Y8
+G1 X-2 Y-8
+G1 X-3 Y-7
+G1 X-3 Y7
+G1 X-4 Y6
+G1 X-4 Y-6
+G1 X-5 Y-5
+G1 X-5 Y5
+G1 X-6 Y4
+G1 X-6 Y-4
+G1 X-7 Y-3
+G1 X-7 Y3
+G1 X-8 Y2
+G1 X-8 Y-2
+G1 X-9 Y-1
+G1 X-10 Y0
+G1 X-9 Y1
+M104
+G0 Q1=5 M100 @717
+
+(*******************)
+(* Layer 21 [Z: 4] *)
+(*******************)
+
+M102 R1=5 R2=1 R3=1 R4=7 @714 (Pressure in 1 kPa)
+G0 X1 Y9
+G0 Q1=4.41 M100 @717
+M103 R1=1 R2=50 @714
+G1 X0 Y10
+G1 X-1 Y9
+G1 X-2 Y8
+G1 X2 Y8
+G1 X3 Y7
+G1 X-3 Y7
+G1 X-4 Y6
+G1 X4 Y6
+G1 X5 Y5
+G1 X-5 Y5
+G1 X-6 Y4
+G1 X6 Y4
+G1 X7 Y3
+G1 X-7 Y3
+G1 X-8 Y2
+G1 X8 Y2
+G1 X9 Y1
+G1 X-9 Y1
+G1 X-10 Y0
+G1 X10 Y0
+G1 X9 Y-1
+G1 X-9 Y-1
+G1 X-8 Y-2
+G1 X8 Y-2
+G1 X7 Y-3
+G1 X-7 Y-3
+G1 X-6 Y-4
+G1 X6 Y-4
+G1 X5 Y-5
+G1 X-5 Y-5
+G1 X-4 Y-6
+G1 X4 Y-6
+G1 X3 Y-7
+G1 X-3 Y-7
+G1 X-2 Y-8
+G1 X2 Y-8
+G1 X1 Y-9
+G1 X0 Y-10
+G1 X-1 Y-9
+M104
+G0 Q1=5.2 M100 @717
+
+(*********************)
+(* Layer 22 [Z: 4.2] *)
+(*********************)
+
+M102 R1=5 R2=1 R3=1 R4=7 @714 (Pressure in 1 kPa)
+G0 X-9 Y1
+G0 Q1=4.61 M100 @717
+M103 R1=1 R2=50 @714
+G1 X-10 Y0
+G1 X-9 Y-1
+G1 X-8 Y-2
+G1 X-8 Y2
+G1 X-7 Y3
+G1 X-7 Y-3
+G1 X-6 Y-4
+G1 X-6 Y4
+G1 X-5 Y5
+G1 X-5 Y-5
+G1 X-4 Y-6
+G1 X-4 Y6
+G1 X-3 Y7
+G1 X-3 Y-7
+G1 X-2 Y-8
+G1 X-2 Y8
+G1 X-1 Y9
+G1 X-1 Y-9
+G1 X0 Y-10
+G1 X0 Y-10
+G1 X0 Y10
+G1 X0 Y10
+G1 X1 Y9
+G1 X1 Y-9
+G1 X2 Y-8
+G1 X2 Y8
+G1 X3 Y7
+G1 X3 Y-7
+G1 X4 Y-6
+G1 X4 Y6
+G1 X5 Y5
+G1 X5 Y-5
+G1 X6 Y-4
+G1 X6 Y4
+G1 X7 Y3
+G1 X7 Y-3
+G1 X8 Y-2
+G1 X8 Y2
+G1 X9 Y1
+G1 X10 Y0
+G1 X9 Y-1
+M104
+G0 Q1=5.4 M100 @717
+
+(*********************)
+(* Layer 23 [Z: 4.4] *)
+(*********************)
+
+M102 R1=5 R2=1 R3=1 R4=7 @714 (Pressure in 1 kPa)
+G0 X-1 Y-9
+G0 Q1=4.81 M100 @717
+M103 R1=1 R2=50 @714
+G1 X0 Y-10
+G1 X1 Y-9
+G1 X2 Y-8
+G1 X-2 Y-8
+G1 X-3 Y-7
+G1 X3 Y-7
+G1 X4 Y-6
+G1 X-4 Y-6
+G1 X-5 Y-5
+G1 X5 Y-5
+G1 X6 Y-4
+G1 X-6 Y-4
+G1 X-7 Y-3
+G1 X7 Y-3
+G1 X8 Y-2
+G1 X-8 Y-2
+G1 X-9 Y-1
+G1 X9 Y-1
+G1 X10 Y0
+G1 X10 Y0
+G1 X-10 Y0
+G1 X-10 Y0
+G1 X-9 Y1
+G1 X9 Y1
+G1 X8 Y2
+G1 X-8 Y2
+G1 X-7 Y3
+G1 X7 Y3
+G1 X6 Y4
+G1 X-6 Y4
+G1 X-5 Y5
+G1 X5 Y5
+G1 X4 Y6
+G1 X-4 Y6
+G1 X-3 Y7
+G1 X3 Y7
+G1 X2 Y8
+G1 X-2 Y8
+G1 X-1 Y9
+G1 X0 Y10
+G1 X1 Y9
+M104
+G0 Q1=5.6 M100 @717
+
+(*********************)
+(* Layer 24 [Z: 4.6] *)
+(*********************)
+
+M102 R1=5 R2=1 R3=1 R4=7 @714 (Pressure in 1 kPa)
+G0 X10 Y0
+G0 Q1=5.01 M100 @717
+M103 R1=1 R2=50 @714
+G1 X10 Y0
+G1 X10 Y0
+G1 X9 Y-1
+G1 X9 Y1
+G1 X8 Y2
+G1 X8 Y-2
+G1 X7 Y-3
+G1 X7 Y3
+G1 X6 Y4
+G1 X6 Y-4
+G1 X5 Y-5
+G1 X5 Y5
+G1 X4 Y6
+G1 X4 Y-6
+G1 X3 Y-7
+G1 X3 Y7
+G1 X2 Y8
+G1 X2 Y-8
+G1 X1 Y-9
+G1 X1 Y9
+G1 X0 Y10
+G1 X0 Y-10
+G1 X-1 Y-9
+G1 X-1 Y9
+G1 X-2 Y8
+G1 X-2 Y-8
+G1 X-3 Y-7
+G1 X-3 Y7
+G1 X-4 Y6
+G1 X-4 Y-6
+G1 X-5 Y-5
+G1 X-5 Y5
+G1 X-6 Y4
+G1 X-6 Y-4
+G1 X-7 Y-3
+G1 X-7 Y3
+G1 X-8 Y2
+G1 X-8 Y-2
+G1 X-9 Y-1
+G1 X-10 Y0
+G1 X-9 Y1
+M104
+G0 Q1=5.8 M100 @717
+
+(*********************)
+(* Layer 25 [Z: 4.8] *)
+(*********************)
+
+M102 R1=5 R2=1 R3=1 R4=7 @714 (Pressure in 1 kPa)
+G0 X1 Y9
+G0 Q1=5.21 M100 @717
+M103 R1=1 R2=50 @714
+G1 X0 Y10
+G1 X-1 Y9
+G1 X-2 Y8
+G1 X2 Y8
+G1 X3 Y7
+G1 X-3 Y7
+G1 X-4 Y6
+G1 X4 Y6
+G1 X5 Y5
+G1 X-5 Y5
+G1 X-6 Y4
+G1 X6 Y4
+G1 X7 Y3
+G1 X-7 Y3
+G1 X-8 Y2
+G1 X8 Y2
+G1 X9 Y1
+G1 X-9 Y1
+G1 X-10 Y0
+G1 X10 Y0
+G1 X9 Y-1
+G1 X-9 Y-1
+G1 X-8 Y-2
+G1 X8 Y-2
+G1 X7 Y-3
+G1 X-7 Y-3
+G1 X-6 Y-4
+G1 X6 Y-4
+G1 X5 Y-5
+G1 X-5 Y-5
+G1 X-4 Y-6
+G1 X4 Y-6
+G1 X3 Y-7
+G1 X-3 Y-7
+G1 X-2 Y-8
+G1 X2 Y-8
+G1 X1 Y-9
+G1 X0 Y-10
+G1 X-1 Y-9
+M104
+G0 Q1=6 M100 @717
+
+(*******************)
+(* Layer 26 [Z: 5] *)
+(*******************)
+
+M102 R1=5 R2=1 R3=1 R4=7 @714 (Pressure in 1 kPa)
+G0 X-9 Y1
+G0 Q1=5.41 M100 @717
+M103 R1=1 R2=50 @714
+G1 X-10 Y0
+G1 X-9 Y-1
+G1 X-8 Y-2
+G1 X-8 Y2
+G1 X-7 Y3
+G1 X-7 Y-3
+G1 X-6 Y-4
+G1 X-6 Y4
+G1 X-5 Y5
+G1 X-5 Y-5
+G1 X-4 Y-6
+G1 X-4 Y6
+G1 X-3 Y7
+G1 X-3 Y-7
+G1 X-2 Y-8
+G1 X-2 Y8
+G1 X-1 Y9
+G1 X-1 Y-9
+G1 X0 Y-10
+G1 X0 Y-10
+G1 X0 Y10
+G1 X0 Y10
+G1 X1 Y9
+G1 X1 Y-9
+G1 X2 Y-8
+G1 X2 Y8
+G1 X3 Y7
+G1 X3 Y-7
+G1 X4 Y-6
+G1 X4 Y6
+G1 X5 Y5
+G1 X5 Y-5
+G1 X6 Y-4
+G1 X6 Y4
+G1 X7 Y3
+G1 X7 Y-3
+G1 X8 Y-2
+G1 X8 Y2
+G1 X9 Y1
+G1 X10 Y0
+G1 X9 Y-1
+M104
+G0 Q1=6.2 M100 @717
+
+(*********************)
+(* Layer 27 [Z: 5.2] *)
+(*********************)
+
+M102 R1=5 R2=1 R3=1 R4=7 @714 (Pressure in 1 kPa)
+G0 X-1 Y-9
+G0 Q1=5.61 M100 @717
+M103 R1=1 R2=50 @714
+G1 X0 Y-10
+G1 X1 Y-9
+G1 X2 Y-8
+G1 X-2 Y-8
+G1 X-3 Y-7
+G1 X3 Y-7
+G1 X4 Y-6
+G1 X-4 Y-6
+G1 X-5 Y-5
+G1 X5 Y-5
+G1 X6 Y-4
+G1 X-6 Y-4
+G1 X-7 Y-3
+G1 X7 Y-3
+G1 X8 Y-2
+G1 X-8 Y-2
+G1 X-9 Y-1
+G1 X9 Y-1
+G1 X10 Y0
+G1 X10 Y0
+G1 X-10 Y0
+G1 X-10 Y0
+G1 X-9 Y1
+G1 X9 Y1
+G1 X8 Y2
+G1 X-8 Y2
+G1 X-7 Y3
+G1 X7 Y3
+G1 X6 Y4
+G1 X-6 Y4
+G1 X-5 Y5
+G1 X5 Y5
+G1 X4 Y6
+G1 X-4 Y6
+G1 X-3 Y7
+G1 X3 Y7
+G1 X2 Y8
+G1 X-2 Y8
+G1 X-1 Y9
+G1 X0 Y10
+G1 X1 Y9
+M104
+G0 Q1=6.4 M100 @717
+
+(*********************)
+(* Layer 28 [Z: 5.4] *)
+(*********************)
+
+M102 R1=5 R2=1 R3=1 R4=7 @714 (Pressure in 1 kPa)
+G0 X10 Y0
+G0 Q1=5.81 M100 @717
+M103 R1=1 R2=50 @714
+G1 X10 Y0
+G1 X10 Y0
+G1 X9 Y-1
+G1 X9 Y1
+G1 X8 Y2
+G1 X8 Y-2
+G1 X7 Y-3
+G1 X7 Y3
+G1 X6 Y4
+G1 X6 Y-4
+G1 X5 Y-5
+G1 X5 Y5
+G1 X4 Y6
+G1 X4 Y-6
+G1 X3 Y-7
+G1 X3 Y7
+G1 X2 Y8
+G1 X2 Y-8
+G1 X1 Y-9
+G1 X1 Y9
+G1 X0 Y10
+G1 X0 Y-10
+G1 X-1 Y-9
+G1 X-1 Y9
+G1 X-2 Y8
+G1 X-2 Y-8
+G1 X-3 Y-7
+G1 X-3 Y7
+G1 X-4 Y6
+G1 X-4 Y-6
+G1 X-5 Y-5
+G1 X-5 Y5
+G1 X-6 Y4
+G1 X-6 Y-4
+G1 X-7 Y-3
+G1 X-7 Y3
+G1 X-8 Y2
+G1 X-8 Y-2
+G1 X-9 Y-1
+G1 X-10 Y0
+G1 X-9 Y1
+M104
+G0 Q1=6.6 M100 @717
+
+(*********************)
+(* Layer 29 [Z: 5.6] *)
+(*********************)
+
+M102 R1=5 R2=1 R3=1 R4=7 @714 (Pressure in 1 kPa)
+G0 X1 Y9
+G0 Q1=6.01 M100 @717
+M103 R1=1 R2=50 @714
+G1 X0 Y10
+G1 X-1 Y9
+G1 X-2 Y8
+G1 X2 Y8
+G1 X3 Y7
+G1 X-3 Y7
+G1 X-4 Y6
+G1 X4 Y6
+G1 X5 Y5
+G1 X-5 Y5
+G1 X-6 Y4
+G1 X6 Y4
+G1 X7 Y3
+G1 X-7 Y3
+G1 X-8 Y2
+G1 X8 Y2
+G1 X9 Y1
+G1 X-9 Y1
+G1 X-10 Y0
+G1 X10 Y0
+G1 X9 Y-1
+G1 X-9 Y-1
+G1 X-8 Y-2
+G1 X8 Y-2
+G1 X7 Y-3
+G1 X-7 Y-3
+G1 X-6 Y-4
+G1 X6 Y-4
+G1 X5 Y-5
+G1 X-5 Y-5
+G1 X-4 Y-6
+G1 X4 Y-6
+G1 X3 Y-7
+G1 X-3 Y-7
+G1 X-2 Y-8
+G1 X2 Y-8
+G1 X1 Y-9
+G1 X0 Y-10
+G1 X-1 Y-9
+M104
+G0 Q1=6.8 M100 @717
+
+(*********************)
+(* Layer 30 [Z: 5.8] *)
+(*********************)
+
+M102 R1=5 R2=1 R3=1 R4=7 @714 (Pressure in 1 kPa)
+G0 X-9 Y1
+G0 Q1=6.21 M100 @717
+M103 R1=1 R2=50 @714
+G1 X-10 Y0
+G1 X-9 Y-1
+G1 X-8 Y-2
+G1 X-8 Y2
+G1 X-7 Y3
+G1 X-7 Y-3
+G1 X-6 Y-4
+G1 X-6 Y4
+G1 X-5 Y5
+G1 X-5 Y-5
+G1 X-4 Y-6
+G1 X-4 Y6
+G1 X-3 Y7
+G1 X-3 Y-7
+G1 X-2 Y-8
+G1 X-2 Y8
+G1 X-1 Y9
+G1 X-1 Y-9
+G1 X0 Y-10
+G1 X0 Y-10
+G1 X0 Y10
+G1 X0 Y10
+G1 X1 Y9
+G1 X1 Y-9
+G1 X2 Y-8
+G1 X2 Y8
+G1 X3 Y7
+G1 X3 Y-7
+G1 X4 Y-6
+G1 X4 Y6
+G1 X5 Y5
+G1 X5 Y-5
+G1 X6 Y-4
+G1 X6 Y4
+G1 X7 Y3
+G1 X7 Y-3
+G1 X8 Y-2
+G1 X8 Y2
+G1 X9 Y1
+G1 X10 Y0
+G1 X9 Y-1
+M104
+G0 Q1=7 M100 @717
+
+(*******************)
+(* Layer 31 [Z: 6] *)
+(*******************)
+
+M102 R1=5 R2=1 R3=1 R4=7 @714 (Pressure in 1 kPa)
+G0 X-1 Y-9
+G0 Q1=6.41 M100 @717
+M103 R1=1 R2=50 @714
+G1 X0 Y-10
+G1 X1 Y-9
+G1 X2 Y-8
+G1 X-2 Y-8
+G1 X-3 Y-7
+G1 X3 Y-7
+G1 X4 Y-6
+G1 X-4 Y-6
+G1 X-5 Y-5
+G1 X5 Y-5
+G1 X6 Y-4
+G1 X-6 Y-4
+G1 X-7 Y-3
+G1 X7 Y-3
+G1 X8 Y-2
+G1 X-8 Y-2
+G1 X-9 Y-1
+G1 X9 Y-1
+G1 X10 Y0
+G1 X10 Y0
+G1 X-10 Y0
+G1 X-10 Y0
+G1 X-9 Y1
+G1 X9 Y1
+G1 X8 Y2
+G1 X-8 Y2
+G1 X-7 Y3
+G1 X7 Y3
+G1 X6 Y4
+G1 X-6 Y4
+G1 X-5 Y5
+G1 X5 Y5
+G1 X4 Y6
+G1 X-4 Y6
+G1 X-3 Y7
+G1 X3 Y7
+G1 X2 Y8
+G1 X-2 Y8
+G1 X-1 Y9
+G1 X0 Y10
+G1 X1 Y9
+M104
+G0 Q1=7.2 M100 @717
+
+(*********************)
+(* Layer 32 [Z: 6.2] *)
+(*********************)
+
+M102 R1=5 R2=1 R3=1 R4=7 @714 (Pressure in 1 kPa)
+G0 X10 Y0
+G0 Q1=6.61 M100 @717
+M103 R1=1 R2=50 @714
+G1 X10 Y0
+G1 X10 Y0
+G1 X9 Y-1
+G1 X9 Y1
+G1 X8 Y2
+G1 X8 Y-2
+G1 X7 Y-3
+G1 X7 Y3
+G1 X6 Y4
+G1 X6 Y-4
+G1 X5 Y-5
+G1 X5 Y5
+G1 X4 Y6
+G1 X4 Y-6
+G1 X3 Y-7
+G1 X3 Y7
+G1 X2 Y8
+G1 X2 Y-8
+G1 X1 Y-9
+G1 X1 Y9
+G1 X0 Y10
+G1 X0 Y-10
+G1 X-1 Y-9
+G1 X-1 Y9
+G1 X-2 Y8
+G1 X-2 Y-8
+G1 X-3 Y-7
+G1 X-3 Y7
+G1 X-4 Y6
+G1 X-4 Y-6
+G1 X-5 Y-5
+G1 X-5 Y5
+G1 X-6 Y4
+G1 X-6 Y-4
+G1 X-7 Y-3
+G1 X-7 Y3
+G1 X-8 Y2
+G1 X-8 Y-2
+G1 X-9 Y-1
+G1 X-10 Y0
+G1 X-9 Y1
+M104
+G0 Q1=7.4 M100 @717
+
+(*********************)
+(* Layer 33 [Z: 6.4] *)
+(*********************)
+
+M102 R1=5 R2=1 R3=1 R4=7 @714 (Pressure in 1 kPa)
+G0 X1 Y9
+G0 Q1=6.81 M100 @717
+M103 R1=1 R2=50 @714
+G1 X0 Y10
+G1 X-1 Y9
+G1 X-2 Y8
+G1 X2 Y8
+G1 X3 Y7
+G1 X-3 Y7
+G1 X-4 Y6
+G1 X4 Y6
+G1 X5 Y5
+G1 X-5 Y5
+G1 X-6 Y4
+G1 X6 Y4
+G1 X7 Y3
+G1 X-7 Y3
+G1 X-8 Y2
+G1 X8 Y2
+G1 X9 Y1
+G1 X-9 Y1
+G1 X-10 Y0
+G1 X10 Y0
+G1 X9 Y-1
+G1 X-9 Y-1
+G1 X-8 Y-2
+G1 X8 Y-2
+G1 X7 Y-3
+G1 X-7 Y-3
+G1 X-6 Y-4
+G1 X6 Y-4
+G1 X5 Y-5
+G1 X-5 Y-5
+G1 X-4 Y-6
+G1 X4 Y-6
+G1 X3 Y-7
+G1 X-3 Y-7
+G1 X-2 Y-8
+G1 X2 Y-8
+G1 X1 Y-9
+G1 X0 Y-10
+G1 X-1 Y-9
+M104
+G0 Q1=7.6 M100 @717
+
+(*********************)
+(* Layer 34 [Z: 6.6] *)
+(*********************)
+
+M102 R1=5 R2=1 R3=1 R4=7 @714 (Pressure in 1 kPa)
+G0 X-9 Y1
+G0 Q1=7.01 M100 @717
+M103 R1=1 R2=50 @714
+G1 X-10 Y0
+G1 X-9 Y-1
+G1 X-8 Y-2
+G1 X-8 Y2
+G1 X-7 Y3
+G1 X-7 Y-3
+G1 X-6 Y-4
+G1 X-6 Y4
+G1 X-5 Y5
+G1 X-5 Y-5
+G1 X-4 Y-6
+G1 X-4 Y6
+G1 X-3 Y7
+G1 X-3 Y-7
+G1 X-2 Y-8
+G1 X-2 Y8
+G1 X-1 Y9
+G1 X-1 Y-9
+G1 X0 Y-10
+G1 X0 Y10
+G1 X1 Y9
+G1 X1 Y-9
+G1 X2 Y-8
+G1 X2 Y8
+G1 X3 Y7
+G1 X3 Y-7
+G1 X4 Y-6
+G1 X4 Y6
+G1 X5 Y5
+G1 X5 Y-5
+G1 X6 Y-4
+G1 X6 Y4
+G1 X7 Y3
+G1 X7 Y-3
+G1 X8 Y-2
+G1 X8 Y2
+G1 X9 Y1
+G1 X10 Y0
+G1 X9 Y-1
+M104
+G0 Q1=7.8 M100 @717
+
+(*********************)
+(* Layer 35 [Z: 6.8] *)
+(*********************)
+
+M102 R1=5 R2=1 R3=1 R4=7 @714 (Pressure in 1 kPa)
+G0 X-1 Y-9
+G0 Q1=7.21 M100 @717
+M103 R1=1 R2=50 @714
+G1 X0 Y-10
+G1 X1 Y-9
+G1 X2 Y-8
+G1 X-2 Y-8
+G1 X-3 Y-7
+G1 X3 Y-7
+G1 X4 Y-6
+G1 X-4 Y-6
+G1 X-5 Y-5
+G1 X5 Y-5
+G1 X6 Y-4
+G1 X-6 Y-4
+G1 X-7 Y-3
+G1 X7 Y-3
+G1 X8 Y-2
+G1 X-8 Y-2
+G1 X-9 Y-1
+G1 X9 Y-1
+G1 X10 Y0
+G1 X10 Y0
+G1 X-10 Y0
+G1 X-10 Y0
+G1 X-9 Y1
+G1 X9 Y1
+G1 X8 Y2
+G1 X-8 Y2
+G1 X-7 Y3
+G1 X7 Y3
+G1 X6 Y4
+G1 X-6 Y4
+G1 X-5 Y5
+G1 X5 Y5
+G1 X4 Y6
+G1 X-4 Y6
+G1 X-3 Y7
+G1 X3 Y7
+G1 X2 Y8
+G1 X-2 Y8
+G1 X-1 Y9
+G1 X0 Y10
+G1 X1 Y9
+M104
+G0 Q1=8 M100 @717
+
+(*******************)
+(* Layer 36 [Z: 7] *)
+(*******************)
+
+M102 R1=5 R2=1 R3=1 R4=7 @714 (Pressure in 1 kPa)
+G0 X10 Y0
+G0 Q1=7.41 M100 @717
+M103 R1=1 R2=50 @714
+G1 X10 Y0
+G1 X10 Y0
+G1 X9 Y-1
+G1 X9 Y1
+G1 X8 Y2
+G1 X8 Y-2
+G1 X7 Y-3
+G1 X7 Y3
+G1 X6 Y4
+G1 X6 Y-4
+G1 X5 Y-5
+G1 X5 Y5
+G1 X4 Y6
+G1 X4 Y-6
+G1 X3 Y-7
+G1 X3 Y7
+G1 X2 Y8
+G1 X2 Y-8
+G1 X1 Y-9
+G1 X1 Y9
+G1 X0 Y10
+G1 X0 Y-10
+G1 X-1 Y-9
+G1 X-1 Y9
+G1 X-2 Y8
+G1 X-2 Y-8
+G1 X-3 Y-7
+G1 X-3 Y7
+G1 X-4 Y6
+G1 X-4 Y-6
+G1 X-5 Y-5
+G1 X-5 Y5
+G1 X-6 Y4
+G1 X-6 Y-4
+G1 X-7 Y-3
+G1 X-7 Y3
+G1 X-8 Y2
+G1 X-8 Y-2
+G1 X-9 Y-1
+G1 X-10 Y0
+G1 X-9 Y1
+M104
+G0 Q1=8.2 M100 @717
+
+(*********************)
+(* Layer 37 [Z: 7.2] *)
+(*********************)
+
+M102 R1=5 R2=1 R3=1 R4=7 @714 (Pressure in 1 kPa)
+G0 X1 Y9
+G0 Q1=7.61 M100 @717
+M103 R1=1 R2=50 @714
+G1 X0 Y10
+G1 X-1 Y9
+G1 X-2 Y8
+G1 X2 Y8
+G1 X3 Y7
+G1 X-3 Y7
+G1 X-4 Y6
+G1 X4 Y6
+G1 X5 Y5
+G1 X-5 Y5
+G1 X-6 Y4
+G1 X6 Y4
+G1 X7 Y3
+G1 X-7 Y3
+G1 X-8 Y2
+G1 X8 Y2
+G1 X9 Y1
+G1 X-9 Y1
+G1 X-10 Y0
+G1 X10 Y0
+G1 X9 Y-1
+G1 X-9 Y-1
+G1 X-8 Y-2
+G1 X8 Y-2
+G1 X7 Y-3
+G1 X-7 Y-3
+G1 X-6 Y-4
+G1 X6 Y-4
+G1 X5 Y-5
+G1 X-5 Y-5
+G1 X-4 Y-6
+G1 X4 Y-6
+G1 X3 Y-7
+G1 X-3 Y-7
+G1 X-2 Y-8
+G1 X2 Y-8
+G1 X1 Y-9
+G1 X0 Y-10
+G1 X-1 Y-9
+M104
+G0 Q1=8.4 M100 @717
+
+(*********************)
+(* Layer 38 [Z: 7.4] *)
+(*********************)
+
+M102 R1=5 R2=1 R3=1 R4=7 @714 (Pressure in 1 kPa)
+G0 X-9 Y1
+G0 Q1=7.81 M100 @717
+M103 R1=1 R2=50 @714
+G1 X-10 Y0
+G1 X-9 Y-1
+G1 X-8 Y-2
+G1 X-8 Y2
+G1 X-7 Y3
+G1 X-7 Y-3
+G1 X-6 Y-4
+G1 X-6 Y4
+G1 X-5 Y5
+G1 X-5 Y-5
+G1 X-4 Y-6
+G1 X-4 Y6
+G1 X-3 Y7
+G1 X-3 Y-7
+G1 X-2 Y-8
+G1 X-2 Y8
+G1 X-1 Y9
+G1 X-1 Y-9
+G1 X0 Y-10
+G1 X0 Y10
+G1 X1 Y9
+G1 X1 Y-9
+G1 X2 Y-8
+G1 X2 Y8
+G1 X3 Y7
+G1 X3 Y-7
+G1 X4 Y-6
+G1 X4 Y6
+G1 X5 Y5
+G1 X5 Y-5
+G1 X6 Y-4
+G1 X6 Y4
+G1 X7 Y3
+G1 X7 Y-3
+G1 X8 Y-2
+G1 X8 Y2
+G1 X9 Y1
+G1 X10 Y0
+G1 X9 Y-1
+M104
+G0 Q1=8.6 M100 @717
+
+(*********************)
+(* Layer 39 [Z: 7.6] *)
+(*********************)
+
+M102 R1=5 R2=1 R3=1 R4=7 @714 (Pressure in 1 kPa)
+G0 X-1 Y-9
+G0 Q1=8.01 M100 @717
+M103 R1=1 R2=50 @714
+G1 X0 Y-10
+G1 X1 Y-9
+G1 X2 Y-8
+G1 X-2 Y-8
+G1 X-3 Y-7
+G1 X3 Y-7
+G1 X4 Y-6
+G1 X-4 Y-6
+G1 X-5 Y-5
+G1 X5 Y-5
+G1 X6 Y-4
+G1 X-6 Y-4
+G1 X-7 Y-3
+G1 X7 Y-3
+G1 X8 Y-2
+G1 X-8 Y-2
+G1 X-9 Y-1
+G1 X9 Y-1
+G1 X10 Y0
+G1 X10 Y0
+G1 X-10 Y0
+G1 X-10 Y0
+G1 X-9 Y1
+G1 X9 Y1
+G1 X8 Y2
+G1 X-8 Y2
+G1 X-7 Y3
+G1 X7 Y3
+G1 X6 Y4
+G1 X-6 Y4
+G1 X-5 Y5
+G1 X5 Y5
+G1 X4 Y6
+G1 X-4 Y6
+G1 X-3 Y7
+G1 X3 Y7
+G1 X2 Y8
+G1 X-2 Y8
+G1 X-1 Y9
+G1 X0 Y10
+G1 X1 Y9
+M104
+G0 Q1=8.8 M100 @717
+
+(*********************)
+(* Layer 40 [Z: 7.8] *)
+(*********************)
+
+M102 R1=5 R2=1 R3=1 R4=7 @714 (Pressure in 1 kPa)
+G0 X10 Y0
+G0 Q1=8.21 M100 @717
+M103 R1=1 R2=50 @714
+G1 X10 Y0
+G1 X10 Y0
+G1 X9 Y-1
+G1 X9 Y1
+G1 X8 Y2
+G1 X8 Y-2
+G1 X7 Y-3
+G1 X7 Y3
+G1 X6 Y4
+G1 X6 Y-4
+G1 X5 Y-5
+G1 X5 Y5
+G1 X4 Y6
+G1 X4 Y-6
+G1 X3 Y-7
+G1 X3 Y7
+G1 X2 Y8
+G1 X2 Y-8
+G1 X1 Y-9
+G1 X1 Y9
+G1 X0 Y10
+G1 X0 Y-10
+G1 X-1 Y-9
+G1 X-1 Y9
+G1 X-2 Y8
+G1 X-2 Y-8
+G1 X-3 Y-7
+G1 X-3 Y7
+G1 X-4 Y6
+G1 X-4 Y-6
+G1 X-5 Y-5
+G1 X-5 Y5
+G1 X-6 Y4
+G1 X-6 Y-4
+G1 X-7 Y-3
+G1 X-7 Y3
+G1 X-8 Y2
+G1 X-8 Y-2
+G1 X-9 Y-1
+G1 X-10 Y0
+G1 X-9 Y1
+M104
+G0 Q1=9 M100 @717
+
+(*******************)
+(* Layer 41 [Z: 8] *)
+(*******************)
+
+M102 R1=5 R2=1 R3=1 R4=7 @714 (Pressure in 1 kPa)
+G0 X1 Y9
+G0 Q1=8.41 M100 @717
+M103 R1=1 R2=50 @714
+G1 X0 Y10
+G1 X-1 Y9
+G1 X-2 Y8
+G1 X2 Y8
+G1 X3 Y7
+G1 X-3 Y7
+G1 X-4 Y6
+G1 X4 Y6
+G1 X5 Y5
+G1 X-5 Y5
+G1 X-6 Y4
+G1 X6 Y4
+G1 X7 Y3
+G1 X-7 Y3
+G1 X-8 Y2
+G1 X8 Y2
+G1 X9 Y1
+G1 X-9 Y1
+G1 X-10 Y0
+G1 X10 Y0
+G1 X9 Y-1
+G1 X-9 Y-1
+G1 X-8 Y-2
+G1 X8 Y-2
+G1 X7 Y-3
+G1 X-7 Y-3
+G1 X-6 Y-4
+G1 X6 Y-4
+G1 X5 Y-5
+G1 X-5 Y-5
+G1 X-4 Y-6
+G1 X4 Y-6
+G1 X3 Y-7
+G1 X-3 Y-7
+G1 X-2 Y-8
+G1 X2 Y-8
+G1 X1 Y-9
+G1 X0 Y-10
+G1 X-1 Y-9
+M104
+G0 Q1=9.2 M100 @717
+
+(*********************)
+(* Layer 42 [Z: 8.2] *)
+(*********************)
+
+M102 R1=5 R2=1 R3=1 R4=7 @714 (Pressure in 1 kPa)
+G0 X-9 Y1
+G0 Q1=8.61 M100 @717
+M103 R1=1 R2=50 @714
+G1 X-10 Y0
+G1 X-9 Y-1
+G1 X-8 Y-2
+G1 X-8 Y2
+G1 X-7 Y3
+G1 X-7 Y-3
+G1 X-6 Y-4
+G1 X-6 Y4
+G1 X-5 Y5
+G1 X-5 Y-5
+G1 X-4 Y-6
+G1 X-4 Y6
+G1 X-3 Y7
+G1 X-3 Y-7
+G1 X-2 Y-8
+G1 X-2 Y8
+G1 X-1 Y9
+G1 X-1 Y-9
+G1 X0 Y-10
+G1 X0 Y10
+G1 X1 Y9
+G1 X1 Y-9
+G1 X2 Y-8
+G1 X2 Y8
+G1 X3 Y7
+G1 X3 Y-7
+G1 X4 Y-6
+G1 X4 Y6
+G1 X5 Y5
+G1 X5 Y-5
+G1 X6 Y-4
+G1 X6 Y4
+G1 X7 Y3
+G1 X7 Y-3
+G1 X8 Y-2
+G1 X8 Y2
+G1 X9 Y1
+G1 X10 Y0
+G1 X9 Y-1
+M104
+G0 Q1=9.4 M100 @717
+
+(*********************)
+(* Layer 43 [Z: 8.4] *)
+(*********************)
+
+M102 R1=5 R2=1 R3=1 R4=7 @714 (Pressure in 1 kPa)
+G0 X-1 Y-9
+G0 Q1=8.81 M100 @717
+M103 R1=1 R2=50 @714
+G1 X0 Y-10
+G1 X1 Y-9
+G1 X2 Y-8
+G1 X-2 Y-8
+G1 X-3 Y-7
+G1 X3 Y-7
+G1 X4 Y-6
+G1 X-4 Y-6
+G1 X-5 Y-5
+G1 X5 Y-5
+G1 X6 Y-4
+G1 X-6 Y-4
+G1 X-7 Y-3
+G1 X7 Y-3
+G1 X8 Y-2
+G1 X-8 Y-2
+G1 X-9 Y-1
+G1 X9 Y-1
+G1 X10 Y0
+G1 X10 Y0
+G1 X-10 Y0
+G1 X-10 Y0
+G1 X-9 Y1
+G1 X9 Y1
+G1 X8 Y2
+G1 X-8 Y2
+G1 X-7 Y3
+G1 X7 Y3
+G1 X6 Y4
+G1 X-6 Y4
+G1 X-5 Y5
+G1 X5 Y5
+G1 X4 Y6
+G1 X-4 Y6
+G1 X-3 Y7
+G1 X3 Y7
+G1 X2 Y8
+G1 X-2 Y8
+G1 X-1 Y9
+G1 X0 Y10
+G1 X1 Y9
+M104
+G0 Q1=9.6 M100 @717
+
+(*********************)
+(* Layer 44 [Z: 8.6] *)
+(*********************)
+
+M102 R1=5 R2=1 R3=1 R4=7 @714 (Pressure in 1 kPa)
+G0 X10 Y0
+G0 Q1=9.01 M100 @717
+M103 R1=1 R2=50 @714
+G1 X10 Y0
+G1 X10 Y0
+G1 X9 Y-1
+G1 X9 Y1
+G1 X8 Y2
+G1 X8 Y-2
+G1 X7 Y-3
+G1 X7 Y3
+G1 X6 Y4
+G1 X6 Y-4
+G1 X5 Y-5
+G1 X5 Y5
+G1 X4 Y6
+G1 X4 Y-6
+G1 X3 Y-7
+G1 X3 Y7
+G1 X2 Y8
+G1 X2 Y-8
+G1 X1 Y-9
+G1 X1 Y9
+G1 X0 Y10
+G1 X0 Y-10
+G1 X-1 Y-9
+G1 X-1 Y9
+G1 X-2 Y8
+G1 X-2 Y-8
+G1 X-3 Y-7
+G1 X-3 Y7
+G1 X-4 Y6
+G1 X-4 Y-6
+G1 X-5 Y-5
+G1 X-5 Y5
+G1 X-6 Y4
+G1 X-6 Y-4
+G1 X-7 Y-3
+G1 X-7 Y3
+G1 X-8 Y2
+G1 X-8 Y-2
+G1 X-9 Y-1
+G1 X-10 Y0
+G1 X-9 Y1
+M104
+G0 Q1=9.8 M100 @717
+
+(*********************)
+(* Layer 45 [Z: 8.8] *)
+(*********************)
+
+M102 R1=5 R2=1 R3=1 R4=7 @714 (Pressure in 1 kPa)
+G0 X1 Y9
+G0 Q1=9.21 M100 @717
+M103 R1=1 R2=50 @714
+G1 X0 Y10
+G1 X-1 Y9
+G1 X-2 Y8
+G1 X2 Y8
+G1 X3 Y7
+G1 X-3 Y7
+G1 X-4 Y6
+G1 X4 Y6
+G1 X5 Y5
+G1 X-5 Y5
+G1 X-6 Y4
+G1 X6 Y4
+G1 X7 Y3
+G1 X-7 Y3
+G1 X-8 Y2
+G1 X8 Y2
+G1 X9 Y1
+G1 X-9 Y1
+G1 X-10 Y0
+G1 X-10 Y0
+G1 X10 Y0
+G1 X10 Y0
+G1 X9 Y-1
+G1 X-9 Y-1
+G1 X-8 Y-2
+G1 X8 Y-2
+G1 X7 Y-3
+G1 X-7 Y-3
+G1 X-6 Y-4
+G1 X6 Y-4
+G1 X5 Y-5
+G1 X-5 Y-5
+G1 X-4 Y-6
+G1 X4 Y-6
+G1 X3 Y-7
+G1 X-3 Y-7
+G1 X-2 Y-8
+G1 X2 Y-8
+G1 X1 Y-9
+G1 X0 Y-10
+G1 X-1 Y-9
+M104
+G0 Q1=10 M100 @717
+
+(*******************)
+(* Layer 46 [Z: 9] *)
+(*******************)
+
+M102 R1=5 R2=1 R3=1 R4=7 @714 (Pressure in 1 kPa)
+G0 X-9 Y1
+G0 Q1=9.41 M100 @717
+M103 R1=1 R2=50 @714
+G1 X-10 Y0
+G1 X-9 Y-1
+G1 X-8 Y-2
+G1 X-8 Y2
+G1 X-7 Y3
+G1 X-7 Y-3
+G1 X-6 Y-4
+G1 X-6 Y4
+G1 X-5 Y5
+G1 X-5 Y-5
+G1 X-4 Y-6
+G1 X-4 Y6
+G1 X-3 Y7
+G1 X-3 Y-7
+G1 X-2 Y-8
+G1 X-2 Y8
+G1 X-1 Y9
+G1 X-1 Y-9
+G1 X0 Y-10
+G1 X0 Y10
+G1 X1 Y9
+G1 X1 Y-9
+G1 X2 Y-8
+G1 X2 Y8
+G1 X3 Y7
+G1 X3 Y-7
+G1 X4 Y-6
+G1 X4 Y6
+G1 X5 Y5
+G1 X5 Y-5
+G1 X6 Y-4
+G1 X6 Y4
+G1 X7 Y3
+G1 X7 Y-3
+G1 X8 Y-2
+G1 X8 Y2
+G1 X9 Y1
+G1 X10 Y0
+G1 X9 Y-1
+M104
+G0 Q1=10.2 M100 @717
+
+(*********************)
+(* Layer 47 [Z: 9.2] *)
+(*********************)
+
+M102 R1=5 R2=1 R3=1 R4=7 @714 (Pressure in 1 kPa)
+G0 X-1 Y-9
+G0 Q1=9.61 M100 @717
+M103 R1=1 R2=50 @714
+G1 X0 Y-10
+G1 X1 Y-9
+G1 X2 Y-8
+G1 X-2 Y-8
+G1 X-3 Y-7
+G1 X3 Y-7
+G1 X4 Y-6
+G1 X-4 Y-6
+G1 X-5 Y-5
+G1 X5 Y-5
+G1 X6 Y-4
+G1 X-6 Y-4
+G1 X-7 Y-3
+G1 X7 Y-3
+G1 X8 Y-2
+G1 X-8 Y-2
+G1 X-9 Y-1
+G1 X9 Y-1
+G1 X10 Y0
+G1 X-10 Y0
+G1 X-9 Y1
+G1 X9 Y1
+G1 X8 Y2
+G1 X-8 Y2
+G1 X-7 Y3
+G1 X7 Y3
+G1 X6 Y4
+G1 X-6 Y4
+G1 X-5 Y5
+G1 X5 Y5
+G1 X4 Y6
+G1 X-4 Y6
+G1 X-3 Y7
+G1 X3 Y7
+G1 X2 Y8
+G1 X-2 Y8
+G1 X-1 Y9
+G1 X0 Y10
+G1 X1 Y9
+M104
+G0 Q1=10.4 M100 @717
+
+(*********************)
+(* Layer 48 [Z: 9.4] *)
+(*********************)
+
+M102 R1=5 R2=1 R3=1 R4=7 @714 (Pressure in 1 kPa)
+G0 X10 Y0
+G0 Q1=9.81 M100 @717
+M103 R1=1 R2=50 @714
+G1 X10 Y0
+G1 X10 Y0
+G1 X9 Y-1
+G1 X9 Y1
+G1 X8 Y2
+G1 X8 Y-2
+G1 X7 Y-3
+G1 X7 Y3
+G1 X6 Y4
+G1 X6 Y-4
+G1 X5 Y-5
+G1 X5 Y5
+G1 X4 Y6
+G1 X4 Y-6
+G1 X3 Y-7
+G1 X3 Y7
+G1 X2 Y8
+G1 X2 Y-8
+G1 X1 Y-9
+G1 X1 Y9
+G1 X0 Y10
+G1 X0 Y10
+G1 X0 Y-10
+G1 X0 Y-10
+G1 X-1 Y-9
+G1 X-1 Y9
+G1 X-2 Y8
+G1 X-2 Y-8
+G1 X-3 Y-7
+G1 X-3 Y7
+G1 X-4 Y6
+G1 X-4 Y-6
+G1 X-5 Y-5
+G1 X-5 Y5
+G1 X-6 Y4
+G1 X-6 Y-4
+G1 X-7 Y-3
+G1 X-7 Y3
+G1 X-8 Y2
+G1 X-8 Y-2
+G1 X-9 Y-1
+G1 X-10 Y0
+G1 X-9 Y1
+M104
+G0 Q1=10.6 M100 @717
+
+(*********************)
+(* Layer 49 [Z: 9.6] *)
+(*********************)
+
+M102 R1=5 R2=1 R3=1 R4=7 @714 (Pressure in 1 kPa)
+G0 X1 Y9
+G0 Q1=10.01 M100 @717
+M103 R1=1 R2=50 @714
+G1 X0 Y10
+G1 X-1 Y9
+G1 X-2 Y8
+G1 X2 Y8
+G1 X3 Y7
+G1 X-3 Y7
+G1 X-4 Y6
+G1 X4 Y6
+G1 X5 Y5
+G1 X-5 Y5
+G1 X-6 Y4
+G1 X6 Y4
+G1 X7 Y3
+G1 X-7 Y3
+G1 X-8 Y2
+G1 X8 Y2
+G1 X9 Y1
+G1 X-9 Y1
+G1 X-10 Y0
+G1 X10 Y0
+G1 X9 Y-1
+G1 X-9 Y-1
+G1 X-8 Y-2
+G1 X8 Y-2
+G1 X7 Y-3
+G1 X-7 Y-3
+G1 X-6 Y-4
+G1 X6 Y-4
+G1 X5 Y-5
+G1 X-5 Y-5
+G1 X-4 Y-6
+G1 X4 Y-6
+G1 X3 Y-7
+G1 X-3 Y-7
+G1 X-2 Y-8
+G1 X2 Y-8
+G1 X1 Y-9
+G1 X0 Y-10
+G1 X-1 Y-9
+M104
+G0 Q1=10.8 M100 @717
+
+(*********************)
+(* Layer 50 [Z: 9.8] *)
+(*********************)
+
+M102 R1=5 R2=1 R3=1 R4=7 @714 (Pressure in 1 kPa)
+G0 X-9 Y1
+G0 Q1=10.21 M100 @717
+M103 R1=1 R2=50 @714
+G1 X-10 Y0
+G1 X-9 Y-1
+G1 X-8 Y-2
+G1 X-8 Y2
+G1 X-7 Y3
+G1 X-7 Y-3
+G1 X-6 Y-4
+G1 X-6 Y4
+G1 X-5 Y5
+G1 X-5 Y-5
+G1 X-4 Y-6
+G1 X-4 Y6
+G1 X-3 Y7
+G1 X-3 Y-7
+G1 X-2 Y-8
+G1 X-2 Y8
+G1 X-1 Y9
+G1 X-1 Y-9
+G1 X0 Y-10
+G1 X0 Y10
+G1 X1 Y9
+G1 X1 Y-9
+G1 X2 Y-8
+G1 X2 Y8
+G1 X3 Y7
+G1 X3 Y-7
+G1 X4 Y-6
+G1 X4 Y6
+G1 X5 Y5
+G1 X5 Y-5
+G1 X6 Y-4
+G1 X6 Y4
+G1 X7 Y3
+G1 X7 Y-3
+G1 X8 Y-2
+G1 X8 Y2
+G1 X9 Y1
+G1 X10 Y0
+G1 X9 Y-1
+M104
+G0 Q1=11 M100 @717
+
+(*******)
+(* End *)
+(*******)
+
+M101 @716
+M2

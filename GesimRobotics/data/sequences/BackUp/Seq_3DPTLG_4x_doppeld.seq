@@ -1,0 +1,16 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<Root>
+  <Header Version="2.0.18.5239" Id="0" />
+  <Steps>
+    <Item Id="58fac781-81b2-4f36-808d-211625d50daf" Description="" ObjectType="Root" ObjectId="e94c0ae7-f5eb-42b3-bf25-c6806131cff7" ActionType="RunGCode" TargetId="7178bd65-7737-4ddd-9cb6-180d7e82595e" TargetRef="Center" FileName="G-Code_3DPTLG_Dichtung_anliegent_doppeld" WaitPointId="89f7838a-28f5-497d-aefa-e65c0030936e" Offset.Z="0" />
+    <Item Id="b2d0992e-8e1a-44f8-8ab0-dbd64f6021a5" Description="" ObjectType="Root" ObjectId="e94c0ae7-f5eb-42b3-bf25-c6806131cff7" ActionType="RunGCode" TargetId="31bb8ba2-501a-41e4-8b94-cbc09aef35d1" TargetRef="Center" FileName="G-Code_3DPTLG_Dichtung_anliegent_doppeld" WaitPointId="89f7838a-28f5-497d-aefa-e65c0030936e" Offset.Z="0">
+      <Condition Type="StepReady" Operator="AND" StepId="0" />
+    </Item>
+    <Item Id="235ac887-a503-4cb2-ba02-a7f25cb2317b" Description="" ObjectType="Root" ObjectId="e94c0ae7-f5eb-42b3-bf25-c6806131cff7" ActionType="RunGCode" TargetId="2c68102d-2df1-4737-a72a-ac82038d5c54" TargetRef="Center" FileName="G-Code_3DPTLG_Dichtung_anliegent_doppeld" WaitPointId="89f7838a-28f5-497d-aefa-e65c0030936e" Offset.Z="0">
+      <Condition Type="StepReady" Operator="AND" StepId="0" />
+    </Item>
+    <Item Id="8b8fc1e8-4404-4fbc-94e1-6a3630656f6a" Description="" ObjectType="Root" ObjectId="e94c0ae7-f5eb-42b3-bf25-c6806131cff7" ActionType="RunGCode" TargetId="688b1113-8fcc-453b-a4de-59f8dd38b53f" TargetRef="Center" FileName="G-Code_3DPTLG_Dichtung_anliegent_doppeld" WaitPointId="89f7838a-28f5-497d-aefa-e65c0030936e" Offset.Z="0">
+      <Condition Type="StepReady" Operator="AND" StepId="0" />
+    </Item>
+  </Steps>
+</Root>

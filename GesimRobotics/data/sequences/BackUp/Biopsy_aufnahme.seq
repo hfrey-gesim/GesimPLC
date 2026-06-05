@@ -1,0 +1,19 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<Root>
+  <Header Version="2.0.18.5239" Id="0" />
+  <Steps>
+    <Item Id="58c4271c-8d99-4ac7-baf6-07d94bd7e882" Description="" ActionType="Wait" Time="10" />
+    <Item Id="bc7d1afa-98de-476b-a9df-70a2a71b38d5" Description="" ObjectType="Diluter" ObjectId="fdaad0fc-a1cf-4f9f-a3f0-440cf357d7b9" ActionType="DilPrepare" Quantity="2500" Mode="ForAspirate">
+      <Condition Type="StepReady" Operator="AND" StepId="0" />
+    </Item>
+    <Item Id="229207f7-2256-4b85-9f1c-3ee9e586d6d3" Description="" ObjectType="PassivePip" ObjectId="869d4cfa-5e99-417b-9916-24634cf7282f" ActionType="Aspirate" Quantity="20000" Flow="500">
+      <Condition Type="StepReady" Operator="AND" StepId="0" />
+    </Item>
+    <Item Id="6c790e71-eee9-4856-b50c-957a70692e32" Description="" ActionType="Wait" Time="3000">
+      <Condition Type="StepReady" Operator="AND" StepId="bc7d1afa-98de-476b-a9df-70a2a71b38d5" />
+    </Item>
+    <Item Id="29a720e8-5f4a-4439-8c40-28137ec6cb03" Description="" ObjectType="PassivePip" ObjectId="869d4cfa-5e99-417b-9916-24634cf7282f" ActionType="MoveZ" Mode="Relative" SpeedZ="1000" Distance="7000">
+      <Condition Type="StepReady" Operator="AND" StepId="0" />
+    </Item>
+  </Steps>
+</Root>

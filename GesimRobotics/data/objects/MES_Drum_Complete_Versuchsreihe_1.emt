@@ -1,0 +1,10 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<Item Id="00000000-0000-0000-0000-000000000000" TemplateId="3db1deee-bd0f-4287-8222-3dbc2ca0d1ca" Name="MES_Drum_Complete_Versuchsreihe_1" ObjType="HighVoltTray" ParentSlotNr="7" RelPos.X="0" RelPos.Y="0" RelPos.Z="0" Width="250000" Depth="350000" Heigth="48000" FreeHeight="0" VoltageChannel="1" CurrentLimit="30" PowerCutOffThreshold="10" PowerCutOffTime="500">
+  <Item Id="00000000-0000-0000-0000-000000000000" TemplateId="06d64534-1185-4b48-889b-842baabe3066" Name="Drum" ObjType="Slide" RelPos.X="45000" RelPos.Y="45000" RelPos.Z="-33000" Width="160000" Depth="260000" Heigth="58000" FreeHeight="0" Offset.Z="0">
+    <Item Id="00000000-0000-0000-0000-000000000000" TemplateId="b6f84478-a8db-496d-aed8-96e246230fba" Name="Drum_SpotArray_1" ObjType="SpotArray" RelPos.X="0" RelPos.Y="3000" RelPos.Z="-8000" Width="150000" Depth="250000" Heigth="0" FreeHeight="0" Cols="7" Rows="11" />
+    <Item Id="00000000-0000-0000-0000-000000000000" TemplateId="b6f84478-a8db-496d-aed8-96e246230fba" Name="Drum_SpotArray_2" ObjType="SpotArray" RelPos.X="12500" RelPos.Y="15500" RelPos.Z="-8000" Width="125000" Depth="225000" Heigth="0" FreeHeight="0" Cols="6" Rows="10" />
+  </Item>
+  <ActionSettings>
+    <Item Name="SetVoltage" Voltage="0" />
+  </ActionSettings>
+</Item>

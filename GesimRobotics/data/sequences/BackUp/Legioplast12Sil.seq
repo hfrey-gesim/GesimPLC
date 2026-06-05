@@ -1,0 +1,22 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<Root>
+  <Header Version="2.0.18.5239" Id="0" />
+  <Steps>
+    <Item Id="71f803f6-c7f7-4b5d-a67d-9c8e38f39bd5" Description="" ObjectType="ZSensor" ObjectId="afea3db0-d5b3-47a0-aacf-9c365ff962c6" ActionType="Measure" TargetId="5169bc8c-43e4-46c7-9d2b-8efbd65c4d38" Option="SlowApproach" />
+    <Item Id="b7ae7491-339c-4b0e-ad65-acf3e6983a59" Description="" ObjectType="ZSensor" ObjectId="afea3db0-d5b3-47a0-aacf-9c365ff962c6" ActionType="Measure" TargetId="61405461-c908-483c-a652-7265abf3b8c1" Option="SlowApproach">
+      <Condition Type="StepReady" Operator="AND" StepId="0" />
+    </Item>
+    <Item Id="ce9e8677-dc61-4902-b990-7daf6dcb9e74" Description="" ObjectType="ZSensor" ObjectId="afea3db0-d5b3-47a0-aacf-9c365ff962c6" ActionType="Measure" TargetId="0fd0baae-d577-4d9d-b059-e8a4dc915e83" Option="SlowApproach">
+      <Condition Type="StepReady" Operator="AND" StepId="0" />
+    </Item>
+    <Item Id="c2a54908-b386-4a22-9aae-16bdbd3c0c11" Description="" ObjectType="Root" ObjectId="e94c0ae7-f5eb-42b3-bf25-c6806131cff7" ActionType="RunGCode" TargetId="0c115d0d-e4fd-4ca5-9799-7aaaaf4126c8" TargetRef="Center" FileName="Legioplast1Sil" WaitPointId="8edb73bb-347e-439a-bc63-195191b4b827" Offset.Z="0">
+      <Condition Type="StepReady" Operator="AND" StepId="0" />
+    </Item>
+    <Item Id="a26f6ab8-dfeb-4bea-98a5-31bbdbd4c1eb" Description="" ObjectType="Root" ObjectId="e94c0ae7-f5eb-42b3-bf25-c6806131cff7" ActionType="RunGCode" TargetId="96c39fa6-4e3a-4731-807a-c13b33d82e56" TargetRef="Center" FileName="Legioplast1Sil" WaitPointId="8edb73bb-347e-439a-bc63-195191b4b827" Offset.Z="0">
+      <Condition Type="StepReady" Operator="AND" StepId="0" />
+    </Item>
+    <Item Id="976ea5e6-feeb-4609-9b12-5276e0834673" Description="" ObjectType="Root" ObjectId="e94c0ae7-f5eb-42b3-bf25-c6806131cff7" ActionType="RunGCode" TargetId="868e3f84-ee07-4087-b237-cd10104d3bce" TargetRef="Center" FileName="Legioplast2Sil" WaitPointId="8edb73bb-347e-439a-bc63-195191b4b827" Offset.Z="0">
+      <Condition Type="StepReady" Operator="AND" StepId="0" />
+    </Item>
+  </Steps>
+</Root>

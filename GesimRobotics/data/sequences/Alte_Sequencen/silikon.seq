@@ -1,0 +1,22 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<Root>
+  <Header Version="2.0.18.5057" Id="0" />
+  <Steps>
+    <Item Id="73db9178-d0d2-49fd-ab22-df64015a769e" Description="" ObjectType="Root" ObjectId="936f148b-455b-497c-b642-640f2ac1e6a8" ActionType="RunGCode" TargetId="3a0b1f69-8222-4714-b86a-aecd1758e323" TargetRef="Center" FileName="Test silikon" WaitPointId="2644b1bb-9532-48ab-adfe-aafb09c576f4" Offset.Z="0" />
+    <Item Id="10a1da9f-30b4-4354-8111-dec868000070" Description="" ObjectType="Root" ObjectId="936f148b-455b-497c-b642-640f2ac1e6a8" ActionType="RunGCode" TargetId="a192a911-4a53-4ede-aded-3d42cdea565c" TargetRef="Center" FileName="Test silikon" WaitPointId="2644b1bb-9532-48ab-adfe-aafb09c576f4" Offset.Z="0">
+      <Condition Type="StepReady" Operator="AND" StepId="0" />
+    </Item>
+    <Item Id="ceca7a9b-965f-4746-a3a0-1b67b72d0d64" Description="" ObjectType="Root" ObjectId="936f148b-455b-497c-b642-640f2ac1e6a8" ActionType="RunGCode" TargetId="0c099c7a-79bf-44ae-a8ce-fd95479bb275" TargetRef="Center" FileName="Test silikon" WaitPointId="2644b1bb-9532-48ab-adfe-aafb09c576f4" Offset.Z="0">
+      <Condition Type="StepReady" Operator="AND" StepId="0" />
+    </Item>
+    <Item Id="53b797fe-0513-4d74-99b3-c567c7e71713" Description="" ObjectType="Root" ObjectId="936f148b-455b-497c-b642-640f2ac1e6a8" ActionType="RunGCode" TargetId="73971b57-0eba-438e-82bc-940976164174" TargetRef="Center" FileName="Test silikon" WaitPointId="2644b1bb-9532-48ab-adfe-aafb09c576f4" Offset.Z="0">
+      <Condition Type="StepReady" Operator="AND" StepId="0" />
+    </Item>
+    <Item Id="cf601f13-a650-420c-8a75-ec8b0bbcab79" Description="" ObjectType="Root" ObjectId="936f148b-455b-497c-b642-640f2ac1e6a8" ActionType="RunGCode" TargetId="2a0cf7a4-8466-4770-b3f0-64e7accfeabf" TargetRef="Center" FileName="Test silikon" WaitPointId="2644b1bb-9532-48ab-adfe-aafb09c576f4" Offset.Z="0">
+      <Condition Type="StepReady" Operator="AND" StepId="0" />
+    </Item>
+    <Item Id="d7007720-bfc8-4fa8-92e2-f56b6288597c" Description="" ObjectType="Root" ObjectId="936f148b-455b-497c-b642-640f2ac1e6a8" ActionType="RunGCode" TargetId="cd15061c-e1f0-4ee4-a0c2-abb48bfad0eb" TargetRef="Center" FileName="Test silikon" WaitPointId="2644b1bb-9532-48ab-adfe-aafb09c576f4" Offset.Z="0">
+      <Condition Type="StepReady" Operator="AND" StepId="0" />
+    </Item>
+  </Steps>
+</Root>

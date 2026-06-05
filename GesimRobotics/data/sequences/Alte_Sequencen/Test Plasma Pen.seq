@@ -1,0 +1,17 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<Root>
+  <Header Version="2.0.18.5057" Id="0" />
+  <Steps>
+    <Item Id="6012f645-0554-4402-85db-c7b826bdfc4f" Description="" ObjectType="Exposure" ObjectId="52ae83e3-ad95-43e5-9642-bce31162ca1a" ActionType="MoveToTarget" TargetId="e6c3f8af-98a0-42fc-8b76-58bed1e2fb74" TargetRef="Center" SpeedX="115000" SpeedY="115000" SpeedZ="72000" Offset.X="0" Offset.Y="0" Offset.Z="0" ZLevel="PrePos" />
+    <Item Id="12df154a-9146-4d68-9ee9-8b2d4c79bb8b" Description="" ObjectType="Exposure" ObjectId="52ae83e3-ad95-43e5-9642-bce31162ca1a" ActionType="Expose" On="true" Brightness="1000" Time="0">
+      <Condition Type="StepReady" Operator="AND" StepId="0" />
+    </Item>
+    <Item Id="0f2e1602-db85-4ed7-ac69-c3810af6ef13" Description="" ObjectType="Exposure" ObjectId="52ae83e3-ad95-43e5-9642-bce31162ca1a" ActionType="MoveXY" DistanceX="0" DistanceY="40000" SpeedX="10000" SpeedY="10000" />
+    <Item Id="5429f674-9579-48a0-ac2b-a5512fa93d94" Description="" ObjectType="Exposure" ObjectId="52ae83e3-ad95-43e5-9642-bce31162ca1a" ActionType="Expose" On="false" Brightness="1000" Time="10000">
+      <Condition Type="StepReady" Operator="AND" StepId="0" />
+    </Item>
+    <Item Id="b6efe047-8e66-4825-bc88-f1aca4c0722b" Description="" ObjectType="Root" ObjectId="936f148b-455b-497c-b642-640f2ac1e6a8" ActionType="RunGCode" TargetId="9d0c878d-da13-445c-8a2c-d20cae1a2324" TargetRef="Center" FileName="Test Plasma Pen" WaitPointId="9d0c878d-da13-445c-8a2c-d20cae1a2324" Offset.Z="0">
+      <Condition Type="StepReady" Operator="AND" StepId="0" />
+    </Item>
+  </Steps>
+</Root>

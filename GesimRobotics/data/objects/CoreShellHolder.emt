@@ -1,0 +1,19 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<Item Id="00000000-0000-0000-0000-000000000000" TemplateId="63f4eb88-4ddf-4e37-b27b-9d7bd77f8440" Name="CoreShellHolder" ObjType="MultiCartridgeHolder" ParentSlotNr="5" RelPos.X="-37500" RelPos.Y="0" RelPos.Z="-114200" Offset.X="0" Offset.Y="0" Offset.Z="0" HeaterExist="False">
+  <Slots>
+    <Item Nr="1" Name="Disp Slot Core" RelPos.X="0" RelPos.Y="0" RelPos.Z="108700" Dim.X="0" Dim.Y="0" />
+    <Item Nr="2" Name="Disp Slot Shell" RelPos.X="0" RelPos.Y="0" RelPos.Z="68700" Dim.X="0" Dim.Y="0" />
+    <Item Nr="3" Name="Nozzle Slot" RelPos.X="0" RelPos.Y="0" RelPos.Z="0" Dim.X="0" Dim.Y="0" />
+  </Slots>
+  <ActionSettings>
+    <Item Name="Jog" SlowSpeedXY="5000" NormalSpeedXY="10000" FastSpeedXY="115000" ManuSpeedXY="115000" SlowSpeedZ="5000" NormalSpeedZ="10000" FastSpeedZ="72000" ManuSpeedZ="72000" InchingDistShort="25" InchingDistMedium="1000" InchingDistLong="10000" InchingDistManuXY="10000" InchingDistManuZ="10000" RecentSpeedChoice="Slow" RecentDistChoice="Short" />
+    <Item Name="MoveToTarget" SpeedX="115000" SpeedY="115000" SpeedZ="72000" />
+    <Item Name="MoveXY" DistanceX="0" DistanceY="0" SpeedX="10000" SpeedY="10000" />
+    <Item Name="MoveZ" HiddenInManu="True" Mode="Relative" SpeedZ="10000" Distance="10000" />
+    <Item Name="Heating" HiddenInManu="True" Temp="200" Temp2="0" Temp3="0" />
+    <Item Name="Measure" Option="SlowApproach" />
+    <Item Name="TeachTool" HiddenInManu="True" />
+    <Item Name="TeachTarget" Offset.Z="2000" />
+    <Item Name="CleanTip" />
+  </ActionSettings>
+</Item>

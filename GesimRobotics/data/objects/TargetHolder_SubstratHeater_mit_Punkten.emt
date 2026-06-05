@@ -1,0 +1,62 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<Item Id="00000000-0000-0000-0000-000000000000" TemplateId="b3f40bba-718d-4d43-94b9-aa10e68dd962" Name="TargetHolder_SubstratHeater_mit_Punkten" ObjType="SubstHolder" ParentSlotNr="1" RelPos.X="0" RelPos.Y="0" RelPos.Z="0" Width="128000" Depth="86000" Heigth="26000" FreeHeight="0" HeaterChannel="1" HeaterKp="160" HeaterKi="12" HeaterKd="0" HeaterTa="10" ValveNrCooling="3" ValveNrVac="5">
+  <Slots />
+  <Item Id="00000000-0000-0000-0000-000000000000" TemplateId="7efea211-6ced-4104-8ca6-26f74abfc51a" Name="CustomObject" ObjType="Slide" RelPos.X="0" RelPos.Y="0" RelPos.Z="0" Width="127500" Depth="85500" Heigth="1000" FreeHeight="0" Offset.Z="0">
+    <Item Id="00000000-0000-0000-0000-000000000000" TemplateId="31dee62b-b1e5-4a80-95a9-581fd37f6ebb" Name="BasisPoint" ObjType="Point" RelPos.X="20000" RelPos.Y="20000" RelPos.Z="0" Width="0" Depth="0" Heigth="0" FreeHeight="0" Offset.Z="5326" PType="Regular">
+      <Item Id="00000000-0000-0000-0000-000000000000" TemplateId="31dee62b-b1e5-4a80-95a9-581fd37f6ebb" Name="Point1" ObjType="Point" RelPos.X="0" RelPos.Y="0" RelPos.Z="0" Width="0" Depth="0" Heigth="0" FreeHeight="0" Offset.Z="0" PType="Print" />
+      <Item Id="00000000-0000-0000-0000-000000000000" TemplateId="31dee62b-b1e5-4a80-95a9-581fd37f6ebb" Name="Point2" ObjType="Point" RelPos.X="20000" RelPos.Y="0" RelPos.Z="0" Width="0" Depth="0" Heigth="0" FreeHeight="0" Offset.Z="0" PType="Print" />
+      <Item Id="00000000-0000-0000-0000-000000000000" TemplateId="31dee62b-b1e5-4a80-95a9-581fd37f6ebb" Name="Point3" ObjType="Point" RelPos.X="40000" RelPos.Y="0" RelPos.Z="0" Width="0" Depth="0" Heigth="0" FreeHeight="0" Offset.Z="0" PType="Print" />
+      <Item Id="00000000-0000-0000-0000-000000000000" TemplateId="31dee62b-b1e5-4a80-95a9-581fd37f6ebb" Name="Piezo_Hex_Spots_klein" ObjType="Point" RelPos.X="20000" RelPos.Y="20000" RelPos.Z="0" Width="0" Depth="0" Heigth="0" FreeHeight="0" Offset.Z="0" PType="Print">
+        <Item Id="00000000-0000-0000-0000-000000000000" TemplateId="b6f84478-a8db-496d-aed8-96e246230fba" Name="4SpotArray_Hex_1" ObjType="SpotArray" RelPos.X="-3464" RelPos.Y="-500" RelPos.Z="0" Width="6928" Depth="0" Heigth="0" FreeHeight="0" Cols="3" Rows="1" />
+        <Item Id="00000000-0000-0000-0000-000000000000" TemplateId="b6f84478-a8db-496d-aed8-96e246230fba" Name="4SpotArray_Hex_2" ObjType="SpotArray" RelPos.X="-1732" RelPos.Y="-3500" RelPos.Z="0" Width="3464" Depth="6000" Heigth="0" FreeHeight="0" Cols="2" Rows="2" />
+      </Item>
+      <Item Id="00000000-0000-0000-0000-000000000000" TemplateId="31dee62b-b1e5-4a80-95a9-581fd37f6ebb" Name="Point6" ObjType="Point" RelPos.X="40000" RelPos.Y="20000" RelPos.Z="0" Width="0" Depth="0" Heigth="0" FreeHeight="0" Offset.Z="0" PType="Print">
+        <Item Id="00000000-0000-0000-0000-000000000000" TemplateId="31dee62b-b1e5-4a80-95a9-581fd37f6ebb" Name="Piezo_Hex_Spots" ObjType="Point" RelPos.X="20000" RelPos.Y="20000" RelPos.Z="0" Width="0" Depth="0" Heigth="0" FreeHeight="0" Offset.Z="0" PType="Regular">
+          <Item Id="00000000-0000-0000-0000-000000000000" TemplateId="b6f84478-a8db-496d-aed8-96e246230fba" Name="SpotArray_Hex_1" ObjType="SpotArray" RelPos.X="-3464" RelPos.Y="-6500" RelPos.Z="0" Width="6928" Depth="12000" Heigth="0" FreeHeight="0" Cols="3" Rows="3" />
+          <Item Id="00000000-0000-0000-0000-000000000000" TemplateId="b6f84478-a8db-496d-aed8-96e246230fba" Name="SpotArray_Hex_2" ObjType="SpotArray" RelPos.X="-5196" RelPos.Y="-3500" RelPos.Z="0" Width="10392" Depth="6000" Heigth="0" FreeHeight="0" Cols="4" Rows="2" />
+          <Item Id="00000000-0000-0000-0000-000000000000" TemplateId="b6f84478-a8db-496d-aed8-96e246230fba" Name="SpotArray_Hex_3" ObjType="SpotArray" RelPos.X="-6928" RelPos.Y="-500" RelPos.Z="0" Width="13856" Depth="0" Heigth="0" FreeHeight="0" Cols="2" Rows="1" />
+        </Item>
+      </Item>
+      <Item Id="00000000-0000-0000-0000-000000000000" TemplateId="31dee62b-b1e5-4a80-95a9-581fd37f6ebb" Name="Point7" ObjType="Point" RelPos.X="60000" RelPos.Y="0" RelPos.Z="0" Width="0" Depth="0" Heigth="0" FreeHeight="0" Offset.Z="0" PType="Print" />
+      <Item Id="00000000-0000-0000-0000-000000000000" TemplateId="31dee62b-b1e5-4a80-95a9-581fd37f6ebb" Name="Point8" ObjType="Point" RelPos.X="60000" RelPos.Y="20000" RelPos.Z="0" Width="0" Depth="0" Heigth="0" FreeHeight="0" Offset.Z="0" PType="Print" />
+      <Item Id="00000000-0000-0000-0000-000000000000" TemplateId="31dee62b-b1e5-4a80-95a9-581fd37f6ebb" Name="Point9" ObjType="Point" RelPos.X="0" RelPos.Y="40000" RelPos.Z="0" Width="0" Depth="0" Heigth="0" FreeHeight="0" Offset.Z="0" PType="Print">
+        <Item Id="00000000-0000-0000-0000-000000000000" TemplateId="31dee62b-b1e5-4a80-95a9-581fd37f6ebb" Name="9Piezo_Hex_Spots" ObjType="Point" RelPos.X="0" RelPos.Y="0" RelPos.Z="0" Width="0" Depth="0" Heigth="0" FreeHeight="0" Offset.Z="0" PType="Regular">
+          <Item Id="00000000-0000-0000-0000-000000000000" TemplateId="b6f84478-a8db-496d-aed8-96e246230fba" Name="9SpotArray_Hex_1" ObjType="SpotArray" RelPos.X="-3464" RelPos.Y="-6500" RelPos.Z="0" Width="6928" Depth="12000" Heigth="0" FreeHeight="0" Cols="3" Rows="3" />
+          <Item Id="00000000-0000-0000-0000-000000000000" TemplateId="b6f84478-a8db-496d-aed8-96e246230fba" Name="9SpotArray_Hex_2" ObjType="SpotArray" RelPos.X="-5196" RelPos.Y="-3500" RelPos.Z="0" Width="10392" Depth="6000" Heigth="0" FreeHeight="0" Cols="4" Rows="2" />
+          <Item Id="00000000-0000-0000-0000-000000000000" TemplateId="b6f84478-a8db-496d-aed8-96e246230fba" Name="9SpotArray_Hex_3" ObjType="SpotArray" RelPos.X="-6928" RelPos.Y="-500" RelPos.Z="0" Width="13856" Depth="0" Heigth="0" FreeHeight="0" Cols="2" Rows="1" />
+        </Item>
+      </Item>
+      <Item Id="00000000-0000-0000-0000-000000000000" TemplateId="31dee62b-b1e5-4a80-95a9-581fd37f6ebb" Name="Point10" ObjType="Point" RelPos.X="20000" RelPos.Y="40000" RelPos.Z="0" Width="0" Depth="0" Heigth="0" FreeHeight="0" Offset.Z="0" PType="Print" />
+      <Item Id="00000000-0000-0000-0000-000000000000" TemplateId="31dee62b-b1e5-4a80-95a9-581fd37f6ebb" Name="Point11" ObjType="Point" RelPos.X="40000" RelPos.Y="40000" RelPos.Z="0" Width="0" Depth="0" Heigth="0" FreeHeight="0" Offset.Z="0" PType="Print">
+        <Item Id="00000000-0000-0000-0000-000000000000" TemplateId="31dee62b-b1e5-4a80-95a9-581fd37f6ebb" Name="Piezo_Hex_Spots" ObjType="Point" RelPos.X="0" RelPos.Y="0" RelPos.Z="0" Width="0" Depth="0" Heigth="0" FreeHeight="0" Offset.Z="0" PType="Regular">
+          <Item Id="00000000-0000-0000-0000-000000000000" TemplateId="b6f84478-a8db-496d-aed8-96e246230fba" Name="11SpotArray_Hex_1" ObjType="SpotArray" RelPos.X="-3464" RelPos.Y="-6500" RelPos.Z="0" Width="6928" Depth="12000" Heigth="0" FreeHeight="0" Cols="3" Rows="3" />
+          <Item Id="00000000-0000-0000-0000-000000000000" TemplateId="b6f84478-a8db-496d-aed8-96e246230fba" Name="11SpotArray_Hex_2" ObjType="SpotArray" RelPos.X="-5196" RelPos.Y="-3500" RelPos.Z="0" Width="10392" Depth="6000" Heigth="0" FreeHeight="0" Cols="4" Rows="2" />
+          <Item Id="00000000-0000-0000-0000-000000000000" TemplateId="b6f84478-a8db-496d-aed8-96e246230fba" Name="11SpotArray_Hex_3" ObjType="SpotArray" RelPos.X="-6928" RelPos.Y="-500" RelPos.Z="0" Width="13856" Depth="0" Heigth="0" FreeHeight="0" Cols="2" Rows="1" />
+        </Item>
+      </Item>
+      <Item Id="00000000-0000-0000-0000-000000000000" TemplateId="31dee62b-b1e5-4a80-95a9-581fd37f6ebb" Name="Point12" ObjType="Point" RelPos.X="60000" RelPos.Y="40000" RelPos.Z="0" Width="0" Depth="0" Heigth="0" FreeHeight="0" Offset.Z="0" PType="Print" />
+      <Item Id="00000000-0000-0000-0000-000000000000" TemplateId="31dee62b-b1e5-4a80-95a9-581fd37f6ebb" Name="Point13" ObjType="Point" RelPos.X="80000" RelPos.Y="20000" RelPos.Z="0" Width="0" Depth="0" Heigth="0" FreeHeight="0" Offset.Z="0" PType="Print" />
+      <Item Id="00000000-0000-0000-0000-000000000000" TemplateId="31dee62b-b1e5-4a80-95a9-581fd37f6ebb" Name="Point14" ObjType="Point" RelPos.X="80000" RelPos.Y="0" RelPos.Z="0" Width="0" Depth="0" Heigth="0" FreeHeight="0" Offset.Z="0" PType="Print">
+        <Item Id="00000000-0000-0000-0000-000000000000" TemplateId="31dee62b-b1e5-4a80-95a9-581fd37f6ebb" Name="Piezo_Hex_Spots" ObjType="Point" RelPos.X="0" RelPos.Y="0" RelPos.Z="0" Width="0" Depth="0" Heigth="0" FreeHeight="0" Offset.Z="0" PType="Regular">
+          <Item Id="00000000-0000-0000-0000-000000000000" TemplateId="b6f84478-a8db-496d-aed8-96e246230fba" Name="14SpotArray_Hex_1" ObjType="SpotArray" RelPos.X="-3464" RelPos.Y="-6500" RelPos.Z="0" Width="6928" Depth="12000" Heigth="0" FreeHeight="0" Cols="3" Rows="3" />
+          <Item Id="00000000-0000-0000-0000-000000000000" TemplateId="b6f84478-a8db-496d-aed8-96e246230fba" Name="14SpotArray_Hex_2" ObjType="SpotArray" RelPos.X="-5196" RelPos.Y="-3500" RelPos.Z="0" Width="10392" Depth="6000" Heigth="0" FreeHeight="0" Cols="4" Rows="2" />
+          <Item Id="00000000-0000-0000-0000-000000000000" TemplateId="b6f84478-a8db-496d-aed8-96e246230fba" Name="14SpotArray_Hex_3" ObjType="SpotArray" RelPos.X="-6928" RelPos.Y="-500" RelPos.Z="0" Width="13856" Depth="0" Heigth="0" FreeHeight="0" Cols="2" Rows="1" />
+        </Item>
+      </Item>
+      <Item Id="00000000-0000-0000-0000-000000000000" TemplateId="31dee62b-b1e5-4a80-95a9-581fd37f6ebb" Name="Point15" ObjType="Point" RelPos.X="80000" RelPos.Y="40000" RelPos.Z="0" Width="0" Depth="0" Heigth="0" FreeHeight="0" Offset.Z="0" PType="Print" />
+      <Item Id="00000000-0000-0000-0000-000000000000" TemplateId="31dee62b-b1e5-4a80-95a9-581fd37f6ebb" Name="Point4" ObjType="Point" RelPos.X="0" RelPos.Y="20000" RelPos.Z="0" Width="0" Depth="0" Heigth="0" FreeHeight="0" Offset.Z="0" PType="Print">
+        <Item Id="00000000-0000-0000-0000-000000000000" TemplateId="31dee62b-b1e5-4a80-95a9-581fd37f6ebb" Name="4Piezo_Hex_Spots" ObjType="Point" RelPos.X="0" RelPos.Y="0" RelPos.Z="0" Width="0" Depth="0" Heigth="0" FreeHeight="0" Offset.Z="0" PType="Regular">
+          <Item Id="00000000-0000-0000-0000-000000000000" TemplateId="b6f84478-a8db-496d-aed8-96e246230fba" Name="4SpotArray_Hex_1" ObjType="SpotArray" RelPos.X="-3464" RelPos.Y="-6500" RelPos.Z="0" Width="6928" Depth="12000" Heigth="0" FreeHeight="0" Cols="3" Rows="3" />
+          <Item Id="00000000-0000-0000-0000-000000000000" TemplateId="b6f84478-a8db-496d-aed8-96e246230fba" Name="4SpotArray_Hex_2" ObjType="SpotArray" RelPos.X="-5196" RelPos.Y="-3500" RelPos.Z="0" Width="10392" Depth="6000" Heigth="0" FreeHeight="0" Cols="4" Rows="2" />
+          <Item Id="00000000-0000-0000-0000-000000000000" TemplateId="b6f84478-a8db-496d-aed8-96e246230fba" Name="4SpotArray_Hex_3" ObjType="SpotArray" RelPos.X="-6928" RelPos.Y="-500" RelPos.Z="0" Width="13856" Depth="0" Heigth="0" FreeHeight="0" Cols="2" Rows="1" />
+        </Item>
+      </Item>
+    </Item>
+  </Item>
+  <ActionSettings>
+    <Item Name="SwitchPressure" HiddenInManu="True" Time="0" />
+    <Item Name="Heating" Temp="200" Temp2="0" Temp3="0" />
+    <Item Name="Cooling" HiddenInManu="True" Temp="200" />
+    <Item Name="SwitchLight" HiddenInManu="True" />
+  </ActionSettings>
+</Item>

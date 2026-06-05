@@ -1,0 +1,19 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<Root>
+  <Header Version="2.0.18.5239" Id="0" />
+  <Steps>
+    <Item Id="929c067a-3798-4f88-a31a-4113e75c2ae4" Description="" ObjectType="Root" ObjectId="e94c0ae7-f5eb-42b3-bf25-c6806131cff7" ActionType="RunGCode" TargetId="ebbb6e99-4d99-46ab-9abd-fdc715a93c4d" TargetRef="Center" FileName="G-Code_Lifecare_Versuch_Silicondruck_mit_0,15Müh_Düse06.11.2023" WaitPointId="aea54e57-5103-4f2f-a064-116157a319f3" Offset.Z="0" />
+    <Item Id="993cadf8-90ce-4cc4-b582-deca2493c39c" Description="" ObjectType="Root" ObjectId="e94c0ae7-f5eb-42b3-bf25-c6806131cff7" ActionType="RunGCode" TargetId="4707efcb-7554-4811-b5cd-eee88e439e0a" TargetRef="Center" FileName="G-Code_Lifecare_Versuch_Silicondruck_mit_0,15Müh_Düse06.11.2023" WaitPointId="aea54e57-5103-4f2f-a064-116157a319f3" Offset.Z="0">
+      <Condition Type="StepReady" Operator="AND" StepId="0" />
+    </Item>
+    <Item Id="7f054eef-50f5-4b78-8afb-857f42119a41" Description="" ObjectType="Root" ObjectId="e94c0ae7-f5eb-42b3-bf25-c6806131cff7" ActionType="RunGCode" TargetId="2be8a9a6-455b-4eb5-8636-21d196af5716" TargetRef="Center" FileName="G-Code_Lifecare_Versuch_Silicondruck_mit_0,15Müh_Düse06.11.2023" WaitPointId="aea54e57-5103-4f2f-a064-116157a319f3" Offset.Z="0">
+      <Condition Type="StepReady" Operator="AND" StepId="0" />
+    </Item>
+    <Item Id="c4f2e235-5139-4108-9724-7c5b4aa47485" Description="" ObjectType="Root" ObjectId="e94c0ae7-f5eb-42b3-bf25-c6806131cff7" ActionType="RunGCode" TargetId="eda081bd-2907-4e12-b421-8e2b5ccffaf9" TargetRef="Center" FileName="G-Code_Lifecare_Versuch_Silicondruck_mit_0,15Müh_Düse06.11.2023" WaitPointId="aea54e57-5103-4f2f-a064-116157a319f3" Offset.Z="0">
+      <Condition Type="StepReady" Operator="AND" StepId="0" />
+    </Item>
+    <Item Id="84edda22-5876-4694-bd6e-4a5b39b9a279" Description="" ObjectType="Root" ObjectId="e94c0ae7-f5eb-42b3-bf25-c6806131cff7" ActionType="RunGCode" TargetId="10d941a0-4907-4a8d-a437-461186589252" TargetRef="Center" FileName="G-Code_Lifecare_Versuch_Silicondruck_mit_0,15Müh_Düse06.11.2023" WaitPointId="aea54e57-5103-4f2f-a064-116157a319f3" Offset.Z="0">
+      <Condition Type="StepReady" Operator="AND" StepId="0" />
+    </Item>
+  </Steps>
+</Root>

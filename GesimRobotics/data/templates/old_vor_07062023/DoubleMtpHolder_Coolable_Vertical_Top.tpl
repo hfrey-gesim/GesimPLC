@@ -1,0 +1,55 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<Root>
+  <Header Id="43292b6e-9c0d-405e-8644-d7e99a0cf8aa" ObjType="MtpHolder" ObjName="DoubleMtpCooler" Version="V2.0.17"></Header>
+  <Picture File="double_mtp_holder_coolable_vertical_top.png">
+    <Dimension X="140000" Y="221000" />
+    <Offset X="0" Y="0" />
+  </Picture>
+  <PossibleParentTypes OnlySlots="TRUE">
+    <Item>TargetTray</Item>
+  </PossibleParentTypes>
+  <DefaultProperties>
+    <RelPos.X Min="0" Max="0" Default="0" Step="500" />
+    <RelPos.Y Min="0" Max="0" Default="0" Step="500" />
+    <RelPos.Z Min="0" Max="0" Default="0" Step="500" />
+    <Width Min="140000" Max="140000" Default="140000" Step="100" />
+    <Depth Min="205000" Max="205000" Default="205000" Step="100" />
+    <Height Min="26000" Max="26000" Default="26000" Step="100" />
+    <HasHeater>FALSE</HasHeater>
+  </DefaultProperties>
+  <Slots>
+    <Item Nr="1" Name="Mtp Slot 1" RelPos.X="5900" RelPos.Y="11000" RelPos.Z="-13300" Depth="0" Diameter="0" Disabled="FALSE">
+      <ChildLimit>
+        <Item ObjType="Mtp">
+          <Categories>
+            <Item>horizontal</Item>
+          </Categories>
+        </Item>
+        <Item ObjType="Slide">
+          <Categories>
+            <Item>horizontal</Item>
+            <Item>vertical</Item>
+          </Categories>
+        </Item>
+      </ChildLimit>
+    </Item>
+    <Item Nr="2" Name="Mtp Slot 2" RelPos.X="5900" RelPos.Y="108000" RelPos.Z="-13300" Depth="0" Diameter="0" Disabled="FALSE">
+      <ChildLimit>
+        <Item ObjType="Mtp">
+          <Categories>
+            <Item>horizontal</Item>
+          </Categories>
+        </Item>
+        <Item ObjType="Slide">
+          <Categories>
+            <Item>horizontal</Item>
+            <Item>vertical</Item>
+          </Categories>
+        </Item>
+      </ChildLimit>
+    </Item>
+  </Slots>
+  <Categories>
+    <Item>double+coolable+vertical+top</Item>
+  </Categories>
+</Root>

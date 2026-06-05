@@ -1,0 +1,4 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<Item Id="00000000-0000-0000-0000-000000000000" TemplateId="938431f0-b55d-2920-9331-21a593ee9de3" Name="CSV_Toni" ObjType="Slide" RelPos.X="0" RelPos.Y="0" RelPos.Z="0" Width="75000" Depth="25000" Heigth="1000" FreeHeight="0" Offset.Z="0">
+  <CameraDetection Marker1Offset.X="0" Marker1Offset.Y="0" Marker2Offset.X="0" Marker2Offset.Y="0" CamDetectionTarget="CSV_Toni" />
+</Item>

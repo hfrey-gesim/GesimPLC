@@ -48,4 +48,20 @@
     <radiusMaxDeviation>1</radiusMaxDeviation>
     <dropCreationProb>100</dropCreationProb>
   </camera>
+  <camera id="is_08420193">
+    <binning>1</binning>
+    <width>744</width>
+    <height>480</height>
+    <framerate>30</framerate>
+    <micrometerperpixel>3.5971223021582732</micrometerperpixel>
+    <rotation>0</rotation>
+    <exposureAuto>true</exposureAuto>
+    <exposureValue>0</exposureValue>
+    <useSim>false</useSim>
+    <dropRadius>6</dropRadius>
+    <maxDeviationX>2</maxDeviationX>
+    <maxDeviationY>3</maxDeviationY>
+    <radiusMaxDeviation>1</radiusMaxDeviation>
+    <dropCreationProb>100</dropCreationProb>
+  </camera>
 </cameras>

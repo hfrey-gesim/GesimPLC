@@ -1,0 +1,108 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<Root Version="1">
+  <Nodes>
+    <Node>
+      <Uid>a7728ea16b2c4229a57eb68e18958597</Uid>
+      <RepeatedExecutionHandling>Execute</RepeatedExecutionHandling>
+      <PosX>1167</PosX>
+      <PosY>2057</PosY>
+      <ReverseConnectors>false</ReverseConnectors>
+      <Type>Start</Type>
+      <Vars>
+        <Var Name="z" VarValueType="System.Int32" InitValue="0" />
+        <Var Name="maxz" VarValueType="System.Int32" InitValue="0" />
+        <Var Name="zinc" VarValueType="System.Int32" InitValue="110" />
+        <Var Name="zausgleich" VarValueType="System.Double" InitValue="1" />
+      </Vars>
+    </Node>
+    <Node>
+      <Uid>d8fc41c15d4841d387e2ba292899ca9f</Uid>
+      <RepeatedExecutionHandling>Execute</RepeatedExecutionHandling>
+      <PosX>1569</PosX>
+      <PosY>2054</PosY>
+      <ReverseConnectors>false</ReverseConnectors>
+      <Type>DynamicStep</Type>
+      <Targets>
+        <TargetUid>f2a3e95b-d94b-47e6-98f5-940d8596056b</TargetUid>
+        <TargetUid>fefa604b-9d9e-462d-b23e-a2cfadabd874</TargetUid>
+        <TargetUid>942a6928-68c9-4d38-9a06-7c8979be69e7</TargetUid>
+      </Targets>
+      <SequenceStep>
+        <Root>
+          <Header Version="2.0.18.5239" Id="1" />
+          <Steps>
+            <Item Id="98a6d21a-7b55-42f0-ba50-0fee0b755eb0" Description="" ObjectType="Root" ObjectId="e94c0ae7-f5eb-42b3-bf25-c6806131cff7" ActionType="RunGCode" TargetId="1fc26315-6c11-4b44-8d23-83848dc9c28b" TargetRef="Center" FileName="testrw" WaitPointId="1fc26315-6c11-4b44-8d23-83848dc9c28b" Offset.Z="0" />
+          </Steps>
+        </Root>
+      </SequenceStep>
+      <Parameters>
+        <Step Nr="1">
+          <Parameter Name="OffsetZ" Type="System.Int32" Var="z" />
+        </Step>
+      </Parameters>
+    </Node>
+    <Node>
+      <Uid>4bdb3feed46541348818c45873cc1764</Uid>
+      <RepeatedExecutionHandling>Repair</RepeatedExecutionHandling>
+      <PosX>1902</PosX>
+      <PosY>2140</PosY>
+      <ReverseConnectors>false</ReverseConnectors>
+      <Type>CameraDetectionMulti</Type>
+      <Targets />
+      <Mode>InFrame</Mode>
+      <SearchRadius>0</SearchRadius>
+      <CameraDelayOnMarker>0</CameraDelayOnMarker>
+      <Selection>CenterMost</Selection>
+      <SearchRecursive>true</SearchRecursive>
+      <Rescale>false</Rescale>
+      <RepeatNoMarkerFound>false</RepeatNoMarkerFound>
+      <RepeatTimesNoMarkerFound>0</RepeatTimesNoMarkerFound>
+      <ErrorOnDistanceDeviation>false</ErrorOnDistanceDeviation>
+      <MaxDeviationPercent>0</MaxDeviationPercent>
+      <DetectionErrorHandling>Continue</DetectionErrorHandling>
+      <FastApproach>false</FastApproach>
+    </Node>
+    <Node>
+      <Uid>f95be6c1aa75458ca4da2701c9deb9fd</Uid>
+      <RepeatedExecutionHandling>Repair</RepeatedExecutionHandling>
+      <PosX>1902</PosX>
+      <PosY>2329</PosY>
+      <ReverseConnectors>false</ReverseConnectors>
+      <Type>WaterSensitiveTest</Type>
+      <PrepOptionsFrequency>0</PrepOptionsFrequency>
+      <PrepOptionsPulse>0</PrepOptionsPulse>
+      <PrepOptionsVoltage>0</PrepOptionsVoltage>
+      <ZOffsetAction>1000</ZOffsetAction>
+      <MaxOffsetRadius>500</MaxOffsetRadius>
+      <Drops>3</Drops>
+      <Delay>3000</Delay>
+    </Node>
+    <Node>
+      <Uid>ebbbb284266741bb9bce83fd85c69a63</Uid>
+      <RepeatedExecutionHandling>Execute</RepeatedExecutionHandling>
+      <PosX>1684</PosX>
+      <PosY>2305</PosY>
+      <ReverseConnectors>true</ReverseConnectors>
+      <Type>SetVar</Type>
+      <Formula>z=z+zinc</Formula>
+    </Node>
+    <Node>
+      <Uid>163a7dd104db41efb73f10f00c1a578d</Uid>
+      <RepeatedExecutionHandling>Execute</RepeatedExecutionHandling>
+      <PosX>1479</PosX>
+      <PosY>2305</PosY>
+      <ReverseConnectors>true</ReverseConnectors>
+      <Type>CheckCondition</Type>
+      <Formula>z&gt;maxz</Formula>
+    </Node>
+  </Nodes>
+  <Connections>
+    <Connection SourceUid="a7728ea16b2c4229a57eb68e18958597" SourceConnectorIndex="0" DestUid="d8fc41c15d4841d387e2ba292899ca9f" DestConnectorIndex="0" />
+    <Connection SourceUid="d8fc41c15d4841d387e2ba292899ca9f" SourceConnectorIndex="0" DestUid="ebbbb284266741bb9bce83fd85c69a63" DestConnectorIndex="0" />
+    <Connection SourceUid="ebbbb284266741bb9bce83fd85c69a63" SourceConnectorIndex="0" DestUid="163a7dd104db41efb73f10f00c1a578d" DestConnectorIndex="0" />
+    <Connection SourceUid="163a7dd104db41efb73f10f00c1a578d" SourceConnectorIndex="1" DestUid="d8fc41c15d4841d387e2ba292899ca9f" DestConnectorIndex="0" />
+  </Connections>
+  <Options>
+    <Camera>is_42120156</Camera>
+  </Options>
+</Root>

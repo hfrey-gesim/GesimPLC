@@ -1,0 +1,509 @@
+Camera:
+	µEyeXS			- µEye Kamera für BSys (linksseitig)
+	CartridgeHolder_Gen1	- IS Kamera + Halter für CartridgeHolder_Gen1
+	CartridgeHolder_Gen2	- IS Kamera + Halter für CartridgeHolder_Gen2
+	CartriddgHolder_Gen3	- IS Kamera + Halter (schwenkbar) für CartridgeHolder_Gen2 (erstmals bei SN2411 NTU Singapore)
+	StampSupport		- IS Kamera + für StampSupport
+	Workplate_vertical_Gen1	- IS Kamera auf Workplate (ObjType=Slide) nach oben gerichtet (für z.B. Pick&Place-Pip oder PowderPip) [klein; z.B. RPC]
+	Workplate_vertical_Gen2	- IS Kamera auf Workplate (ObjType=WorkplateCamera) nach oben gerichtet (für z.B. Pick&Place-Pip oder PowderPip) [groß; z.B. Linie]
+	Workplate_vertical_Gen3	- IS Kamera auf Workplate (ObjType=WorkplateCamera) nach oben gerichtet (für z.B. Pick&Place-Pip oder PowderPip) [klein; z.B. RPC]
+
+
+CartridgeDispenser:
+	Metal_Gen1_UN516	- Gesimkartuschen mit UN 5/16"-Gewinde
+	Metal_Gen1_LuerLock	- Gesimkartuschen mit UN 5/16"-Gewinde + LuerLock-Adapter
+	Metal_Gen2_G18		- Gesimkartuschen mit G 1/8"-Gewinde
+	Metal_Gen2_LuerLock	- Gesimkartuschen mit G 1/8"-Gewinde + LuerLock-Adapter
+	Plastic_LuerLock	- Nordsonkartuschen mit LuerLock
+	_Vac		   	- wenn Haltevakuum im KopfManifold eingerichtet (siehe Fluidikplan)
+	_High_Volt		- für CartridgeHolder_High_Volt
+	Multi			- nur bei MultiCartridgeHolder verwendbar (z.B. Core/Shell-Dispenser)
+
+
+CartridgeHolder:
+	Gen1	- "alte" orangene Halter + interne Steuerung (teils extern)
+	Gen2	- aktuelle Halter + interne Steuerungen	
+
+	_Standard 		- ohne Elektronik (keine T-Steuerung möglich)
+	_Gap			- schwarze Abstandshalter zwischen horizontalem und vertikalem orangenem Teil des Kartuschenhalters vorhanden
+
+	Gen1_ExternalCooler	- keine Platine im Halter aber externe Kühlsteuerung; Basis ist NoHeater aber es wird Bild der Kühlkartusche_Gen1 angezeigt
+	Gen1_HeaterDisabled   	- Platine im Halter aber kein Heizer vorhanden (Heizpatrone)
+	Gen1_ExternalHeater   	- Platine im Halter aber externer Heizer (Hochtemperatur); Basis ist HeaterDisabled aber es wird Bild der InternalHeater angezeigt
+	Gen1_InternalHeater	- Platine im Halter mit Heizerpatrone (MB Platine)
+	Gen2_InternalHeater	- Platine im Halter + Powermodul + Düsenheizung intern mgl. (FBär Platine)
+	Gen2_InternalCooler 	- Platine im Halter + Powermodul
+
+	High_Volt_Left		- Masseverteiler auf linker Seite (Standard)
+	High_Volt_Right		- Masseverteiler auf rechter Seite (erstmals bei Nachrüstung für SN2412 verwendet) 
+	
+
+	--> Standard			- Template/Root/DefaultProperties/HeaterTyp = None
+	--> HeaterDisabled		- Template/Root/DefaultProperties/HeaterTyp = SingleHeater
+	--> InternalHeater_Gen1		- Template/Root/DefaultProperties/HeaterTyp = SingleHeater
+	--> InternalHeater_Gen2		- Template/Root/DefaultProperties/HeaterTyp = TwinHeater
+
+
+CleaningBrush:
+	Reinigungsbürsten für TipCleaner_Gen2
+	_Brass			- Messing (Standard für Messingdüsen z.B. Nozzle_Extruder_FDM)
+	_Polyamid		- Polyamid (Standard für Kunststoffdüsen z.B. Nozzle_Tip)
+	_StainlessSteel		- E-Stahl (Standard für E-Stahldüsen z.B. Nozzle_Extruder_HTE) 	
+
+
+CollectorPlate:
+	Substratplatte für Tray_HighVolt
+	_ESD			- gelbe Kunsstoffplatte (wird nicht mehr verwendet da Fertigung ungenügend war), "Fixierung" über Schraubenköpfe in Metalplatte 
+	_Glass	 		- Glasplatte (Standard), "Fixierung" über Antirutschmatte auf Metalplatte 
+
+
+CoreShell:
+	CoreShellHolder		- aktuelle Aufnahme für CoreShellDispenser und Nozzle_CoreShellHolder
+
+
+CustomUnit:
+	_Type1			- Weilin-Absaugzelle (2 Channels separat mittels je 2Way-Ventil über eine Pumpe absaugbar + Delay zwischen Ventil und Pumpe)
+	_Type2			- Nazhat-Absaugzelle (1 Channel für Absaugung über Pumpe; aktiv + Auslösung Sensor; Sensor freiverkabelt an F-Box)
+		
+	_Type2_Fleece		- siehe oben (mit DryPad-Klemmung) --> wurde dann doch nicht ausgeliefert, da zu hoch
+	_Type2_Plate		- siehe oben (mit flacher Auflage E-Stahl oder "einfache" Fleece-Klemmung) 
+
+
+Diluter:
+	_3Way			- Standard 3-Wege-Ventil für z.B. PiezoPip
+	_4Distri_1I1O1W		- 4Distri mit 1*Input, 1*Output & 1*Waste Anschluss (1*blind/unbenutzt) für z.B. Luer
+	_4Distri_3I1O0W		- 4Distri mit (bis zu)3*Input, 1*Output & 0*Waste Anschluss für z.B. PassivPip, die aus bis zu 3*versch. Reservoir ziehen kann 
+			  	(Achtung Gefahr Kreuzkontamination bei Aspirate); für z.B. PassivPip 2396_BSys32_Lacriscience
+
+
+Dispenser:
+	_Delo_Dot:		- abgekündigt; nur bei 2232_BS31_Maastricht implementiert
+
+	_Delo_PN2:		- aktuell verfügbar
+
+	_Nordson_PicoXMod:	- abgekündigt; nur bei 2235_BS31_Griffith implementiert
+
+	_Vermes_MDV3000:	- MDV3000er Serie; aktuell verfügbar (standardmäßig MDV3250)
+
+	_Diluter_1Input:	- möglicher Dispenser für HybridHolder [Basis ist Pip_Passive]; nur Dispensfunktion [Schlauch von Diluter über Kopf], 
+				  kein physisches Tool
+
+	_Luer:	
+		Gen1		- Luer ist 2mm nach rechts verschoben + 2mm breiter (eigenlich nur bei SN2251+SN2264 verbaut)
+		Gen2		- Standard
+		WithoutTransfer	- Transferfunktion deaktiviert (siehe Fluidikplan)
+
+	_Powder_Gen2:		- mit Press/Vac/Sweep und NozzleSlot
+
+
+DryPad:
+	Gen1		- Standard bei BS3.1/µCP4.1 (quadratische Grundfläche), Ausrichtung je nach dem zu welcher Achse die Klemmen parallel sind 
+	Gen2		- Standard bei BS3.2 (rechteckige Grundfläche), Ausrichtung je nach dem zu welcher Achse die Klemmen parallel sind
+	Gen3		- Standard bei Linienmaschinen (recht Grundfläche), kleiner als Gen2, Ausrichtung je nach dem zu welcher Achse die Klemmen parallel sind
+
+
+Exposure:
+	Exposure			- allgemeine UV mit allen Funktionen (Intensität über SW einstellbar)
+	CartridgeHolder_OmnicureS1500	- Standard bei BS (_Gen1 = für CartridgeHolder_Gen1 / _Gen2 = für CartridgeHolder_Gen2); Brightness deaktiviert		
+	CartridgeHolder_ThorLabs	- volle Funktionalität (mit Zusatz je nach dem an welches Tool); (_Gen1 = für CartridgeHolder_Gen1 / _Gen2 = für CartridgeHolder_Gen2)
+	StampSupport_OmnicureS1500	- Standard bei µCP; Brightness deaktiviert
+	PlasmaPen_Nadir			- Brightness deaktiviert (eigenständiges Tool)
+	UVPen_Gen1			- für CartridgeHolder_Gen1, für internen oder OEM-Pen (z.B. Opsytec); Auswahl DigiPort beachten
+	UVPen_Gen2			- für CartridgeHolder_Gen2, für internen oder OEM-Pen (z.B. Opsytec); Auswahl DigiPort beachten
+
+
+Extruder:
+	FDM:
+		Gen1		- StepCraft (eigentlich nicht in Verwendung)
+		Gen2_Right	- erste GeSiM-Version rechts gelagert von Achse, sprich linksbündig zum Schlitten (zum ersten mal bei SN2399 verbaut)
+		Gen2_Left	- erste GeSiM-Version links gelagert von Achse, sprich rechtsbündig zum Schlitten (zum ersten mal bei SN2400 verbaut) 
+	
+	HTE:
+		Gen1 			- U/min auf FW/SPS/GUI
+		Gen2 			- U/min auf FW; mm/s auf SPS/GUI
+		Gen3 			- mm/s auf FW/SPS/GUI (aktuelle version)
+		Gen3_TwinExtruder	- Gen3 HTE der für TwinExtruder genutzt werden muss
+
+	Screw:			- ursprünglich für Schneckenextruder von ViscoTec
+
+	Syringe:
+		Gen1				- Standard SSE
+		Gen2_TwinExtruder_Left/Right	- beide quasi gleich, aber jenachdem  welcher an der aktiven Achse ist, muss dessen Slot für den Z-Sensor freigegeben werden
+
+
+Head:
+	für jede Maschine wird eine eigenes Head-Tpl angelegt mit eventuell customized Eigenschaften (z.B. nur gekaufte Tools zulassen)
+	Der Tpl-Name lautet "Head_[Maschinentypkürzel]_SN[XXXX].tpl" z.B. "Head_µCP_SN2230"
+
+	µCP_Gen1	- Achsen 1-2-3
+	µCP_Gen2	- Achsen 1-2-KK-4 (aktive Achse ist aber dennoch 3)
+	Collimator	- Kopf ohne Achsenlayout; Position ist CollimatorPos (Head wird wie Tool verwendet)
+
+
+HybridHolder:
+	virtuelles Tool wo bis zu 3 Tools gleichzeitig extrudieren/dispensen können, sich aber nur das MasterTool in Z bewegt;
+	muss zuerst konfiguriert werden; Zuordnung Slots zu Master/Slave beachten; Slot2=Mitte, Slot1=rechts von Mitte, Slot3=links von Mitte
+	mögliche Tools = Extruder_Syringe; CartridgeDispenser; Dispenser_Diluter
+
+
+InkStation:
+	Schleuder für µCP (+Z-Sensor)
+
+	_Right		- Z-Sensor rechts oben; Deckel geht in Y+ auf --> führt bei 2"-Stamps zur Kollision im Rack + Z-Sensor für >2"-Stamps mit evtl. Kollision verbunden
+	_Left		- Z-Sensor links unten; Deckel geht in Y- auf --> "neuer" Standard
+
+
+LiquidReserve:
+	4*Liquid-Zuläufe mit AutoStop bei Erreichen des Sensors (pro Zulauf ein Sensor) + Rücklauf um Verdunstung zu minimieren (Zahnringpumpen verwendet)
+	Zuläufe können mit Septum abgedeckt werden
+	2*Waste (1* pro 2*Zulauf)
+	so nur bei SN2251_Maastricht verbaut 
+
+
+MultiLumen:
+	erstmals bei SN2377_Weilin verbaut
+
+	MultiLumenHolder			- aktuelle Aufnahme für MultiLumenDispenser
+	_1					- Aufnahme für 1*MultiLumenDispenser
+	_3					- Aufnahme für 3*MultiLumenDispenser
+
+	MultiLumenDispenser_Dispensing		- nur Dispense möglich
+	MultiLumenDispenser_Mixing		- Dispense/Aspirate/Mix möglich
+
+
+Nozzle:
+	_CoreShellHolder_800-300	- Allgemeingültige Nozzle für kleine Düsenpaarung
+	_CoreShellHolder_5000-2500	- Allgemeingültige Nozzle für große Düsenpaarung
+	_Dispenser_Powder		- für Dispenser_Powder
+	_Extruder_FDM			- Düsen für FDM (Gen analog Extruder_FDM)
+	_Extruder_HTE			- Düsen für HTE
+	_G18_GeSiM			- 1/8"-Adapter + M3,5-Gewinde Nozzle
+	_HybridHolder_Mixing_Gen1	- für HybridHolder (inklusive Nozzle_Tip; erstmals bei SN2440_UNC)
+	_HybridHolder_Triaxial_Gen1	- für HybridHolder (ursprünglich Spezialanfertigung für SN2380_KAUST)
+	_M35				- M3,5-Gewinde Nozzle (wird einzeln so bis jetzt nicht verwendet --> i.d.R. immer in Kombination mit Adapter)
+	_Pip_PickPlace			- für Pip_PickPlace
+	_TwinExtruder_HTE		- Düsen für HTE-Mixer
+	_UN516_GeSiM			- 5/16"-Gewinde Nozzle
+
+	_LuerLock			- Nozzle mit LuerLock-Anschluss
+		_Alu	- Aluminiumdüse
+		_GeSiM	- LuerLock-Adapter + M3,5-Gewinde Nozzle
+		_Needle	- Kunststoffanschluss mit Stahlkapillare
+		_Tip	- konische Kunststoffdüsen
+
+
+NozzleHeater:
+	Gen1		- mit externer Steuerung (Basis ist DummyTool)
+	Gen2		- mit interner Steuerung in CartridgeHolder (Basis ist DummyTool)
+
+
+Piece:
+	Cap_pHElectrode	- transportables Gefäß mit Pufferlösung; kann von TitrationToolSensor_pH-Electrode und PieceRack_Cap aufgenommen werden
+	FlipTube	- kann von PieceRack_FlipTube aufgenommen werden; Öffnen/Schließen mit PieceHandler_FlipTube möglich
+
+	Needle		- LuerLock mit Stahlkapillare; kann von PieceRack_Needle aufgenommen werden; Aufnahme/Abgabe mit Dispenser_Luer möglich
+		_40	  	- 40mm Länge
+		_G8_G10   	- Düsengrößen G8 bis G10 --> Spezialrack
+		_G12_G20  	- Düsengrößen G12 bis G20 --> Spezialrack
+
+	Port		- LuerSlip-Verbinder; kann von PieceRack_Port aufgenommen werden; Andocken/Transfer mit Dispenser_Luer möglich
+		Gen1	      	- "alte" Kunststoffanschlüsse; Verbindung der Silikonschläuche über Olive (wenig druckstabil) 
+		Gen2	  	- aktuelle PEEK-Anschlüsse; Verbindung der Schläuche über UNF ("druckstabil")
+
+	Septum		- kann von PieceRack_Septum aufgenommen werden; Aufnahme/Abgabe mit TriplePip möglich; Verschluss von z.B. Vial und LiquidReserve
+	
+	Stamp		- runde Stempel für µCP/NIL; kann von PieceRack_Stamp aufgenommen werden; Aufnahme/Abgabe mit StampSupport möglich
+		1Inch     	- 1" Durchmesser Stempelfläche; Standard µCP-Stempel für 20mm & 1" Strukturen
+		1Inch_Vac 	- 1" Durchmesser Stempelfläche + Vac-Adapter für Spezialapplikationen (z.B. MicroNeedles)
+		2Inch	  	- 2" Durchmesser Stempelfläche (erstmals bei SN2407_AMU-Marseille)
+		3Inch	  	- 3" Durchmesser Stempelfläche (obsolet)
+		4Inch	  	- 4" Durchmesser Stempelfläche
+
+	Tip		- konische Kunststoffdüse mit LuerSlip; kann von PieceRack_Tip aufgenommen werden; Aufnahme/Abgabe mit Dispenser_Luer möglich
+	
+	Vial			
+		3ml_Opened    	- Glasvial (offen); kann von PieceRack_Vial/Reaktor/PowderStation aufgenommen werden; Aufnahme/Abgabe mit TriplePip/PieceHandler_Vial möglich
+		3ml_Closed    	- Glasvial (geschlossen/gebördelt); kann von PieceRack_Vial; kann von Dispenser_Luer+Needle durchstochen werden
+ 		10ml_Opened   	- Glasvial (offen)
+		10ml_Closed   	- Glasvial (geschlossen/gebördelt)
+		_Verex	      	- Glasvial mit konischen Boden für "vollständige" Entleerung; kann von PieceRack_Vial_Verex aufgenommen werden
+
+
+PieceHandler:
+	FlipTube	- Öffnen/Schließen von FlipTubes
+		Gen1		- originaler FlipTubeHandler von Hamilton (orange); nur bei 2232_BS31_Maastricht implementiert
+		Gen2		- eigener FlipTubeHandler (rot); Standardversion
+		Gen3		- eigener FlipTubeHandler (rot); mit zusätzlicher Toolaufnahme (z.B. UV-Pen an 2396_BSys32_Lacriscience)
+
+	Vial		- Transport von 3ml_Vial; Aufnahme mechanisch, aber pneumatisch aktuiert; erstmals bei SN2416_IST verbaut
+	
+
+PieceRack:
+	Cap_pHElectrode		- einzelne Aufnahme für Cap; nicht an BSys-Rack-Slots gebunden
+
+	FlipTube 		- mehrfache Aufnahme für FlipTubes; an BSys-Rack-Slots gebunden
+  		Adapter    		- kommt auf Workplate (für FlipTubeRack_Gen2_Short)
+		Coolable   		- 18er Raster; Anschlüsse für externe Kühlung (Huber)
+		Gen1       		- 15er Raster (so nur bei 2251_BSys31E_Maastricht vorhanden) 
+		Gen2       		- 18er Raster (aktuelle Version)
+		Gen2_Short 		- 18er Raster (kann nur auf FlipTubeRack_Adapter; ist so in Y "verschiebbar")
+
+	Needle			- mehrfache Aufnahme für Needles; an BSys-Rack-Slots gebunden
+		_40	  		- 40mm Länge
+		_G8_G10   		- Düsengrößen G8 bis G10 --> erstmals bei SN2301_Nazhat verbaut
+		_G12_G20  		- Düsengrößen G12 bis G20 --> erstmals bei SN2301_Nazhat verbaut
+
+	Port			- mehrfache Aufnahme für Ports; an BSys-Rack-Slots gebunden (Gen analog Piece_Port)
+
+	Septum			- mehrfache Aufnahme für Septen; an BSys-Rack-Slots gebunden
+
+	Stamp			- je nach Piece-Typ einfache/doppelte oder mehrfache Aufnahme gleicher oder unterschiedlicher Typen 
+				  (Ziffer = Stampgröße; "_" = nebeinander; "-" = übereinander); nicht an BSys-Rack-Slots gebunden
+		_1_1			- 2*Slots (nebeneinander) für 1"-Stempel --> Sonderform erstmals verbaut bei SN2373_Yizhi 
+		_1_1_1			- 3*Slots (nebeneinander) für 1"-Stempel --> Standard bei µCP5/6
+		_2_1_1_1Vac		- 4*Slots (nebeneinander) für 2"- und 1"- und 1"(Vac)-Stempel --> Sonderform erstmals bei SN2407_AMU-Marseille verbaut
+		_1_1_1_1_1		- 5*Slots (nebeneinander) für 1"-Stempel --> alter Standard bei µCP4/obsolet
+		_1_1_1_1_1Vac		- 5*Slots (nebeneinander); 4* für 1"- und 1* für 1"(Vac)-Stempel (physisch wie _1-2_1-2_1-2_1-2_1Vac, aber keine Mischbestückung möglich wegen Kollisionsgefahr) --> Standard bei µCP4
+		_2_2_2_2_2Vac		- 5*Slots (nebeneinander); 4* für 2"- und 1* für 1"(Vac)-Stempel (physisch wie _1-2_1-2_1-2_1-2_1Vac, aber keine Mischbestückung möglich wegen Kollisionsgefahr) --> Standard bei µCP4
+		_1_1_1_1_1_1_1_1	- 8*Slots (nebeneinander) für 1"-Stempel --> alter Standard bei µCP4/obsolet
+		_1-2_1_1-2_1-2_1Vac	- 5*Slots (nebeneinander); 3* für 1"- und 2"-Stempel (jeweils übereinander); 1* für 1"-Stempel; 1* für 1"(Vac)-Stempel
+					  (an Pos 2 kann kein 2"-Stempel, wenn InkStation_Right vorhanden, sonst Kollision mit Deckel)
+		_1-2_1-2_1-2_1-2_1Vac	- 5*Slots (nebeneinander); 4* für 1"- und 2"-Stempel (jeweils übereinander); 1* für 1"(Vac)-Stempel
+		_2-3			- 1*Slot für 2"- und 3"-Stempel (übereinander); Footprint der InkStation --> erstmals als Nachrüstung bei SN2266_Yizhi verbaut
+		_2-4			- 1*Slot für 2"- und 4"-Stempel (übereinander); Footprint der InkStation --> Sonderform
+
+	Tip			- mehrfache Aufnahme für Tips; nicht an BSys-Rack-Slots gebunden; kommerzielles TipRack von Eppendorf
+
+	Vial			- mehrfache Aufnahme für Vials; an BSys-Rack-Slots gebunden
+		_Lockable		- Vials werden mittels eines "Kammes" fixiert  
+		_Simple			- Vials sind nicht fixiert und können transferiert werden
+		_Coolable		- Anschlüsse für externe Kühlung (Huber)
+
+
+Pip:
+	_Dummy		- J-Aufnahme für PipHolder; ist quasi die DummyPipette (kann konfiguriert werden, wenn kein Diluter vorhanden ist, man diese aber z.B. bei der Inbetriebnahme/Einrichtung einer Maschine braucht)
+	_GearPump	- Prototyp für CellPickingTool
+
+	_Passive	- J-Aufnahme für PipHolder; Aspirate/Dispense nur über Diluter
+		1Inputs			- Standardversion; Nutzung mit z.B. Diluter_3Way & Diluter_4Distri_1I1O1W
+		1Inputs_LuerLock	- Basis ist _1Inputs mit Slot für LuerLock-Nozzles; blockiert physisch den Slot für Z-Sensor		
+		3Inputs			- Nutzung mit z.B. Diluter_4Distri_3I1O0W; bei Dispense-Actions muss Input-Port ausgewählt werden;
+					  kann aus bis zu 3*versch. Reservoir dispensen 
+					  (Achtung Gefahr Kreuzkontamination bei Aspirate); erstmals bei SN2396_Lacriscience verwendet
+		
+	_PickPlace	- Piecetransfer über Vac und Press (Abgabe); erstmals verbaut bei SN2423_Nordetect
+	
+	_Piezo		- J-Aufnahme für PipHolder
+		_Nano		- max. Flow 50µl/s (sonst eventuell Beschädigung der Pip); nutzbar für Nano-Tip J & HV-J 	
+		_Pico		- nutzbar für Pico-Tip J & Gr-J
+		_Heatable	- beheizbar nutzbar für Nano-Tip J-H & HV-J-H & Gr-J-H & HV-Gr-J-H
+				  beheizbar nutzbar für Pico-Tip J-H & Gr-J-H
+
+	_Solenoid	- J-Aufnahme für PipHolder; Solenoid/LEE-Pipette
+
+
+PipAligmentStation:		
+	rein passives Modul; Aufnahme für wassersensitives Papier ("Gelbpapier") --> Target_Slide_WSP
+
+
+PipHolder:
+	Single_Gen1		  	- "ganz alter" Pipettenhalter (ehemals SinglePiezoHolder); ohne Toolerkennung; nur für PiezoPip/PassivePip; 
+					  für ZSensor_Gen1 & ZSensor_Gen2 (Short+Long); wird nicht mehr verbaut (nur für RPC 3.1)
+	SinglePipHolder_Gen2		- "alter" Pipettenhalter (ehemals SinglePipHolder_Gen1); für PiezoPip/PassivePip/SolenoidPip; 
+					  für ZSensor_Gen1 & ZSensor_Gen2 (Short+Long); wird nicht mehr verbaut (nur für RPC 3.2)
+	SinglePipHolder_Gen3		- aktueller Pipettenhalter (ehemals SinglePipHolder_Gen2); optisch etwas anders als Gen1 + länger + PipSlot weiter unterhalb vom ZSensorSlot;
+					  nur für ZSensor_Gen2_Long; für PiezoPip/PassivePip/SolenoidPip
+	SinglePipHolder_Gen3_Passive	- optisch wie SinglePipHolder_Gen3; keine Elektrik (ObjType=DummyTool); nur für PassivePip & ZSensor_Gen2_Long
+
+	_WithoutPiezo			- nur für ZSensor freigegeben 
+
+Point:
+	_CalibrationZ_TipCalibrator_Gen1		- Sollte nur auf TipCalibrator_Gen1 konfiguriert werden; für Kalibrierung vom Z-Sensor
+	_CalibrationZ_TipCalibrator_Gen2		- Sollte nur auf TipCalibrator_Gen2 konfiguriert werden; für Kalibrierung vom Z-Sensor
+	_CalibrationZ_TipCalibrator_Gen3		- Sollte nur auf TipCalibrator_Gen3 konfiguriert werden; für Kalibrierung vom Z-Sensor
+
+PowderStation:
+	_Gen2		- "neue" Powderstation (Pulverbett inklusive Kamera) ohne Vialslot
+	_Gen3		- "neue" Powderstation (Pulverbett inklusive Kamera) mit Vialslot in Kombination mit VialGripper zu nutzen
+
+
+Reactor:
+	Aufnahme eines Vial_3ml; Klemmung; Vial kann mit Septum abgedeckt und mit Deckel in Reaktor "verschlossen" werden; Heizung
+	zuletzt verbaut an SN2251_Maastricht 
+
+Root:
+	für jede Maschine wird eine eigenes Root-Tpl angelegt mit eventuell customized Eigenschaften
+	Der Tpl-Name lautet "Root_[Maschinentypkürzel]_SN[XXXX].tpl" z.B. "Root_µCP_SN2230"
+	ObjName im Tpl lautet "[Maschinentyp lang]_[Versionsnummer]_(SN[XXXX])" z.B. "µContactPrinter 4.1 (SN2230)" oder "BioScaffolder 5.1/E (SN2333)"	
+
+	µCP		- ohne Scaffold-Generator-Funktion (-> RunGCode bei Kundentpl. gegebenfalls freigeben)
+	BS		- mit Scaffold-Generator-Funktion
+
+
+
+SpotArray:
+
+
+StampSupport:
+	_Gen1		- bei älteren µCP4.1 verbaut; ohne Koppelplatte für Head_µCP_Gen1
+	_Gen2		- Standard bei µCP4.1; mit Koppelplatte für Head_µCP_Gen2
+
+
+Stroboscope:
+
+
+Target:
+	_Mtp		- diverse Größen/Arten von WellPlates (Mtp = Multi-Titer-Platte); ggf. an spezifische Kunden-Mtp anpassen
+	_Object		- frei konfigurierbarer Volumenkörper (W/D/H variabel)
+
+	_PetriDish	- Petrischale
+		Variable	- W/D/H variabel
+		60_15		- W/D=60mm H=15mm für TargetHolder_PetriDish_Sixfold (erstmals bei SN2398)
+		94_16		- W/D=94mm H=16mm für TargetHolder_PetriDish_Double (erstmals bei SN2398)
+
+	_Slide		- Standard-Slide (kann als Basis für viele passive Objekte benutzt werden
+ 	_Wafer		- Basis ist Slide
+
+
+TargetHolder:
+	_Mtp		- mechanische Basis ist der "neue" Universal-MTP-Double-Cooler
+		_Double_Coolable_Horizontal_Left	- Standard für BS3.2-Tray; für 2*MTP; externe Kühlung; Anschlüsse an kurzer Seite; je nach Lage auf Workplate verwenden
+		_Double_Coolable_Horizontal_Right	- Standard für BS3.2-Tray; für 2*MTP; externe Kühlung; Anschlüsse an kurzer Seite (Basis ist Double_Coolable_Left um 180° gedreht); je nach Lage auf Workplate verwenden
+		_Double_Coolable_Vertical_Right		- Standard für BS3.1-Tray; für 2*MTP; externe Kühlung; Anschlüsse an langer Seite
+		_Double_Coolable_Vertical_Top		- Standard für BS3.2-Tray (Add auf RPD-TargetTray); für 2*MTP; externe Kühlung; Anschlüsse an kurzer Seite (Basis ist Double_Coolable_Left um 90° gedreht)
+		_Single_Coolable_Horizontal_Left	- Standard für BS3.2-Workplate; für 1*MTP; externe Kühlung
+		_Single_Coolable_Horizontal_Right	- Standard für µCP4.1-Workplate; für 1*MTP; externe Kühlung
+		_Single_Heatable_Horizontal		- Standard für BS3.1/BS3.2; Heizung intern; für 1*MTP (Standard 96er)
+		_Single_Heatable_Vertical		- Standard für BS5.1; Heizung intern; für 1*MTP (Standard 96er)
+		_Plain					- Standard wenn Single Heatable nicht verbaut; für 1*MTP; schwarze Platte mit kleiner Versenkung für MTP
+		_Simple					- Standard bei µCP; Blechklemmung
+
+	_PetriDish	- mechanische Basis ist der "neue" Universal-MTP-Double-Cooler
+		_Double_Horizontal_Left			- Anschlüsse an kurzer Seite links; für PetriDisch_94_16
+		_Sixfold_Horizontal_Left		- Anschlüsse an kurzer Seite links; für PetriDisch_60_15
+
+	_Slide		- mechanische Basis ist der "neue" Universal-MTP-Double-Cooler
+		_Eightfold_Coolable_Gen1_Horizontal_Left	- mechanische Basis ist der "neue" Universal-MTP-Double-Cooler; Anschlüsse an kurzer Seite links
+		_Eightfold_Coolable_Gen1_Horizontal_Right	- mechanische Basis ist der "neue" Universal-MTP-Double-Cooler; Anschlüsse an kurzer Seite rechts
+		_Eightfold_Coolable_Gen1_Horizontal_Top		- mechanische Basis ist der "neue" Universal-MTP-Double-Cooler; Anschlüsse an langer Seite oben links
+		_Fourfold_Gen1					- passiver Halter in MTP-Format
+
+	_Substrate	- standardmäßig Vac-Klemmung von flachen Substraten 
+		_Double_Coolable_Horizontal_Left		- mechanische Basis ist der "neue" Universal-MTP-Double-Cooler; Anschlüsse an kurzer Seite links
+		_Double_Coolable_Horizontal_Right		- mechanische Basis ist der "neue" Universal-MTP-Double-Cooler; Anschlüsse an kurzer Seite rechts
+		_Double_Coolable_Horizontal_Top			- mechanische Basis ist der "neue" Universal-MTP-Double-Cooler; Anschlüsse an langer Seite oben links
+		_Double_Coolable_Horizontal_Top_Unistat		- mechanische Basis ist der "neue" Universal-MTP-Double-Cooler; Anschlüsse an langer Seite oben links; erstmals bei SN2400_TUB
+								  Temperierung über GUI möglich
+		_Single_Heatable_Add_External			- passt in MTP-Halterung (z.B. BS-Tray); aufsetzbar; Heizer-Steuerung extern; Vakuumklemmung extern
+		_Single_Heatable_Add_Internal			- passt in MTP-Halterung (z.B. BS-Tray); aufsetzbar; Heizer-Steuerung intern (DockingStation); Vakuumklemmung intern
+		_Single_Heatable_Horizontal_Right		- ist bei alten µCP4.1 (Head_Gen1) verbaut; in Workplate versenkt; Heizer-Steuerung intern; Vakuumklemmung intern; 
+								  Anschlussseite (für Licht) nach rechts ausgerichtet; StampSupport konnte nicht kompletten Bereich abdecken wenn dieser auf physisch Achse 4 hängt
+		_Single_Heatable_Vertical_Bottom		- Standard bei µCP4.3 (Head_Gen2) wo StampSupport auf physisch Achse 4 hängt; in Workplate versenkt; Heizer-Steuerung intern; Vakuumklemmung intern; 
+								  Anschlussseite (für Licht) nach unten ausgerichtet; 
+		_Single_Heatable_Vertical_Top			- Standard bei µCP6.3; in Workplate versenkt; Heizer-Steuerung intern; Vakuumklemmung intern; Anschlussseite (für Licht) nach oben ausgerichtet 
+		_Single_Transparent				- Standard bei µCP6
+
+
+TargetRack:
+	_Mtp		- Aufnahme für 3 Mtp; an BSys-Rack-Slots gebunden (_High = 20mm)
+	_Slide		- Aufnahme für 15 Slides; an BSys-Rack-Slots gebunden
+
+
+Test:
+	_DummyTool		- ist ein "frei" konfigurierbares HeadTool (ObjType) speziell für Tools die dargestellt werden sollen, aber keine Funktionen in der Software haben (z.B. als Basis für NozzleHeater)
+	_Head_Complete		- Head mit 7 Achsen, wo alle Tools freigegeben sind; gedacht für Tests mit der Software
+	_Root_Complete		- Root wo alle Heads und Workplates eingefügt werden können; gedacht für Tests mit der Software
+
+
+TipCalibrator:
+	Gen1		- für BS3.1 (unterschiedliche Höhen [31mm, 51mm, 81mm] werden bei kundenspezifischen Workplate-Tpl in Slots eingetragen)
+	Gen2		- für BS3.2 Height = 33mm (Standard bei neueren BS3.2)
+	Gen2_High      	- für BS3.2 Height = 43mm (bei älteren BS3.2 verbaut)
+	Gen3		- insbesondere für Linienmaschinen; optisch wie Gen2 aber kleinerer Foodprint
+
+
+TipCleaner:
+	Gen1		- Standard bei "alten" BS (Reinigung mittels Lippen); Ausrichtung je nachdem wo die Lippen sind; aktiver Reiniger; (Objecttyp=TipCleaner)
+	Gen2		- Standard bei "neuen" BS; passiver TipCleaner (neuer Objecttyp=TipCleanerGen2); hat Drahtabstreifer & nimmt CleaningBrushes auf
+	Gen2_1_Brush	- passiver TipCleaner (neuer Objecttyp=TipCleanerGen2); nimmt nur 1*CleaningBrushe auf; kein Drahtabstreifer; erstmals bei SN2416 verbaut
+	Gen2_BS31	- 2*Brush-SLot deaktiviert, weil diese am BS31 nicht erreicht werden können
+
+
+TitrationTool:
+	erstmals bei SN2267_IPF verbaut
+
+	TitrationToolHolder			- aktuelle Aufnahme für TitrationToolDispenser & -Sensor --> Bilden zusammen das eigentliche Titrationstool
+	TitrationToolDispenser_Dispensing	- nur Dispense möglich (hier 1*Base und 1*Säure)
+	TitrationToolDispenser_Mixing		- Dispense/Aspirate/Mix möglich
+	TitrationToolSensor_pHElectrode		- pH-Electrode die _Cap aufnehmen kann	
+
+
+Tray:
+	_HighVolt		- MES/MEW-Tray; nimmt CollectorPlate auf (kein Slot)
+
+	_Service
+		für jede Maschine wird eine eigenes ServiceTray-Tpl angelegt mit eventuell customized Eigenschaften
+		Der Tpl-Name lautet "ServiceTray_[Maschinentypkürzel]_SN[XXXX].tpl" z.B. "ServiceTray_BS_SN2333"
+		Slothöhen an eventuelle Modul-Rahmen anpassen
+
+	_Target
+		bei TargetTrays für RPD (außer Add-Tray) wird für jede Maschine eine eigenes TargatTray-Tpl angelegt mit eventuell customized Eigenschaften
+		Der Tpl-Name lautet "TargetTray_[Maschinentypkürzel]_SN[XXXX].tpl" z.B. "TargetTray_BS_SN2333"
+
+		RPC_BS32_Horizontal_Low		- Höhe 12mm; wurde wegen schlechter Ereichbarkeit mancher Tools (Z) durch High ersetzt
+		RPC_BS32_Horizontal_High	- Höhe 20mm; Standard für >= BS3.2
+		RPD_BS_Add_Vertical		- wird auf RPD_BS_TargetTray gesetzt; Basis ist BS32_High um 90° gedreht
+
+
+TrayTransporter:
+	_Small_Left		- für schmales TargetTray; Transport von links (Magazinmodul) auf Chassis (erstmals bei SN2416_IST verbaut)
+
+
+TriplPip:
+	kombiniertes Tool aus 1*Liquiddispenser, 1*Gasdispenser, 1*Vac; kann für Vial-/Septum-Transfer genutzt werden; kann auf Vial im Reaktor andocken
+
+	_WithoutDispenser	- kein LiquidDispenser
+	_WithoutGripper		- kein Vac-Kanal
+
+
+TwinExtruder:
+	
+	_HTE		- zwei HTE an einer getriebenen Achse (aber zwei Achsen/Schlitten elektronisch genutzt); Mischereinheit hat eigene Heizung; Master-HTE = HTE an Antriebsachse
+	_Syringe	- zwei SSE an einer getriebenen Achse (aber zwei Achsen/Schlitten elektronisch genutzt); ohne Heizung; Master-SSE = SSE an Antriebsachsean; Master-SSE kann ein Z-Sensor aufnehmen
+
+
+TwinPipHolder:
+	Aufnahme von 2*PiezoPip oder 2*SolenoidPip; zueinander klappen für "MixOnDemand"; Möglickeit für Kamera zur OnlineTropfenerkennung 
+
+
+WashStation:
+	BS_Gen1 	- 1*Waschposition (Standard bei BS3.1)
+	BS_Gen2 	- 2*Waschposition (Standard bei >= BS3.2; wichtig für TwinPipHolder)
+	BSys		- Standard-BSys-WashStation
+	BSys_AirBlade	- Standard-BSys-WashStation + AirBlade
+
+
+Waste:
+	_Gen1		- Waste für benutzte Septum (nur bei SN2251_Maastricht verbaut)
+	_Gen2		- Wastgefäß für kleine Elemente; Footprint vom Stroboskop (erstmals bei SN2423_Nordetect verbaut) 
+
+
+Workplate:
+	für jede Maschine wird eine eigenes Workplate-Tpl angelegt mit eventuell customized Eigenschaften (z.B. nur gekaufte Module zulassen; Rahmenhöhen in Slots eintragen)
+	Der Tpl-Name lautet "Workplate_[Maschinentypkürzel]_SN[XXXX].tpl" z.B. "Workplate_µCP_SN2230"
+	Slothöhen an eventuelle Modul-Rahmen anpassen
+
+	_µCP43_Gen1	- "altes" Layout
+	_µCP43_Gen2	- "neues" Layout seit ca. Mitte 2023; notwendige Änderungen für besseres Handling mit 4"-Stamps
+
+	_Line_Large	- Aufnahme von breiten TrayTransporter/TargetTray
+	_Line_Small	- Aufnahme von schmalen TrayTransporter/TargetTray
+
+
+Z-Sensor:
+	Gen1		- Version ohne Schutzmantel am goldenen Teil (es gab verschiedene Ausbauformen mit unterschiedlich langer Rändelschraube); wurde ersetzt durch Gen2_Short
+	Gen2_Short	- Version mit Schutzmantel am goldenen Teil (erste Variante); wurde ersetzt durch Gen2_Long; kann nur an SinglePipHolder_Gen1
+	Gen2_Long	- Version mit Schutzmantel am goldenen Teil; aktuelle Version
+
+	_Workplate_Gen1	- ObjType=StampMagazine; physisch in Blindplatte für InkStation; "neuer" Standard für µCP ohne InkStation
+

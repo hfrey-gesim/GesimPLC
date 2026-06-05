@@ -1,0 +1,133 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<Root>
+  <Header Version="2.0.18.5239" Id="0" />
+  <Steps>
+    <Item Id="7fa298d5-0aac-47a7-a167-c33469ec2c1c" Description="" ObjectType="PassivePip" ObjectId="701ccef5-79b1-467f-8a92-f64fb77db701" ActionType="WashTool" TargetId="7464ef0b-5dbb-4f23-a674-a406df008bed" WashPointNr="1" Mode="WashInOutside" Quantity="5000" Flow="2000" Time="3000" />
+    <Item Id="f5e9329d-433c-460b-862b-7898345a4bcb" Description="" ObjectType="Root" ObjectId="e94c0ae7-f5eb-42b3-bf25-c6806131cff7" ActionType="RunSequence" SequenceName="BioSaw_Probe_weg_LuerLock">
+      <Condition Type="StepReady" Operator="AND" StepId="0" />
+    </Item>
+    <Item Id="7fe460e3-e274-4188-8332-7bdc57c63a4b" Description="" ObjectType="PassivePip" ObjectId="701ccef5-79b1-467f-8a92-f64fb77db701" ActionType="MoveToTarget" TargetId="4254673b-7ac0-4849-a035-845f414f8072" TargetRef="Center" SpeedX="115000" SpeedY="115000" SpeedZ="72000" Offset.X="0" Offset.Y="0" Offset.Z="0" ZLevel="PrePos">
+      <Condition Type="StepReady" Operator="AND" StepId="0" />
+    </Item>
+    <Item Id="108d5c14-c8b0-4f1c-be6c-93e9e9ef549d" Description="" ObjectType="Root" ObjectId="e94c0ae7-f5eb-42b3-bf25-c6806131cff7" ActionType="RunSequence" SequenceName="BioSaw_Probe_aufnehmen_LuerLock">
+      <Condition Type="StepReady" Operator="AND" StepId="0" />
+    </Item>
+    <Item Id="f8328c5b-0cd3-4853-a923-9975b25d076e" Description="" ObjectType="Root" ObjectId="e94c0ae7-f5eb-42b3-bf25-c6806131cff7" ActionType="RunSequence" SequenceName="BioSaw_Probe_weg_LuerLock">
+      <Condition Type="StepReady" Operator="AND" StepId="0" />
+    </Item>
+    <Item Id="ed80bdea-23b9-4b56-b21c-866eb331214f" Description="" ObjectType="PassivePip" ObjectId="701ccef5-79b1-467f-8a92-f64fb77db701" ActionType="MoveToTarget" TargetId="43c4da6b-ea72-4146-830a-d907f5df5342" TargetRef="Center" SpeedX="115000" SpeedY="115000" SpeedZ="72000" Offset.X="0" Offset.Y="0" Offset.Z="0" ZLevel="PrePos">
+      <Condition Type="StepReady" Operator="AND" StepId="0" />
+    </Item>
+    <Item Id="69bd4e2d-d785-4fb3-9e9b-fe1fe87dd5c3" Description="" ObjectType="Root" ObjectId="e94c0ae7-f5eb-42b3-bf25-c6806131cff7" ActionType="RunSequence" SequenceName="BioSaw_Probe_aufnehmen_LuerLock">
+      <Condition Type="StepReady" Operator="AND" StepId="0" />
+    </Item>
+    <Item Id="653a0aac-f43f-4254-a99b-c3674dc5b10b" Description="" ObjectType="Root" ObjectId="e94c0ae7-f5eb-42b3-bf25-c6806131cff7" ActionType="RunSequence" SequenceName="BioSaw_Probe_weg_LuerLock">
+      <Condition Type="StepReady" Operator="AND" StepId="0" />
+    </Item>
+    <Item Id="b9ac7989-1786-460b-9142-a236d5cb381c" Description="" ObjectType="PassivePip" ObjectId="701ccef5-79b1-467f-8a92-f64fb77db701" ActionType="MoveToTarget" TargetId="f0f7a19e-2824-49c7-b423-e673e2ec54cc" TargetRef="Center" SpeedX="115000" SpeedY="115000" SpeedZ="72000" Offset.X="0" Offset.Y="0" Offset.Z="0" ZLevel="PrePos">
+      <Condition Type="StepReady" Operator="AND" StepId="0" />
+    </Item>
+    <Item Id="48d05cdc-0ead-42cd-a135-0601b00a8fb0" Description="" ObjectType="Root" ObjectId="e94c0ae7-f5eb-42b3-bf25-c6806131cff7" ActionType="RunSequence" SequenceName="BioSaw_Probe_aufnehmen_LuerLock">
+      <Condition Type="StepReady" Operator="AND" StepId="0" />
+    </Item>
+    <Item Id="599c084f-45c0-493d-a7c9-efa4cfb96fcc" Description="" ObjectType="Root" ObjectId="e94c0ae7-f5eb-42b3-bf25-c6806131cff7" ActionType="RunSequence" SequenceName="BioSaw_Probe_weg_LuerLock">
+      <Condition Type="StepReady" Operator="AND" StepId="0" />
+    </Item>
+    <Item Id="d81be398-013b-4e8e-aea0-4f1cf4ea8079" Description="" ObjectType="PassivePip" ObjectId="701ccef5-79b1-467f-8a92-f64fb77db701" ActionType="MoveToTarget" TargetId="1c375199-81fc-4ff6-a181-1c7e2e438292" TargetRef="Center" SpeedX="115000" SpeedY="115000" SpeedZ="72000" Offset.X="0" Offset.Y="0" Offset.Z="0" ZLevel="PrePos">
+      <Condition Type="StepReady" Operator="AND" StepId="0" />
+    </Item>
+    <Item Id="2ac4cba0-6c06-4dd5-b799-1fc84d494721" Description="" ObjectType="Root" ObjectId="e94c0ae7-f5eb-42b3-bf25-c6806131cff7" ActionType="RunSequence" SequenceName="BioSaw_Probe_aufnehmen_LuerLock">
+      <Condition Type="StepReady" Operator="AND" StepId="0" />
+    </Item>
+    <Item Id="a20b14a4-dd98-42f6-8368-7cb57cc683c7" Description="" ObjectType="Root" ObjectId="e94c0ae7-f5eb-42b3-bf25-c6806131cff7" ActionType="RunSequence" SequenceName="BioSaw_Probe_weg_LuerLock">
+      <Condition Type="StepReady" Operator="AND" StepId="0" />
+    </Item>
+    <Item Id="438f01bd-93e2-49c3-b11b-c972db983a7c" Description="" ObjectType="PassivePip" ObjectId="701ccef5-79b1-467f-8a92-f64fb77db701" ActionType="MoveToTarget" TargetId="3c985be9-d1cf-400c-9714-4926ec21b400" TargetRef="Center" SpeedX="115000" SpeedY="115000" SpeedZ="72000" Offset.X="0" Offset.Y="0" Offset.Z="0" ZLevel="PrePos">
+      <Condition Type="StepReady" Operator="AND" StepId="0" />
+    </Item>
+    <Item Id="21d7d037-7d15-4694-9842-9121b4cb8ee0" Description="" ObjectType="Root" ObjectId="e94c0ae7-f5eb-42b3-bf25-c6806131cff7" ActionType="RunSequence" SequenceName="BioSaw_Probe_aufnehmen_LuerLock">
+      <Condition Type="StepReady" Operator="AND" StepId="0" />
+    </Item>
+    <Item Id="624b8383-cd8c-44ce-a0dd-ec08772db850" Description="" ObjectType="Root" ObjectId="e94c0ae7-f5eb-42b3-bf25-c6806131cff7" ActionType="RunSequence" SequenceName="BioSaw_Probe_weg_LuerLock">
+      <Condition Type="StepReady" Operator="AND" StepId="0" />
+    </Item>
+    <Item Id="0200e80e-80af-408b-b6f8-d3e56dd1182a" Description="" ObjectType="PassivePip" ObjectId="701ccef5-79b1-467f-8a92-f64fb77db701" ActionType="MoveToTarget" TargetId="c61645a4-aa3f-4d7e-935e-396196e591a3" TargetRef="Center" SpeedX="115000" SpeedY="115000" SpeedZ="72000" Offset.X="0" Offset.Y="0" Offset.Z="0" ZLevel="PrePos">
+      <Condition Type="StepReady" Operator="AND" StepId="0" />
+    </Item>
+    <Item Id="4bd7df09-d1d2-4658-ab44-5137f5c42a1d" Description="" ObjectType="Root" ObjectId="e94c0ae7-f5eb-42b3-bf25-c6806131cff7" ActionType="RunSequence" SequenceName="BioSaw_Probe_aufnehmen_LuerLock">
+      <Condition Type="StepReady" Operator="AND" StepId="0" />
+    </Item>
+    <Item Id="e495e95d-bf46-4a92-be7b-e4467a917472" Description="" ObjectType="Root" ObjectId="e94c0ae7-f5eb-42b3-bf25-c6806131cff7" ActionType="RunSequence" SequenceName="BioSaw_Probe_weg_LuerLock">
+      <Condition Type="StepReady" Operator="AND" StepId="0" />
+    </Item>
+    <Item Id="2740ee38-f6e8-4382-a664-fc7183825728" Description="" ObjectType="PassivePip" ObjectId="701ccef5-79b1-467f-8a92-f64fb77db701" ActionType="MoveToTarget" TargetId="19078dba-ff00-4d60-a266-a47e740deec8" TargetRef="Center" SpeedX="115000" SpeedY="115000" SpeedZ="72000" Offset.X="0" Offset.Y="0" Offset.Z="0" ZLevel="PrePos">
+      <Condition Type="StepReady" Operator="AND" StepId="0" />
+    </Item>
+    <Item Id="53f23df0-78c0-4099-b192-268a6a969644" Description="" ObjectType="Root" ObjectId="e94c0ae7-f5eb-42b3-bf25-c6806131cff7" ActionType="RunSequence" SequenceName="BioSaw_Probe_aufnehmen_LuerLock">
+      <Condition Type="StepReady" Operator="AND" StepId="0" />
+    </Item>
+    <Item Id="af154864-9d25-4c5f-a224-1bc1a5273773" Description="" ObjectType="Root" ObjectId="e94c0ae7-f5eb-42b3-bf25-c6806131cff7" ActionType="RunSequence" SequenceName="BioSaw_Probe_weg_LuerLock">
+      <Condition Type="StepReady" Operator="AND" StepId="0" />
+    </Item>
+    <Item Id="de618d9d-3cb3-4dc9-8b45-45c60a6f79b5" Description="" ObjectType="PassivePip" ObjectId="701ccef5-79b1-467f-8a92-f64fb77db701" ActionType="MoveToTarget" TargetId="4690f5fb-8981-4ea7-a815-4afa13a4cd1c" TargetRef="Center" SpeedX="115000" SpeedY="115000" SpeedZ="72000" Offset.X="0" Offset.Y="0" Offset.Z="0" ZLevel="PrePos">
+      <Condition Type="StepReady" Operator="AND" StepId="0" />
+    </Item>
+    <Item Id="a33cf9fb-dfe1-4b86-b14e-ac252a66c99d" Description="" ObjectType="Root" ObjectId="e94c0ae7-f5eb-42b3-bf25-c6806131cff7" ActionType="RunSequence" SequenceName="BioSaw_Probe_aufnehmen_LuerLock">
+      <Condition Type="StepReady" Operator="AND" StepId="0" />
+    </Item>
+    <Item Id="1631df70-3137-4a4b-a2e0-19b2e961fd50" Description="" ObjectType="Root" ObjectId="e94c0ae7-f5eb-42b3-bf25-c6806131cff7" ActionType="RunSequence" SequenceName="BioSaw_Probe_weg_LuerLock">
+      <Condition Type="StepReady" Operator="AND" StepId="0" />
+    </Item>
+    <Item Id="ce866cea-436a-4e68-a099-7205536ba298" Description="" ObjectType="PassivePip" ObjectId="701ccef5-79b1-467f-8a92-f64fb77db701" ActionType="MoveToTarget" TargetId="a730e896-7eeb-4e99-bc65-6c60815c269c" TargetRef="Center" SpeedX="115000" SpeedY="115000" SpeedZ="72000" Offset.X="0" Offset.Y="0" Offset.Z="0" ZLevel="PrePos">
+      <Condition Type="StepReady" Operator="AND" StepId="0" />
+    </Item>
+    <Item Id="5a8ab65d-1e82-40b9-95ea-fae74c6d53f0" Description="" ObjectType="Root" ObjectId="e94c0ae7-f5eb-42b3-bf25-c6806131cff7" ActionType="RunSequence" SequenceName="BioSaw_Probe_aufnehmen_LuerLock">
+      <Condition Type="StepReady" Operator="AND" StepId="0" />
+    </Item>
+    <Item Id="862e246d-2bd4-4861-bfa2-5fe31a723287" Description="" ObjectType="Root" ObjectId="e94c0ae7-f5eb-42b3-bf25-c6806131cff7" ActionType="RunSequence" SequenceName="BioSaw_Probe_weg_LuerLock">
+      <Condition Type="StepReady" Operator="AND" StepId="0" />
+    </Item>
+    <Item Id="0189440e-814f-4a1a-a30f-03eaaa226026" Description="" ObjectType="PassivePip" ObjectId="701ccef5-79b1-467f-8a92-f64fb77db701" ActionType="MoveToTarget" TargetId="434f5dbe-04ff-462b-9d1c-fe9487e025df" TargetRef="Center" SpeedX="115000" SpeedY="115000" SpeedZ="72000" Offset.X="0" Offset.Y="0" Offset.Z="0" ZLevel="PrePos">
+      <Condition Type="StepReady" Operator="AND" StepId="0" />
+    </Item>
+    <Item Id="67d3c120-2190-4b2d-b5ed-9835b1622047" Description="" ObjectType="Root" ObjectId="e94c0ae7-f5eb-42b3-bf25-c6806131cff7" ActionType="RunSequence" SequenceName="BioSaw_Probe_aufnehmen_LuerLock">
+      <Condition Type="StepReady" Operator="AND" StepId="0" />
+    </Item>
+    <Item Id="4f8289bf-9450-421d-a068-0a389b27a869" Description="" ObjectType="Root" ObjectId="e94c0ae7-f5eb-42b3-bf25-c6806131cff7" ActionType="RunSequence" SequenceName="BioSaw_Probe_weg_LuerLock">
+      <Condition Type="StepReady" Operator="AND" StepId="0" />
+    </Item>
+    <Item Id="5d13800a-6741-4608-b5fb-86b65e7eba4f" Description="" ObjectType="PassivePip" ObjectId="701ccef5-79b1-467f-8a92-f64fb77db701" ActionType="MoveToTarget" TargetId="bf8f257d-77e8-4778-9168-9c266d575e22" TargetRef="Center" SpeedX="115000" SpeedY="115000" SpeedZ="72000" Offset.X="0" Offset.Y="0" Offset.Z="0" ZLevel="PrePos">
+      <Condition Type="StepReady" Operator="AND" StepId="0" />
+    </Item>
+    <Item Id="7e4f944b-e6da-4c53-96ac-26da28f8ccec" Description="" ObjectType="Root" ObjectId="e94c0ae7-f5eb-42b3-bf25-c6806131cff7" ActionType="RunSequence" SequenceName="BioSaw_Probe_aufnehmen_LuerLock">
+      <Condition Type="StepReady" Operator="AND" StepId="0" />
+    </Item>
+    <Item Id="2fa038e8-6d44-4e12-8a5b-ff00539df43e" Description="" ObjectType="Root" ObjectId="e94c0ae7-f5eb-42b3-bf25-c6806131cff7" ActionType="RunSequence" SequenceName="BioSaw_Probe_weg_LuerLock">
+      <Condition Type="StepReady" Operator="AND" StepId="0" />
+    </Item>
+    <Item Id="7fb2ea31-7ad2-4fd2-bae7-e35f7e386581" Description="" ObjectType="PassivePip" ObjectId="701ccef5-79b1-467f-8a92-f64fb77db701" ActionType="MoveToTarget" TargetId="ad034c85-0211-4d2e-8f37-6bbd1fcf60ac" TargetRef="Center" SpeedX="115000" SpeedY="115000" SpeedZ="72000" Offset.X="0" Offset.Y="0" Offset.Z="0" ZLevel="PrePos">
+      <Condition Type="StepReady" Operator="AND" StepId="0" />
+    </Item>
+    <Item Id="89254ee1-76eb-4823-8f69-157bffb3142c" Description="" ObjectType="Root" ObjectId="e94c0ae7-f5eb-42b3-bf25-c6806131cff7" ActionType="RunSequence" SequenceName="BioSaw_Probe_aufnehmen_LuerLock">
+      <Condition Type="StepReady" Operator="AND" StepId="0" />
+    </Item>
+    <Item Id="f23a8418-ed31-4e8a-a89e-ad24b1cc3220" Description="" ObjectType="Root" ObjectId="e94c0ae7-f5eb-42b3-bf25-c6806131cff7" ActionType="RunSequence" SequenceName="BioSaw_Probe_weg_LuerLock">
+      <Condition Type="StepReady" Operator="AND" StepId="0" />
+    </Item>
+    <Item Id="4b9abdac-d86a-4383-942c-6e10d5e716b0" Description="" ObjectType="PassivePip" ObjectId="701ccef5-79b1-467f-8a92-f64fb77db701" ActionType="MoveToTarget" TargetId="3665e74f-f384-4294-8c1e-544a5ce3ffc7" TargetRef="Center" SpeedX="115000" SpeedY="115000" SpeedZ="72000" Offset.X="0" Offset.Y="0" Offset.Z="0" ZLevel="PrePos">
+      <Condition Type="StepReady" Operator="AND" StepId="0" />
+    </Item>
+    <Item Id="9e714cd4-d212-45b1-966a-01f8c6c8874a" Description="" ObjectType="Root" ObjectId="e94c0ae7-f5eb-42b3-bf25-c6806131cff7" ActionType="RunSequence" SequenceName="BioSaw_Probe_aufnehmen_LuerLock">
+      <Condition Type="StepReady" Operator="AND" StepId="0" />
+    </Item>
+    <Item Id="2f753042-5b63-411f-8182-c64b92d7015f" Description="" ObjectType="Root" ObjectId="e94c0ae7-f5eb-42b3-bf25-c6806131cff7" ActionType="RunSequence" SequenceName="BioSaw_Probe_weg_LuerLock">
+      <Condition Type="StepReady" Operator="AND" StepId="0" />
+    </Item>
+    <Item Id="db5ce96a-41af-41f2-b09b-655e5cf4b524" Description="" ObjectType="PassivePip" ObjectId="701ccef5-79b1-467f-8a92-f64fb77db701" ActionType="MoveToTarget" TargetId="4254673b-7ac0-4849-a035-845f414f8072" TargetRef="Center" SpeedX="115000" SpeedY="115000" SpeedZ="72000" Offset.X="0" Offset.Y="0" Offset.Z="0" ZLevel="PrePos">
+      <Condition Type="StepReady" Operator="AND" StepId="0" />
+    </Item>
+    <Item Id="cde11efe-cd71-4a98-9c6a-0691ca334f64" Description="" ObjectType="Root" ObjectId="e94c0ae7-f5eb-42b3-bf25-c6806131cff7" ActionType="RunSequence" SequenceName="BioSaw_Probe_aufnehmen_LuerLock">
+      <Condition Type="StepReady" Operator="AND" StepId="0" />
+    </Item>
+  </Steps>
+</Root>

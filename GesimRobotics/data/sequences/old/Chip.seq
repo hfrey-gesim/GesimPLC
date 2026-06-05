@@ -1,0 +1,22 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<Root>
+  <Header Version="2.0.18.5239" Id="0" />
+  <Steps>
+    <Item Id="e3dca1f1-e198-4591-af4f-99a3302b606f" Description="" ObjectType="Root" ObjectId="e94c0ae7-f5eb-42b3-bf25-c6806131cff7" ActionType="RunGCode" TargetId="afc342bd-552d-47da-b947-85d00e2b4613" TargetRef="Center" FileName="G-Code_3DPTLG_Dichtung_anliegent_Plasmapen" WaitPointId="afc342bd-552d-47da-b947-85d00e2b4613" Offset.Z="0" />
+    <Item Id="d0a95392-b3f6-406b-a81d-523c7b809a1c" Description="" ObjectType="Exposure" ObjectId="2e496f01-128c-464c-82a7-aecfce4ccf3f" ActionType="MoveZ" Mode="Home" SpeedZ="10000" Distance="10000">
+      <Condition Type="StepReady" Operator="AND" StepId="0" />
+    </Item>
+    <Item Id="2443f78d-5c7e-4fd4-bdfa-1a5e488197b1" Description="" ObjectType="Root" ObjectId="e94c0ae7-f5eb-42b3-bf25-c6806131cff7" ActionType="RunGCode" TargetId="a941b092-470d-4eff-aa22-d15c343982df" TargetRef="Center" FileName="G-Code_3DPTLG_Dichtung_anliegent_1x" WaitPointId="286631af-e8cc-4453-a1f5-18d4324618e4" Offset.Z="0">
+      <Condition Type="StepReady" Operator="AND" StepId="0" />
+    </Item>
+    <Item Id="c388e8d6-876e-438d-8710-71b44fa5f4d9" Description="" ObjectType="Root" ObjectId="e94c0ae7-f5eb-42b3-bf25-c6806131cff7" ActionType="RunGCode" TargetId="ae6f67a2-a39a-4892-9991-6217da9ec2cd" TargetRef="Center" FileName="G-Code_3DPTLG_Dichtung_anliegent_1x" WaitPointId="286631af-e8cc-4453-a1f5-18d4324618e4" Offset.Z="0">
+      <Condition Type="StepReady" Operator="AND" StepId="0" />
+    </Item>
+    <Item Id="9852f6ff-225c-4ea7-9219-3ff4f903ebe1" Description="" ObjectType="Root" ObjectId="e94c0ae7-f5eb-42b3-bf25-c6806131cff7" ActionType="RunGCode" TargetId="c1b22aed-39d1-4fff-aa54-6ffa4af9ce5d" TargetRef="Center" FileName="G-Code_3DPTLG_Dichtung_anliegent_1x" WaitPointId="286631af-e8cc-4453-a1f5-18d4324618e4" Offset.Z="0">
+      <Condition Type="StepReady" Operator="AND" StepId="0" />
+    </Item>
+    <Item Id="7bde05ca-5105-43f5-a1b8-b6ad0fa69637" Description="" ObjectType="Root" ObjectId="e94c0ae7-f5eb-42b3-bf25-c6806131cff7" ActionType="RunGCode" TargetId="1186a78f-4e5f-4c76-9d23-31b02e669b45" TargetRef="Center" FileName="G-Code_3DPTLG_Dichtung_anliegent_1x" WaitPointId="286631af-e8cc-4453-a1f5-18d4324618e4" Offset.Z="0">
+      <Condition Type="StepReady" Operator="AND" StepId="0" />
+    </Item>
+  </Steps>
+</Root>

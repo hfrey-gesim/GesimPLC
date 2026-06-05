@@ -1,0 +1,28 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<Root>
+  <Header Version="2.0.18.5239" Id="0" />
+  <Steps>
+    <Item Id="8a8243ae-9699-4196-94fd-0715628a3924" Description="" ObjectType="Root" ObjectId="e94c0ae7-f5eb-42b3-bf25-c6806131cff7" ActionType="RunGCode" TargetId="cb67eb4b-8fc9-4597-a0c9-b39e6a8a37da" TargetRef="Center" FileName="CellTheon_Slide_Spotten" WaitPointId="cb67eb4b-8fc9-4597-a0c9-b39e6a8a37da" Offset.Z="0" />
+    <Item Id="049b9bdb-f0eb-4efb-9eec-a5ca306fadd6" Description="" ObjectType="PiezoPip" ObjectId="83321c62-c1a2-42d6-a078-6be7969295b8" ActionType="MoveZ" Mode="Home" SpeedZ="10000" Distance="10000">
+      <Condition Type="StepReady" Operator="AND" StepId="0" />
+    </Item>
+    <Item Id="9d433f3f-b9a8-4f86-9cfa-6c8f3ed75232" Description="" ObjectType="Diluter" ObjectId="95e48861-4459-407a-b2f0-a0d3bf4408f1" ActionType="DilPrepare" Quantity="50000" Mode="ForAspirate">
+      <Condition Type="StepReady" Operator="AND" StepId="0" />
+    </Item>
+    <Item Id="2a554010-5ae2-4d69-a0d1-d6b30e879032" Description="" ObjectType="Diluter" ObjectId="95e48861-4459-407a-b2f0-a0d3bf4408f1" ActionType="DilPrepare" Quantity="50000" Mode="ForDispense">
+      <Condition Type="StepReady" Operator="AND" StepId="0" />
+    </Item>
+    <Item Id="7cd6125e-40f4-47cf-866c-504d31846204" Description="" ObjectType="Root" ObjectId="e94c0ae7-f5eb-42b3-bf25-c6806131cff7" ActionType="RunGCode" TargetId="cb67eb4b-8fc9-4597-a0c9-b39e6a8a37da" TargetRef="Center" FileName="CellTheon_Slide_Fluten" WaitPointId="cb67eb4b-8fc9-4597-a0c9-b39e6a8a37da" Offset.Z="0">
+      <Condition Type="StepReady" Operator="AND" StepId="0" />
+    </Item>
+    <Item Id="71d23399-8936-4745-85ef-8f7448663d8f" Description="" ObjectType="PassivePip" ObjectId="19685cce-9c28-4047-8594-779c591a1a52" ActionType="MoveZ" Mode="Home" SpeedZ="10000" Distance="10000">
+      <Condition Type="StepReady" Operator="AND" StepId="0" />
+    </Item>
+    <Item Id="f37be508-8b6b-4600-9b5b-eab7929b032a" Description="" ObjectType="Root" ObjectId="e94c0ae7-f5eb-42b3-bf25-c6806131cff7" ActionType="RunGCode" TargetId="cb67eb4b-8fc9-4597-a0c9-b39e6a8a37da" TargetRef="Center" FileName="CellTheon_Slide_Trocknung" WaitPointId="cb67eb4b-8fc9-4597-a0c9-b39e6a8a37da" Offset.Z="0">
+      <Condition Type="StepReady" Operator="AND" StepId="0" />
+    </Item>
+    <Item Id="fc2954c7-0064-41c9-895b-d7184d5d7096" Description="" ObjectType="CartridgeDisp" ObjectId="e0989cc8-9da5-4c85-8f1f-ce9bc4c049df" ActionType="MoveZ" Mode="Home" SpeedZ="10000" Distance="10000">
+      <Condition Type="StepReady" Operator="AND" StepId="0" />
+    </Item>
+  </Steps>
+</Root>

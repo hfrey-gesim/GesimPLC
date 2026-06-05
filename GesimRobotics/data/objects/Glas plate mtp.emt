@@ -1,0 +1,4 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<Item Id="00000000-0000-0000-0000-000000000000" TemplateId="7efea211-6ced-4104-8ca6-26f74abfc51a" Name="Glas plate mtp" ObjType="Slide" RelPos.X="0" RelPos.Y="0" RelPos.Z="0" Width="86000" Depth="128000" Heigth="1" FreeHeight="0" Offset.Z="1252">
+  <Item Id="00000000-0000-0000-0000-000000000000" TemplateId="31dee62b-b1e5-4a80-95a9-581fd37f6ebb" Name="PointPrint" ObjType="Point" RelPos.X="50000" RelPos.Y="50000" RelPos.Z="0" Width="0" Depth="0" Heigth="0" FreeHeight="0" Offset.Z="668" />
+</Item>

@@ -1,0 +1,36 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<Root>
+  <Header Version="2.0.18.5239" Id="0" />
+  <Steps>
+    <Item Id="38f083e7-3a6d-43c0-b0e4-c5fe8df13d3c" Description="" ObjectType="PiezoPip" ObjectId="595313da-1b22-4d98-9dfb-b8283284ed31" ActionType="MoveToTarget" TargetId="aea50137-590f-44b1-b0d7-53552b21e8c5" TargetRef="RightBottom" SpeedX="115000" SpeedY="115000" SpeedZ="72000" Offset.X="0" Offset.Y="0" Offset.Z="25000" ZLevel="PrePos" />
+    <Item Id="044785f2-c610-46da-97db-9e44535a9bec" Description="" ActionType="CounterStep" Operator="Set" Amount="0">
+      <Condition Type="StepReady" Operator="AND" StepId="0" />
+    </Item>
+    <Item Id="9bf91ad3-32eb-4349-ab3b-afd0a63bb45e" Description="" ObjectType="PiezoPip" ObjectId="595313da-1b22-4d98-9dfb-b8283284ed31" ActionType="MoveToTarget" TargetId="aea50137-590f-44b1-b0d7-53552b21e8c5" TargetRef="LeftBottom" SpeedX="115000" SpeedY="115000" SpeedZ="72000" Offset.X="0" Offset.Y="0" Offset.Z="25000" ZLevel="PrePos">
+      <Condition Type="StepReady" Operator="AND" StepId="0" />
+    </Item>
+    <Item Id="787d0b17-f62b-4d2d-bf8b-7766eef0538c" Description="" ActionType="Wait" Time="1">
+      <Condition Type="StepReady" Operator="AND" StepId="0" />
+    </Item>
+    <Item Id="306895bd-2c41-4bff-a107-1b27929735c5" Description="" ObjectType="PiezoPip" ObjectId="595313da-1b22-4d98-9dfb-b8283284ed31" ActionType="MoveToTarget" TargetId="aea50137-590f-44b1-b0d7-53552b21e8c5" TargetRef="LeftTop" SpeedX="115000" SpeedY="115000" SpeedZ="72000" Offset.X="0" Offset.Y="0" Offset.Z="20000" ZLevel="PrePos">
+      <Condition Type="StepReady" Operator="AND" StepId="0" />
+    </Item>
+    <Item Id="b77b6e76-56ca-4571-a8be-e5f1a4301d46" Description="" ActionType="Wait" Time="10000">
+      <Condition Type="StepReady" Operator="AND" StepId="0" />
+    </Item>
+    <Item Id="80bd1930-1753-46e9-8635-418d1db7bf40" Description="" ObjectType="PiezoPip" ObjectId="595313da-1b22-4d98-9dfb-b8283284ed31" ActionType="MoveToTarget" TargetId="aea50137-590f-44b1-b0d7-53552b21e8c5" TargetRef="RightTop" SpeedX="115000" SpeedY="115000" SpeedZ="72000" Offset.X="0" Offset.Y="0" Offset.Z="20000" ZLevel="PrePos">
+      <Condition Type="StepReady" Operator="AND" StepId="0" />
+    </Item>
+    <Item Id="2fba3167-dde2-462c-b48b-a7c42f736334" Description="" ObjectType="PiezoPip" ObjectId="595313da-1b22-4d98-9dfb-b8283284ed31" ActionType="MoveZ" Mode="Home" SpeedZ="10000" Distance="10000">
+      <Condition Type="StepReady" Operator="AND" StepId="0" />
+    </Item>
+    <Item Id="7c9a7020-b1bb-4e99-965a-b7831a4f5fd8" Description="" ActionType="GotoStep" StepId="9bf91ad3-32eb-4349-ab3b-afd0a63bb45e">
+      <Condition Type="StepReady" Operator="AND" StepId="0" />
+      <Condition Type="StepResult" Operator="AND" StepId="044785f2-c610-46da-97db-9e44535a9bec" CompOperator="GT" CompValue="2" />
+    </Item>
+    <Item Id="eed9ea4c-1e22-4c92-9817-6a85565c1bb0" Description="" ActionType="CounterStep" Operator="Add" Amount="1">
+      <Condition Type="StepReady" Operator="AND" StepId="0" />
+      <Condition Type="StepResult" Operator="AND" StepId="044785f2-c610-46da-97db-9e44535a9bec" CompOperator="LE" CompValue="5" />
+    </Item>
+  </Steps>
+</Root>

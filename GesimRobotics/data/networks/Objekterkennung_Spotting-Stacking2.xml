@@ -1,0 +1,401 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<Root Version="1">
+  <Nodes>
+    <Node>
+      <Uid>244b6de37b3f4dbd8137402757de48b4</Uid>
+      <RepeatedExecutionHandling>Execute</RepeatedExecutionHandling>
+      <PosX>2502</PosX>
+      <PosY>3365</PosY>
+      <ReverseConnectors>false</ReverseConnectors>
+      <Type>Start</Type>
+      <Vars>
+        <Var Name="freq" VarValueType="System.Int32" InitValue="90" />
+      </Vars>
+    </Node>
+    <Node>
+      <Uid>691a539eed14491ea6d162110b693f13</Uid>
+      <RepeatedExecutionHandling>Execute</RepeatedExecutionHandling>
+      <PosX>3245</PosX>
+      <PosY>3658</PosY>
+      <ReverseConnectors>false</ReverseConnectors>
+      <Type>Sequence</Type>
+      <SeqName>ProbeaufnehmenRot</SeqName>
+    </Node>
+    <Node>
+      <Uid>69898d651e0640d5870f88ed507b91e2</Uid>
+      <RepeatedExecutionHandling>Repair</RepeatedExecutionHandling>
+      <PosX>3498</PosX>
+      <PosY>3585</PosY>
+      <ReverseConnectors>true</ReverseConnectors>
+      <RepairedBy />
+      <Type>WaterSensitiveTest</Type>
+      <PipGCodeToolNr>5</PipGCodeToolNr>
+      <PrepOptionsFrequency>0</PrepOptionsFrequency>
+      <PrepOptionsPulse>0</PrepOptionsPulse>
+      <PrepOptionsVoltage>0</PrepOptionsVoltage>
+      <ZOffsetAction>1000</ZOffsetAction>
+      <MaxOffsetRadius>500</MaxOffsetRadius>
+      <Drops>10</Drops>
+      <Target>dc92e0a4-42dc-4171-b799-443ba2ff88c5</Target>
+      <Marker>Spot_Tinte_Marker</Marker>
+      <Delay>3000</Delay>
+    </Node>
+    <Node>
+      <Uid>e00c06a1b61d47e6aebffb16dc0a57f9</Uid>
+      <RepeatedExecutionHandling>Repair</RepeatedExecutionHandling>
+      <PosX>3861</PosX>
+      <PosY>3639</PosY>
+      <ReverseConnectors>false</ReverseConnectors>
+      <RepairedBy />
+      <Type>Spotting</Type>
+      <Targets>
+        <TargetUid>f2a3e95b-d94b-47e6-98f5-940d8596056b</TargetUid>
+        <TargetUid>fefa604b-9d9e-462d-b23e-a2cfadabd874</TargetUid>
+      </Targets>
+      <ApplyToAllTargets>true</ApplyToAllTargets>
+      <ApplyToAlignedTargets>false</ApplyToAlignedTargets>
+      <PipGCodeToolNr>1</PipGCodeToolNr>
+      <Spots>
+        <Spot SpotIds="342,340,347,346,353,360,351,345" Drops="10" />
+      </Spots>
+      <OnlySpotPrevSuccSpottedSpot>true</OnlySpotPrevSuccSpottedSpot>
+      <OptimizePath>false</OptimizePath>
+      <PrepOptionsFrequency>100</PrepOptionsFrequency>
+      <PrepOptionsPulse>90</PrepOptionsPulse>
+      <PrepOptionsVoltage>60</PrepOptionsVoltage>
+      <Speed>5000</Speed>
+      <ZOffsetAction>1000</ZOffsetAction>
+      <ZOffsetMove>1000</ZOffsetMove>
+    </Node>
+    <Node>
+      <Uid>3e2b7d8a492346b3a9d308b510cdb87f</Uid>
+      <RepeatedExecutionHandling>Repair</RepeatedExecutionHandling>
+      <PosX>4020</PosX>
+      <PosY>3639</PosY>
+      <ReverseConnectors>false</ReverseConnectors>
+      <RepairedBy />
+      <Type>Spotting</Type>
+      <Targets>
+        <TargetUid>f2a3e95b-d94b-47e6-98f5-940d8596056b</TargetUid>
+        <TargetUid>fefa604b-9d9e-462d-b23e-a2cfadabd874</TargetUid>
+      </Targets>
+      <ApplyToAllTargets>true</ApplyToAllTargets>
+      <ApplyToAlignedTargets>false</ApplyToAlignedTargets>
+      <PipGCodeToolNr>5</PipGCodeToolNr>
+      <Spots>
+        <Spot SpotIds="358,349,350,341,363,364,344,359,343,354,362,355,352,356,361,348,357" Drops="10" />
+      </Spots>
+      <OnlySpotPrevSuccSpottedSpot>true</OnlySpotPrevSuccSpottedSpot>
+      <OptimizePath>false</OptimizePath>
+      <PrepOptionsFrequency>90</PrepOptionsFrequency>
+      <PrepOptionsPulse>45</PrepOptionsPulse>
+      <PrepOptionsVoltage>45</PrepOptionsVoltage>
+      <Speed>5000</Speed>
+      <ZOffsetAction>1000</ZOffsetAction>
+      <ZOffsetMove>1000</ZOffsetMove>
+    </Node>
+    <Node>
+      <Uid>7eba69d32a184ba6ba3842eb21d4e961</Uid>
+      <RepeatedExecutionHandling>Repair</RepeatedExecutionHandling>
+      <PosX>3861</PosX>
+      <PosY>3767</PosY>
+      <ReverseConnectors>false</ReverseConnectors>
+      <RepairedBy />
+      <Type>Spotting</Type>
+      <Targets>
+        <TargetUid>f2a3e95b-d94b-47e6-98f5-940d8596056b</TargetUid>
+        <TargetUid>fefa604b-9d9e-462d-b23e-a2cfadabd874</TargetUid>
+      </Targets>
+      <ApplyToAllTargets>true</ApplyToAllTargets>
+      <ApplyToAlignedTargets>false</ApplyToAlignedTargets>
+      <PipGCodeToolNr>1</PipGCodeToolNr>
+      <Spots>
+        <Spot SpotIds="357,344,348,364,343,360,363,352,353,349,350,354,359,340,355" Drops="10" />
+      </Spots>
+      <OnlySpotPrevSuccSpottedSpot>true</OnlySpotPrevSuccSpottedSpot>
+      <OptimizePath>false</OptimizePath>
+      <PrepOptionsFrequency>100</PrepOptionsFrequency>
+      <PrepOptionsPulse>90</PrepOptionsPulse>
+      <PrepOptionsVoltage>60</PrepOptionsVoltage>
+      <Speed>115000</Speed>
+      <ZOffsetAction>1000</ZOffsetAction>
+      <ZOffsetMove>1000</ZOffsetMove>
+    </Node>
+    <Node>
+      <Uid>223e1c49a9b14b46b7926c8ea67ad5b4</Uid>
+      <RepeatedExecutionHandling>Repair</RepeatedExecutionHandling>
+      <PosX>4020</PosX>
+      <PosY>3767</PosY>
+      <ReverseConnectors>false</ReverseConnectors>
+      <RepairedBy />
+      <Type>Spotting</Type>
+      <Targets>
+        <TargetUid>f2a3e95b-d94b-47e6-98f5-940d8596056b</TargetUid>
+        <TargetUid>fefa604b-9d9e-462d-b23e-a2cfadabd874</TargetUid>
+      </Targets>
+      <ApplyToAllTargets>true</ApplyToAllTargets>
+      <ApplyToAlignedTargets>false</ApplyToAlignedTargets>
+      <PipGCodeToolNr>5</PipGCodeToolNr>
+      <Spots>
+        <Spot SpotIds="362,358,341,351,361,347,345,346,356,342" Drops="10" />
+      </Spots>
+      <OnlySpotPrevSuccSpottedSpot>true</OnlySpotPrevSuccSpottedSpot>
+      <OptimizePath>false</OptimizePath>
+      <PrepOptionsFrequency>90</PrepOptionsFrequency>
+      <PrepOptionsPulse>45</PrepOptionsPulse>
+      <PrepOptionsVoltage>45</PrepOptionsVoltage>
+      <Speed>115000</Speed>
+      <ZOffsetAction>1000</ZOffsetAction>
+      <ZOffsetMove>1000</ZOffsetMove>
+    </Node>
+    <Node>
+      <Uid>fa1d78e956ee4e2c84cbe518d3eb6434</Uid>
+      <RepeatedExecutionHandling>Repair</RepeatedExecutionHandling>
+      <PosX>3854</PosX>
+      <PosY>3906</PosY>
+      <ReverseConnectors>false</ReverseConnectors>
+      <RepairedBy />
+      <Type>Spotting</Type>
+      <Targets>
+        <TargetUid>f2a3e95b-d94b-47e6-98f5-940d8596056b</TargetUid>
+        <TargetUid>fefa604b-9d9e-462d-b23e-a2cfadabd874</TargetUid>
+      </Targets>
+      <ApplyToAllTargets>true</ApplyToAllTargets>
+      <ApplyToAlignedTargets>false</ApplyToAlignedTargets>
+      <PipGCodeToolNr>1</PipGCodeToolNr>
+      <Spots>
+        <Spot SpotIds="344,362,347,360,355,351,350,343,354,358,352,364,342,348,353,345" Drops="10" />
+      </Spots>
+      <OnlySpotPrevSuccSpottedSpot>true</OnlySpotPrevSuccSpottedSpot>
+      <OptimizePath>false</OptimizePath>
+      <PrepOptionsFrequency>100</PrepOptionsFrequency>
+      <PrepOptionsPulse>90</PrepOptionsPulse>
+      <PrepOptionsVoltage>60</PrepOptionsVoltage>
+      <Speed>115000</Speed>
+      <ZOffsetAction>1000</ZOffsetAction>
+      <ZOffsetMove>1000</ZOffsetMove>
+    </Node>
+    <Node>
+      <Uid>177a22637e124a5ebd86ee07e0120077</Uid>
+      <RepeatedExecutionHandling>Repair</RepeatedExecutionHandling>
+      <PosX>4012</PosX>
+      <PosY>3906</PosY>
+      <ReverseConnectors>false</ReverseConnectors>
+      <RepairedBy />
+      <Type>Spotting</Type>
+      <Targets>
+        <TargetUid>f2a3e95b-d94b-47e6-98f5-940d8596056b</TargetUid>
+        <TargetUid>fefa604b-9d9e-462d-b23e-a2cfadabd874</TargetUid>
+      </Targets>
+      <ApplyToAllTargets>true</ApplyToAllTargets>
+      <ApplyToAlignedTargets>false</ApplyToAlignedTargets>
+      <PipGCodeToolNr>5</PipGCodeToolNr>
+      <Spots>
+        <Spot SpotIds="349,361,359,356,363,357,340,346,341" Drops="10" />
+      </Spots>
+      <OnlySpotPrevSuccSpottedSpot>true</OnlySpotPrevSuccSpottedSpot>
+      <OptimizePath>false</OptimizePath>
+      <PrepOptionsFrequency>90</PrepOptionsFrequency>
+      <PrepOptionsPulse>45</PrepOptionsPulse>
+      <PrepOptionsVoltage>45</PrepOptionsVoltage>
+      <Speed>115000</Speed>
+      <ZOffsetAction>1000</ZOffsetAction>
+      <ZOffsetMove>1000</ZOffsetMove>
+    </Node>
+    <Node>
+      <Uid>90e85d27c3f24139b3d63bf113167ba3</Uid>
+      <RepeatedExecutionHandling>Repair</RepeatedExecutionHandling>
+      <PosX>3854</PosX>
+      <PosY>4034</PosY>
+      <ReverseConnectors>false</ReverseConnectors>
+      <RepairedBy />
+      <Type>Spotting</Type>
+      <Targets>
+        <TargetUid>f2a3e95b-d94b-47e6-98f5-940d8596056b</TargetUid>
+        <TargetUid>fefa604b-9d9e-462d-b23e-a2cfadabd874</TargetUid>
+      </Targets>
+      <ApplyToAllTargets>true</ApplyToAllTargets>
+      <ApplyToAlignedTargets>false</ApplyToAlignedTargets>
+      <PipGCodeToolNr>1</PipGCodeToolNr>
+      <Spots>
+        <Spot SpotIds="342,344,354,350,348,346,351,361,353,340,341,362,345,360,356,355" Drops="10" />
+      </Spots>
+      <OnlySpotPrevSuccSpottedSpot>true</OnlySpotPrevSuccSpottedSpot>
+      <OptimizePath>false</OptimizePath>
+      <PrepOptionsFrequency>100</PrepOptionsFrequency>
+      <PrepOptionsPulse>90</PrepOptionsPulse>
+      <PrepOptionsVoltage>60</PrepOptionsVoltage>
+      <Speed>115000</Speed>
+      <ZOffsetAction>1000</ZOffsetAction>
+      <ZOffsetMove>1000</ZOffsetMove>
+    </Node>
+    <Node>
+      <Uid>218fa9f61c3149f99a0663e9f34997e5</Uid>
+      <RepeatedExecutionHandling>Repair</RepeatedExecutionHandling>
+      <PosX>4012</PosX>
+      <PosY>4034</PosY>
+      <ReverseConnectors>false</ReverseConnectors>
+      <RepairedBy />
+      <Type>Spotting</Type>
+      <Targets>
+        <TargetUid>f2a3e95b-d94b-47e6-98f5-940d8596056b</TargetUid>
+        <TargetUid>fefa604b-9d9e-462d-b23e-a2cfadabd874</TargetUid>
+      </Targets>
+      <ApplyToAllTargets>true</ApplyToAllTargets>
+      <ApplyToAlignedTargets>false</ApplyToAlignedTargets>
+      <PipGCodeToolNr>5</PipGCodeToolNr>
+      <Spots>
+        <Spot SpotIds="364,352,358,347,363,343,349,359,357" Drops="10" />
+      </Spots>
+      <OnlySpotPrevSuccSpottedSpot>true</OnlySpotPrevSuccSpottedSpot>
+      <OptimizePath>false</OptimizePath>
+      <PrepOptionsFrequency>90</PrepOptionsFrequency>
+      <PrepOptionsPulse>45</PrepOptionsPulse>
+      <PrepOptionsVoltage>45</PrepOptionsVoltage>
+      <Speed>115000</Speed>
+      <ZOffsetAction>1000</ZOffsetAction>
+      <ZOffsetMove>1000</ZOffsetMove>
+    </Node>
+    <Node>
+      <Uid>c238a5a304f24710a159558ad534016b</Uid>
+      <RepeatedExecutionHandling>Repair</RepeatedExecutionHandling>
+      <PosX>3078</PosX>
+      <PosY>3355</PosY>
+      <ReverseConnectors>false</ReverseConnectors>
+      <RepairedBy />
+      <Type>CameraDetectionMulti</Type>
+      <Targets>
+        <TargetUid>f2a3e95b-d94b-47e6-98f5-940d8596056b</TargetUid>
+        <TargetUid>fefa604b-9d9e-462d-b23e-a2cfadabd874</TargetUid>
+      </Targets>
+      <Mode>InFrame</Mode>
+      <SearchRadius>0</SearchRadius>
+      <CameraDelayOnMarker>0</CameraDelayOnMarker>
+      <Selection>CenterMost</Selection>
+      <SearchRecursive>false</SearchRecursive>
+      <Rescale>false</Rescale>
+      <RepeatNoMarkerFound>false</RepeatNoMarkerFound>
+      <RepeatTimesNoMarkerFound>0</RepeatTimesNoMarkerFound>
+      <ErrorOnDistanceDeviation>false</ErrorOnDistanceDeviation>
+      <MaxDeviationPercent>0</MaxDeviationPercent>
+      <DetectionErrorHandling>Stop</DetectionErrorHandling>
+      <FastApproach>false</FastApproach>
+    </Node>
+    <Node>
+      <Uid>54b13f798cfe48c0914f6784f1643021</Uid>
+      <RepeatedExecutionHandling>Execute</RepeatedExecutionHandling>
+      <PosX>3248</PosX>
+      <PosY>3825</PosY>
+      <ReverseConnectors>true</ReverseConnectors>
+      <Type>Sequence</Type>
+      <SeqName>ProbeabgebenRot</SeqName>
+    </Node>
+    <Node>
+      <Uid>9be9464df5ef41c08b3d8d3a65576100</Uid>
+      <RepeatedExecutionHandling>Repair</RepeatedExecutionHandling>
+      <PosX>3645</PosX>
+      <PosY>3673</PosY>
+      <ReverseConnectors>false</ReverseConnectors>
+      <RepairedBy />
+      <Type>WaterSensitiveTest</Type>
+      <PipGCodeToolNr>1</PipGCodeToolNr>
+      <PrepOptionsFrequency>0</PrepOptionsFrequency>
+      <PrepOptionsPulse>0</PrepOptionsPulse>
+      <PrepOptionsVoltage>0</PrepOptionsVoltage>
+      <ZOffsetAction>1000</ZOffsetAction>
+      <MaxOffsetRadius>500</MaxOffsetRadius>
+      <Drops>100</Drops>
+      <Target>dc92e0a4-42dc-4171-b799-443ba2ff88c5</Target>
+      <Marker>GelbPapier_Rot_Textmarkertinte</Marker>
+      <Delay>3000</Delay>
+    </Node>
+    <Node>
+      <Uid>e723760d60fc48b6ba83838c7018928f</Uid>
+      <RepeatedExecutionHandling>Execute</RepeatedExecutionHandling>
+      <PosX>3462</PosX>
+      <PosY>3851</PosY>
+      <ReverseConnectors>true</ReverseConnectors>
+      <Type>Loop</Type>
+      <MaxCount>3</MaxCount>
+    </Node>
+    <Node>
+      <Uid>c4f4e569bbc94127819f2d2907eb58aa</Uid>
+      <RepeatedExecutionHandling>Execute</RepeatedExecutionHandling>
+      <PosX>4325</PosX>
+      <PosY>4026</PosY>
+      <ReverseConnectors>false</ReverseConnectors>
+      <Type>Sequence</Type>
+      <SeqName>ProbeabgebenRot</SeqName>
+    </Node>
+    <Node>
+      <Uid>b876075773a94df689c1ed9e089e799a</Uid>
+      <RepeatedExecutionHandling>Execute</RepeatedExecutionHandling>
+      <PosX>4589</PosX>
+      <PosY>4026</PosY>
+      <ReverseConnectors>false</ReverseConnectors>
+      <Type>Sequence</Type>
+      <SeqName>ProbeabgebenBlau</SeqName>
+    </Node>
+    <Node>
+      <Uid>077071bb266d41c5894c5e1365429ee4</Uid>
+      <RepeatedExecutionHandling>Execute</RepeatedExecutionHandling>
+      <PosX>3278</PosX>
+      <PosY>3340</PosY>
+      <ReverseConnectors>false</ReverseConnectors>
+      <Type>Sequence</Type>
+      <SeqName>ProbeaufnehmenBlau</SeqName>
+    </Node>
+    <Node>
+      <Uid>b5ca49bbc3e749b3b4b5e4dee0c9bd4c</Uid>
+      <RepeatedExecutionHandling>Execute</RepeatedExecutionHandling>
+      <PosX>2896</PosX>
+      <PosY>3559</PosY>
+      <ReverseConnectors>true</ReverseConnectors>
+      <Type>SetVar</Type>
+      <Formula>freq=freq+1</Formula>
+    </Node>
+    <Node>
+      <Uid>5feb678aa3c441dfab090161f24d679f</Uid>
+      <RepeatedExecutionHandling>Execute</RepeatedExecutionHandling>
+      <PosX>2708</PosX>
+      <PosY>3559</PosY>
+      <ReverseConnectors>true</ReverseConnectors>
+      <Type>CheckCondition</Type>
+      <Formula>freq&lt;200</Formula>
+    </Node>
+    <Node>
+      <Uid>15b9fdf00c0b4fe19eaa599e38b64286</Uid>
+      <RepeatedExecutionHandling>Execute</RepeatedExecutionHandling>
+      <PosX>2735</PosX>
+      <PosY>3358</PosY>
+      <ReverseConnectors>false</ReverseConnectors>
+      <Type>Wait</Type>
+      <Time>1000</Time>
+    </Node>
+  </Nodes>
+  <Connections>
+    <Connection SourceUid="69898d651e0640d5870f88ed507b91e2" SourceConnectorIndex="0" DestUid="691a539eed14491ea6d162110b693f13" DestConnectorIndex="0" />
+    <Connection SourceUid="e00c06a1b61d47e6aebffb16dc0a57f9" SourceConnectorIndex="0" DestUid="3e2b7d8a492346b3a9d308b510cdb87f" DestConnectorIndex="0" />
+    <Connection SourceUid="7eba69d32a184ba6ba3842eb21d4e961" SourceConnectorIndex="0" DestUid="223e1c49a9b14b46b7926c8ea67ad5b4" DestConnectorIndex="0" />
+    <Connection SourceUid="3e2b7d8a492346b3a9d308b510cdb87f" SourceConnectorIndex="0" DestUid="7eba69d32a184ba6ba3842eb21d4e961" DestConnectorIndex="0" />
+    <Connection SourceUid="fa1d78e956ee4e2c84cbe518d3eb6434" SourceConnectorIndex="0" DestUid="177a22637e124a5ebd86ee07e0120077" DestConnectorIndex="0" />
+    <Connection SourceUid="90e85d27c3f24139b3d63bf113167ba3" SourceConnectorIndex="0" DestUid="218fa9f61c3149f99a0663e9f34997e5" DestConnectorIndex="0" />
+    <Connection SourceUid="177a22637e124a5ebd86ee07e0120077" SourceConnectorIndex="0" DestUid="90e85d27c3f24139b3d63bf113167ba3" DestConnectorIndex="0" />
+    <Connection SourceUid="54b13f798cfe48c0914f6784f1643021" SourceConnectorIndex="0" DestUid="691a539eed14491ea6d162110b693f13" DestConnectorIndex="0" />
+    <Connection SourceUid="9be9464df5ef41c08b3d8d3a65576100" SourceConnectorIndex="0" DestUid="e00c06a1b61d47e6aebffb16dc0a57f9" DestConnectorIndex="0" />
+    <Connection SourceUid="e723760d60fc48b6ba83838c7018928f" SourceConnectorIndex="0" DestUid="54b13f798cfe48c0914f6784f1643021" DestConnectorIndex="0" />
+    <Connection SourceUid="c4f4e569bbc94127819f2d2907eb58aa" SourceConnectorIndex="0" DestUid="b876075773a94df689c1ed9e089e799a" DestConnectorIndex="0" />
+    <Connection SourceUid="c238a5a304f24710a159558ad534016b" SourceConnectorIndex="0" DestUid="077071bb266d41c5894c5e1365429ee4" DestConnectorIndex="0" />
+    <Connection SourceUid="077071bb266d41c5894c5e1365429ee4" SourceConnectorIndex="0" DestUid="69898d651e0640d5870f88ed507b91e2" DestConnectorIndex="0" />
+    <Connection SourceUid="691a539eed14491ea6d162110b693f13" SourceConnectorIndex="0" DestUid="9be9464df5ef41c08b3d8d3a65576100" DestConnectorIndex="0" />
+    <Connection SourceUid="223e1c49a9b14b46b7926c8ea67ad5b4" SourceConnectorIndex="0" DestUid="fa1d78e956ee4e2c84cbe518d3eb6434" DestConnectorIndex="0" />
+    <Connection SourceUid="218fa9f61c3149f99a0663e9f34997e5" SourceConnectorIndex="0" DestUid="c4f4e569bbc94127819f2d2907eb58aa" DestConnectorIndex="0" />
+    <Connection SourceUid="b5ca49bbc3e749b3b4b5e4dee0c9bd4c" SourceConnectorIndex="0" DestUid="5feb678aa3c441dfab090161f24d679f" DestConnectorIndex="0" />
+    <Connection SourceUid="244b6de37b3f4dbd8137402757de48b4" SourceConnectorIndex="0" DestUid="15b9fdf00c0b4fe19eaa599e38b64286" DestConnectorIndex="0" />
+    <Connection SourceUid="15b9fdf00c0b4fe19eaa599e38b64286" SourceConnectorIndex="0" DestUid="b5ca49bbc3e749b3b4b5e4dee0c9bd4c" DestConnectorIndex="0" />
+    <Connection SourceUid="5feb678aa3c441dfab090161f24d679f" SourceConnectorIndex="0" DestUid="15b9fdf00c0b4fe19eaa599e38b64286" DestConnectorIndex="0" />
+  </Connections>
+  <Options>
+    <Camera>is_42120156</Camera>
+  </Options>
+</Root>

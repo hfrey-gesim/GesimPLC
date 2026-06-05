@@ -1,0 +1,20 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<Item Id="00000000-0000-0000-0000-000000000000" TemplateId="1bfa2c83-059f-4eb1-86e7-e9936f9d05f1" Name="PickingTool" ObjType="CartridgeDisp" ParentSlotNr="1" RelPos.X="0" RelPos.Y="0" RelPos.Z="-76000" Offset.X="5800" Offset.Y="11000" Offset.Z="-8700" ItvChanPress="1" ItvChanVac="3" DigiOutMzValvePress="6">
+  <Slots>
+    <Item Nr="1" Name="Nozzle Slot" RelPos.X="0" RelPos.Y="0" RelPos.Z="7000" Dim.X="0" Dim.Y="0" />
+  </Slots>
+  <Item Id="00000000-0000-0000-0000-000000000000" TemplateId="9a1281d0-5530-4cb1-ae43-161b03181664" Name="Nozzle_GeSiM_Gen2_Screw_250" ObjType="Nozzle" ParentSlotNr="1" Width="14000" Depth="14000" Heigth="37500" SlotDiameter="0" OverlapTool="0" OverlapSlot="0" Offset.X="0" Offset.Y="0" Offset.Z="0" MeasureDistance="6000" DockOffset="0" InsideDiameter="250" CleaningDepth="2000" />
+  <ActionSettings>
+    <Item Name="Jog" SlowSpeedXY="5000" NormalSpeedXY="10000" FastSpeedXY="115000" ManuSpeedXY="115000" SlowSpeedZ="5000" NormalSpeedZ="10000" FastSpeedZ="72000" ManuSpeedZ="72000" InchingDistShort="25" InchingDistMedium="1000" InchingDistLong="10000" InchingDistManuXY="100" InchingDistManuZ="10000" RecentSpeedChoice="Slow" RecentDistChoice="Medium" />
+    <Item Name="MoveToTarget" SpeedX="115000" SpeedY="115000" SpeedZ="72000" />
+    <Item Name="MoveXY" DistanceX="0" DistanceY="0" SpeedX="10000" SpeedY="10000" />
+    <Item Name="MoveZ" HiddenInManu="True" Mode="Relative" SpeedZ="10000" Distance="10000" />
+    <Item Name="SetPressure" Pressure="100" TolerancePlus="7" ToleranceMinus="7" Timeout="5000" />
+    <Item Name="SwitchPressure" Time="0" />
+    <Item Name="Measure" Option="SlowApproach" />
+    <Item Name="TeachTool" HiddenInManu="True" />
+    <Item Name="TeachTarget" Offset.Z="2000" />
+    <Item Name="CleanTip" />
+    <Item Name="ActionOnArray" SpeedX="115000" SpeedY="115000" SpeedZ="72000" SpeedZRelease="72000" ZOffsetAction="1000" ZDistanceRelease="0" ZOffsetXYMove="2000" ReleaseMoveDelay="0" />
+  </ActionSettings>
+</Item>

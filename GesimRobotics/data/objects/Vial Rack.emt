@@ -1,0 +1,9 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<Item Id="00000000-0000-0000-0000-000000000000" TemplateId="7efea211-6ced-4104-8ca6-26f74abfc51a" Name="Vial Rack" ObjType="Slide" RelPos.X="0" RelPos.Y="68500" RelPos.Z="0" Width="42000" Depth="236000" Heigth="46000" FreeHeight="0" Offset.Z="0">
+  <Item Id="00000000-0000-0000-0000-000000000000" TemplateId="31dee62b-b1e5-4a80-95a9-581fd37f6ebb" Name="Point_Iso" ObjType="Point" RelPos.X="16000" RelPos.Y="29000" RelPos.Z="-14997" Width="0" Depth="0" Heigth="0" FreeHeight="0" Offset.Z="0" />
+  <Item Id="00000000-0000-0000-0000-000000000000" TemplateId="31dee62b-b1e5-4a80-95a9-581fd37f6ebb" Name="Point_Cyclo" ObjType="Point" RelPos.X="33000" RelPos.Y="30000" RelPos.Z="-14997" Width="0" Depth="0" Heigth="0" FreeHeight="0" Offset.Z="0" />
+  <Item Id="00000000-0000-0000-0000-000000000000" TemplateId="31dee62b-b1e5-4a80-95a9-581fd37f6ebb" Name="Point_NOA" ObjType="Point" RelPos.X="25000" RelPos.Y="20000" RelPos.Z="-8997" Width="0" Depth="0" Heigth="0" FreeHeight="0" Offset.Z="0" />
+  <Item Id="00000000-0000-0000-0000-000000000000" TemplateId="31dee62b-b1e5-4a80-95a9-581fd37f6ebb" Name="Point 1" ObjType="Point" RelPos.X="35175" RelPos.Y="7363" RelPos.Z="-13449" Width="0" Depth="0" Heigth="0" FreeHeight="0" Offset.Z="0" />
+  <Item Id="00000000-0000-0000-0000-000000000000" TemplateId="31dee62b-b1e5-4a80-95a9-581fd37f6ebb" Name="Point 2" ObjType="Point" RelPos.X="38000" RelPos.Y="147400" RelPos.Z="-8994" Width="0" Depth="0" Heigth="0" FreeHeight="0" Offset.Z="0" />
+  <Item Id="00000000-0000-0000-0000-000000000000" TemplateId="31dee62b-b1e5-4a80-95a9-581fd37f6ebb" Name="Waste" ObjType="Point" RelPos.X="29576" RelPos.Y="110000" RelPos.Z="-11661" Width="0" Depth="0" Heigth="0" FreeHeight="0" Offset.Z="0" />
+</Item>

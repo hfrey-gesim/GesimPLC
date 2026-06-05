@@ -1,0 +1,19 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<Root>
+  <Header Version="2.0.18.5239" Id="0" />
+  <Steps>
+    <Item Id="b1fa1138-c2fd-4f4a-b31f-9a79eba9112a" Description="" ObjectType="Root" ObjectId="e94c0ae7-f5eb-42b3-bf25-c6806131cff7" ActionType="RunGCode" TargetId="ff968128-27fb-427e-975a-62ec1b5f0d2b" TargetRef="Center" FileName="LifeCare_Dichtung_Kreis_V1_ausgelagerter_Start" WaitPointId="8edb73bb-347e-439a-bc63-195191b4b827" Offset.Z="0" />
+    <Item Id="3d626c00-c97c-4bd6-9870-4fa9f32197b8" Description="" ObjectType="Root" ObjectId="e94c0ae7-f5eb-42b3-bf25-c6806131cff7" ActionType="RunGCode" TargetId="d00e39bc-71f4-4dc1-9751-a476d3f18674" TargetRef="Center" FileName="LifeCare_Dichtung_Kreis_V1_ausgelagerter_Start" WaitPointId="8edb73bb-347e-439a-bc63-195191b4b827" Offset.Z="0">
+      <Condition Type="StepReady" Operator="AND" StepId="0" />
+    </Item>
+    <Item Id="d8b58205-31ee-4fb7-a832-53bc5e28c417" Description="" ObjectType="Root" ObjectId="e94c0ae7-f5eb-42b3-bf25-c6806131cff7" ActionType="RunGCode" TargetId="ccbb97ca-57f1-4c9c-8fe4-840557c94667" TargetRef="Center" FileName="LifeCare_Dichtung_Kreis_V1_ausgelagerter_Start" WaitPointId="8edb73bb-347e-439a-bc63-195191b4b827" Offset.Z="0">
+      <Condition Type="StepReady" Operator="AND" StepId="0" />
+    </Item>
+    <Item Id="28376fb3-94ce-4107-9677-7aaf45180c4e" Description="" ObjectType="Root" ObjectId="e94c0ae7-f5eb-42b3-bf25-c6806131cff7" ActionType="RunGCode" TargetId="036951fe-4b20-4cd9-8a67-7dfd4a3f9b36" TargetRef="Center" FileName="LifeCare_Dichtung_Kreis_V1_ausgelagerter_Start" WaitPointId="8edb73bb-347e-439a-bc63-195191b4b827" Offset.Z="0">
+      <Condition Type="StepReady" Operator="AND" StepId="0" />
+    </Item>
+    <Item Id="f71807f3-8067-41e2-b19d-4b921f541729" Description="" ObjectType="Root" ObjectId="e94c0ae7-f5eb-42b3-bf25-c6806131cff7" ActionType="RunSequence" SequenceName="LifeCare_Plasma_V1">
+      <Condition Type="StepReady" Operator="AND" StepId="0" />
+    </Item>
+  </Steps>
+</Root>

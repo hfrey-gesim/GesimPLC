@@ -1,0 +1,13 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<Root>
+  <Header Version="2.0.18.5057" Id="0" />
+  <Steps>
+    <Item Id="449b6323-2041-4d15-9005-3c18d521cfd3" Description="" ObjectType="Root" ObjectId="936f148b-455b-497c-b642-640f2ac1e6a8" ActionType="RunGCode" TargetId="3a28149f-5e22-44b8-8c81-061913d41772" TargetRef="Center" FileName="Dichtung_Miccell" WaitPointId="8c099a7f-c69e-438e-b0d0-fe552f322404" Offset.Z="0" />
+    <Item Id="efcc2dbf-05fd-460c-a478-fe547014d049" Description="" ActionType="Wait" Time="30000">
+      <Condition Type="StepReady" Operator="AND" StepId="0" />
+    </Item>
+    <Item Id="f9dba75a-728c-4f30-97a6-1d6201185cca" Description="" ObjectType="Root" ObjectId="936f148b-455b-497c-b642-640f2ac1e6a8" ActionType="RunGCode" TargetId="3a28149f-5e22-44b8-8c81-061913d41772" TargetRef="Center" FileName="Dichtung_Miccell" WaitPointId="8c099a7f-c69e-438e-b0d0-fe552f322404" Offset.Z="0">
+      <Condition Type="StepReady" Operator="AND" StepId="0" />
+    </Item>
+  </Steps>
+</Root>

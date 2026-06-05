@@ -1,0 +1,7 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<Root>
+  <Header Version="2.0.18.5239" Id="0" />
+  <Steps>
+    <Item Id="3be626ff-ac7e-4ab9-acf9-0d537bf58f57" Description="" ObjectType="Root" ObjectId="e94c0ae7-f5eb-42b3-bf25-c6806131cff7" ActionType="RunGCode" TargetId="f7eb8031-fea0-4ea0-9e64-21c5f9fe2516" TargetRef="Center" FileName="Toni_Demodruck" WaitPointId="1fbf3507-0801-4583-9c72-bcbe7ba7e273" Offset.Z="0" />
+  </Steps>
+</Root>

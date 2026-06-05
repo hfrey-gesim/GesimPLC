@@ -1,0 +1,190 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<Root Version="5" Mode="Advanced">
+  <Objects>
+    <Object>
+      <Model Type="Block" FillRule="Positive">
+        <Radius>37000</Radius>
+        <IsHollow>false</IsHollow>
+        <InnerRadius>2999</InnerRadius>
+        <Corners>4</Corners>
+        <Height>800</Height>
+      </Model>
+      <Position Type="Manual">
+        <X>25000</X>
+        <Y>25000</Y>
+        <Z>0</Z>
+        <Rotate>true</Rotate>
+        <RotationAngle>45000</RotationAngle>
+      </Position>
+      <SpotOrder>AsGiven</SpotOrder>
+      <Materials>
+        <Material Name="Default" Voxelize="false">
+          <Infill>
+            <InfillType>Hexes</InfillType>
+            <StartAngle>0</StartAngle>
+            <AngleChange>0</AngleChange>
+            <RepeatAngleChange>1</RepeatAngleChange>
+            <InfillOffset>-800</InfillOffset>
+            <InfillOffsetRelative>false</InfillOffsetRelative>
+            <StrandDistance>400</StrandDistance>
+            <Amplitude>200</Amplitude>
+            <Alternate>false</Alternate>
+            <MinDistance>300</MinDistance>
+            <MinLength>10000</MinLength>
+          </Infill>
+          <Outline>
+            <OutlineOffset>-800</OutlineOffset>
+            <OutlineDistance>400</OutlineDistance>
+            <OutlineMinDistance>400</OutlineMinDistance>
+            <FiniteOutlines>true</FiniteOutlines>
+            <OutlineNumber>2</OutlineNumber>
+          </Outline>
+          <Voxel>
+            <VoxelType>SquareGrid</VoxelType>
+            <VoxelShift>false</VoxelShift>
+            <VoxelOffset>0</VoxelOffset>
+            <VoxelMinDistance>0</VoxelMinDistance>
+            <VoxelDistance>500</VoxelDistance>
+          </Voxel>
+          <Sample>
+            <Color>#00FFFFFF</Color>
+            <PrepOptions />
+          </Sample>
+          <Layers OutlineFirst="false">
+            <Layer>
+              <Infill>1</Infill>
+              <Outline>0</Outline>
+            </Layer>
+          </Layers>
+        </Material>
+      </Materials>
+      <SupportMaterial Name="Support" Voxelize="false">
+        <Infill>
+          <InfillType>Lines</InfillType>
+          <StartAngle>0</StartAngle>
+          <AngleChange>90</AngleChange>
+          <RepeatAngleChange>1</RepeatAngleChange>
+          <InfillOffset>0</InfillOffset>
+          <InfillOffsetRelative>false</InfillOffsetRelative>
+          <StrandDistance>1000</StrandDistance>
+          <Amplitude>200</Amplitude>
+          <Alternate>false</Alternate>
+          <MinDistance>500</MinDistance>
+          <MinLength>1000</MinLength>
+        </Infill>
+        <Outline>
+          <OutlineOffset>0</OutlineOffset>
+          <OutlineDistance>1000</OutlineDistance>
+          <OutlineMinDistance>500</OutlineMinDistance>
+          <FiniteOutlines>true</FiniteOutlines>
+          <OutlineNumber>1</OutlineNumber>
+        </Outline>
+        <Voxel>
+          <VoxelType>SquareGrid</VoxelType>
+          <VoxelShift>false</VoxelShift>
+          <VoxelOffset>0</VoxelOffset>
+          <VoxelMinDistance>0</VoxelMinDistance>
+          <VoxelDistance>500</VoxelDistance>
+        </Voxel>
+        <Sample>
+          <Color>#00FFFFFF</Color>
+          <PrepOptions />
+        </Sample>
+        <Layers OutlineFirst="false">
+          <Layer>
+            <Infill></Infill>
+            <Outline></Outline>
+          </Layer>
+        </Layers>
+      </SupportMaterial>
+      <Paths />
+      <Samples />
+    </Object>
+  </Objects>
+  <Tools>
+    <Tool Type="CartridgeDisp" Nr="1">
+      <Identifier>1</Identifier>
+      <UseExposure>false</UseExposure>
+      <Brightness>0</Brightness>
+      <StirrMode>Never</StirrMode>
+      <StirrSpeed>0</StirrSpeed>
+      <StirrTimeLimited>false</StirrTimeLimited>
+      <StirrTimeOn>0</StirrTimeOn>
+      <StirrTimeOff>0</StirrTimeOff>
+      <StirrDuration>1000</StirrDuration>
+      <StirrRepeat>1</StirrRepeat>
+      <Color>#FF7F2A6A</Color>
+      <Speed>10000</Speed>
+      <ZOffset>1350</ZOffset>
+      <Height>350</Height>
+      <Width>400</Width>
+      <LoopExtension>0</LoopExtension>
+      <Connection>OutlinePlus</Connection>
+      <TearOffDirection>None</TearOffDirection>
+      <TearOffSpeed>115000</TearOffSpeed>
+      <TearOffDistance>1000</TearOffDistance>
+      <CleanTipBeforeUsage>false</CleanTipBeforeUsage>
+      <CleanTipAfterUsage>false</CleanTipAfterUsage>
+      <RepeatTipCleaning>1</RepeatTipCleaning>
+      <CleaningMode>WireAndBrush</CleaningMode>
+      <CleanTipBrushSlot>2</CleanTipBrushSlot>
+      <CleanTipDispenseTime>0</CleanTipDispenseTime>
+      <CleanTipWireSpeed>100000</CleanTipWireSpeed>
+      <Strand Channel="1">
+        <Parameter Type="Pressure" Number="1">
+          <Value>350</Value>
+        </Parameter>
+        <StartBreak>0</StartBreak>
+        <EndBreak>0</EndBreak>
+        <SetInactive>true</SetInactive>
+      </Strand>
+    </Tool>
+    <Tool Type="TwinExtruder" Nr="7">
+      <Identifier>7</Identifier>
+      <Color>#FF2A506E</Color>
+      <Speed>3000</Speed>
+      <ZOffset>1000</ZOffset>
+      <Height>180</Height>
+      <Width>1200</Width>
+      <LoopExtension>0</LoopExtension>
+      <Connection>Outline</Connection>
+      <TearOffDirection>None</TearOffDirection>
+      <TearOffSpeed>115000</TearOffSpeed>
+      <TearOffDistance>1000</TearOffDistance>
+      <CleanTipBeforeUsage>false</CleanTipBeforeUsage>
+      <CleanTipAfterUsage>false</CleanTipAfterUsage>
+      <RepeatTipCleaning>1</RepeatTipCleaning>
+      <CleaningMode>WireAndBrush</CleaningMode>
+      <CleanTipBrushSlot>1</CleanTipBrushSlot>
+      <CleanTipDispenseTime>0</CleanTipDispenseTime>
+      <CleanTipWireSpeed>0</CleanTipWireSpeed>
+      <Strand Channel="1">
+        <Parameter Type="Feed" Number="1">
+          <Value>2</Value>
+        </Parameter>
+        <Parameter Type="Feed" Number="2">
+          <Value>180</Value>
+        </Parameter>
+        <StartBreak>2200</StartBreak>
+        <EndBreak>0</EndBreak>
+        <SetInactive>true</SetInactive>
+      </Strand>
+    </Tool>
+  </Tools>
+  <Options>
+    <CustomToolOrder>true</CustomToolOrder>
+    <ToolOrder>71</ToolOrder>
+    <IsPartialPrint>false</IsPartialPrint>
+    <MinZHeight>0</MinZHeight>
+    <MaxZHeight>699</MaxZHeight>
+    <Pausing>false</Pausing>
+    <LayerPause>60000</LayerPause>
+    <RepeatPause>2</RepeatPause>
+    <Smoothing>false</Smoothing>
+    <SmoothingMinAngle>45</SmoothingMinAngle>
+    <SmoothingMaxDistance>100</SmoothingMaxDistance>
+    <DistanceLimit>false</DistanceLimit>
+    <PointMaxDistance>10000</PointMaxDistance>
+    <DoNotSetPrintParms>true</DoNotSetPrintParms>
+  </Options>
+</Root>

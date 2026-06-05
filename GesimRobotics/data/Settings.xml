@@ -3,7 +3,7 @@
   <CurrentConfiguration>GESIM_Config_TwinKopf_TwinPip</CurrentConfiguration>
   <CurrentNetwork>PickandPlace2</CurrentNetwork>
   <IsAutoConnect>false</IsAutoConnect>
-  <MachineName>LANGER-LULATSCH</MachineName>
+  <MachineName>DOPPELTE-LOTTE</MachineName>
   <ConnectionOption xsi:nil="true" />
   <CurrentScaffold>PickandPlace_Positionierung2</CurrentScaffold>
   <CurrentSequence>Test</CurrentSequence>

@@ -1,0 +1,28 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<Root>
+  <Header Version="2.0.18.5239" Id="0" />
+  <Steps>
+    <Item Id="0093a711-8516-4dd2-be51-d1800b23a333" Description="" ActionType="Wait" Time="1000" />
+    <Item Id="f99cfb11-7c59-4381-86fb-5f8da17fed22" Description="" ObjectType="PassivePip" ObjectId="dc33acfd-09c0-4484-92b9-c32a30ed0268" ActionType="Aspirate" Quantity="400" Flow="400">
+      <Condition Type="StepReady" Operator="AND" StepId="0" />
+    </Item>
+    <Item Id="5a05c34d-e965-459f-8f3d-7c86227b4470" Description="" ActionType="Wait" Time="1000">
+      <Condition Type="StepReady" Operator="AND" StepId="0" />
+    </Item>
+    <Item Id="d53be0b3-a3a1-4288-a577-3858009723cb" Description="" ObjectType="PassivePip" ObjectId="dc33acfd-09c0-4484-92b9-c32a30ed0268" ActionType="MoveToTarget" TargetId="7b572022-fb86-4005-b0a9-ebaa04778190" TargetRef="Center" SpeedX="115000" SpeedY="115000" SpeedZ="72000" Offset.X="0" Offset.Y="0" Offset.Z="0" ZLevel="PrePos">
+      <Condition Type="StepReady" Operator="AND" StepId="0" />
+    </Item>
+    <Item Id="31c0306a-39df-4365-b652-46f0fdfbd55f" Description="" ObjectType="PassivePip" ObjectId="dc33acfd-09c0-4484-92b9-c32a30ed0268" ActionType="Dispense" Quantity="400" Flow="400">
+      <Condition Type="StepReady" Operator="AND" StepId="0" />
+    </Item>
+    <Item Id="c036ae9b-ad50-43f1-b8c5-5f708ae79ec3" Description="" ActionType="Wait" Time="1000">
+      <Condition Type="StepReady" Operator="AND" StepId="0" />
+    </Item>
+    <Item Id="f35398a3-4891-427d-9de0-e38e4221e10b" Description="" ObjectType="PassivePip" ObjectId="dc33acfd-09c0-4484-92b9-c32a30ed0268" ActionType="WashTool" TargetId="7464ef0b-5dbb-4f23-a674-a406df008bed" WashPointNr="1" Mode="WashInOutside" Quantity="5000" Flow="2000" Time="3000">
+      <Condition Type="StepReady" Operator="AND" StepId="0" />
+    </Item>
+    <Item Id="ebd7e570-52ef-425b-b9f8-c7253f23d2ca" Description="" ActionType="Wait" Time="100000">
+      <Condition Type="StepReady" Operator="AND" StepId="0" />
+    </Item>
+  </Steps>
+</Root>

@@ -1,0 +1,6 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<Item Id="00000000-0000-0000-0000-000000000000" TemplateId="731e9259-e202-496e-9ce5-5b8b3f1a332b" Name="LegioplastChip" ObjType="Slide" RelPos.X="16080" RelPos.Y="-25970" RelPos.Z="0" Width="75000" Depth="25500" Heigth="1000" FreeHeight="0" Offset.Z="0">
+  <Item Id="00000000-0000-0000-0000-000000000000" TemplateId="31dee62b-b1e5-4a80-95a9-581fd37f6ebb" Name="ChipPoint" ObjType="Point" RelPos.X="8000" RelPos.Y="12750" RelPos.Z="0" Width="0" Depth="0" Heigth="0" FreeHeight="0" Offset.Z="72">
+    <Item Id="00000000-0000-0000-0000-000000000000" TemplateId="31dee62b-b1e5-4a80-95a9-581fd37f6ebb" Name="PrintPoint1" ObjType="Point" RelPos.X="29750" RelPos.Y="0" RelPos.Z="0" Width="0" Depth="0" Heigth="0" FreeHeight="0" Offset.Z="0" />
+  </Item>
+</Item>

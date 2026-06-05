@@ -1,0 +1,16 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<Root>
+  <Header Version="2.0.18.5239" Id="0" />
+  <Steps>
+    <Item Id="67a1e71a-333e-44c7-9824-63bb775c1b5a" Description="" ObjectType="ZSensor" ObjectId="666e2047-2da8-4cd4-b903-75ef5ad865d5" ActionType="Measure" TargetId="1f776cb9-1479-4158-9f45-90ee2479117a" Option="FastApproach" />
+    <Item Id="5ca2a23a-444d-4c05-be4b-858e2ccd9785" Description="" ObjectType="ZSensor" ObjectId="666e2047-2da8-4cd4-b903-75ef5ad865d5" ActionType="Measure" TargetId="7b3068f8-fcb9-43de-9e9b-694e5ef9883a" Option="FastApproach">
+      <Condition Type="StepReady" Operator="AND" StepId="0" />
+    </Item>
+    <Item Id="bdfe6484-d21f-4870-8f43-f5dc4e3a3c30" Description="" ObjectType="ZSensor" ObjectId="666e2047-2da8-4cd4-b903-75ef5ad865d5" ActionType="Measure" TargetId="a05755a0-c7ca-4afa-8bb7-d7edac590cff" Option="FastApproach">
+      <Condition Type="StepReady" Operator="AND" StepId="0" />
+    </Item>
+    <Item Id="ef1ebe41-9e06-4974-a1e6-57010e8d104c" Description="" ObjectType="ZSensor" ObjectId="666e2047-2da8-4cd4-b903-75ef5ad865d5" ActionType="Measure" TargetId="27925472-ecbb-4ab4-bdae-e90c52568f75" Option="FastApproach">
+      <Condition Type="StepReady" Operator="AND" StepId="0" />
+    </Item>
+  </Steps>
+</Root>

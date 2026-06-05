@@ -1,0 +1,16 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<Root>
+  <Header Version="2.0.18.5239" Id="0" />
+  <Steps>
+    <Item Id="ebf6a4aa-56f6-469d-95c0-2ce781a14c4f" Description="" ObjectType="CartridgeDisp" ObjectId="80c1fee0-3154-4ca4-8089-22b0e195c6ab" ActionType="SwitchPressure" Ctrl="PressOn" Time="0" />
+    <Item Id="5edb4a1b-859f-41f9-9988-76395a2cd7d4" Description="" ObjectType="CartridgeDisp" ObjectId="2dcf8684-e352-4bf7-8648-220a10a3938a" ActionType="SwitchPressure" Ctrl="PressOn" Time="5000">
+      <Condition Type="StepReady" Operator="AND" StepId="0" />
+    </Item>
+    <Item Id="b8015481-81bf-40bd-994c-bd08506724ab" Description="" ObjectType="CartridgeDisp" ObjectId="2dcf8684-e352-4bf7-8648-220a10a3938a" ActionType="SwitchPressure" Ctrl="Off" Time="0">
+      <Condition Type="StepReady" Operator="AND" StepId="0" />
+    </Item>
+    <Item Id="9a767221-1ebf-46c4-80b6-cdd9fc42ee05" Description="" ActionType="GotoStep" StepId="5edb4a1b-859f-41f9-9988-76395a2cd7d4">
+      <Condition Type="StepReady" Operator="AND" StepId="0" />
+    </Item>
+  </Steps>
+</Root>

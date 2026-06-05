@@ -1,0 +1,20 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<Root>
+  <Header Version="2.0.17.2" Id="0" />
+  <Steps>
+    <Item Id="50d16c4b-8b2c-4c4d-be16-dbf82185e9d2" Description="" ObjectType="CartridgeDisp" ObjectId="f5b91dc5-1f6d-45d8-bf66-7ef07d5b5da8" ActionType="SetPressure" Pressure="100" />
+    <Item Id="fb890e4e-3f25-47b9-a037-10ec171e4c5c" Description="" ObjectType="CartridgeDisp" ObjectId="ba86ac2b-343d-4007-aa12-fa0e0cfa731a" ActionType="SetPressure" Pressure="300">
+      <Condition Type="StepReady" Operator="AND" StepId="0" />
+    </Item>
+    <Item Id="8171890a-106d-45d0-948c-8845873c7f77" Description="" ObjectType="CartridgeDisp" ObjectId="f5b91dc5-1f6d-45d8-bf66-7ef07d5b5da8" ActionType="SwitchPressure" Ctrl="PressOn" Time="0">
+      <Condition Type="StepReady" Operator="AND" StepId="0" />
+    </Item>
+    <Item Id="560902a8-13b8-4129-854d-79606a21c204" Description="" ObjectType="CartridgeDisp" ObjectId="ba86ac2b-343d-4007-aa12-fa0e0cfa731a" ActionType="ActionOnArray" TargetId="50206b1b-0a64-40de-8892-34475dbfaeb5" Order="RowWiseSaw" SpeedX="115000" SpeedY="115000" SpeedZ="72000" SpeedZRelease="72000" ActionOffset.Z="10000" ReleaseDistance.Z="0" MoveOffset.Z="10000" ReleaseMoveInstantly="false" ReleaseMoveDelay="0">
+      <SubAction ActionType="SwitchPressure" Ctrl="PressOn" Time="100" />
+      <Condition Type="StepReady" Operator="AND" StepId="0" />
+    </Item>
+    <Item Id="94d4065f-0cb0-42c0-afa5-f54bdbc93542" Description="" ObjectType="CartridgeDisp" ObjectId="f5b91dc5-1f6d-45d8-bf66-7ef07d5b5da8" ActionType="SetPressure" Pressure="0">
+      <Condition Type="StepReady" Operator="AND" StepId="0" />
+    </Item>
+  </Steps>
+</Root>

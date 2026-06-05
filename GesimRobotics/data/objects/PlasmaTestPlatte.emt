@@ -1,0 +1,25 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<Item Id="00000000-0000-0000-0000-000000000000" TemplateId="1c372ce2-aa39-4251-95ca-777aeb2e91c4" Name="PlasmaTestPlatte" ObjType="TargetTray" ParentSlotNr="1" RelPos.X="0" RelPos.Y="0" RelPos.Z="0" Width="85400" Depth="127400" Heigth="3200" FreeHeight="0">
+  <Slots>
+    <Item Nr="1" Name="Slide Slot 1" RelPos.X="4600" RelPos.Y="10100" RelPos.Z="-1000" Dim.X="0" Dim.Y="0" />
+    <Item Nr="2" Name="Slide Slot 2" RelPos.X="4600" RelPos.Y="37100" RelPos.Z="-1000" Dim.X="0" Dim.Y="0" />
+    <Item Nr="3" Name="Slide Slot 3" RelPos.X="4600" RelPos.Y="64100" RelPos.Z="-1000" Dim.X="0" Dim.Y="0" />
+    <Item Nr="4" Name="Slide Slot 4" RelPos.X="4600" RelPos.Y="91100" RelPos.Z="-1000" Dim.X="0" Dim.Y="0" />
+  </Slots>
+  <Item Id="00000000-0000-0000-0000-000000000000" TemplateId="731e9259-e202-496e-9ce5-5b8b3f1a332b" Name="Slide_Horizontal" ObjType="Slide" ParentSlotNr="4" RelPos.X="0" RelPos.Y="0" RelPos.Z="0" Width="75000" Depth="25000" Heigth="1000" FreeHeight="0" Offset.Z="0">
+    <Item Id="00000000-0000-0000-0000-000000000000" TemplateId="31dee62b-b1e5-4a80-95a9-581fd37f6ebb" Name="Point2_Plasma" ObjType="Point" RelPos.X="62158" RelPos.Y="20286" RelPos.Z="-996" Width="0" Depth="0" Heigth="0" FreeHeight="0" Offset.Z="0" />
+    <Item Id="00000000-0000-0000-0000-000000000000" TemplateId="b6f84478-a8db-496d-aed8-96e246230fba" Name="SpotArray" ObjType="SpotArray" RelPos.X="3000" RelPos.Y="10000" RelPos.Z="0" Width="21099" Depth="20000" Heigth="0" FreeHeight="0" Cols="6" Rows="6" />
+    <Item Id="00000000-0000-0000-0000-000000000000" TemplateId="b6f84478-a8db-496d-aed8-96e246230fba" Name="SpotArrayPlasma" ObjType="SpotArray" RelPos.X="52392" RelPos.Y="9998" RelPos.Z="0" Width="20000" Depth="20000" Heigth="0" FreeHeight="0" Cols="6" Rows="6" />
+  </Item>
+  <Item Id="00000000-0000-0000-0000-000000000000" TemplateId="731e9259-e202-496e-9ce5-5b8b3f1a332b" Name="Slide_Horizontal" ObjType="Slide" ParentSlotNr="3" RelPos.X="0" RelPos.Y="0" RelPos.Z="0" Width="75000" Depth="25000" Heigth="1000" FreeHeight="0" Offset.Z="0">
+    <Item Id="00000000-0000-0000-0000-000000000000" TemplateId="b6f84478-a8db-496d-aed8-96e246230fba" Name="SpotArray" ObjType="SpotArray" RelPos.X="6092" RelPos.Y="7538" RelPos.Z="0" Width="63626" Depth="18053" Heigth="0" FreeHeight="0" Cols="8" Rows="3" />
+  </Item>
+  <Item Id="00000000-0000-0000-0000-000000000000" TemplateId="731e9259-e202-496e-9ce5-5b8b3f1a332b" Name="Slide_Horizontal" ObjType="Slide" ParentSlotNr="2" RelPos.X="0" RelPos.Y="0" RelPos.Z="0" Width="75000" Depth="25000" Heigth="1000" FreeHeight="0" Offset.Z="0">
+    <Item Id="00000000-0000-0000-0000-000000000000" TemplateId="31dee62b-b1e5-4a80-95a9-581fd37f6ebb" Name="Point_Crosslines" ObjType="Point" RelPos.X="60192" RelPos.Y="4237" RelPos.Z="-672" Width="0" Depth="0" Heigth="0" FreeHeight="0" Offset.Z="0" />
+  </Item>
+  <Item Id="00000000-0000-0000-0000-000000000000" TemplateId="731e9259-e202-496e-9ce5-5b8b3f1a332b" Name="Slide_Horizontal" ObjType="Slide" ParentSlotNr="1" RelPos.X="0" RelPos.Y="0" RelPos.Z="0" Width="75000" Depth="25000" Heigth="1000" FreeHeight="0" Offset.Z="0">
+    <Item Id="00000000-0000-0000-0000-000000000000" TemplateId="31dee62b-b1e5-4a80-95a9-581fd37f6ebb" Name="Point_Slide1" ObjType="Point" RelPos.X="62550" RelPos.Y="13076" RelPos.Z="0" Width="0" Depth="0" Heigth="0" FreeHeight="0" Offset.Z="0" />
+    <Item Id="00000000-0000-0000-0000-000000000000" TemplateId="b6f84478-a8db-496d-aed8-96e246230fba" Name="Kegel Array" ObjType="SpotArray" RelPos.X="3866" RelPos.Y="-2159" RelPos.Z="3000" Width="17999" Depth="18073" Heigth="0" FreeHeight="0" Cols="4" Rows="4" />
+    <Item Id="00000000-0000-0000-0000-000000000000" TemplateId="b6f84478-a8db-496d-aed8-96e246230fba" Name="Kegel Plasma" ObjType="SpotArray" RelPos.X="46167" RelPos.Y="-2106" RelPos.Z="3000" Width="18050" Depth="18000" Heigth="0" FreeHeight="0" Cols="4" Rows="4" />
+  </Item>
+</Item>

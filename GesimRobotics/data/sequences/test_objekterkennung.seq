@@ -1,0 +1,7 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<Root>
+  <Header Version="2.0.18.5239" Id="0" />
+  <Steps>
+    <Item Id="7149d3d3-d35f-4004-8882-e6ade8d1c461" Description="" ObjectType="Root" ObjectId="e94c0ae7-f5eb-42b3-bf25-c6806131cff7" ActionType="RunGCode" TargetId="20849f3c-f92a-4ccb-bfd1-2ab0bc7efcb4" TargetRef="Center" FileName="gcode_objekterkennung" WaitPointId="82db5aaf-82c0-4029-80ed-472a23fc094c" Offset.Z="2000" />
+  </Steps>
+</Root>

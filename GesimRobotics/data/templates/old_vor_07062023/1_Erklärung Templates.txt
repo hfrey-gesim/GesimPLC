@@ -1,0 +1,223 @@
+Camera:
+Camera_Axis		- µEye Kamera für BSys
+Camera_CartrtidgeHolder	- IS Kamera + Halter für CartridgeHolder
+Camera_StampSupport	- IS Kamera + für StampSupport
+
+
+CartridgeDispenser:
+Metal_Gen1_LuerLock	- 5/16"-Gewinde + LuerLock-Adapter
+Metal_Gen1_Screw	- 5/16"-Gewinde
+Metal_Gen2_Screw	- 1/8"-Gewinde
+Plastic			- LuerLock
+_Vac		   	- wenn Haltevakuum im KopfManifold eingerichtet (siehe Fluidikplan)
+_Gap			- schwarze Abstandshalter zwischen horizontalem und vertikalem orangenem Teil des Kartuschenhalters vorhanden
+Multi			- nur bei MultiCartridgeHolder verwendbar (z.B. Core/Shell-Dispenser)
+
+
+CartridgeHolder:
+NoHeater       	   	- keine Platine im Halter
+HeaterDisabled 	   	- Platine im Halter aber kein Heizer (Heizpatrone)
+InternalHeater_Gen1	- Platine im Halter mit Heizerpatrone (MB Platine)
+InternalHeater_Gen2	- Platine im Halter + Powermodul + Düsenheizung intern mgl. (FBär Platine)
+ExternalHeater 	   	- Platine im Halter aber externer Heizer (Hochtemperatur); Basis ist HeaterDisabled aber es wird Bild der InternalHeater angezeigt
+InternalCooler 		- Platine im Halter
+ExternalCooler		- keine Platine im Halter aber externe Kühlsteuerung; Basis ist NoHeater aber es wird Bild der Kühlkartusche_Gen1 angezeigt
+
+
+CustomUnit:
+_Type1			- Weilin-Absaugzelle (2 Channels separat mittels je 2Way-Ventil über eine Pumpe absaugbar + Delay zwischen Ventil und Pumpe)
+
+
+NoHeater		- Template/Root/DefaultProperties/HeaterTyp = None
+HeaterDisabled		- Template/Root/DefaultProperties/HeaterTyp = SingleHeater
+InternalHeater_Gen1	- Template/Root/DefaultProperties/HeaterTyp = SingleHeater
+InternalHeater_Gen2	- Template/Root/DefaultProperties/HeaterTyp = TwinHeater
+
+
+DeloDot:
+abgekündigt
+nur bei 2232_BS31_Maastricht implementiert
+
+
+Diluter:
+3Way			- Standard 3-Wege-Ventil für z.B. PiezoPip
+4Distri_1I1O1W		- 4Distri mit 1*Input, 1*Output & 1*Waste Anschluss (1*blind/unbenutzt) für z.B. Luer
+4Distri_3I1O0W		- 4Distri mit (bis zu)3*Input, 1*Output & 0*Waste Anschluss für z.B. PassivPip, die aus bis zu 3*versch. Reservoir ziehen kann 
+			  (Achtung Gefahr Kreuzkontamination bei Aspirate); für z.B. PassivPip 2396_BSys32_Lacriscience
+ 
+
+DryPad:
+Gen1			- Standard bei BS3.1/µCP4.1 ("quadratische Grundfläche"), Ausrichtung je nach dem zu welcher Achse die Klemmen parallel sind 
+Gen2			- Standard bei BS3.2 (rechteckige Grundfläche), Ausrichtung je nach dem zu welcher Achse die Klemmen parallel sind
+
+
+DummyTool:
+ist ein "frei" konfigurierbares HeadTool (ObjType) speziell für Tools die dargestellt werden sollen, aber keine Funktionen in der Software haben (z.B. NozzleHeater)
+
+
+Exposure:
+Exposure		- allgemeine UV mit allen Funktionen (Intensität über SW einstellbar)
+OmnicureS1500		- Standard bei BS (_CartridgeHolder) und µCP (_StampSupport); Brightness deaktiviert (mit Zusatz je nach dem an welches Tool)
+ThorLabs		- volle Funktionalität (mit Zusatz je nach dem an welches Tool);
+PlasmaPen		- Brightness deaktiviert (eigenständiges Tool)
+UVPen			- für internen oder OEM-Pen (z.B. Opsytec); Auswahl DigiPort beachten
+
+
+FlipTubeHandler:
+Gen1			- originaler FlipTubeHandler von Hamilton (orange); nur bei 2232_BS31_Maastricht implementiert
+Gen2			- eigener FlipTubeHandler (rot); Standardversion
+Gen3			- eigener FlipTubeHandler (rot); mit zusätzlicher Toolaufnahme (z.B. UV-Pen an 2396_BSys32_Lacriscience)
+
+
+FlipTubeRack:
+Adapter    - kommt auf Workplate (für FlipTubeRack_Gen2_Short)
+Coolable   - 18er Raster
+Gen1       - 15er Raster (so nur bei 2251_BSys31E_Maastricht vorhanden) 
+Gen2       - 18er Raster (aktuelle Version)
+Gen2_Short - 18er Raster (kann nur auf FlipTubeRack_Adapter; ist so in Y "verschiebbar")
+
+
+Head:
+für jede Maschine wird eine eigenes Head-Tpl angelegt mit eventuell customized Eigenschaften (z.B. nur gekaufte Tools zulassen)
+Der Tpl-Name lautet "Head_[Maschinentypkürzel]_SN[XXXX].tpl" z.B. "Head_µCP_SN2230"
+µCP_Gen1		- Achsen 1-2-3
+µCP_Gen2		- Achsen 1-2-KK-4 (aktive Achse ist aber dennoch 3)
+
+
+HTE:
+Gen1 			- U/min auf FW/SPS/GUI
+Gen2 			- U/min auf FW; mm/s auf SPS/GUI
+Gen3 			- mm/s auf FW/SPS/GUI (aktuelle version)
+Gen3_TwinExtruder	- Gen3 HTE der für TwinExtruder genutzt werden muss
+
+
+HybridDispenser:
+_Main			- abstraktes Tool was bis zu drei weitere aufnehmen kann; muss zuerst konfiguriert werden; Zuordnung Slots zu Master/Slave beachten
+			  Slot2=Mitte, Slot1=rechts von Mitte, Slot3=links von Mitte
+DiluterDispenser - Basis ist PassivPip; kein physisches Tool, sondern nur Schlauch von Diluter über Kopf
+
+Luer:
+Gen1			- Luer ist 2mm nach rechts verschoben + 2mm breiter (eigenlich nur bei SN2251+SN2264 verbaut)
+Gen2			- Standard
+WithoutTransfer		- Transferfunktion deaktiviert (siehe Fluidikplan)
+
+
+MTPHolder:
+Double_Coolable_Horizontal_Left		- Standard für BS3.2-Tray; für 2*MTP; externe Kühlung; Anschlüsse an kurzer Seite; je nach Lage auf Workplate verwenden
+Double_Coolable_Horizontal_Right	- Standard für BS3.2-Tray; für 2*MTP; externe Kühlung; Anschlüsse an kurzer Seite (Basis ist Double_Coolable_Left um 180° gedreht); je nach Lage auf Workplate verwenden
+Double_Coolable_Vertical_Right		- Standard für BS3.1-Tray; für 2*MTP; externe Kühlung; Anschlüsse an langer Seite
+Double_Coolable_Vertical_Top		- Standard für BS3.2-Tray (Add auf RPD-TargetTray); für 2*MTP; externe Kühlung; Anschlüsse an kurzer Seite (Basis ist Double_Coolable_Left um 90° gedreht)
+Single_Coolable_Left			- Standard für BS3.2-Workplate; für 1*MTP; externe Kühlung
+Single_Coolable_Right			- Standard für µCP4.1-Workplate; für 1*MTP; externe Kühlung
+Single_Heatable_Horizontal		- Standard für BS3.1/BS3.2; Heizung intern; für 1*MTP (Standard 96er)
+Single_Heatable_Vertical		- Standard für BS5.1; Heizung intern; für 1*MTP (Standard 96er)
+Plain					- Standard wenn Single Heatable nicht verbaut; für 1*MTP; schwarze Platte mit kleiner Versenkung für MTP
+Simple					- Standard bei µCP; Blechklemmung
+
+
+Nozzle:
+Tip			- LuerLock
+Alu			- LuerLock
+Needle			- LuerLock
+GeSiM_Gen1_Screw	- 5/16"-Gewinde
+GeSiM_Gen1_Screw_Long	- 5/16"-Gewinde + Verlängerung
+GeSiM_Gen2_LuerLock	- M3,5-Gewinde Nozzle + LuerLock-Adpater
+GeSiM_Gen2_Screw	- M3,5-Gewinde Nozzle + 1/8"-Adapter
+CoreShell_800-300	- Allgemeingültige Nozzle für kleine Düsenpaarung
+CoreShell_5000-2500	- Allgemeingültige Nozzle für große Düsenpaarung
+HTExtruder		- Düsen für HTE
+TwinHTExtruder		- Düsen für HTE-Mixer
+FDMExtruder		- Düsen für FDM
+PowderDisp		- für PowderDisp
+
+
+NozzleHeater:
+Gen1			- mit externer Steuerung (Basis ist DummyTool)
+Gen2			- mit interner Steuerung in CartridgeHolder (Basis ist DummyTool)
+
+
+PassivPip:
+_1Inputs		- Standardversion; Nutzung mit z.B. Diluter_3Way & Diluter_4Distri_1I1O1W
+_3Inputs		- Nutzung mit z.B. Diluter_4Distri_3I1O0W; bei Dispense-Actions muss Input-Port ausgewählt werden
+_1Inputs_LuerLock	- Basis ist _1Inputs mit Slot für LuerLock-Nozzles
+
+
+PicoXMod:
+abgekündigt
+nur bei 2235_BS31_Griffith implementiert
+
+
+PiezoHolder:
+SinglePiezoHolder	- Standard bei BS3.1 und alten µCP4.1 verbaut (nur für Piezo & Z-Sensor); keine Toolerkennung
+WithoutPiezo		- Piezo kann nicht angelegt werden; nur für Z-Messung verwendbar; keine Toolerkennung
+SinglePipHolder_Gen1	- Standard ab BS3.2; Toolerkennung; für Piezo oder Solenoid & Z-Sensor verwendbar
+SinglePipHolder_Gen2	- wie Gen1 nur etwas länger damit Piezo weiter nach unten kommt; insbesondere relevant für RPD-Two-Level-Lab
+TwinPipHolder		- mit Toolerkennung; für 2*Piezo oder 2*Solenoid ohne Z-Sensor 
+
+
+Root:
+für jede Maschine wird eine eigenes Root-Tpl angelegt mit eventuell customized Eigenschaften
+Der Tpl-Name lautet "Root_[Maschinentypkürzel]_SN[XXXX].tpl" z.B. "Root_µCP_SN2230"
+ObjName im Tpl lautet "[Maschinentyp lang]_[Versionsnummer]_(SN[XXXX])" z.B. "µContactPrinter 4.1 (SN2230)" oder "BioScaffolder 5.1/E (SN2333)"
+µCP			- ohne Scaffold-Generator-Funktion (-> RunGCode bei Kundentpl. gegebenfalls freigeben)
+BS			- mit Scaffold-Generator-Funktion
+
+
+ServiceTray:
+für jede Maschine wird eine eigenes ServiceTray-Tpl angelegt mit eventuell customized Eigenschaften
+Der Tpl-Name lautet "ServiceTray_[Maschinentypkürzel]_SN[XXXX].tpl" z.B. "ServiceTray_BS_SN2333"
+Slothöhen an eventuelle Modul-Rahmen anpassen
+
+
+StampSupport:
+Gen1			- bei älteren µCP4.1 verbaut; ohne Koppelplatte für Head_µCP_Gen1
+Gen2			- Standard bei µCP4.1; mit Koppelplatte für Head_µCP_Gen2
+
+
+SubstratHolder:
+Single_Heatable_Add_External		- passt in MTP-Halterung (z.B. BS-Tray); aufsetzbar; Heizer-Steuerung extern; Vakuumklemmung extern
+Single_Heatable_Add_Internal		- passt in MTP-Halterung (z.B. BS-Tray); aufsetzbar; Heizer-Steuerung intern (DockingStation); Vakuumklemmung extern
+Single_Heatable_Horizontal_Right	- ist bei alten µCP4.1 (Head_Gen1) verbaut; in Workplate versenkt; Heizer-Steuerung intern; Vakuumklemmung intern; Anschlussseite (für Licht) nach rechts ausgerichtet; StampSupport konnte nicht kompletten Bereich abdecken wenn dieser auf physisch Achse 4 hängt
+Single_Heatable_Vertical_Bottom		- Standard bei µCP4.1 (Head_Gen2) wo StampSupport auf physisch Achse 4 hängt; in Workplate versenkt; Heizer-Steuerung intern; Vakuumklemmung intern; Anschlussseite (für Licht) nach unten ausgerichtet; 
+Single_Heatable_Vertical_Top		- Standard bei µCP6.1; in Workplate versenkt; Heizer-Steuerung intern; Vakuumklemmung intern; Anschlussseite (für Licht) nach oben ausgerichtet; 
+
+
+SyringeDispenser:
+_Plastic	- Basis ist CartridgeDispenser_Plastic
+
+
+TargetTray:
+RPC_BS32_Horizontal_Low			- Höhe 12mm; wurde wegen schlechter Ereichbarkeit mancher Tools (Z) durch High ersetzt
+RPC_BS32_Horizontal_High		- Höhe 20mm; Standard für BS3.2
+RPD_BS_Add_Vertical			- wird auf RPD_BS_TargetTray gesetzt; Basis ist BS32_High um 90° gedreht
+bei TargetTrays für RPD (außer Add-Tray) wird für jede Maschine eine eigenes TargatTray-Tpl angelegt mit eventuell customized Eigenschaften
+Der Tpl-Name lautet "TargetTray_[Maschinentypkürzel]_SN[XXXX].tpl" z.B. "TargetTray_BS_SN2333"
+
+
+TipCalibrator:
+Gen1	       		- für BS3.1 (unterschiedliche Höhen [31mm, 51mm, 51mm] werden bei kundenspezifischen Workplate-Tpl in Slots eingetragen)
+Gen2           		- für BS3.2 33mm (Standard bei neueren BS3.2)
+Gen2High       		- für BS3.2 43mm (bei älteren BS3.2 verbaut)
+
+
+TipCleaner:
+Gen1			- Standard bei allen BS (Reinigung mittels Lippen); Ausrichtung ja nachdem wo die Lippen sind; aktiver Reiniger; (Objecttyp=TipCleaner)
+Gen2			- passiver TipCleaner (neuer Objecttyp=TipCleanerGen2); nimmt CleaningBrushes auf
+
+
+WashStation:
+Gen1 			- 1*Waschposition (Standard bei BS3.1)
+Gen2 			- 2*Waschposition (Standard bei BS3.2; wichtig für TwinPipHolder)
+
+
+Workplate:
+für jede Maschine wird eine eigenes Workplate-Tpl angelegt mit eventuell customized Eigenschaften (z.B. nur gekaufte Module zulassen; Rahmenhöhen in SLots eintragen)
+Der Tpl-Name lautet "Workplate_[Maschinentypkürzel]_SN[XXXX].tpl" z.B. "Workplate_µCP_SN2230"
+Slothöhen an eventuelle Modul-Rahmen anpassen
+
+
+Z-Sensor:
+Gen1			- Version ohne Schutzmantel am goldenen Teil (es gab verschiedene Ausbauformen mit unterschiedlich langer Rändelschraube); wurde ersetzt durch Gen2_Short
+Gen2_Short		- Version mit Schutzmantel am goldenen Teil (erste Variante); wurde ersetzt durch Gen2_Long; kann nur an SinglePipHolder_Gen1
+Gen2_Long		- Version mit Schutzmantel am goldenen Teil; aktuelle Version
+

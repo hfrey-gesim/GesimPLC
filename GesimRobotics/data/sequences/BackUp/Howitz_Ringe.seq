@@ -1,0 +1,40 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<Root>
+  <Header Version="2.0.18.5239" Id="0" />
+  <Steps>
+    <Item Id="a3dc8242-5064-4814-b363-252a7d61355a" Description="" ObjectType="Root" ObjectId="e94c0ae7-f5eb-42b3-bf25-c6806131cff7" ActionType="RunGCode" TargetId="3ea685f8-ac42-40ac-974d-b48aefccb472" TargetRef="Center" FileName="PCL_Howitz_Ringe" WaitPointId="2e0ffdb6-7822-4a30-9343-75f3195784e0" Offset.Z="0" />
+    <Item Id="89c2f94c-1ba7-428b-a86f-2c93f62d29eb" Description="" ObjectType="Root" ObjectId="e94c0ae7-f5eb-42b3-bf25-c6806131cff7" ActionType="RunGCode" TargetId="4d64af42-5ce0-4903-878a-5eeaba7fada6" TargetRef="Center" FileName="PCL_Howitz_Ringe" WaitPointId="2e0ffdb6-7822-4a30-9343-75f3195784e0" Offset.Z="0">
+      <Condition Type="StepReady" Operator="AND" StepId="0" />
+    </Item>
+    <Item Id="2b4da3a9-5aee-48e6-99ba-8dd37e396579" Description="" ObjectType="Root" ObjectId="e94c0ae7-f5eb-42b3-bf25-c6806131cff7" ActionType="RunGCode" TargetId="f0c816c5-0fc4-4138-830a-387b5d564391" TargetRef="Center" FileName="PCL_Howitz_Ringe" WaitPointId="2e0ffdb6-7822-4a30-9343-75f3195784e0" Offset.Z="0">
+      <Condition Type="StepReady" Operator="AND" StepId="0" />
+    </Item>
+    <Item Id="a9f59202-97fd-427f-813c-7dae6195af00" Description="" ObjectType="Root" ObjectId="e94c0ae7-f5eb-42b3-bf25-c6806131cff7" ActionType="RunGCode" TargetId="f2e8e0af-2f9c-4b53-ae75-3fa415e4a6f0" TargetRef="Center" FileName="PCL_Howitz_Ringe" WaitPointId="2e0ffdb6-7822-4a30-9343-75f3195784e0" Offset.Z="0">
+      <Condition Type="StepReady" Operator="AND" StepId="0" />
+    </Item>
+    <Item Id="57369c61-b4f3-4ce1-91f9-543971209b27" Description="" ObjectType="Root" ObjectId="e94c0ae7-f5eb-42b3-bf25-c6806131cff7" ActionType="RunGCode" TargetId="ab46a707-1f04-456a-b89e-2f878d2f2ff4" TargetRef="Center" FileName="PCL_Howitz_Ringe" WaitPointId="2e0ffdb6-7822-4a30-9343-75f3195784e0" Offset.Z="0">
+      <Condition Type="StepReady" Operator="AND" StepId="0" />
+    </Item>
+    <Item Id="49743da0-02d2-4b65-aff9-ef41f2354ef4" Description="" ObjectType="Root" ObjectId="e94c0ae7-f5eb-42b3-bf25-c6806131cff7" ActionType="RunGCode" TargetId="734cb9ca-4c77-4e30-8d3b-bddbeba686fd" TargetRef="Center" FileName="PCL_Howitz_Ringe" WaitPointId="2e0ffdb6-7822-4a30-9343-75f3195784e0" Offset.Z="0">
+      <Condition Type="StepReady" Operator="AND" StepId="0" />
+    </Item>
+    <Item Id="186c3cde-8339-4b5f-b81f-a8821f7159b3" Description="" ObjectType="Root" ObjectId="e94c0ae7-f5eb-42b3-bf25-c6806131cff7" ActionType="RunGCode" TargetId="d5cc736e-ebea-438b-ad1a-390666af7941" TargetRef="Center" FileName="PCL_Howitz_Ringe" WaitPointId="2e0ffdb6-7822-4a30-9343-75f3195784e0" Offset.Z="0">
+      <Condition Type="StepReady" Operator="AND" StepId="0" />
+    </Item>
+    <Item Id="9b55354d-12e6-41c4-950d-605aa7226bc8" Description="" ObjectType="Root" ObjectId="e94c0ae7-f5eb-42b3-bf25-c6806131cff7" ActionType="RunGCode" TargetId="1fbf3507-0801-4583-9c72-bcbe7ba7e273" TargetRef="Center" FileName="PCL_Howitz_Ringe" WaitPointId="2e0ffdb6-7822-4a30-9343-75f3195784e0" Offset.Z="0">
+      <Condition Type="StepReady" Operator="AND" StepId="0" />
+    </Item>
+    <Item Id="e7cd6148-8768-4258-845d-7844b07b6698" Description="" ObjectType="Root" ObjectId="e94c0ae7-f5eb-42b3-bf25-c6806131cff7" ActionType="RunGCode" TargetId="16e87fc4-1555-4be9-bb44-a4f7293b6231" TargetRef="Center" FileName="PCL_Howitz_Ringe" WaitPointId="2e0ffdb6-7822-4a30-9343-75f3195784e0" Offset.Z="0">
+      <Condition Type="StepReady" Operator="AND" StepId="0" />
+    </Item>
+    <Item Id="0b96bd96-47d8-4728-9370-75eddd2f950b" Description="" ObjectType="Root" ObjectId="e94c0ae7-f5eb-42b3-bf25-c6806131cff7" ActionType="RunGCode" TargetId="8803b714-9649-462f-8520-812ae0864d31" TargetRef="Center" FileName="PCL_Howitz_Ringe" WaitPointId="2e0ffdb6-7822-4a30-9343-75f3195784e0" Offset.Z="0">
+      <Condition Type="StepReady" Operator="AND" StepId="0" />
+    </Item>
+    <Item Id="7c434e33-805b-4a23-9e50-372b7f7374c2" Description="" ObjectType="Root" ObjectId="e94c0ae7-f5eb-42b3-bf25-c6806131cff7" ActionType="RunGCode" TargetId="206348ac-8787-4f51-a5a5-4f59ea5d014c" TargetRef="Center" FileName="PCL_Howitz_Ringe" WaitPointId="2e0ffdb6-7822-4a30-9343-75f3195784e0" Offset.Z="0">
+      <Condition Type="StepReady" Operator="AND" StepId="0" />
+    </Item>
+    <Item Id="931d29e4-6c51-4e90-84b2-50d9bbc298ae" Description="" ObjectType="Root" ObjectId="e94c0ae7-f5eb-42b3-bf25-c6806131cff7" ActionType="RunGCode" TargetId="79811b82-7a03-4e9e-9f93-3cc93fbd9736" TargetRef="Center" FileName="PCL_Howitz_Ringe" WaitPointId="2e0ffdb6-7822-4a30-9343-75f3195784e0" Offset.Z="0">
+      <Condition Type="StepReady" Operator="AND" StepId="0" />
+    </Item>
+  </Steps>
+</Root>

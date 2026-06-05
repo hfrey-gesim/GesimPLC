@@ -1,0 +1,150 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<Root Version="5" Mode="Advanced">
+  <Objects>
+    <Object>
+      <Model Type="ThreeMF" FillRule="Positive">
+        <FileName>C:\Users\RPC\Desktop\S.3mf</FileName>
+      </Model>
+      <Position Type="CenterOnOrigin">
+        <X>0</X>
+        <Y>0</Y>
+        <Z>0</Z>
+        <Rotate>true</Rotate>
+        <RotationAngle>270000</RotationAngle>
+      </Position>
+      <SpotOrder>AsGiven</SpotOrder>
+      <Materials>
+        <Material Name="Regular">
+          <Infill>
+            <InfillType>Lines</InfillType>
+            <StartAngle>45</StartAngle>
+            <AngleChange>90</AngleChange>
+            <RepeatAngleChange>1</RepeatAngleChange>
+            <InfillOffset>1150</InfillOffset>
+            <InfillOffsetRelative>false</InfillOffsetRelative>
+            <StrandDistance>600</StrandDistance>
+            <MinDistance>100</MinDistance>
+            <MinLength>1000</MinLength>
+          </Infill>
+          <Outline>
+            <OutlineOffset>0</OutlineOffset>
+            <OutlineDistance>650</OutlineDistance>
+            <OutlineMinDistance>200</OutlineMinDistance>
+            <FiniteOutlines>true</FiniteOutlines>
+            <OutlineNumber>2</OutlineNumber>
+          </Outline>
+          <Layers OutlineFirst="true">
+            <Layer>
+              <Infill>5</Infill>
+              <Outline>3</Outline>
+            </Layer>
+          </Layers>
+        </Material>
+      </Materials>
+      <Paths />
+      <Samples />
+    </Object>
+  </Objects>
+  <Tools>
+    <Tool Type="Extruder" Nr="3">
+      <Identifier>3</Identifier>
+      <Color>#FFAC7B39</Color>
+      <Speed>5000</Speed>
+      <ZOffset>200</ZOffset>
+      <Height>350</Height>
+      <Width>250</Width>
+      <Connection>OutlinePlus</Connection>
+      <TearOffDirection>None</TearOffDirection>
+      <TearOffSpeed>115000</TearOffSpeed>
+      <TearOffDistance>1000</TearOffDistance>
+      <CleanTipBeforeUsage>true</CleanTipBeforeUsage>
+      <CleanTipAfterUsage>false</CleanTipAfterUsage>
+      <RepeatTipCleaning>1</RepeatTipCleaning>
+      <CleaningMode>Brush</CleaningMode>
+      <CleanTipBrushSlot>1</CleanTipBrushSlot>
+      <CleanTipDispenseTime>0</CleanTipDispenseTime>
+      <CleanTipWireSpeed>100000</CleanTipWireSpeed>
+      <Strand Channel="1">
+        <Parameter Type="Feed" Number="1">
+          <Feed>8</Feed>
+        </Parameter>
+        <StartBreak>250</StartBreak>
+        <EndBreak>250</EndBreak>
+        <SetInactive>true</SetInactive>
+      </Strand>
+    </Tool>
+    <Tool Type="Extruder" Nr="5">
+      <Identifier>5</Identifier>
+      <Color>#FF89A336</Color>
+      <Speed>5000</Speed>
+      <ZOffset>200</ZOffset>
+      <Height>350</Height>
+      <Width>250</Width>
+      <Connection>OutlinePlus</Connection>
+      <TearOffDirection>None</TearOffDirection>
+      <TearOffSpeed>115000</TearOffSpeed>
+      <TearOffDistance>1000</TearOffDistance>
+      <CleanTipBeforeUsage>true</CleanTipBeforeUsage>
+      <CleanTipAfterUsage>false</CleanTipAfterUsage>
+      <RepeatTipCleaning>1</RepeatTipCleaning>
+      <CleaningMode>Brush</CleaningMode>
+      <CleanTipBrushSlot>1</CleanTipBrushSlot>
+      <CleanTipDispenseTime>0</CleanTipDispenseTime>
+      <CleanTipWireSpeed>100000</CleanTipWireSpeed>
+      <Strand Channel="1">
+        <Parameter Type="Feed" Number="1">
+          <Feed>9</Feed>
+        </Parameter>
+        <StartBreak>250</StartBreak>
+        <EndBreak>250</EndBreak>
+        <SetInactive>true</SetInactive>
+      </Strand>
+    </Tool>
+    <Tool Type="Camera" Nr="7">
+      <Identifier>C</Identifier>
+      <Color>#FF000000</Color>
+      <Speed>10000</Speed>
+      <ZOffset>0</ZOffset>
+      <Height>0</Height>
+      <Width>0</Width>
+      <Connection>OutlinePlus</Connection>
+      <AreaX>12000</AreaX>
+      <AreaY>16000</AreaY>
+      <AreaPosition>None</AreaPosition>
+      <AreaWaitTime>0,000 s</AreaWaitTime>
+      <RepeatAreaAction>1</RepeatAreaAction>
+    </Tool>
+    <Tool Type="Exposure" Nr="8">
+      <Identifier>U</Identifier>
+      <Brightness>500</Brightness>
+      <Time>1</Time>
+      <Color>#80000000</Color>
+      <Speed>10000</Speed>
+      <ZOffset>0</ZOffset>
+      <Height>0</Height>
+      <Width>300</Width>
+      <Connection>OutlinePlus</Connection>
+      <AreaX>12000</AreaX>
+      <AreaY>16000</AreaY>
+      <AreaPosition>None</AreaPosition>
+      <AreaWaitTime>0,000 s</AreaWaitTime>
+      <RepeatAreaAction>1</RepeatAreaAction>
+    </Tool>
+  </Tools>
+  <Options>
+    <CustomToolOrder>true</CustomToolOrder>
+    <ToolOrder>35</ToolOrder>
+    <IsPartialPrint>false</IsPartialPrint>
+    <MinZHeight>0</MinZHeight>
+    <MaxZHeight>2099</MaxZHeight>
+    <Pausing>false</Pausing>
+    <LayerPause>50000</LayerPause>
+    <RepeatPause>1</RepeatPause>
+    <Smoothing>false</Smoothing>
+    <SmoothingMinAngle>45</SmoothingMinAngle>
+    <SmoothingMaxDistance>100</SmoothingMaxDistance>
+    <DistanceLimit>false</DistanceLimit>
+    <PointMaxDistance>10000</PointMaxDistance>
+    <DoNotSetPrintParms>false</DoNotSetPrintParms>
+  </Options>
+</Root>

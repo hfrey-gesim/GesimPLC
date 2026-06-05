@@ -1,0 +1,301 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<Root Version="5" Mode="Advanced">
+  <Objects>
+    <Object>
+      <Model Type="Block" FillRule="Positive">
+        <Radius>20000</Radius>
+        <IsHollow>false</IsHollow>
+        <InnerRadius>3500</InnerRadius>
+        <Corners>4</Corners>
+        <Height>100</Height>
+      </Model>
+      <Position Type="Manual">
+        <X>0</X>
+        <Y>-25000</Y>
+        <Z>0</Z>
+        <Rotate>false</Rotate>
+        <RotationAngle>0</RotationAngle>
+      </Position>
+      <SpotOrder>AsGiven</SpotOrder>
+      <Materials>
+        <Material Name="Default" Voxelize="false">
+          <Infill>
+            <InfillType>Lines</InfillType>
+            <StartAngle>0</StartAngle>
+            <AngleChange>90</AngleChange>
+            <RepeatAngleChange>1</RepeatAngleChange>
+            <InfillOffset>0</InfillOffset>
+            <InfillOffsetRelative>false</InfillOffsetRelative>
+            <StrandDistance>1000</StrandDistance>
+            <Amplitude>200</Amplitude>
+            <Alternate>false</Alternate>
+            <MinDistance>500</MinDistance>
+            <MinLength>1000</MinLength>
+          </Infill>
+          <Outline>
+            <OutlineOffset>0</OutlineOffset>
+            <OutlineDistance>1000</OutlineDistance>
+            <OutlineMinDistance>500</OutlineMinDistance>
+            <FiniteOutlines>true</FiniteOutlines>
+            <OutlineNumber>1</OutlineNumber>
+          </Outline>
+          <Voxel>
+            <VoxelType>SquareGrid</VoxelType>
+            <VoxelShift>false</VoxelShift>
+            <VoxelOffset>0</VoxelOffset>
+            <VoxelMinDistance>0</VoxelMinDistance>
+            <VoxelDistance>500</VoxelDistance>
+          </Voxel>
+          <Sample>
+            <Color>#00FFFFFF</Color>
+            <PrepOptions />
+          </Sample>
+          <Layers OutlineFirst="false">
+            <Layer>
+              <Infill>1</Infill>
+              <Outline></Outline>
+            </Layer>
+          </Layers>
+        </Material>
+      </Materials>
+      <SupportMaterial Name="Support" Voxelize="false">
+        <Infill>
+          <InfillType>Lines</InfillType>
+          <StartAngle>0</StartAngle>
+          <AngleChange>90</AngleChange>
+          <RepeatAngleChange>1</RepeatAngleChange>
+          <InfillOffset>0</InfillOffset>
+          <InfillOffsetRelative>false</InfillOffsetRelative>
+          <StrandDistance>1000</StrandDistance>
+          <Amplitude>200</Amplitude>
+          <Alternate>false</Alternate>
+          <MinDistance>500</MinDistance>
+          <MinLength>1000</MinLength>
+        </Infill>
+        <Outline>
+          <OutlineOffset>0</OutlineOffset>
+          <OutlineDistance>1000</OutlineDistance>
+          <OutlineMinDistance>500</OutlineMinDistance>
+          <FiniteOutlines>true</FiniteOutlines>
+          <OutlineNumber>1</OutlineNumber>
+        </Outline>
+        <Voxel>
+          <VoxelType>SquareGrid</VoxelType>
+          <VoxelShift>false</VoxelShift>
+          <VoxelOffset>0</VoxelOffset>
+          <VoxelMinDistance>0</VoxelMinDistance>
+          <VoxelDistance>500</VoxelDistance>
+        </Voxel>
+        <Sample>
+          <Color>#00FFFFFF</Color>
+          <PrepOptions />
+        </Sample>
+        <Layers OutlineFirst="false">
+          <Layer>
+            <Infill></Infill>
+            <Outline></Outline>
+          </Layer>
+        </Layers>
+      </SupportMaterial>
+      <Paths />
+      <Samples />
+    </Object>
+  </Objects>
+  <Tools>
+    <Tool Type="TwinPiezoHolder" Nr="1">
+      <Identifier>1</Identifier>
+      <Color>#FF7F2A6A</Color>
+      <Speed>50000</Speed>
+      <ZOffset>5000</ZOffset>
+      <Height>10</Height>
+      <Width>250</Width>
+      <LoopExtension>0</LoopExtension>
+      <Connection>None</Connection>
+      <Spotting>true</Spotting>
+      <StartBreak>0</StartBreak>
+      <SpotAlignment>Center</SpotAlignment>
+      <SpotDistance>500</SpotDistance>
+      <Fluid Channel="0">
+        <Quantity>7</Quantity>
+        <Parameter Type="Frequency" Number="1">
+          <Feed>100</Feed>
+        </Parameter>
+        <Parameter Type="Pulse" Number="1">
+          <Feed>50</Feed>
+        </Parameter>
+        <Parameter Type="Voltage" Number="1">
+          <Feed>56</Feed>
+        </Parameter>
+      </Fluid>
+      <Fluid Channel="0">
+        <Quantity>7</Quantity>
+        <Parameter Type="Frequency" Number="2">
+          <Feed>100</Feed>
+        </Parameter>
+        <Parameter Type="Pulse" Number="2">
+          <Feed>50</Feed>
+        </Parameter>
+        <Parameter Type="Voltage" Number="2">
+          <Feed>56</Feed>
+        </Parameter>
+      </Fluid>
+      <RunPrep>false</RunPrep>
+      <RepeatPrep>0</RepeatPrep>
+      <PrepOptions>
+        <SourceName></SourceName>
+        <WashTime>9000</WashTime>
+        <WashFlow>100</WashFlow>
+        <WashTargetNr>1</WashTargetNr>
+        <WashSpotNr>1</WashSpotNr>
+        <PostWashDryTargetNr>3</PostWashDryTargetNr>
+        <PostWashDryCount>1</PostWashDryCount>
+        <PostWashDryTime>100</PostWashDryTime>
+        <PostAspirateDryTargetNr>0</PostAspirateDryTargetNr>
+        <PostAspirateDryCount>0</PostAspirateDryCount>
+        <PostAspirateDryTime>100</PostAspirateDryTime>
+        <AspirateSampleVolume>0</AspirateSampleVolume>
+        <AspirateSampleFlow>10</AspirateSampleFlow>
+        <AspirateSampleWaitTime>2000</AspirateSampleWaitTime>
+        <AspirateSampleAirGap>0</AspirateSampleAirGap>
+        <AspirateSampleDiluterBypass>0</AspirateSampleDiluterBypass>
+        <AspirateSampleWellUsage>OneWell</AspirateSampleWellUsage>
+        <AspirateSampleSpots />
+        <AspirateSampleAirGap>0</AspirateSampleAirGap>
+        <AspirateSampleDiluterBypass>0</AspirateSampleDiluterBypass>
+        <DispenseSampleVolume>0</DispenseSampleVolume>
+        <DispenseSampleFlow>0</DispenseSampleFlow>
+        <DispenseSampleTargetNr>0</DispenseSampleTargetNr>
+        <DispenseSampleSpotNr>0</DispenseSampleSpotNr>
+        <PreDispenseTest>false</PreDispenseTest>
+        <PreDispenseTestTargetNr>0</PreDispenseTestTargetNr>
+        <PostDispenseTest>false</PostDispenseTest>
+        <PostDispenseTestTargetNr>0</PostDispenseTestTargetNr>
+      </PrepOptions>
+    </Tool>
+    <Tool Type="PiezoPip" Nr="3">
+      <Identifier>3</Identifier>
+      <Color>#FFAC7B39</Color>
+      <Speed>10000</Speed>
+      <ZOffset>1000</ZOffset>
+      <Height>10</Height>
+      <Width>250</Width>
+      <LoopExtension>0</LoopExtension>
+      <Connection>None</Connection>
+      <Spotting>true</Spotting>
+      <StartBreak>0</StartBreak>
+      <SpotAlignment>Center</SpotAlignment>
+      <SpotDistance>500</SpotDistance>
+      <Fluid Channel="0">
+        <Quantity>1</Quantity>
+        <Parameter Type="Frequency" Number="1">
+          <Feed>100</Feed>
+        </Parameter>
+        <Parameter Type="Pulse" Number="1">
+          <Feed>90</Feed>
+        </Parameter>
+        <Parameter Type="Voltage" Number="1">
+          <Feed>70</Feed>
+        </Parameter>
+      </Fluid>
+      <RunPrep>false</RunPrep>
+      <RepeatPrep>0</RepeatPrep>
+      <PrepOptions>
+        <SourceName></SourceName>
+        <WashTime>9000</WashTime>
+        <WashFlow>100</WashFlow>
+        <WashTargetNr>1</WashTargetNr>
+        <WashSpotNr>1</WashSpotNr>
+        <PostWashDryTargetNr>3</PostWashDryTargetNr>
+        <PostWashDryCount>1</PostWashDryCount>
+        <PostWashDryTime>100</PostWashDryTime>
+        <PostAspirateDryTargetNr>0</PostAspirateDryTargetNr>
+        <PostAspirateDryCount>0</PostAspirateDryCount>
+        <PostAspirateDryTime>100</PostAspirateDryTime>
+        <AspirateSampleVolume>0</AspirateSampleVolume>
+        <AspirateSampleFlow>10</AspirateSampleFlow>
+        <AspirateSampleWaitTime>2000</AspirateSampleWaitTime>
+        <AspirateSampleAirGap>0</AspirateSampleAirGap>
+        <AspirateSampleDiluterBypass>0</AspirateSampleDiluterBypass>
+        <AspirateSampleWellUsage>OneWell</AspirateSampleWellUsage>
+        <AspirateSampleSpots />
+        <AspirateSampleAirGap>0</AspirateSampleAirGap>
+        <AspirateSampleDiluterBypass>0</AspirateSampleDiluterBypass>
+        <DispenseSampleVolume>0</DispenseSampleVolume>
+        <DispenseSampleFlow>0</DispenseSampleFlow>
+        <DispenseSampleTargetNr>0</DispenseSampleTargetNr>
+        <DispenseSampleSpotNr>0</DispenseSampleSpotNr>
+        <PreDispenseTest>false</PreDispenseTest>
+        <PreDispenseTestTargetNr>0</PreDispenseTestTargetNr>
+        <PostDispenseTest>false</PostDispenseTest>
+        <PostDispenseTestTargetNr>0</PostDispenseTestTargetNr>
+      </PrepOptions>
+    </Tool>
+    <Tool Type="CartridgeDisp" Nr="7">
+      <Identifier>7</Identifier>
+      <UseExposure>false</UseExposure>
+      <Brightness>0</Brightness>
+      <StirrMode>Never</StirrMode>
+      <StirrSpeed>0</StirrSpeed>
+      <StirrTimeLimited>false</StirrTimeLimited>
+      <StirrTimeOn>0</StirrTimeOn>
+      <StirrTimeOff>0</StirrTimeOff>
+      <StirrDuration>1000</StirrDuration>
+      <StirrRepeat>1</StirrRepeat>
+      <Color>#FF2A506E</Color>
+      <Speed>50000</Speed>
+      <ZOffset>4000</ZOffset>
+      <Height>1</Height>
+      <Width>250</Width>
+      <LoopExtension>0</LoopExtension>
+      <Connection>Outline</Connection>
+      <TearOffDirection>None</TearOffDirection>
+      <TearOffSpeed>115000</TearOffSpeed>
+      <TearOffDistance>1000</TearOffDistance>
+      <CleanTipBeforeUsage>false</CleanTipBeforeUsage>
+      <CleanTipAfterUsage>false</CleanTipAfterUsage>
+      <RepeatTipCleaning>1</RepeatTipCleaning>
+      <CleaningMode>WireAndBrush</CleaningMode>
+      <CleanTipDispenseTime>0</CleanTipDispenseTime>
+      <CleanTipWireSpeed>100000</CleanTipWireSpeed>
+      <Strand Channel="1">
+        <Parameter Type="Pressure" Number="1">
+          <Value>10</Value>
+        </Parameter>
+        <StartBreak>0</StartBreak>
+        <EndBreak>0</EndBreak>
+        <SetInactive>false</SetInactive>
+      </Strand>
+    </Tool>
+    <Tool Type="Camera" Nr="12">
+      <Identifier>C</Identifier>
+      <Color>#FF000000</Color>
+      <Speed>10000</Speed>
+      <ZOffset>0</ZOffset>
+      <Height>0</Height>
+      <Width>0</Width>
+      <LoopExtension>0</LoopExtension>
+      <Connection>OutlinePlus</Connection>
+      <AreaX>12000</AreaX>
+      <AreaY>16000</AreaY>
+      <AreaPosition>None</AreaPosition>
+      <AreaWaitTime>0,000 s</AreaWaitTime>
+      <RepeatAreaAction>1</RepeatAreaAction>
+    </Tool>
+  </Tools>
+  <Options>
+    <CustomToolOrder>false</CustomToolOrder>
+    <ToolOrder>1</ToolOrder>
+    <IsPartialPrint>false</IsPartialPrint>
+    <MinZHeight>0</MinZHeight>
+    <MaxZHeight>99</MaxZHeight>
+    <Pausing>false</Pausing>
+    <LayerPause>1000</LayerPause>
+    <RepeatPause>1</RepeatPause>
+    <Smoothing>false</Smoothing>
+    <SmoothingMinAngle>45</SmoothingMinAngle>
+    <SmoothingMaxDistance>100</SmoothingMaxDistance>
+    <DistanceLimit>false</DistanceLimit>
+    <PointMaxDistance>10000</PointMaxDistance>
+    <DoNotSetPrintParms>false</DoNotSetPrintParms>
+  </Options>
+</Root>

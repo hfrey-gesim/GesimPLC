@@ -1,0 +1,38 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<Item Id="00000000-0000-0000-0000-000000000000" TemplateId="0bcb50d9-7fe1-40f6-8d15-c5da51ceb547" Name="1" ObjType="SinglePiezoHolder" ParentSlotNr="1" RelPos.X="-15600" RelPos.Y="0" RelPos.Z="-77500" Offset.X="0" Offset.Y="0" Offset.Z="0">
+  <Slots>
+    <Item Nr="1" Name="ZSensor" RelPos.X="0" RelPos.Y="4250" RelPos.Z="52000" Dim.X="0" Dim.Y="0" />
+    <Item Nr="2" Name="Pipette" RelPos.X="-10600" RelPos.Y="13050" RelPos.Z="6600" Dim.X="0" Dim.Y="0" />
+  </Slots>
+  <Item Id="00000000-0000-0000-0000-000000000000" TemplateId="4cb2ad73-97d2-480a-a705-9267a8e5432a" Name="PiezoPipette Nano" ObjType="PiezoPip" ParentSlotNr="2" RelPos.X="0" RelPos.Y="0" RelPos.Z="-31500" Offset.X="0" Offset.Y="0" Offset.Z="0" DiluterId="0bfc53e3-3aee-44b2-94cc-d36ef7a299dc" Frequency="100" Pulse="90" Voltage="70" DryPadArea="1" DryTime="100" HeaterExist="False" SerialNumber="">
+    <Slots />
+    <ActionSettings>
+      <Item Name="Jog" SlowSpeedXY="5000" NormalSpeedXY="10000" FastSpeedXY="115000" ManuSpeedXY="115000" SlowSpeedZ="5000" NormalSpeedZ="10000" FastSpeedZ="72000" ManuSpeedZ="72000" InchingDistShort="25" InchingDistMedium="1000" InchingDistLong="10000" InchingDistManuXY="10000" InchingDistManuZ="10000" RecentSpeedChoice="Slow" RecentDistChoice="Short" />
+      <Item Name="MoveToTarget" SpeedX="115000" SpeedY="115000" SpeedZ="72000" />
+      <Item Name="MoveXY" DistanceX="0" DistanceY="0" SpeedX="10000" SpeedY="10000" />
+      <Item Name="MoveZ" HiddenInManu="True" Mode="Relative" SpeedZ="10000" Distance="10000" />
+      <Item Name="InsertTool" InsertLevel="Top" />
+      <Item Name="Aspirate" Quantity="100" Flow="100" />
+      <Item Name="Dispense" Quantity="100" Flow="100" />
+      <Item Name="DispensePiezoDelo" Drops="0" />
+      <Item Name="DryPip" TimeOverride="0" Offset.Z="0" />
+      <Item Name="GetPipSample" Quantity="100" Flow="100" Delay="0" QuantityAirGap="0" />
+      <Item Name="WashTool" Mode="Undefiend" Quantity="100" Flow="100" Time="1000" />
+      <Item Name="Heating" HiddenInManu="True" Temp="200" Temp2="0" Temp3="0" />
+      <Item Name="Measure" Option="SlowApproach" />
+      <Item Name="TeachTarget" Offset.Z="2000" />
+      <Item Name="DispenseTest" HiddenInManu="True" Drops="10" Interaction="False" />
+      <Item Name="ActionOnArray" SpeedX="115000" SpeedY="115000" SpeedZ="72000" SpeedZRelease="72000" ZOffsetAction="1000" ZDistanceRelease="0" ZOffsetXYMove="2000" ReleaseMoveDelay="0" />
+    </ActionSettings>
+  </Item>
+  <Item Id="00000000-0000-0000-0000-000000000000" TemplateId="7069be8c-6446-4bfc-b5dd-f80d4146a512" Name="ZSensor" ObjType="ZSensor" ParentSlotNr="1" RelPos.X="-12200" RelPos.Y="0" RelPos.Z="-82000" Offset.X="0" Offset.Y="0" Offset.Z="0">
+    <Slots />
+    <ActionSettings>
+      <Item Name="Jog" SlowSpeedXY="5000" NormalSpeedXY="10000" FastSpeedXY="115000" ManuSpeedXY="115000" SlowSpeedZ="5000" NormalSpeedZ="10000" FastSpeedZ="72000" ManuSpeedZ="72000" InchingDistShort="25" InchingDistMedium="1000" InchingDistLong="10000" InchingDistManuXY="10000" InchingDistManuZ="10000" RecentSpeedChoice="Slow" RecentDistChoice="Short" />
+      <Item Name="MoveToTarget" SpeedX="115000" SpeedY="115000" SpeedZ="72000" />
+      <Item Name="MoveXY" HiddenInManu="True" DistanceX="0" DistanceY="0" SpeedX="10000" SpeedY="10000" />
+      <Item Name="MoveZ" HiddenInManu="True" Mode="Relative" SpeedZ="10000" Distance="10000" />
+      <Item Name="Measure" Option="FastApproach" />
+    </ActionSettings>
+  </Item>
+</Item>

@@ -1,0 +1,13 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<Root>
+  <Header Version="2.0.17.2" Id="0" />
+  <Steps>
+    <Item Id="e2494b47-9ee8-4cde-835e-2db46ce2b703" Description="" ObjectType="Root" ObjectId="936f148b-455b-497c-b642-640f2ac1e6a8" ActionType="RunGCode" TargetId="0c9126f6-e7d9-465e-95a3-32fd013cd5d8" TargetRef="Center" FileName="test" WaitPointId="94a12bbd-ab18-44a1-9a1a-e169dbb0ee2c" Offset.Z="0" />
+    <Item Id="2459d4cc-2531-4a89-a318-4e2170d2826d" Description="" ObjectType="Root" ObjectId="936f148b-455b-497c-b642-640f2ac1e6a8" ActionType="RunGCode" TargetId="0c9126f6-e7d9-465e-95a3-32fd013cd5d8" TargetRef="Center" FileName="test" WaitPointId="0c9126f6-e7d9-465e-95a3-32fd013cd5d8" Offset.Z="-50">
+      <Condition Type="StepReady" Operator="AND" StepId="0" />
+    </Item>
+    <Item Id="0941c8e3-1283-4667-9541-bff26d828c0c" Description="" ActionType="GotoStep" StepId="e2494b47-9ee8-4cde-835e-2db46ce2b703">
+      <Condition Type="StepReady" Operator="AND" StepId="0" />
+    </Item>
+  </Steps>
+</Root>

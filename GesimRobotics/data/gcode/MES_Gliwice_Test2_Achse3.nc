@@ -1,0 +1,247 @@
+%MES_Gliwice_Test2
+
+(3MF: C:\Users\RPC\Desktop\3MF_Files\MES_2xMat_30x30x0,04.3mf)
+(Sliced with Machete 2.0.0)
+(Created by GesimRobotics 1.18.1.5085)
+(Creation Date: 2022-09-01 14:25:00)
+(Estimated Time: 00:03:23)
+(Partial Print: 1 -> 3 um)
+R120=-20000 (Min.X)
+R121=20000 (Max.X)
+R122=-20000 (Min.Y)
+R123=20000 (Max.Y)
+R124=0 (Min.Z)
+R125=10000 (Max.Z)
+
+(**********************)
+(* Tool Configuration *)
+(**********************)
+
+
+(Tool 3: CartridgeDisp: MES Dispenser Achse 3)
+R101=3
+R500=1200 (Speed in mm/min)
+(Estimated Volume: 0.01 ml)
+
+(********)
+(* Init *)
+(********)
+
+G54
+M5
+ROT Z=R126
+
+(**********************)
+(* Layer 1 [Z: 0.001] *)
+(**********************)
+
+M102 R1=3 R2=1 R3=1 R4=30 @714 (Pressure in kPa)
+T3 M6 @716 (Select MES Dispenser Achse 3)
+G1 F=R500
+M103 R1=1 R2=0 @714
+G1 X20 Y14
+G1 Q1=5.001 M100 @717
+G1 X-20 Y14
+G1 X-20 Y12
+G1 X20 Y12
+G1 X20 Y10
+G1 X-20 Y10
+G1 X-20 Y8
+G1 X20 Y8
+G1 X20 Y6
+G1 X-20 Y6
+G1 X-20 Y4
+G1 X20 Y4
+G1 X20 Y2
+G1 X-20 Y2
+G1 X-20 Y0
+G1 X20 Y0
+G1 X20 Y-2
+G1 X-20 Y-2
+G1 X-20 Y-4
+G1 X20 Y-4
+G1 X20 Y-6
+G1 X-20 Y-6
+G1 X-20 Y-8
+G1 X20 Y-8
+G1 X20 Y-10
+G1 X-20 Y-10
+G1 X-20 Y-12
+G1 X20 Y-12
+G1 X20 Y-14
+G1 X-20 Y-14
+G1 X-14 Y20
+G1 Q1=5.001 M100 @717
+G1 X-14 Y-20
+G1 X-12 Y-20
+G1 X-12 Y20
+G1 X-10 Y20
+G1 X-10 Y-20
+G1 X-8 Y-20
+G1 X-8 Y20
+G1 X-6 Y20
+G1 X-6 Y-20
+G1 X-4 Y-20
+G1 X-4 Y20
+G1 X-2 Y20
+G1 X-2 Y-20
+G1 X0 Y-20
+G1 X0 Y20
+G1 X2 Y20
+G1 X2 Y-20
+G1 X4 Y-20
+G1 X4 Y20
+G1 X6 Y20
+G1 X6 Y-20
+G1 X8 Y-20
+G1 X8 Y20
+G1 X10 Y20
+G1 X10 Y-20
+G1 X12 Y-20
+G1 X12 Y20
+G1 X14 Y20
+G1 X14 Y-20
+
+(**********************)
+(* Layer 2 [Z: 0.002] *)
+(**********************)
+
+M102 R1=3 R2=1 R3=1 R4=30 @714 (Pressure in kPa)
+G1 X20 Y14
+G1 Q1=5.002 M100 @717
+G1 X-20 Y14
+G1 X-20 Y12
+G1 X20 Y12
+G1 X20 Y10
+G1 X-20 Y10
+G1 X-20 Y8
+G1 X20 Y8
+G1 X20 Y6
+G1 X-20 Y6
+G1 X-20 Y4
+G1 X20 Y4
+G1 X20 Y2
+G1 X-20 Y2
+G1 X-20 Y0
+G1 X20 Y0
+G1 X20 Y-2
+G1 X-20 Y-2
+G1 X-20 Y-4
+G1 X20 Y-4
+G1 X20 Y-6
+G1 X-20 Y-6
+G1 X-20 Y-8
+G1 X20 Y-8
+G1 X20 Y-10
+G1 X-20 Y-10
+G1 X-20 Y-12
+G1 X20 Y-12
+G1 X20 Y-14
+G1 X-20 Y-14
+G1 X-14 Y20
+G1 Q1=5.002 M100 @717
+G1 X-14 Y-20
+G1 X-12 Y-20
+G1 X-12 Y20
+G1 X-10 Y20
+G1 X-10 Y-20
+G1 X-8 Y-20
+G1 X-8 Y20
+G1 X-6 Y20
+G1 X-6 Y-20
+G1 X-4 Y-20
+G1 X-4 Y20
+G1 X-2 Y20
+G1 X-2 Y-20
+G1 X0 Y-20
+G1 X0 Y20
+G1 X2 Y20
+G1 X2 Y-20
+G1 X4 Y-20
+G1 X4 Y20
+G1 X6 Y20
+G1 X6 Y-20
+G1 X8 Y-20
+G1 X8 Y20
+G1 X10 Y20
+G1 X10 Y-20
+G1 X12 Y-20
+G1 X12 Y20
+G1 X14 Y20
+G1 X14 Y-20
+
+(**********************)
+(* Layer 3 [Z: 0.003] *)
+(**********************)
+
+M102 R1=3 R2=1 R3=1 R4=30 @714 (Pressure in kPa)
+G1 X20 Y14
+G1 Q1=5.003 M100 @717
+G1 X-20 Y14
+G1 X-20 Y12
+G1 X20 Y12
+G1 X20 Y10
+G1 X-20 Y10
+G1 X-20 Y8
+G1 X20 Y8
+G1 X20 Y6
+G1 X-20 Y6
+G1 X-20 Y4
+G1 X20 Y4
+G1 X20 Y2
+G1 X-20 Y2
+G1 X-20 Y0
+G1 X20 Y0
+G1 X20 Y-2
+G1 X-20 Y-2
+G1 X-20 Y-4
+G1 X20 Y-4
+G1 X20 Y-6
+G1 X-20 Y-6
+G1 X-20 Y-8
+G1 X20 Y-8
+G1 X20 Y-10
+G1 X-20 Y-10
+G1 X-20 Y-12
+G1 X20 Y-12
+G1 X20 Y-14
+G1 X-20 Y-14
+G1 X-14 Y20
+G1 Q1=5.003 M100 @717
+G1 X-14 Y-20
+G1 X-12 Y-20
+G1 X-12 Y20
+G1 X-10 Y20
+G1 X-10 Y-20
+G1 X-8 Y-20
+G1 X-8 Y20
+G1 X-6 Y20
+G1 X-6 Y-20
+G1 X-4 Y-20
+G1 X-4 Y20
+G1 X-2 Y20
+G1 X-2 Y-20
+G1 X0 Y-20
+G1 X0 Y20
+G1 X2 Y20
+G1 X2 Y-20
+G1 X4 Y-20
+G1 X4 Y20
+G1 X6 Y20
+G1 X6 Y-20
+G1 X8 Y-20
+G1 X8 Y20
+G1 X10 Y20
+G1 X10 Y-20
+G1 X12 Y-20
+G1 X12 Y20
+G1 X14 Y20
+G1 X14 Y-20
+
+(*******)
+(* End *)
+(*******)
+
+M104
+M101 @716
+M2

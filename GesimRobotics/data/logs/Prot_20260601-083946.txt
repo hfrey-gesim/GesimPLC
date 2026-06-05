@@ -1,0 +1,1 @@
+﻿Time;Mode;State;ErrorId;Cmd;

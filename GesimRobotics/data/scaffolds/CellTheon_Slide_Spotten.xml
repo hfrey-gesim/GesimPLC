@@ -1,0 +1,363 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<Root Version="5" Mode="Advanced">
+  <Objects>
+    <Object>
+      <Model Type="CSVSpots" FillRule="Positive">
+        <FileName>\\nas-gesim\gesim3\Stein\Protokolle\CellTheon\CSV_CellTheon_bsp2_Meander.csv</FileName>
+        <Factor>1</Factor>
+      </Model>
+      <Position Type="Manual">
+        <X>0</X>
+        <Y>0</Y>
+        <Z>0</Z>
+        <Rotate>false</Rotate>
+        <RotationAngle>0</RotationAngle>
+      </Position>
+      <SpotOrder>AsGiven</SpotOrder>
+      <Materials />
+      <SupportMaterial Name="Support" Voxelize="false">
+        <Infill>
+          <InfillType>Lines</InfillType>
+          <StartAngle>0</StartAngle>
+          <AngleChange>90</AngleChange>
+          <RepeatAngleChange>1</RepeatAngleChange>
+          <InfillOffset>0</InfillOffset>
+          <InfillOffsetRelative>false</InfillOffsetRelative>
+          <StrandDistance>1000</StrandDistance>
+          <Amplitude>200</Amplitude>
+          <Alternate>false</Alternate>
+          <MinDistance>500</MinDistance>
+          <MinLength>1000</MinLength>
+        </Infill>
+        <Outline>
+          <OutlineOffset>0</OutlineOffset>
+          <OutlineDistance>1000</OutlineDistance>
+          <OutlineMinDistance>500</OutlineMinDistance>
+          <FiniteOutlines>true</FiniteOutlines>
+          <OutlineNumber>1</OutlineNumber>
+        </Outline>
+        <Voxel>
+          <VoxelType>SquareGrid</VoxelType>
+          <VoxelShift>false</VoxelShift>
+          <VoxelOffset>0</VoxelOffset>
+          <VoxelMinDistance>0</VoxelMinDistance>
+          <VoxelDistance>500</VoxelDistance>
+        </Voxel>
+        <Sample>
+          <Color>#00FFFFFF</Color>
+          <PrepOptions />
+        </Sample>
+        <Layers OutlineFirst="false">
+          <Layer>
+            <Infill></Infill>
+            <Outline></Outline>
+          </Layer>
+        </Layers>
+      </SupportMaterial>
+      <Paths />
+      <Samples>
+        <Sample>
+          <Strand>1</Strand>
+          <Color>sc#1; 0,212230757; 0,0231533684; 0,144128472</Color>
+          <PrepOptions>
+            <SourceName />
+            <WashTime>0</WashTime>
+            <WashFlow>0</WashFlow>
+            <WashTargetNr>0</WashTargetNr>
+            <WashSpotNr>0</WashSpotNr>
+            <PostWashDryTargetNr>0</PostWashDryTargetNr>
+            <PostWashDryCount>0</PostWashDryCount>
+            <PostWashDryTime>100</PostWashDryTime>
+            <PostAspirateDryTargetNr>0</PostAspirateDryTargetNr>
+            <PostAspirateDryCount>0</PostAspirateDryCount>
+            <PostAspirateDryTime>100</PostAspirateDryTime>
+            <AspirateSampleVolume>0</AspirateSampleVolume>
+            <AspirateSampleFlow>10</AspirateSampleFlow>
+            <AspirateSampleWaitTime>2000</AspirateSampleWaitTime>
+            <AspirateSampleAirGap>0</AspirateSampleAirGap>
+            <AspirateSampleDiluterBypass>0</AspirateSampleDiluterBypass>
+            <AspirateSampleWellUsage>OneWell</AspirateSampleWellUsage>
+            <AspirateSampleSpots />
+            <AspirateSampleAirGap>0</AspirateSampleAirGap>
+            <AspirateSampleDiluterBypass>0</AspirateSampleDiluterBypass>
+            <DispenseSampleVolume>0</DispenseSampleVolume>
+            <DispenseSampleFlow>0</DispenseSampleFlow>
+            <DispenseSampleTargetNr>0</DispenseSampleTargetNr>
+            <DispenseSampleSpotNr>0</DispenseSampleSpotNr>
+            <PreDispenseTest>false</PreDispenseTest>
+            <PreDispenseTestTargetNr>0</PreDispenseTestTargetNr>
+            <PostDispenseTest>false</PostDispenseTest>
+            <PostDispenseTestTargetNr>0</PostDispenseTestTargetNr>
+          </PrepOptions>
+        </Sample>
+        <Sample>
+          <Strand>1</Strand>
+          <Color>sc#1; 0,4244615; 0,0463067368; 0,288256943</Color>
+          <PrepOptions>
+            <SourceName />
+            <WashTime>0</WashTime>
+            <WashFlow>0</WashFlow>
+            <WashTargetNr>0</WashTargetNr>
+            <WashSpotNr>0</WashSpotNr>
+            <PostWashDryTargetNr>0</PostWashDryTargetNr>
+            <PostWashDryCount>0</PostWashDryCount>
+            <PostWashDryTime>100</PostWashDryTime>
+            <PostAspirateDryTargetNr>0</PostAspirateDryTargetNr>
+            <PostAspirateDryCount>0</PostAspirateDryCount>
+            <PostAspirateDryTime>100</PostAspirateDryTime>
+            <AspirateSampleVolume>0</AspirateSampleVolume>
+            <AspirateSampleFlow>10</AspirateSampleFlow>
+            <AspirateSampleWaitTime>2000</AspirateSampleWaitTime>
+            <AspirateSampleAirGap>0</AspirateSampleAirGap>
+            <AspirateSampleDiluterBypass>0</AspirateSampleDiluterBypass>
+            <AspirateSampleWellUsage>OneWell</AspirateSampleWellUsage>
+            <AspirateSampleSpots />
+            <AspirateSampleAirGap>0</AspirateSampleAirGap>
+            <AspirateSampleDiluterBypass>0</AspirateSampleDiluterBypass>
+            <DispenseSampleVolume>0</DispenseSampleVolume>
+            <DispenseSampleFlow>0</DispenseSampleFlow>
+            <DispenseSampleTargetNr>0</DispenseSampleTargetNr>
+            <DispenseSampleSpotNr>0</DispenseSampleSpotNr>
+            <PreDispenseTest>false</PreDispenseTest>
+            <PreDispenseTestTargetNr>0</PreDispenseTestTargetNr>
+            <PostDispenseTest>false</PostDispenseTest>
+            <PostDispenseTestTargetNr>0</PostDispenseTestTargetNr>
+          </PrepOptions>
+        </Sample>
+        <Sample>
+          <Strand>1</Strand>
+          <Color>sc#1; 0,106115378; 0,0115766842; 0,0720642358</Color>
+          <PrepOptions>
+            <SourceName />
+            <WashTime>0</WashTime>
+            <WashFlow>0</WashFlow>
+            <WashTargetNr>0</WashTargetNr>
+            <WashSpotNr>0</WashSpotNr>
+            <PostWashDryTargetNr>0</PostWashDryTargetNr>
+            <PostWashDryCount>0</PostWashDryCount>
+            <PostWashDryTime>100</PostWashDryTime>
+            <PostAspirateDryTargetNr>0</PostAspirateDryTargetNr>
+            <PostAspirateDryCount>0</PostAspirateDryCount>
+            <PostAspirateDryTime>100</PostAspirateDryTime>
+            <AspirateSampleVolume>0</AspirateSampleVolume>
+            <AspirateSampleFlow>10</AspirateSampleFlow>
+            <AspirateSampleWaitTime>2000</AspirateSampleWaitTime>
+            <AspirateSampleAirGap>0</AspirateSampleAirGap>
+            <AspirateSampleDiluterBypass>0</AspirateSampleDiluterBypass>
+            <AspirateSampleWellUsage>OneWell</AspirateSampleWellUsage>
+            <AspirateSampleSpots />
+            <AspirateSampleAirGap>0</AspirateSampleAirGap>
+            <AspirateSampleDiluterBypass>0</AspirateSampleDiluterBypass>
+            <DispenseSampleVolume>0</DispenseSampleVolume>
+            <DispenseSampleFlow>0</DispenseSampleFlow>
+            <DispenseSampleTargetNr>0</DispenseSampleTargetNr>
+            <DispenseSampleSpotNr>0</DispenseSampleSpotNr>
+            <PreDispenseTest>false</PreDispenseTest>
+            <PreDispenseTestTargetNr>0</PreDispenseTestTargetNr>
+            <PostDispenseTest>false</PostDispenseTest>
+            <PostDispenseTestTargetNr>0</PostDispenseTestTargetNr>
+          </PrepOptions>
+        </Sample>
+        <Sample>
+          <Strand>1</Strand>
+          <Color>sc#1; 0,6366923; 0,06946011; 0,4323854</Color>
+          <PrepOptions>
+            <SourceName />
+            <WashTime>0</WashTime>
+            <WashFlow>0</WashFlow>
+            <WashTargetNr>0</WashTargetNr>
+            <WashSpotNr>0</WashSpotNr>
+            <PostWashDryTargetNr>0</PostWashDryTargetNr>
+            <PostWashDryCount>0</PostWashDryCount>
+            <PostWashDryTime>100</PostWashDryTime>
+            <PostAspirateDryTargetNr>0</PostAspirateDryTargetNr>
+            <PostAspirateDryCount>0</PostAspirateDryCount>
+            <PostAspirateDryTime>100</PostAspirateDryTime>
+            <AspirateSampleVolume>0</AspirateSampleVolume>
+            <AspirateSampleFlow>10</AspirateSampleFlow>
+            <AspirateSampleWaitTime>2000</AspirateSampleWaitTime>
+            <AspirateSampleAirGap>0</AspirateSampleAirGap>
+            <AspirateSampleDiluterBypass>0</AspirateSampleDiluterBypass>
+            <AspirateSampleWellUsage>OneWell</AspirateSampleWellUsage>
+            <AspirateSampleSpots />
+            <AspirateSampleAirGap>0</AspirateSampleAirGap>
+            <AspirateSampleDiluterBypass>0</AspirateSampleDiluterBypass>
+            <DispenseSampleVolume>0</DispenseSampleVolume>
+            <DispenseSampleFlow>0</DispenseSampleFlow>
+            <DispenseSampleTargetNr>0</DispenseSampleTargetNr>
+            <DispenseSampleSpotNr>0</DispenseSampleSpotNr>
+            <PreDispenseTest>false</PreDispenseTest>
+            <PreDispenseTestTargetNr>0</PreDispenseTestTargetNr>
+            <PostDispenseTest>false</PostDispenseTest>
+            <PostDispenseTestTargetNr>0</PostDispenseTestTargetNr>
+          </PrepOptions>
+        </Sample>
+      </Samples>
+    </Object>
+  </Objects>
+  <Tools>
+    <Tool Type="PiezoPip" Nr="1">
+      <Identifier>1</Identifier>
+      <Color>#FF7F2A6A</Color>
+      <Speed>115000</Speed>
+      <ZOffset>5000</ZOffset>
+      <Height>100</Height>
+      <Width>250</Width>
+      <LoopExtension>0</LoopExtension>
+      <Connection>None</Connection>
+      <Spotting>true</Spotting>
+      <StartBreak>0</StartBreak>
+      <SpotAlignment>Center</SpotAlignment>
+      <SpotDistance>500</SpotDistance>
+      <Fluid Channel="0">
+        <Quantity>1</Quantity>
+        <Parameter Type="Frequency" Number="1">
+          <Feed>16</Feed>
+        </Parameter>
+        <Parameter Type="Pulse" Number="1">
+          <Feed>16</Feed>
+        </Parameter>
+        <Parameter Type="Voltage" Number="1">
+          <Feed>20</Feed>
+        </Parameter>
+      </Fluid>
+      <RunPrep>true</RunPrep>
+      <RepeatPrep>0</RepeatPrep>
+      <PrepOptions>
+        <SourceName></SourceName>
+        <WashTime>0</WashTime>
+        <WashFlow>0</WashFlow>
+        <WashTargetNr>0</WashTargetNr>
+        <WashSpotNr>0</WashSpotNr>
+        <PostWashDryTargetNr>0</PostWashDryTargetNr>
+        <PostWashDryCount>0</PostWashDryCount>
+        <PostWashDryTime>100</PostWashDryTime>
+        <PostAspirateDryTargetNr>0</PostAspirateDryTargetNr>
+        <PostAspirateDryCount>0</PostAspirateDryCount>
+        <PostAspirateDryTime>100</PostAspirateDryTime>
+        <AspirateSampleVolume>0</AspirateSampleVolume>
+        <AspirateSampleFlow>10</AspirateSampleFlow>
+        <AspirateSampleWaitTime>2000</AspirateSampleWaitTime>
+        <AspirateSampleAirGap>0</AspirateSampleAirGap>
+        <AspirateSampleDiluterBypass>0</AspirateSampleDiluterBypass>
+        <AspirateSampleWellUsage>OneWell</AspirateSampleWellUsage>
+        <AspirateSampleSpots />
+        <AspirateSampleAirGap>0</AspirateSampleAirGap>
+        <AspirateSampleDiluterBypass>0</AspirateSampleDiluterBypass>
+        <DispenseSampleVolume>0</DispenseSampleVolume>
+        <DispenseSampleFlow>0</DispenseSampleFlow>
+        <DispenseSampleTargetNr>0</DispenseSampleTargetNr>
+        <DispenseSampleSpotNr>0</DispenseSampleSpotNr>
+        <PreDispenseTest>true</PreDispenseTest>
+        <PreDispenseTestTargetNr>2</PreDispenseTestTargetNr>
+        <PostDispenseTest>true</PostDispenseTest>
+        <PostDispenseTestTargetNr>2</PostDispenseTestTargetNr>
+      </PrepOptions>
+    </Tool>
+    <Tool Type="PassivePip" Nr="3">
+      <Identifier>3</Identifier>
+      <Color>#FFAC7B39</Color>
+      <Speed>10000</Speed>
+      <ZOffset>1000</ZOffset>
+      <Height>10</Height>
+      <Width>250</Width>
+      <LoopExtension>0</LoopExtension>
+      <Connection>None</Connection>
+      <Spotting>true</Spotting>
+      <StartBreak>0</StartBreak>
+      <SpotAlignment>Center</SpotAlignment>
+      <SpotDistance>500</SpotDistance>
+      <Fluid Channel="0">
+        <Quantity>50000</Quantity>
+        <Parameter Type="Flow" Number="1">
+          <Feed>2000</Feed>
+        </Parameter>
+      </Fluid>
+      <RunPrep>false</RunPrep>
+      <RepeatPrep>0</RepeatPrep>
+      <PrepOptions>
+        <SourceName></SourceName>
+        <WashTime>9000</WashTime>
+        <WashFlow>100</WashFlow>
+        <WashTargetNr>1</WashTargetNr>
+        <WashSpotNr>1</WashSpotNr>
+        <PostWashDryTargetNr>3</PostWashDryTargetNr>
+        <PostWashDryCount>1</PostWashDryCount>
+        <PostWashDryTime>100</PostWashDryTime>
+        <PostAspirateDryTargetNr>0</PostAspirateDryTargetNr>
+        <PostAspirateDryCount>0</PostAspirateDryCount>
+        <PostAspirateDryTime>100</PostAspirateDryTime>
+        <AspirateSampleVolume>0</AspirateSampleVolume>
+        <AspirateSampleFlow>10</AspirateSampleFlow>
+        <AspirateSampleWaitTime>2000</AspirateSampleWaitTime>
+        <AspirateSampleAirGap>0</AspirateSampleAirGap>
+        <AspirateSampleDiluterBypass>0</AspirateSampleDiluterBypass>
+        <AspirateSampleWellUsage>OneWell</AspirateSampleWellUsage>
+        <AspirateSampleSpots />
+        <AspirateSampleAirGap>0</AspirateSampleAirGap>
+        <AspirateSampleDiluterBypass>0</AspirateSampleDiluterBypass>
+        <DispenseSampleVolume>0</DispenseSampleVolume>
+        <DispenseSampleFlow>0</DispenseSampleFlow>
+        <DispenseSampleTargetNr>0</DispenseSampleTargetNr>
+        <DispenseSampleSpotNr>0</DispenseSampleSpotNr>
+        <PreDispenseTest>false</PreDispenseTest>
+        <PreDispenseTestTargetNr>0</PreDispenseTestTargetNr>
+        <PostDispenseTest>false</PostDispenseTest>
+        <PostDispenseTestTargetNr>0</PostDispenseTestTargetNr>
+      </PrepOptions>
+    </Tool>
+    <Tool Type="CartridgeDisp" Nr="7">
+      <Identifier>7</Identifier>
+      <UseExposure>false</UseExposure>
+      <Brightness>0</Brightness>
+      <StirrMode>Never</StirrMode>
+      <StirrSpeed>0</StirrSpeed>
+      <StirrTimeLimited>false</StirrTimeLimited>
+      <StirrTimeOn>0</StirrTimeOn>
+      <StirrTimeOff>0</StirrTimeOff>
+      <StirrDuration>1000</StirrDuration>
+      <StirrRepeat>1</StirrRepeat>
+      <Color>#FF2A506E</Color>
+      <Speed>10000</Speed>
+      <ZOffset>30000</ZOffset>
+      <Height>180</Height>
+      <Width>250</Width>
+      <LoopExtension>0</LoopExtension>
+      <Connection>OutlinePlus</Connection>
+      <TearOffDirection>None</TearOffDirection>
+      <TearOffSpeed>115000</TearOffSpeed>
+      <TearOffDistance>1000</TearOffDistance>
+      <CleanTipBeforeUsage>false</CleanTipBeforeUsage>
+      <CleanTipAfterUsage>false</CleanTipAfterUsage>
+      <RepeatTipCleaning>1</RepeatTipCleaning>
+      <CleaningMode>WireAndBrush</CleaningMode>
+      <CleanTipBrushSlot>1</CleanTipBrushSlot>
+      <CleanTipDispenseTime>0</CleanTipDispenseTime>
+      <CleanTipWireSpeed>100000</CleanTipWireSpeed>
+      <Strand Channel="1">
+        <Parameter Type="Pressure" Number="1">
+          <Value>50</Value>
+        </Parameter>
+        <StartBreak>0</StartBreak>
+        <EndBreak>0</EndBreak>
+        <SetInactive>true</SetInactive>
+      </Strand>
+    </Tool>
+  </Tools>
+  <Options>
+    <CustomToolOrder>false</CustomToolOrder>
+    <ToolOrder>1</ToolOrder>
+    <IsPartialPrint>false</IsPartialPrint>
+    <MinZHeight>0</MinZHeight>
+    <MaxZHeight>0</MaxZHeight>
+    <Pausing>false</Pausing>
+    <LayerPause>1000</LayerPause>
+    <RepeatPause>1</RepeatPause>
+    <Smoothing>false</Smoothing>
+    <SmoothingMinAngle>45</SmoothingMinAngle>
+    <SmoothingMaxDistance>100</SmoothingMaxDistance>
+    <DistanceLimit>false</DistanceLimit>
+    <PointMaxDistance>10000</PointMaxDistance>
+    <DoNotSetPrintParms>false</DoNotSetPrintParms>
+  </Options>
+</Root>

@@ -1,0 +1,23 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<Root>
+  <Header Version="2.0.17.3" Id="0" />
+  <Steps>
+    <Item Id="2856ad1b-482e-48d9-a1be-b104ee505912" Description="" ActionType="CounterStep" Operator="Set" Amount="0" />
+    <Item Id="0a11b80a-ae87-4b18-91c2-62d0645a7031" Description="" ObjectType="PassivePip" ObjectId="3e661140-90f6-4de1-becf-d2aec3ecee36" ActionType="MoveXY" DistanceX="250" DistanceY="0" SpeedX="5000" SpeedY="10000">
+      <Condition Type="StepReady" Operator="AND" StepId="0" />
+    </Item>
+    <Item Id="0f83cb6d-ab75-4eb3-9cd7-d74dd9ca59a3" Description="" ObjectType="PassivePip" ObjectId="3e661140-90f6-4de1-becf-d2aec3ecee36" ActionType="MoveXY" DistanceX="-500" DistanceY="0" SpeedX="5000" SpeedY="10000">
+      <Condition Type="StepReady" Operator="AND" StepId="0" />
+    </Item>
+    <Item Id="17733b96-0a0f-4a17-bf84-2ea884da07c4" Description="" ObjectType="PassivePip" ObjectId="3e661140-90f6-4de1-becf-d2aec3ecee36" ActionType="MoveXY" DistanceX="250" DistanceY="0" SpeedX="5000" SpeedY="10000">
+      <Condition Type="StepReady" Operator="AND" StepId="0" />
+    </Item>
+    <Item Id="b6368b64-fb99-46ec-84a8-3216a3e4e4fc" Description="" ActionType="CounterStep" Operator="Add" Amount="1">
+      <Condition Type="StepReady" Operator="AND" StepId="0" />
+    </Item>
+    <Item Id="bf251822-4abe-42fe-8776-2319bca664a3" Description="" ActionType="GotoStep" StepId="0a11b80a-ae87-4b18-91c2-62d0645a7031">
+      <Condition Type="StepResult" Operator="AND" StepId="b6368b64-fb99-46ec-84a8-3216a3e4e4fc" CompOperator="LT" CompValue="5" />
+      <Condition Type="StepReady" Operator="AND" StepId="0" />
+    </Item>
+  </Steps>
+</Root>

@@ -1,0 +1,28 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<Root>
+  <Header Version="2.0.18.5239" Id="0" />
+  <Steps>
+    <Item Id="9fb3e66f-373b-41d1-a503-fc353840ef87" Description="" ObjectType="Exposure" ObjectId="7db9b67a-2b57-4203-99ee-70e0002d1337" ActionType="MoveToTarget" TargetId="785cf146-9427-4812-a40d-966c8afafdb5" TargetRef="Center" SpeedX="115000" SpeedY="115000" SpeedZ="72000" Offset.X="0" Offset.Y="0" Offset.Z="0" ZLevel="PrePos" />
+    <Item Id="20f4a388-ea81-4288-a7c0-55e9d357a03b" Description="" ObjectType="Exposure" ObjectId="7db9b67a-2b57-4203-99ee-70e0002d1337" ActionType="MoveXY" DistanceX="0" DistanceY="-36000" SpeedX="10000" SpeedY="115000">
+      <Condition Type="StepReady" Operator="AND" StepId="0" />
+    </Item>
+    <Item Id="1a20df44-a60f-406b-83aa-a54277920130" Description="" ObjectType="Exposure" ObjectId="7db9b67a-2b57-4203-99ee-70e0002d1337" ActionType="Expose" On="true" Brightness="0" Time="0">
+      <Condition Type="StepReady" Operator="AND" StepId="0" />
+    </Item>
+    <Item Id="9227051e-8b8f-4827-acd6-0b46a1d4a87c" Description="" ObjectType="Exposure" ObjectId="7db9b67a-2b57-4203-99ee-70e0002d1337" ActionType="MoveXY" DistanceX="0" DistanceY="-5000" SpeedX="10000" SpeedY="10000">
+      <Condition Type="StepReady" Operator="AND" StepId="20f4a388-ea81-4288-a7c0-55e9d357a03b" />
+    </Item>
+    <Item Id="777bc81e-78e6-4a23-93ff-b6960eb61cf8" Description="" ObjectType="Exposure" ObjectId="7db9b67a-2b57-4203-99ee-70e0002d1337" ActionType="MoveXY" DistanceX="0" DistanceY="-10000" SpeedX="10000" SpeedY="2000">
+      <Condition Type="StepReady" Operator="AND" StepId="0" />
+    </Item>
+    <Item Id="3047186f-73c7-4e08-8d7f-0014ede6271c" Description="" ObjectType="Exposure" ObjectId="7db9b67a-2b57-4203-99ee-70e0002d1337" ActionType="MoveXY" DistanceX="0" DistanceY="-2000" SpeedX="10000" SpeedY="10000">
+      <Condition Type="StepReady" Operator="AND" StepId="0" />
+    </Item>
+    <Item Id="fae43e50-b22a-46fb-8f73-26cc9ac7524d" Description="" ObjectType="Exposure" ObjectId="7db9b67a-2b57-4203-99ee-70e0002d1337" ActionType="Expose" On="false" Brightness="0" Time="1000">
+      <Condition Type="StepReady" Operator="AND" StepId="0" />
+    </Item>
+    <Item Id="540c771e-98eb-4ddb-9797-a35234d658be" Description="" ObjectType="Exposure" ObjectId="7db9b67a-2b57-4203-99ee-70e0002d1337" ActionType="MoveZ" Mode="Home" SpeedZ="10000" Distance="10000">
+      <Condition Type="StepReady" Operator="AND" StepId="0" />
+    </Item>
+  </Steps>
+</Root>

@@ -1,0 +1,22 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<Root>
+  <Header Version="2.0.18.5057" Id="0" />
+  <Steps>
+    <Item Id="6a8b6a3c-a97f-49e6-90c0-99ef05daed6b" Description="" ObjectType="Root" ObjectId="936f148b-455b-497c-b642-640f2ac1e6a8" ActionType="RunGCode" TargetId="f5a3bfde-7265-4d4d-bde5-28ef68b1f280" TargetRef="Center" FileName="G" WaitPointId="9d0c878d-da13-445c-8a2c-d20cae1a2324" Offset.Z="0" />
+    <Item Id="b3fc6163-5de4-40c9-8b91-76990519defc" Description="" ObjectType="Root" ObjectId="936f148b-455b-497c-b642-640f2ac1e6a8" ActionType="RunGCode" TargetId="dc24c621-8072-4e14-ad74-d8687aac8d2f" TargetRef="Center" FileName="E" WaitPointId="9d0c878d-da13-445c-8a2c-d20cae1a2324" Offset.Z="0">
+      <Condition Type="StepReady" Operator="AND" StepId="0" />
+    </Item>
+    <Item Id="61678cbd-6d33-40da-bf21-b11dcb42f3dd" Description="" ObjectType="Root" ObjectId="936f148b-455b-497c-b642-640f2ac1e6a8" ActionType="RunGCode" TargetId="9cab1d80-a198-4881-88b6-448501ae4082" TargetRef="Center" FileName="S" WaitPointId="9d0c878d-da13-445c-8a2c-d20cae1a2324" Offset.Z="0">
+      <Condition Type="StepReady" Operator="AND" StepId="0" />
+    </Item>
+    <Item Id="a04ef15b-02b6-4351-9ba1-9e739477d771" Description="" ObjectType="Root" ObjectId="936f148b-455b-497c-b642-640f2ac1e6a8" ActionType="RunGCode" TargetId="8b152854-c6f2-40f6-be6d-cd4f85cf6663" TargetRef="Center" FileName="I" WaitPointId="9d0c878d-da13-445c-8a2c-d20cae1a2324" Offset.Z="0">
+      <Condition Type="StepReady" Operator="AND" StepId="0" />
+    </Item>
+    <Item Id="1cda1876-316b-4a32-a742-41705b319fce" Description="" ObjectType="Root" ObjectId="936f148b-455b-497c-b642-640f2ac1e6a8" ActionType="RunGCode" TargetId="4eb8ab04-a97a-4b27-975b-337ae1b71166" TargetRef="Center" FileName="M" WaitPointId="9d0c878d-da13-445c-8a2c-d20cae1a2324" Offset.Z="0">
+      <Condition Type="StepReady" Operator="AND" StepId="0" />
+    </Item>
+    <Item Id="1c5b4534-8f38-4cd2-9c1d-d69701536c0d" Description="" ObjectType="Root" ObjectId="936f148b-455b-497c-b642-640f2ac1e6a8" ActionType="RunGCode" TargetId="d1024d12-2f4c-48a3-bb51-25dea36de8f8" TargetRef="Center" FileName="2022" WaitPointId="9d0c878d-da13-445c-8a2c-d20cae1a2324" Offset.Z="0">
+      <Condition Type="StepReady" Operator="AND" StepId="0" />
+    </Item>
+  </Steps>
+</Root>

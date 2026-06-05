@@ -1,0 +1,11 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<Root>
+  <Header Version="2.0.18.5239" Id="0" />
+  <Steps>
+    <Item Id="62d1fad2-e654-4f27-92f9-81814c29138b" Description="" ObjectType="Exposure" ObjectId="733002df-3853-4b07-9899-3d36987f0e28" ActionType="Expose" On="true" Brightness="0" Time="0" />
+    <Item Id="576e906d-571d-4024-ab07-175661f26aab" Description="" ObjectType="Root" ObjectId="e94c0ae7-f5eb-42b3-bf25-c6806131cff7" ActionType="RunGCode" TargetId="4610c5c5-9294-4510-89f3-a5c25e4f112f" TargetRef="Center" FileName="Sprühventil_Algi_Spitzdüse" WaitPointId="4610c5c5-9294-4510-89f3-a5c25e4f112f" Offset.Z="0" />
+    <Item Id="561de617-c233-4d41-94e7-2e410ce49a33" Description="" ObjectType="Exposure" ObjectId="733002df-3853-4b07-9899-3d36987f0e28" ActionType="Expose" On="false" Brightness="0" Time="0">
+      <Condition Type="StepReady" Operator="AND" StepId="0" />
+    </Item>
+  </Steps>
+</Root>

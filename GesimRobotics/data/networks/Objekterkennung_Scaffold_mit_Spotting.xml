@@ -1,0 +1,175 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<Root Version="1">
+  <Nodes>
+    <Node>
+      <Uid>a7728ea16b2c4229a57eb68e18958597</Uid>
+      <RepeatedExecutionHandling>Execute</RepeatedExecutionHandling>
+      <PosX>1855</PosX>
+      <PosY>2363</PosY>
+      <ReverseConnectors>false</ReverseConnectors>
+      <Type>Start</Type>
+      <Vars />
+    </Node>
+    <Node>
+      <Uid>8ccf66506c6f4fb59067b74764bf0433</Uid>
+      <RepeatedExecutionHandling>Execute</RepeatedExecutionHandling>
+      <PosX>2700</PosX>
+      <PosY>2378</PosY>
+      <ReverseConnectors>false</ReverseConnectors>
+      <Type>StrobTest</Type>
+      <PipGCodeToolNr>5</PipGCodeToolNr>
+      <PrepOptionsFrequency>90</PrepOptionsFrequency>
+      <PrepOptionsPulse>45</PrepOptionsPulse>
+      <PrepOptionsVoltage>45</PrepOptionsVoltage>
+    </Node>
+    <Node>
+      <Uid>b34062f522994b4ca36b63831bd8c59c</Uid>
+      <RepeatedExecutionHandling>Execute</RepeatedExecutionHandling>
+      <PosX>2476</PosX>
+      <PosY>2372</PosY>
+      <ReverseConnectors>false</ReverseConnectors>
+      <Type>Sequence</Type>
+      <SeqName>ProbeaufnehmenBlau</SeqName>
+    </Node>
+    <Node>
+      <Uid>b9ffe0d80fda42c8a983ee894c039ea5</Uid>
+      <RepeatedExecutionHandling>Execute</RepeatedExecutionHandling>
+      <PosX>2480</PosX>
+      <PosY>2483</PosY>
+      <ReverseConnectors>true</ReverseConnectors>
+      <Type>Sequence</Type>
+      <SeqName>ProbeabgebenBlau</SeqName>
+    </Node>
+    <Node>
+      <Uid>50ff4bf0d3164b0c81d9c76f8ef25c83</Uid>
+      <RepeatedExecutionHandling>Execute</RepeatedExecutionHandling>
+      <PosX>2894</PosX>
+      <PosY>2375</PosY>
+      <ReverseConnectors>false</ReverseConnectors>
+      <Type>Sequence</Type>
+      <SeqName>Objekterkennung_Scaffold_mit_Spots_Layer1</SeqName>
+    </Node>
+    <Node>
+      <Uid>c9e5d197c5904b7485792a097718f7be</Uid>
+      <RepeatedExecutionHandling>Execute</RepeatedExecutionHandling>
+      <PosX>3203</PosX>
+      <PosY>2365</PosY>
+      <ReverseConnectors>false</ReverseConnectors>
+      <Type>StrobTest</Type>
+      <PipGCodeToolNr>5</PipGCodeToolNr>
+      <PrepOptionsFrequency>90</PrepOptionsFrequency>
+      <PrepOptionsPulse>45</PrepOptionsPulse>
+      <PrepOptionsVoltage>45</PrepOptionsVoltage>
+    </Node>
+    <Node>
+      <Uid>f40bf12486544482b366496e5065d67e</Uid>
+      <RepeatedExecutionHandling>Execute</RepeatedExecutionHandling>
+      <PosX>3412</PosX>
+      <PosY>2362</PosY>
+      <ReverseConnectors>false</ReverseConnectors>
+      <Type>Sequence</Type>
+      <SeqName>Objekterkennung_Scaffold_mit_Spots_Layer2</SeqName>
+    </Node>
+    <Node>
+      <Uid>693cac2181e84b3fbe58cd552d7fce9b</Uid>
+      <RepeatedExecutionHandling>Execute</RepeatedExecutionHandling>
+      <PosX>3719</PosX>
+      <PosY>2352</PosY>
+      <ReverseConnectors>false</ReverseConnectors>
+      <Type>StrobTest</Type>
+      <PipGCodeToolNr>5</PipGCodeToolNr>
+      <PrepOptionsFrequency>90</PrepOptionsFrequency>
+      <PrepOptionsPulse>45</PrepOptionsPulse>
+      <PrepOptionsVoltage>45</PrepOptionsVoltage>
+    </Node>
+    <Node>
+      <Uid>3d18142a92894534b6608603d62c86b4</Uid>
+      <RepeatedExecutionHandling>Execute</RepeatedExecutionHandling>
+      <PosX>3921</PosX>
+      <PosY>2334</PosY>
+      <ReverseConnectors>false</ReverseConnectors>
+      <Type>Sequence</Type>
+      <SeqName>ProbeabgebenBlau</SeqName>
+    </Node>
+    <Node>
+      <Uid>2e432382b47449fb87e3add44ac31735</Uid>
+      <RepeatedExecutionHandling>Execute</RepeatedExecutionHandling>
+      <PosX>3194</PosX>
+      <PosY>2622</PosY>
+      <ReverseConnectors>true</ReverseConnectors>
+      <Type>Sequence</Type>
+      <SeqName>ProbeaufnehmenBlau</SeqName>
+    </Node>
+    <Node>
+      <Uid>d73e9853163c493f9a3bd82615259118</Uid>
+      <RepeatedExecutionHandling>Execute</RepeatedExecutionHandling>
+      <PosX>3401</PosX>
+      <PosY>2622</PosY>
+      <ReverseConnectors>true</ReverseConnectors>
+      <Type>Sequence</Type>
+      <SeqName>ProbeabgebenBlau</SeqName>
+    </Node>
+    <Node>
+      <Uid>4dbf66aad6e841488be7709a772afa7a</Uid>
+      <RepeatedExecutionHandling>Execute</RepeatedExecutionHandling>
+      <PosX>3421</PosX>
+      <PosY>2508</PosY>
+      <ReverseConnectors>false</ReverseConnectors>
+      <Type>Loop</Type>
+      <MaxCount>3</MaxCount>
+    </Node>
+    <Node>
+      <Uid>5829f21d55474268b40b7787e1935be7</Uid>
+      <RepeatedExecutionHandling>Execute</RepeatedExecutionHandling>
+      <PosX>2703</PosX>
+      <PosY>2509</PosY>
+      <ReverseConnectors>true</ReverseConnectors>
+      <Type>Loop</Type>
+      <MaxCount>3</MaxCount>
+    </Node>
+    <Node>
+      <Uid>27590fc939ba4d89907dde712f908751</Uid>
+      <RepeatedExecutionHandling>Repair</RepeatedExecutionHandling>
+      <PosX>2253</PosX>
+      <PosY>2252</PosY>
+      <ReverseConnectors>false</ReverseConnectors>
+      <RepairedBy />
+      <Type>CameraDetectionMulti</Type>
+      <Targets>
+        <TargetUid>ae32e1ef-8ad6-4f0a-bc24-70880371d1f4</TargetUid>
+      </Targets>
+      <Mode>InFrame</Mode>
+      <SearchRadius>0</SearchRadius>
+      <CameraDelayOnMarker>0</CameraDelayOnMarker>
+      <Selection>CenterMost</Selection>
+      <SearchRecursive>true</SearchRecursive>
+      <Rescale>false</Rescale>
+      <RepeatNoMarkerFound>false</RepeatNoMarkerFound>
+      <RepeatTimesNoMarkerFound>0</RepeatTimesNoMarkerFound>
+      <ErrorOnDistanceDeviation>false</ErrorOnDistanceDeviation>
+      <MaxDeviationPercent>0</MaxDeviationPercent>
+      <DetectionErrorHandling>Continue</DetectionErrorHandling>
+      <FastApproach>false</FastApproach>
+    </Node>
+  </Nodes>
+  <Connections>
+    <Connection SourceUid="b34062f522994b4ca36b63831bd8c59c" SourceConnectorIndex="0" DestUid="8ccf66506c6f4fb59067b74764bf0433" DestConnectorIndex="0" />
+    <Connection SourceUid="b9ffe0d80fda42c8a983ee894c039ea5" SourceConnectorIndex="0" DestUid="b34062f522994b4ca36b63831bd8c59c" DestConnectorIndex="0" />
+    <Connection SourceUid="8ccf66506c6f4fb59067b74764bf0433" SourceConnectorIndex="0" DestUid="50ff4bf0d3164b0c81d9c76f8ef25c83" DestConnectorIndex="0" />
+    <Connection SourceUid="50ff4bf0d3164b0c81d9c76f8ef25c83" SourceConnectorIndex="0" DestUid="c9e5d197c5904b7485792a097718f7be" DestConnectorIndex="0" />
+    <Connection SourceUid="c9e5d197c5904b7485792a097718f7be" SourceConnectorIndex="0" DestUid="f40bf12486544482b366496e5065d67e" DestConnectorIndex="0" />
+    <Connection SourceUid="f40bf12486544482b366496e5065d67e" SourceConnectorIndex="0" DestUid="693cac2181e84b3fbe58cd552d7fce9b" DestConnectorIndex="0" />
+    <Connection SourceUid="693cac2181e84b3fbe58cd552d7fce9b" SourceConnectorIndex="0" DestUid="3d18142a92894534b6608603d62c86b4" DestConnectorIndex="0" />
+    <Connection SourceUid="d73e9853163c493f9a3bd82615259118" SourceConnectorIndex="0" DestUid="2e432382b47449fb87e3add44ac31735" DestConnectorIndex="0" />
+    <Connection SourceUid="2e432382b47449fb87e3add44ac31735" SourceConnectorIndex="0" DestUid="c9e5d197c5904b7485792a097718f7be" DestConnectorIndex="0" />
+    <Connection SourceUid="693cac2181e84b3fbe58cd552d7fce9b" SourceConnectorIndex="1" DestUid="3d18142a92894534b6608603d62c86b4" DestConnectorIndex="0" />
+    <Connection SourceUid="8ccf66506c6f4fb59067b74764bf0433" SourceConnectorIndex="1" DestUid="5829f21d55474268b40b7787e1935be7" DestConnectorIndex="0" />
+    <Connection SourceUid="5829f21d55474268b40b7787e1935be7" SourceConnectorIndex="0" DestUid="b9ffe0d80fda42c8a983ee894c039ea5" DestConnectorIndex="0" />
+    <Connection SourceUid="c9e5d197c5904b7485792a097718f7be" SourceConnectorIndex="1" DestUid="4dbf66aad6e841488be7709a772afa7a" DestConnectorIndex="0" />
+    <Connection SourceUid="4dbf66aad6e841488be7709a772afa7a" SourceConnectorIndex="0" DestUid="d73e9853163c493f9a3bd82615259118" DestConnectorIndex="0" />
+    <Connection SourceUid="a7728ea16b2c4229a57eb68e18958597" SourceConnectorIndex="0" DestUid="27590fc939ba4d89907dde712f908751" DestConnectorIndex="0" />
+  </Connections>
+  <Options>
+    <Camera>is_42120156</Camera>
+  </Options>
+</Root>

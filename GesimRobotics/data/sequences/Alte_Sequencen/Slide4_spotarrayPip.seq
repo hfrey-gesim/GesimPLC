@@ -1,0 +1,15 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<Root>
+  <Header Version="2.0.18.5057" Id="0" />
+  <Steps>
+    <Item Id="10ff9ef4-d02c-4c5a-a8bf-92a8e311615a" Description="" ObjectType="Diluter" ObjectId="e4a579e6-0509-469b-a2bf-20c322c92cad" ActionType="DilPrepare" Quantity="2400" Mode="ForDispense" />
+    <Item Id="acd7201e-2165-4e17-a9b6-8f91646416f5" Description="" ObjectType="PassivePip" ObjectId="c6d7eded-8563-4f05-8c75-aba6bf303942" ActionType="ActionOnArray" TargetId="583b4363-c7b2-41c0-a159-9aa6d1fe034e" Order="RowWiseSaw" SpeedX="115000" SpeedY="115000" SpeedZ="72000" SpeedZRelease="72000" ActionOffset.Z="0" ReleaseDistance.Z="0" MoveOffset.Z="2000" ReleaseMoveInstantly="false" ReleaseMoveDelay="0">
+      <SubAction ActionType="Dispense" Quantity="30" Flow="100" />
+      <Condition Type="StepReady" Operator="AND" StepId="0" />
+    </Item>
+    <Item Id="9f2b18a9-3b8b-4696-9180-3c7327b64065" Description="" ObjectType="PassivePip" ObjectId="c6d7eded-8563-4f05-8c75-aba6bf303942" ActionType="ActionOnArray" TargetId="f572e43a-bb0f-41ca-9afd-ca0c57569c87" Order="RowWiseSaw" SpeedX="115000" SpeedY="115000" SpeedZ="72000" SpeedZRelease="72000" ActionOffset.Z="0" ReleaseDistance.Z="0" MoveOffset.Z="2000" ReleaseMoveInstantly="false" ReleaseMoveDelay="0">
+      <SubAction ActionType="Dispense" Quantity="30" Flow="100" />
+      <Condition Type="StepReady" Operator="AND" StepId="0" />
+    </Item>
+  </Steps>
+</Root>

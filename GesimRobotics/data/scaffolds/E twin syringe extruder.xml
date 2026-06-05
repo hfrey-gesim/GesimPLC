@@ -1,0 +1,96 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<Root Version="5" Mode="Advanced">
+  <Objects>
+    <Object>
+      <Model Type="ThreeMF" FillRule="Positive">
+        <FileName>C:\Users\RPC\Desktop\E_meu.3mf</FileName>
+      </Model>
+      <Position Type="Manual">
+        <X>0</X>
+        <Y>0</Y>
+        <Z>0</Z>
+        <Rotate>false</Rotate>
+        <RotationAngle>0</RotationAngle>
+      </Position>
+      <SpotOrder>AsGiven</SpotOrder>
+      <Materials>
+        <Material Name="Regular">
+          <Infill>
+            <InfillType>Lines</InfillType>
+            <StartAngle>0</StartAngle>
+            <AngleChange>0</AngleChange>
+            <RepeatAngleChange>1</RepeatAngleChange>
+            <InfillOffset>500</InfillOffset>
+            <InfillOffsetRelative>false</InfillOffsetRelative>
+            <StrandDistance>740</StrandDistance>
+            <MinDistance>500</MinDistance>
+            <MinLength>1000</MinLength>
+          </Infill>
+          <Outline>
+            <OutlineOffset>0</OutlineOffset>
+            <OutlineDistance>1000</OutlineDistance>
+            <OutlineMinDistance>500</OutlineMinDistance>
+            <FiniteOutlines>true</FiniteOutlines>
+            <OutlineNumber>1</OutlineNumber>
+          </Outline>
+          <Layers OutlineFirst="true">
+            <Layer>
+              <Infill>7</Infill>
+              <Outline>7</Outline>
+            </Layer>
+          </Layers>
+        </Material>
+      </Materials>
+      <Paths />
+      <Samples />
+    </Object>
+  </Objects>
+  <Tools>
+    <Tool Type="TwinExtruder" Nr="7">
+      <Identifier>7</Identifier>
+      <Color>#FF2A506E</Color>
+      <Speed>3000</Speed>
+      <ZOffset>300</ZOffset>
+      <Height>400</Height>
+      <Width>840</Width>
+      <Connection>OutlinePlus</Connection>
+      <TearOffDirection>Vertical</TearOffDirection>
+      <TearOffSpeed>115000</TearOffSpeed>
+      <TearOffDistance>1000</TearOffDistance>
+      <CleanTipBeforeUsage>true</CleanTipBeforeUsage>
+      <CleanTipAfterUsage>false</CleanTipAfterUsage>
+      <RepeatTipCleaning>1</RepeatTipCleaning>
+      <CleaningMode>WireAndBrush</CleaningMode>
+      <CleanTipBrushSlot>1</CleanTipBrushSlot>
+      <CleanTipDispenseTime>0</CleanTipDispenseTime>
+      <CleanTipWireSpeed>115000</CleanTipWireSpeed>
+      <Strand Channel="1">
+        <Parameter Type="Feed" Number="1">
+          <Feed>3</Feed>
+        </Parameter>
+        <Parameter Type="Feed" Number="2">
+          <Feed>1</Feed>
+        </Parameter>
+        <StartBreak>400</StartBreak>
+        <EndBreak>500</EndBreak>
+        <SetInactive>true</SetInactive>
+      </Strand>
+    </Tool>
+  </Tools>
+  <Options>
+    <CustomToolOrder>false</CustomToolOrder>
+    <ToolOrder>7</ToolOrder>
+    <IsPartialPrint>false</IsPartialPrint>
+    <MinZHeight>0</MinZHeight>
+    <MaxZHeight>1999</MaxZHeight>
+    <Pausing>true</Pausing>
+    <LayerPause>5000</LayerPause>
+    <RepeatPause>1</RepeatPause>
+    <Smoothing>false</Smoothing>
+    <SmoothingMinAngle>45</SmoothingMinAngle>
+    <SmoothingMaxDistance>100</SmoothingMaxDistance>
+    <DistanceLimit>false</DistanceLimit>
+    <PointMaxDistance>10000</PointMaxDistance>
+    <DoNotSetPrintParms>true</DoNotSetPrintParms>
+  </Options>
+</Root>

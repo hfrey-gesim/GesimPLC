@@ -1,0 +1,95 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<Root Version="1">
+  <Nodes>
+    <Node>
+      <Uid>d01133cd91444157ba39c514bae37f7a</Uid>
+      <RepeatedExecutionHandling>Execute</RepeatedExecutionHandling>
+      <PosX>132</PosX>
+      <PosY>2243</PosY>
+      <ReverseConnectors>false</ReverseConnectors>
+      <Type>Start</Type>
+      <Vars>
+        <Var Name="Höhe" VarValueType="System.Int32" InitValue="0" />
+        <Var Name="X" VarValueType="System.Int32" InitValue="200" />
+      </Vars>
+    </Node>
+    <Node>
+      <Uid>4692cfd8e4fb45cc9c057e876da23768</Uid>
+      <RepeatedExecutionHandling>Execute</RepeatedExecutionHandling>
+      <PosX>405</PosX>
+      <PosY>2175</PosY>
+      <ReverseConnectors>false</ReverseConnectors>
+      <Type>DynamicSequence</Type>
+      <Targets />
+      <SequenceStep>
+        <Root>
+          <Header Version="2.0.18.5239" Id="0" />
+          <Steps>
+            <Item Id="cdfdb637-4d2a-4dfe-92a1-5c979b07768e" Description="" ObjectType="Root" ObjectId="e94c0ae7-f5eb-42b3-bf25-c6806131cff7" ActionType="RunGCode" TargetId="0cfcf0fc-8027-4e6e-8562-5e103bfca16f" TargetRef="Center" FileName="Algi_HA_PulverHA250429M_Demo1" WaitPointId="37dbf157-6035-4d1b-919f-984053104dba" Offset.Z="0" />
+            <Item Id="e80cc078-9bae-42ea-8a82-47ea0fd86aa3" Description="" ObjectType="PiezoPip" ObjectId="008ef286-00aa-433c-a6d6-ccec526b1412" ActionType="GetPipSample" TargetId="35b6066a-1387-42d1-971a-3ff3a135f28a" Col="5" Row="12" Quantity="5" Flow="2" Delay="2000" QuantityAirGap="0">
+              <Condition Type="StepReady" Operator="AND" StepId="0" />
+            </Item>
+            <Item Id="203d542d-1d2f-41d6-bd14-9f51531fb399" Description="" ObjectType="PiezoPip" ObjectId="008ef286-00aa-433c-a6d6-ccec526b1412" ActionType="WashTool" TargetId="7464ef0b-5dbb-4f23-a674-a406df008bed" WashPointNr="1" Mode="WashOutside" Quantity="200" Flow="100" Time="2500">
+              <Condition Type="StepReady" Operator="AND" StepId="0" />
+            </Item>
+            <Item Id="12d34da6-5756-4633-8bb4-fdd5fa424f2b" Description="" ObjectType="PiezoPip" ObjectId="008ef286-00aa-433c-a6d6-ccec526b1412" ActionType="DryPip" TargetId="09643790-c0d6-4435-ae8a-ca2ae375674e" Time="0" Offset.Z="500">
+              <Condition Type="StepReady" Operator="AND" StepId="0" />
+            </Item>
+          </Steps>
+        </Root>
+      </SequenceStep>
+      <Parameters>
+        <Step Nr="1" />
+        <Step Nr="2" />
+        <Step Nr="3" />
+        <Step Nr="4" />
+      </Parameters>
+    </Node>
+    <Node>
+      <Uid>f3372bcb32384bcbb58c8b21021992fa</Uid>
+      <RepeatedExecutionHandling>Execute</RepeatedExecutionHandling>
+      <PosX>797</PosX>
+      <PosY>2168</PosY>
+      <ReverseConnectors>false</ReverseConnectors>
+      <Type>DynamicSequence</Type>
+      <Targets />
+      <SequenceStep>
+        <Root>
+          <Header Version="2.0.18.5239" Id="0" />
+          <Steps>
+            <Item Id="bb6ed35b-deda-4967-a07c-98bf84964158" Description="" ObjectType="Root" ObjectId="e94c0ae7-f5eb-42b3-bf25-c6806131cff7" ActionType="RunGCode" TargetId="0cfcf0fc-8027-4e6e-8562-5e103bfca16f" TargetRef="Center" FileName="Algi_HA_PulverHA250429M_Demo4" WaitPointId="37dbf157-6035-4d1b-919f-984053104dba" Offset.Z="0" />
+          </Steps>
+        </Root>
+      </SequenceStep>
+      <Parameters>
+        <Step Nr="1" />
+      </Parameters>
+    </Node>
+    <Node>
+      <Uid>063ff50b2ffb4f4d9c567ef2c19ce445</Uid>
+      <RepeatedExecutionHandling>Execute</RepeatedExecutionHandling>
+      <PosX>1200</PosX>
+      <PosY>2186</PosY>
+      <ReverseConnectors>false</ReverseConnectors>
+      <Type>DynamicSequence</Type>
+      <Targets />
+      <SequenceStep>
+        <Root>
+          <Header Version="2.0.18.5239" Id="0" />
+          <Steps>
+            <Item Id="13e8efca-01c1-4b14-8c6c-42dfa4931dd9" Description="" ObjectType="PiezoPip" ObjectId="008ef286-00aa-433c-a6d6-ccec526b1412" ActionType="WashTool" TargetId="7464ef0b-5dbb-4f23-a674-a406df008bed" WashPointNr="1" Mode="WashInOutside" Quantity="200" Flow="100" Time="2500" />
+          </Steps>
+        </Root>
+      </SequenceStep>
+      <Parameters>
+        <Step Nr="1" />
+      </Parameters>
+    </Node>
+  </Nodes>
+  <Connections>
+    <Connection SourceUid="d01133cd91444157ba39c514bae37f7a" SourceConnectorIndex="0" DestUid="4692cfd8e4fb45cc9c057e876da23768" DestConnectorIndex="0" />
+    <Connection SourceUid="4692cfd8e4fb45cc9c057e876da23768" SourceConnectorIndex="0" DestUid="f3372bcb32384bcbb58c8b21021992fa" DestConnectorIndex="0" />
+    <Connection SourceUid="f3372bcb32384bcbb58c8b21021992fa" SourceConnectorIndex="0" DestUid="063ff50b2ffb4f4d9c567ef2c19ce445" DestConnectorIndex="0" />
+  </Connections>
+  <Options />
+</Root>

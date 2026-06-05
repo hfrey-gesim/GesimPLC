@@ -1,0 +1,17 @@
+<?xml version="1.0" encoding="utf-8"?>
+<Target xmlns:xsd="http://www.w3.org/2001/XMLSchema" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance">
+  <Width>25000</Width>
+  <Height>1000</Height>
+  <Depth>75000</Depth>
+  <SpotPatterns />
+  <Marker1Enabled>true</Marker1Enabled>
+  <Marker1PosX>3750</Marker1PosX>
+  <Marker1PosY>1500</Marker1PosY>
+  <Marker1Type>PhagenID_Chip</Marker1Type>
+  <Marker1CornerPos>LeftBottom</Marker1CornerPos>
+  <Marker2Enabled>true</Marker2Enabled>
+  <Marker2PosX>21500</Marker2PosX>
+  <Marker2PosY>73500</Marker2PosY>
+  <Marker2Type>PhagenID_Chip</Marker2Type>
+  <Marker2CornerPos>RightTop</Marker2CornerPos>
+</Target>

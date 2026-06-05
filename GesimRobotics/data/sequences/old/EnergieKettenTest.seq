@@ -1,0 +1,40 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<Root>
+  <Header Version="2.0.18.5239" Id="0" />
+  <Steps>
+    <Item Id="94f159f3-25fa-4d81-b3a0-20b938519a83" Description="" ObjectType="ZSensor" ObjectId="e7fd646e-5717-4d6b-bfdb-ce91bc1202ba" ActionType="MoveToTarget" TargetId="e25b1418-3b1b-4d47-be47-46e9d3f9c380" TargetRef="Center" SpeedX="115000" SpeedY="115000" SpeedZ="72000" Offset.X="0" Offset.Y="0" Offset.Z="0" ZLevel="PrePos" />
+    <Item Id="c585f259-1e54-4788-9a92-4610199ffa55" Description="" ObjectType="ZSensor" ObjectId="e7fd646e-5717-4d6b-bfdb-ce91bc1202ba" ActionType="MoveToTarget" TargetId="af190e34-2a05-42b5-9748-d50c22bc4da0" TargetRef="Center" SpeedX="115000" SpeedY="115000" SpeedZ="72000" Offset.X="0" Offset.Y="0" Offset.Z="0" ZLevel="PrePos">
+      <Condition Type="StepReady" Operator="AND" StepId="0" />
+    </Item>
+    <Item Id="6a69b872-dc92-4ca8-8ed3-80f4c9df0ab6" Description="" ObjectType="ZSensor" ObjectId="e7fd646e-5717-4d6b-bfdb-ce91bc1202ba" ActionType="MoveToTarget" TargetId="ac92d1ed-697b-4fed-9f2f-fdc23607d737" TargetRef="Center" SpeedX="115000" SpeedY="115000" SpeedZ="72000" Offset.X="0" Offset.Y="0" Offset.Z="0" ZLevel="PrePos">
+      <Condition Type="StepReady" Operator="AND" StepId="0" />
+    </Item>
+    <Item Id="73ddd90c-1ec5-402a-9182-5c17936eaa2b" Description="" ObjectType="ZSensor" ObjectId="e7fd646e-5717-4d6b-bfdb-ce91bc1202ba" ActionType="MoveToTarget" TargetId="e5f2f400-8028-4892-b823-e683fd92a95e" TargetRef="Center" SpeedX="115000" SpeedY="115000" SpeedZ="72000" Offset.X="0" Offset.Y="0" Offset.Z="0" ZLevel="PrePos">
+      <Condition Type="StepReady" Operator="AND" StepId="0" />
+    </Item>
+    <Item Id="1d4ebd6d-07a2-4505-b388-083976e83965" Description="" ObjectType="ZSensor" ObjectId="e7fd646e-5717-4d6b-bfdb-ce91bc1202ba" ActionType="MoveToTarget" TargetId="e25b1418-3b1b-4d47-be47-46e9d3f9c380" TargetRef="Center" SpeedX="115000" SpeedY="115000" SpeedZ="72000" Offset.X="0" Offset.Y="0" Offset.Z="0" ZLevel="PrePos">
+      <Condition Type="StepReady" Operator="AND" StepId="0" />
+    </Item>
+    <Item Id="9ba4620b-5514-4e7b-91dd-faa28509d918" Description="" ObjectType="ZSensor" ObjectId="e7fd646e-5717-4d6b-bfdb-ce91bc1202ba" ActionType="MoveToTarget" TargetId="ac92d1ed-697b-4fed-9f2f-fdc23607d737" TargetRef="Center" SpeedX="115000" SpeedY="115000" SpeedZ="72000" Offset.X="0" Offset.Y="0" Offset.Z="0" ZLevel="PrePos">
+      <Condition Type="StepReady" Operator="AND" StepId="0" />
+    </Item>
+    <Item Id="19783632-4048-4754-befd-75b9f68ab070" Description="" ObjectType="ZSensor" ObjectId="e7fd646e-5717-4d6b-bfdb-ce91bc1202ba" ActionType="MoveToTarget" TargetId="e5f2f400-8028-4892-b823-e683fd92a95e" TargetRef="Center" SpeedX="115000" SpeedY="115000" SpeedZ="72000" Offset.X="0" Offset.Y="0" Offset.Z="0" ZLevel="PrePos">
+      <Condition Type="StepReady" Operator="AND" StepId="0" />
+    </Item>
+    <Item Id="450726d5-8274-4887-9473-f3bc6e0d74d8" Description="" ObjectType="ZSensor" ObjectId="e7fd646e-5717-4d6b-bfdb-ce91bc1202ba" ActionType="MoveToTarget" TargetId="af190e34-2a05-42b5-9748-d50c22bc4da0" TargetRef="Center" SpeedX="115000" SpeedY="115000" SpeedZ="72000" Offset.X="0" Offset.Y="0" Offset.Z="0" ZLevel="PrePos">
+      <Condition Type="StepReady" Operator="AND" StepId="0" />
+    </Item>
+    <Item Id="ae73fcd5-6550-4aad-aa41-eb5cc03edd72" Description="" ObjectType="ZSensor" ObjectId="e7fd646e-5717-4d6b-bfdb-ce91bc1202ba" ActionType="MoveToTarget" TargetId="ac92d1ed-697b-4fed-9f2f-fdc23607d737" TargetRef="Center" SpeedX="115000" SpeedY="115000" SpeedZ="72000" Offset.X="0" Offset.Y="0" Offset.Z="0" ZLevel="PrePos">
+      <Condition Type="StepReady" Operator="AND" StepId="0" />
+    </Item>
+    <Item Id="670327ef-4ec0-4c8d-9271-a59af323074a" Description="" ObjectType="ZSensor" ObjectId="e7fd646e-5717-4d6b-bfdb-ce91bc1202ba" ActionType="MoveToTarget" TargetId="e25b1418-3b1b-4d47-be47-46e9d3f9c380" TargetRef="Center" SpeedX="115000" SpeedY="115000" SpeedZ="72000" Offset.X="0" Offset.Y="0" Offset.Z="0" ZLevel="PrePos">
+      <Condition Type="StepReady" Operator="AND" StepId="0" />
+    </Item>
+    <Item Id="e4536674-5e0d-4947-9e53-2e24de4e2de9" Description="" ObjectType="Root" ObjectId="e94c0ae7-f5eb-42b3-bf25-c6806131cff7" ActionType="RunGCode" TargetId="3bdb652c-3ead-42ba-a17f-189f1f2006df" TargetRef="Center" FileName="EnergieKettenTest" WaitPointId="889f9e2b-8f46-4ccd-b9e1-6af322799d51" Offset.Z="0">
+      <Condition Type="StepReady" Operator="AND" StepId="0" />
+    </Item>
+    <Item Id="b842d9d6-8056-445f-8158-b6a350775b3b" Description="" ActionType="GotoStep" StepId="94f159f3-25fa-4d81-b3a0-20b938519a83">
+      <Condition Type="StepReady" Operator="AND" StepId="0" />
+    </Item>
+  </Steps>
+</Root>

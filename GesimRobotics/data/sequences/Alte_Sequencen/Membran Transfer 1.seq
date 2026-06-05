@@ -1,0 +1,31 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<Root>
+  <Header Version="2.0.18.5057" Id="0" />
+  <Steps>
+    <Item Id="46c890d5-c55f-4ace-b24f-9482afcede2b" Description="" ObjectType="CartridgeDisp" ObjectId="30a2b654-8044-4462-9b28-2c93deb52a23" ActionType="SetPressure" Pressure="200" />
+    <Item Id="eb8caafc-4d0b-416e-9bcd-8d16f72f42d7" Description="" ObjectType="CartridgeDisp" ObjectId="30a2b654-8044-4462-9b28-2c93deb52a23" ActionType="MoveToTarget" TargetId="b2809d5a-25d2-4569-a61c-199169e0fe5c" TargetRef="Center" SpeedX="115000" SpeedY="115000" SpeedZ="72000" Offset.X="0" Offset.Y="0" Offset.Z="0" ZLevel="PrePos">
+      <Condition Type="StepReady" Operator="AND" StepId="0" />
+    </Item>
+    <Item Id="0644c4a7-76e8-427b-bb19-3404099e58f5" Description="" ObjectType="CartridgeDisp" ObjectId="30a2b654-8044-4462-9b28-2c93deb52a23" ActionType="MoveZ" Mode="Relative" SpeedZ="10000" Distance="-1200">
+      <Condition Type="StepReady" Operator="AND" StepId="0" />
+    </Item>
+    <Item Id="d9ce2788-4a9a-45ae-8b86-6d59707ea5d3" Description="" ObjectType="CartridgeDisp" ObjectId="30a2b654-8044-4462-9b28-2c93deb52a23" ActionType="SwitchPressure" Ctrl="PressOn" Time="0">
+      <Condition Type="StepReady" Operator="AND" StepId="0" />
+    </Item>
+    <Item Id="6cdad181-4569-42bb-b9b6-4b11b881c390" Description="" ActionType="Wait" Time="1000">
+      <Condition Type="StepReady" Operator="AND" StepId="0" />
+    </Item>
+    <Item Id="2ee61863-4c5a-42aa-8848-6de81ac50efc" Description="" ObjectType="CartridgeDisp" ObjectId="30a2b654-8044-4462-9b28-2c93deb52a23" ActionType="MoveToTarget" TargetId="b9e09e65-b81b-4da2-aac1-df79b19d932e" TargetRef="Center" SpeedX="115000" SpeedY="115000" SpeedZ="72000" Offset.X="0" Offset.Y="0" Offset.Z="0" ZLevel="PrePos">
+      <Condition Type="StepReady" Operator="AND" StepId="0" />
+    </Item>
+    <Item Id="eb8b8b7c-231f-4016-80c0-2df7ff21df7f" Description="" ObjectType="CartridgeDisp" ObjectId="30a2b654-8044-4462-9b28-2c93deb52a23" ActionType="MoveZ" Mode="Relative" SpeedZ="10000" Distance="-1200">
+      <Condition Type="StepReady" Operator="AND" StepId="0" />
+    </Item>
+    <Item Id="f1e96a67-874f-4488-8c4d-31670b6bd812" Description="" ObjectType="CartridgeDisp" ObjectId="30a2b654-8044-4462-9b28-2c93deb52a23" ActionType="SwitchPressure" Ctrl="Off" Time="0">
+      <Condition Type="StepReady" Operator="AND" StepId="0" />
+    </Item>
+    <Item Id="582e4d1b-dbbb-41b7-a1fc-c6e9e6bb4c5e" Description="" ObjectType="CartridgeDisp" ObjectId="30a2b654-8044-4462-9b28-2c93deb52a23" ActionType="MoveZ" Mode="Home" SpeedZ="10000" Distance="10000">
+      <Condition Type="StepReady" Operator="AND" StepId="0" />
+    </Item>
+  </Steps>
+</Root>

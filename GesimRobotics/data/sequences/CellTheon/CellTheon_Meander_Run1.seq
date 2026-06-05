@@ -1,0 +1,28 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<Root>
+  <Header Version="2.0.18.5239" Id="0" />
+  <Steps>
+    <Item Id="ec29d889-a265-4787-b4d1-3aa76498be2f" Description="" ObjectType="PiezoPip" ObjectId="09eaf504-8211-4f6c-bbe9-ed706b5c0c7f" ActionType="MoveToTarget" TargetId="1b4daff7-8a0f-457a-b2a6-03e989437b8d" TargetRef="ArrayRowCol" Col="1" Row="104" SpeedX="115000" SpeedY="115000" SpeedZ="72000" Offset.X="0" Offset.Y="0" Offset.Z="0" ZLevel="PrePos" />
+    <Item Id="ff3df000-26d2-481e-8b16-6c6a4f176589" Description="" ObjectType="Root" ObjectId="e94c0ae7-f5eb-42b3-bf25-c6806131cff7" ActionType="RunSequence" SequenceName="Pip1_Drop">
+      <Condition Type="StepReady" Operator="AND" StepId="0" />
+    </Item>
+    <Item Id="2a7176de-e925-4c0a-8f07-fa24a4d1bcc8" Description="" ObjectType="PiezoPip" ObjectId="09eaf504-8211-4f6c-bbe9-ed706b5c0c7f" ActionType="MoveToTarget" TargetId="1b4daff7-8a0f-457a-b2a6-03e989437b8d" TargetRef="ArrayRowCol" Col="2" Row="105" SpeedX="115000" SpeedY="115000" SpeedZ="72000" Offset.X="0" Offset.Y="0" Offset.Z="0" ZLevel="PrePos">
+      <Condition Type="StepReady" Operator="AND" StepId="0" />
+    </Item>
+    <Item Id="1207388b-f93a-4078-95e2-08a4ab1e8024" Description="" ObjectType="Root" ObjectId="e94c0ae7-f5eb-42b3-bf25-c6806131cff7" ActionType="RunSequence" SequenceName="Pip1_Drop">
+      <Condition Type="StepReady" Operator="AND" StepId="0" />
+    </Item>
+    <Item Id="2ebc7f17-09ab-4ce8-8d61-afb119fed3db" Description="" ObjectType="PiezoPip" ObjectId="09eaf504-8211-4f6c-bbe9-ed706b5c0c7f" ActionType="MoveToTarget" TargetId="1b4daff7-8a0f-457a-b2a6-03e989437b8d" TargetRef="ArrayRowCol" Col="3" Row="106" SpeedX="115000" SpeedY="115000" SpeedZ="72000" Offset.X="0" Offset.Y="0" Offset.Z="0" ZLevel="PrePos">
+      <Condition Type="StepReady" Operator="AND" StepId="0" />
+    </Item>
+    <Item Id="96a9b7bc-8744-426a-b5ce-26e7c9946a89" Description="" ObjectType="Root" ObjectId="e94c0ae7-f5eb-42b3-bf25-c6806131cff7" ActionType="RunSequence" SequenceName="Pip1_Drop">
+      <Condition Type="StepReady" Operator="AND" StepId="0" />
+    </Item>
+    <Item Id="f99e2268-a62a-409f-8315-39e136b4df28" Description="" ObjectType="PiezoPip" ObjectId="09eaf504-8211-4f6c-bbe9-ed706b5c0c7f" ActionType="MoveToTarget" TargetId="1b4daff7-8a0f-457a-b2a6-03e989437b8d" TargetRef="ArrayRowCol" Col="4" Row="107" SpeedX="115000" SpeedY="115000" SpeedZ="72000" Offset.X="0" Offset.Y="0" Offset.Z="0" ZLevel="PrePos">
+      <Condition Type="StepReady" Operator="AND" StepId="0" />
+    </Item>
+    <Item Id="aa2aeb95-5e75-46ca-bec3-2d3f4f2cff4e" Description="" ObjectType="Root" ObjectId="e94c0ae7-f5eb-42b3-bf25-c6806131cff7" ActionType="RunSequence" SequenceName="Pip1_Drop">
+      <Condition Type="StepReady" Operator="AND" StepId="0" />
+    </Item>
+  </Steps>
+</Root>

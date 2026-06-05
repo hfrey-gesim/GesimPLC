@@ -1,0 +1,40 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<Root>
+  <Header Version="2.0.18.5057" Id="0" />
+  <Steps>
+    <Item Id="fb015a10-b3dd-422f-b794-830bcc6c93ee" Description="" ObjectType="SolenoidPip" ObjectId="ccbd78bd-5697-4283-a6d7-7003476f1c30" ActionType="MoveToTarget" TargetId="1bb015b3-159e-42f1-aea9-b56d7f84e5ba" TargetRef="Center" SpeedX="115000" SpeedY="115000" SpeedZ="72000" Offset.X="0" Offset.Y="0" Offset.Z="0" ZLevel="PrePos" />
+    <Item Id="6824fa66-eac5-4b0e-b2f4-c656fdae063c" Description="" ObjectType="SolenoidPip" ObjectId="ccbd78bd-5697-4283-a6d7-7003476f1c30" ActionType="Aspirate" Quantity="100" Flow="20">
+      <Condition Type="StepReady" Operator="AND" StepId="0" />
+    </Item>
+    <Item Id="a5dc8c5e-f3a5-41ff-867f-67279ba0e59a" Description="" ActionType="Wait" Time="5000">
+      <Condition Type="StepReady" Operator="AND" StepId="0" />
+    </Item>
+    <Item Id="6c05f4f3-17d7-4f91-84d2-a495c38cf836" Description="" ObjectType="SolenoidPip" ObjectId="ccbd78bd-5697-4283-a6d7-7003476f1c30" ActionType="MoveZ" Mode="Free" SpeedZ="10000" Distance="10000">
+      <Condition Type="StepReady" Operator="AND" StepId="0" />
+    </Item>
+    <Item Id="e6d9aa1e-a14a-4529-aa79-5b7a4657c73b" Description="" ObjectType="SolenoidPip" ObjectId="ccbd78bd-5697-4283-a6d7-7003476f1c30" ActionType="Aspirate" Quantity="10" Flow="20">
+      <Condition Type="StepReady" Operator="AND" StepId="0" />
+    </Item>
+    <Item Id="46edbfd2-0951-48f3-9009-c8770cd121da" Description="" ActionType="Wait" Time="5000">
+      <Condition Type="StepReady" Operator="AND" StepId="0" />
+    </Item>
+    <Item Id="faeffabf-be21-4af9-8799-48d17177a731" Description="" ObjectType="SolenoidPip" ObjectId="ccbd78bd-5697-4283-a6d7-7003476f1c30" ActionType="MoveToTarget" TargetId="c311a29e-78ef-4258-8fcc-1a7b6c023e69" TargetRef="Center" SpeedX="115000" SpeedY="115000" SpeedZ="72000" Offset.X="0" Offset.Y="0" Offset.Z="0" ZLevel="PrePos">
+      <Condition Type="StepReady" Operator="AND" StepId="0" />
+    </Item>
+    <Item Id="134826ca-911d-4add-a514-d049724a76e3" Description="" ObjectType="SolenoidPip" ObjectId="ccbd78bd-5697-4283-a6d7-7003476f1c30" ActionType="Aspirate" Quantity="30" Flow="20">
+      <Condition Type="StepReady" Operator="AND" StepId="0" />
+    </Item>
+    <Item Id="efd65e91-4727-46fd-aeb1-e64cea2c75e8" Description="" ActionType="Wait" Time="5000">
+      <Condition Type="StepReady" Operator="AND" StepId="0" />
+    </Item>
+    <Item Id="73abe981-53d1-4004-831f-df0756d24ea2" Description="" ObjectType="SolenoidPip" ObjectId="ccbd78bd-5697-4283-a6d7-7003476f1c30" ActionType="MoveToTarget" TargetId="97a191b2-bdf5-40a5-a312-465021d0b2c7" TargetRef="Center" SpeedX="115000" SpeedY="115000" SpeedZ="72000" Offset.X="0" Offset.Y="0" Offset.Z="2000" ZLevel="PrePos">
+      <Condition Type="StepReady" Operator="AND" StepId="0" />
+    </Item>
+    <Item Id="bcf08a97-bb23-4163-9525-1d7bb0318ef4" Description="" ObjectType="SolenoidPip" ObjectId="ccbd78bd-5697-4283-a6d7-7003476f1c30" ActionType="Aspirate" Quantity="20" Flow="20">
+      <Condition Type="StepReady" Operator="AND" StepId="0" />
+    </Item>
+    <Item Id="ce85fcda-95c7-4b2a-acb0-6bdd533675db" Description="" ActionType="Wait" Time="5000">
+      <Condition Type="StepReady" Operator="AND" StepId="0" />
+    </Item>
+  </Steps>
+</Root>

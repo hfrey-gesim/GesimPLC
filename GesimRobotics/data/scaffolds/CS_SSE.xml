@@ -1,0 +1,104 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<Root Version="5" Mode="Advanced">
+  <Objects>
+    <Object>
+      <Model Type="Block" FillRule="Positive">
+        <Radius>15000</Radius>
+        <IsHollow>false</IsHollow>
+        <InnerRadius>3500</InnerRadius>
+        <Corners>150</Corners>
+        <Height>150</Height>
+      </Model>
+      <Position Type="CenterOnOrigin">
+        <X>0</X>
+        <Y>0</Y>
+        <Z>0</Z>
+        <Rotate>true</Rotate>
+        <RotationAngle>45000</RotationAngle>
+      </Position>
+      <SpotOrder>AsGiven</SpotOrder>
+      <Materials>
+        <Material Name="Default">
+          <Infill>
+            <InfillType>Rings</InfillType>
+            <StartAngle>0</StartAngle>
+            <AngleChange>90</AngleChange>
+            <RepeatAngleChange>1</RepeatAngleChange>
+            <InfillOffset>0</InfillOffset>
+            <InfillOffsetRelative>false</InfillOffsetRelative>
+            <StrandDistance>2500</StrandDistance>
+            <MinDistance>300</MinDistance>
+            <MinLength>300000</MinLength>
+          </Infill>
+          <Outline>
+            <OutlineOffset>0</OutlineOffset>
+            <OutlineDistance>400</OutlineDistance>
+            <OutlineMinDistance>0</OutlineMinDistance>
+            <FiniteOutlines>true</FiniteOutlines>
+            <OutlineNumber>2</OutlineNumber>
+          </Outline>
+          <Layers OutlineFirst="true">
+            <Layer>
+              <Infill>3</Infill>
+              <Outline></Outline>
+            </Layer>
+          </Layers>
+        </Material>
+      </Materials>
+      <Paths />
+      <Samples />
+    </Object>
+  </Objects>
+  <Tools>
+    <Tool Type="MultiCartridgeHolder" Nr="3">
+      <Identifier>3</Identifier>
+      <Color>#FFAC7B39</Color>
+      <Speed>5000</Speed>
+      <ZOffset>1000</ZOffset>
+      <Height>140</Height>
+      <Width>200</Width>
+      <Connection>OutlinePlus</Connection>
+      <TearOffDirection>Diagonal</TearOffDirection>
+      <TearOffSpeed>115000</TearOffSpeed>
+      <TearOffDistance>1000</TearOffDistance>
+      <CleanTipBeforeUsage>false</CleanTipBeforeUsage>
+      <CleanTipAfterUsage>false</CleanTipAfterUsage>
+      <RepeatTipCleaning>1</RepeatTipCleaning>
+      <CleaningMode>WireAndBrush</CleaningMode>
+      <CleanTipDispenseTime>0</CleanTipDispenseTime>
+      <CleanTipWireSpeed>0</CleanTipWireSpeed>
+      <Strand Channel="1">
+        <Parameter Type="Pressure" Number="1">
+          <Feed>120</Feed>
+        </Parameter>
+        <StartBreak>200</StartBreak>
+        <EndBreak>0</EndBreak>
+        <SetInactive>true</SetInactive>
+      </Strand>
+      <Strand Channel="2">
+        <Parameter Type="Pressure" Number="2">
+          <Feed>170</Feed>
+        </Parameter>
+        <StartBreak>200</StartBreak>
+        <EndBreak>0</EndBreak>
+        <SetInactive>true</SetInactive>
+      </Strand>
+    </Tool>
+  </Tools>
+  <Options>
+    <CustomToolOrder>false</CustomToolOrder>
+    <ToolOrder>3</ToolOrder>
+    <IsPartialPrint>false</IsPartialPrint>
+    <MinZHeight>0</MinZHeight>
+    <MaxZHeight>139</MaxZHeight>
+    <Pausing>false</Pausing>
+    <LayerPause>10000</LayerPause>
+    <RepeatPause>1</RepeatPause>
+    <Smoothing>false</Smoothing>
+    <SmoothingMinAngle>45</SmoothingMinAngle>
+    <SmoothingMaxDistance>100</SmoothingMaxDistance>
+    <DistanceLimit>false</DistanceLimit>
+    <PointMaxDistance>10000</PointMaxDistance>
+    <DoNotSetPrintParms>false</DoNotSetPrintParms>
+  </Options>
+</Root>

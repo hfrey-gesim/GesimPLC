@@ -1,0 +1,9 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<Root>
+  <Header Version="2.0.18.5239" Id="0" />
+  <Steps>
+    <Item Id="9e2c82be-e865-4888-9e92-df9cb809fef6" Description="" ObjectType="PiezoPip" ObjectId="09eaf504-8211-4f6c-bbe9-ed706b5c0c7f" ActionType="DispenseDrops" Ctrl="On" Drops="1" />
+    <Item Id="019151f7-0313-4667-a637-3248843610f2" Description="" ObjectType="PiezoPip" ObjectId="48679bdb-6a24-4d12-a30f-922f977f0727" ActionType="DispenseDrops" Ctrl="On" Drops="1" />
+    <Item Id="f7270b22-80bd-4a04-8605-c662839ce0da" Description="" ObjectType="PiezoPip" ObjectId="64a244b4-6c62-41d9-92f7-4aa35fd8a48c" ActionType="DispenseDrops" Ctrl="On" Drops="1" />
+  </Steps>
+</Root>

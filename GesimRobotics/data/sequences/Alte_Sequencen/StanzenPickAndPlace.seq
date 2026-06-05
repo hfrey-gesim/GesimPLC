@@ -1,0 +1,55 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<Root>
+  <Header Version="2.0.17.3" Id="0" />
+  <Steps>
+    <Item Id="7d02355e-384a-4f29-817c-2fc11c9a26f5" Description="" ObjectType="CartridgeDisp" ObjectId="e2d4991a-80a1-487a-b8fc-93b595ae99c2" ActionType="SetPressure" Pressure="50" />
+    <Item Id="b3c8917b-0930-47d3-9c02-5a30dd66ae13" Description="" ObjectType="CartridgeDisp" ObjectId="4356ebfb-02cf-47c8-8b3a-4040a98f500b" ActionType="SetPressure" Pressure="330">
+      <Condition Type="StepReady" Operator="AND" StepId="0" />
+    </Item>
+    <Item Id="ac039206-012a-49fb-a1b9-423046631bfc" Description="" ObjectType="CartridgeDisp" ObjectId="4356ebfb-02cf-47c8-8b3a-4040a98f500b" ActionType="MoveToTarget" TargetId="bd9733a6-1750-47d3-b8a0-0762108bab4b" TargetRef="ArrayRowCol" Col="1" Row="7" SpeedX="115000" SpeedY="115000" SpeedZ="10000" Offset.X="0" Offset.Y="0" Offset.Z="-100" ZLevel="PrePos">
+      <Condition Type="StepReady" Operator="AND" StepId="0" />
+    </Item>
+    <Item Id="cb75eb08-0c8f-4dcb-9645-7e3bb21e8773" Description="" ObjectType="Exposure" ObjectId="ba0746d2-6806-4b49-ad37-93abaa326543" ActionType="Expose" On="true" Brightness="0" Time="300">
+      <Condition Type="StepReady" Operator="AND" StepId="0" />
+    </Item>
+    <Item Id="b734e4cd-802f-4a37-8e20-9999a16df0b3" Description="" ObjectType="CartridgeDisp" ObjectId="4356ebfb-02cf-47c8-8b3a-4040a98f500b" ActionType="MoveToTarget" TargetId="7cb590a5-dcb4-4485-b72d-cf84801ecf80" TargetRef="Center" SpeedX="115000" SpeedY="115000" SpeedZ="10000" Offset.X="0" Offset.Y="0" Offset.Z="0" ZLevel="PrePos">
+      <Condition Type="StepReady" Operator="AND" StepId="0" />
+    </Item>
+    <Item Id="a2565481-d8f6-40bd-9b20-f91b16a6cf8c" Description="" ObjectType="TriplePip" ObjectId="75fd56b1-ad7a-401e-bdf4-2cbdf1130d0b" ActionType="SetVacuum" Pressure="-70">
+      <Condition Type="StepReady" Operator="AND" StepId="0" />
+    </Item>
+    <Item Id="1bdac447-dc68-4a27-ad86-189e12bc0844" Description="" ObjectType="CartridgeDisp" ObjectId="4356ebfb-02cf-47c8-8b3a-4040a98f500b" ActionType="SwitchPressure" Ctrl="PressOn" Time="0">
+      <Condition Type="StepReady" Operator="AND" StepId="0" />
+    </Item>
+    <Item Id="0f00538b-9547-4b16-8b55-bdc187e661de" Description="" ObjectType="CartridgeDisp" ObjectId="4356ebfb-02cf-47c8-8b3a-4040a98f500b" ActionType="MoveZ" Mode="Relative" SpeedZ="10000" Distance="500">
+      <Condition Type="StepReady" Operator="AND" StepId="0" />
+    </Item>
+    <Item Id="c5d537df-0d66-4e31-ab1c-84246c8af5ca" Description="" ObjectType="CartridgeDisp" ObjectId="4356ebfb-02cf-47c8-8b3a-4040a98f500b" ActionType="SwitchPressure" Ctrl="Off" Time="0">
+      <Condition Type="StepReady" Operator="AND" StepId="0" />
+    </Item>
+    <Item Id="eedd5374-43d9-4094-9fa5-be54aa351558" Description="" ObjectType="PassivePip" ObjectId="3e661140-90f6-4de1-becf-d2aec3ecee36" ActionType="MoveToTarget" TargetId="7cb590a5-dcb4-4485-b72d-cf84801ecf80" TargetRef="Center" SpeedX="115000" SpeedY="115000" SpeedZ="72000" Offset.X="0" Offset.Y="0" Offset.Z="0" ZLevel="PrePos">
+      <Condition Type="StepReady" Operator="AND" StepId="0" />
+    </Item>
+    <Item Id="513f3254-4227-458d-b31f-ce088f7a7258" Description="" ObjectType="TriplePip" ObjectId="75fd56b1-ad7a-401e-bdf4-2cbdf1130d0b" ActionType="SetVacuum" Pressure="0">
+      <Condition Type="StepReady" Operator="AND" StepId="0" />
+    </Item>
+    <Item Id="874c4771-8fc4-4009-9963-39d60a161575" Description="" ObjectType="CartridgeDisp" ObjectId="e2d4991a-80a1-487a-b8fc-93b595ae99c2" ActionType="SwitchPressure" Ctrl="PressOn" Time="0">
+      <Condition Type="StepReady" Operator="AND" StepId="0" />
+    </Item>
+    <Item Id="e1eec1bf-f9bb-44f2-8b24-ec5548600454" Description="" ActionType="Wait" Time="2000">
+      <Condition Type="StepReady" Operator="AND" StepId="0" />
+    </Item>
+    <Item Id="9f6419da-76f5-4237-9e98-51ba19f6d396" Description="" ObjectType="PassivePip" ObjectId="3e661140-90f6-4de1-becf-d2aec3ecee36" ActionType="MoveZ" Mode="Relative" SpeedZ="10000" Distance="1000">
+      <Condition Type="StepReady" Operator="AND" StepId="0" />
+    </Item>
+    <Item Id="98fee56e-b091-4cda-990c-4f712eb302ad" Description="" ObjectType="PassivePip" ObjectId="3e661140-90f6-4de1-becf-d2aec3ecee36" ActionType="MoveToTarget" TargetId="5aa37c61-0670-4cb8-9b06-6a61b223b265" TargetRef="ArrayRowCol" Col="1" Row="12" SpeedX="115000" SpeedY="115000" SpeedZ="72000" Offset.X="0" Offset.Y="0" Offset.Z="0" ZLevel="PrePos">
+      <Condition Type="StepReady" Operator="AND" StepId="0" />
+    </Item>
+    <Item Id="c98bb241-f0af-4e90-9de9-055c839f9e7a" Description="" ObjectType="PassivePip" ObjectId="3e661140-90f6-4de1-becf-d2aec3ecee36" ActionType="MoveZ" Mode="Relative" SpeedZ="10000" Distance="-9800">
+      <Condition Type="StepReady" Operator="AND" StepId="0" />
+    </Item>
+    <Item Id="c55e5a84-12f4-4b9a-b72a-a229d61abb7c" Description="" ObjectType="CartridgeDisp" ObjectId="e2d4991a-80a1-487a-b8fc-93b595ae99c2" ActionType="SwitchPressure" Ctrl="Off" Time="0">
+      <Condition Type="StepReady" Operator="AND" StepId="0" />
+    </Item>
+  </Steps>
+</Root>

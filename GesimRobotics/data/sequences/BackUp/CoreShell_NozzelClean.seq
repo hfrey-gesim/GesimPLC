@@ -1,0 +1,19 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<Root>
+  <Header Version="2.0.18.5239" Id="0" />
+  <Steps>
+    <Item Id="9561daa6-f097-4843-96cc-1aef56a97c80" Description="" ObjectType="CartridgeDisp" ObjectId="2dcf8684-e352-4bf7-8648-220a10a3938a" ActionType="SetPressure" Pressure="600" />
+    <Item Id="cb8291d3-a008-4e42-b0f7-910d6257c7bc" Description="" ObjectType="CartridgeDisp" ObjectId="80c1fee0-3154-4ca4-8089-22b0e195c6ab" ActionType="SetPressure" Pressure="600">
+      <Condition Type="StepReady" Operator="AND" StepId="0" />
+    </Item>
+    <Item Id="9af3e164-dd09-4e71-82a2-15194c7bb7e4" Description="" ObjectType="MultiCartridgeHolder" ObjectId="25f790cd-e83a-42b3-a67e-ce05e05d561a" ActionType="CleanTip" TargetId="7a26918c-dc14-46da-bcfa-a755d9d806ce" Slot="1" Mode="Wire" DispenseTime="1000" CleanWireSpeed="10000">
+      <Condition Type="StepReady" Operator="AND" StepId="0" />
+    </Item>
+    <Item Id="a9a05662-90db-42d6-8b48-a5c337a1dffb" Description="" ObjectType="CartridgeDisp" ObjectId="2dcf8684-e352-4bf7-8648-220a10a3938a" ActionType="SetPressure" Pressure="250">
+      <Condition Type="StepReady" Operator="AND" StepId="0" />
+    </Item>
+    <Item Id="a437f51a-f790-482b-958d-ce120158dcd7" Description="" ObjectType="CartridgeDisp" ObjectId="80c1fee0-3154-4ca4-8089-22b0e195c6ab" ActionType="SetPressure" Pressure="300">
+      <Condition Type="StepReady" Operator="AND" StepId="0" />
+    </Item>
+  </Steps>
+</Root>

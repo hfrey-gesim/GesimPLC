@@ -1,0 +1,22 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<Root>
+  <Header Version="2.0.18.5057" Id="0" />
+  <Steps>
+    <Item Id="31a75239-717b-42e1-855e-d1feb35bbdb3" Description="" ObjectType="Extruder" ObjectId="7f69af53-f939-4939-837c-7c330933e913" ActionType="CleanTip" TargetId="324e789a-082f-440f-93f7-9081508cd031" Slot="1" Mode="Brush" DispenseTime="2000" CleanWireSpeed="115000" />
+    <Item Id="c1f6859f-069c-4e0b-b2d9-49aa8f1eab07" Description="" ObjectType="Root" ObjectId="936f148b-455b-497c-b642-640f2ac1e6a8" ActionType="RunGCode" TargetId="d72f4fb8-309b-43d4-adcf-e686e0186b28" TargetRef="Center" FileName="FDM_G" WaitPointId="00af9b30-66ab-4e34-9c9e-cf865873e640" Offset.Z="0">
+      <Condition Type="StepReady" Operator="AND" StepId="0" />
+    </Item>
+    <Item Id="6bbbde78-e5f5-4177-8be1-f134248f4871" Description="" ObjectType="Root" ObjectId="936f148b-455b-497c-b642-640f2ac1e6a8" ActionType="RunGCode" TargetId="d72f4fb8-309b-43d4-adcf-e686e0186b28" TargetRef="Center" FileName="FDM_E" WaitPointId="00af9b30-66ab-4e34-9c9e-cf865873e640" Offset.Z="0">
+      <Condition Type="StepReady" Operator="AND" StepId="0" />
+    </Item>
+    <Item Id="e52c0e1f-17e7-42a3-8279-dade7736c7ae" Description="" ObjectType="Root" ObjectId="936f148b-455b-497c-b642-640f2ac1e6a8" ActionType="RunGCode" TargetId="d72f4fb8-309b-43d4-adcf-e686e0186b28" TargetRef="Center" FileName="FDM_S" WaitPointId="00af9b30-66ab-4e34-9c9e-cf865873e640" Offset.Z="0">
+      <Condition Type="StepReady" Operator="AND" StepId="0" />
+    </Item>
+    <Item Id="f46bad4d-125c-4446-a055-6033543747db" Description="" ObjectType="Root" ObjectId="936f148b-455b-497c-b642-640f2ac1e6a8" ActionType="RunGCode" TargetId="d72f4fb8-309b-43d4-adcf-e686e0186b28" TargetRef="Center" FileName="FDM_I" WaitPointId="00af9b30-66ab-4e34-9c9e-cf865873e640" Offset.Z="0">
+      <Condition Type="StepReady" Operator="AND" StepId="0" />
+    </Item>
+    <Item Id="b53cea2e-8df1-4e05-8817-830772a70569" Description="" ObjectType="Root" ObjectId="936f148b-455b-497c-b642-640f2ac1e6a8" ActionType="RunGCode" TargetId="d72f4fb8-309b-43d4-adcf-e686e0186b28" TargetRef="Center" FileName="FDM_M" WaitPointId="00af9b30-66ab-4e34-9c9e-cf865873e640" Offset.Z="0">
+      <Condition Type="StepReady" Operator="AND" StepId="0" />
+    </Item>
+  </Steps>
+</Root>

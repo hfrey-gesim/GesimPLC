@@ -1,0 +1,28 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<Root>
+  <Header Version="2.0.18.5057" Id="0" />
+  <Steps>
+    <Item Id="2f86e752-b3d0-4e7c-bf02-50abdd3d4cd9" Description="" ObjectType="PassivePip" ObjectId="c6d7eded-8563-4f05-8c75-aba6bf303942" ActionType="MoveToTarget" TargetId="0503cc74-fa30-459f-9987-d69fe3a0f10f" TargetRef="ArrayRowCol" Col="1" Row="2" SpeedX="115000" SpeedY="115000" SpeedZ="72000" Offset.X="0" Offset.Y="0" Offset.Z="0" ZLevel="PrePos" />
+    <Item Id="14106b21-70e3-4e6c-964d-f8d16f3e5905" Description="" ObjectType="PassivePip" ObjectId="c6d7eded-8563-4f05-8c75-aba6bf303942" ActionType="Dispense" Quantity="100" Flow="10">
+      <Condition Type="StepReady" Operator="AND" StepId="0" />
+    </Item>
+    <Item Id="cff1c685-fea8-4693-8292-bd819750c2d6" Description="" ObjectType="Exposure" ObjectId="9ab999fc-b574-44de-8214-8d378a86d315" ActionType="MoveToTarget" TargetId="0503cc74-fa30-459f-9987-d69fe3a0f10f" TargetRef="ArrayRowCol" Col="3" Row="2" SpeedX="115000" SpeedY="115000" SpeedZ="72000" Offset.X="0" Offset.Y="0" Offset.Z="-1000" ZLevel="PrePos">
+      <Condition Type="StepReady" Operator="AND" StepId="0" />
+    </Item>
+    <Item Id="ea896195-993d-4b82-af45-6454e96315b5" Description="" ObjectType="Exposure" ObjectId="9ab999fc-b574-44de-8214-8d378a86d315" ActionType="Expose" On="true" Brightness="1000" Time="5000">
+      <Condition Type="StepReady" Operator="AND" StepId="0" />
+    </Item>
+    <Item Id="d8018c77-7457-4a6e-866a-3a1fad7b33d9" Description="" ObjectType="Exposure" ObjectId="9ab999fc-b574-44de-8214-8d378a86d315" ActionType="MoveZ" Mode="Home" SpeedZ="10000" Distance="10000">
+      <Condition Type="StepReady" Operator="AND" StepId="0" />
+    </Item>
+    <Item Id="ce8bf9cb-a6bd-4beb-95eb-907a819e5593" Description="" ObjectType="PassivePip" ObjectId="c6d7eded-8563-4f05-8c75-aba6bf303942" ActionType="MoveToTarget" TargetId="0503cc74-fa30-459f-9987-d69fe3a0f10f" TargetRef="ArrayRowCol" Col="3" Row="2" SpeedX="115000" SpeedY="115000" SpeedZ="72000" Offset.X="0" Offset.Y="0" Offset.Z="0" ZLevel="PrePos">
+      <Condition Type="StepReady" Operator="AND" StepId="0" />
+    </Item>
+    <Item Id="314afdb8-2546-44a3-8cdf-5fe21ae2f598" Description="" ObjectType="PassivePip" ObjectId="c6d7eded-8563-4f05-8c75-aba6bf303942" ActionType="Dispense" Quantity="100" Flow="10">
+      <Condition Type="StepReady" Operator="AND" StepId="0" />
+    </Item>
+    <Item Id="5ea3e41f-33ea-43d1-ab0d-16ad44d70b19" Description="" ObjectType="PassivePip" ObjectId="c6d7eded-8563-4f05-8c75-aba6bf303942" ActionType="MoveZ" Mode="Home" SpeedZ="10000" Distance="10000">
+      <Condition Type="StepReady" Operator="AND" StepId="0" />
+    </Item>
+  </Steps>
+</Root>

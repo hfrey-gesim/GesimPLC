@@ -1,0 +1,13 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<Root>
+  <Header Version="2.0.18.5239" Id="0" />
+  <Steps>
+    <Item Id="b0f5600f-72dd-4c85-8146-d23dfca8ed39" Description="" ObjectType="Root" ObjectId="e94c0ae7-f5eb-42b3-bf25-c6806131cff7" ActionType="RunGCode" TargetId="ab46a707-1f04-456a-b89e-2f878d2f2ff4" TargetRef="Center" FileName="Toni_Demodruck_Deckel" WaitPointId="2e0ffdb6-7822-4a30-9343-75f3195784e0" Offset.Z="3978" />
+    <Item Id="b139bea2-954b-4290-a7d4-42efd45cbdbe" Description="" ObjectType="CartridgeDisp" ObjectId="50522d3e-91c6-49d0-9e12-371d791d85bd" ActionType="MoveZ" Mode="Free" SpeedZ="10000" Distance="10000">
+      <Condition Type="StepReady" Operator="AND" StepId="0" />
+    </Item>
+    <Item Id="5ec9b71b-7d77-4f7e-9300-b1a8c2456238" Description="" ObjectType="CartridgeDisp" ObjectId="50522d3e-91c6-49d0-9e12-371d791d85bd" ActionType="MoveZ" Mode="Home" SpeedZ="10000" Distance="10000">
+      <Condition Type="StepReady" Operator="AND" StepId="0" />
+    </Item>
+  </Steps>
+</Root>

@@ -1,0 +1,10 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<Root>
+  <Header Version="2.0.18.5239" Id="0" />
+  <Steps>
+    <Item Id="f05cb770-9b7a-403d-83db-f49d3776d30f" Description="" ObjectType="Root" ObjectId="e94c0ae7-f5eb-42b3-bf25-c6806131cff7" ActionType="RunGCode" TargetId="49adb016-03ff-4cda-bfab-149cced62a3a" TargetRef="Center" FileName="Objekterkennung_Schlange_Linie" WaitPointId="1fc26315-6c11-4b44-8d23-83848dc9c28b" Offset.Z="300" />
+    <Item Id="14317bfb-c901-4db3-81f8-664ce0149bc3" Description="" ObjectType="Root" ObjectId="e94c0ae7-f5eb-42b3-bf25-c6806131cff7" ActionType="RunGCode" TargetId="49adb016-03ff-4cda-bfab-149cced62a3a" TargetRef="Center" FileName="Objekterkennung_Schlange_Spots" WaitPointId="1fc26315-6c11-4b44-8d23-83848dc9c28b" Offset.Z="300">
+      <Condition Type="StepReady" Operator="AND" StepId="0" />
+    </Item>
+  </Steps>
+</Root>

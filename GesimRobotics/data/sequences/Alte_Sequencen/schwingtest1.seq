@@ -1,0 +1,13 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<Root>
+  <Header Version="2.0.17.2" Id="0" />
+  <Steps>
+    <Item Id="9acf887d-a1e1-4809-bd02-8c4d7d7329d2" Description="" ObjectType="Extruder" ObjectId="9ea2ab16-e47f-4d2a-8b51-bf41ea04da16" ActionType="MoveToTarget" TargetId="59eb46fd-81a7-4441-beab-c88fa036f885" TargetRef="Center" SpeedX="115000" SpeedY="115000" SpeedZ="72000" Offset.X="0" Offset.Y="0" Offset.Z="0" ZLevel="PrePos" />
+    <Item Id="f3e40487-7f86-4419-860f-6487d93ef122" Description="" ObjectType="Extruder" ObjectId="9ea2ab16-e47f-4d2a-8b51-bf41ea04da16" ActionType="MoveToTarget" TargetId="86b01d92-df31-4b99-baa9-80a9ccdbef6f" TargetRef="Center" SpeedX="115000" SpeedY="115000" SpeedZ="72000" Offset.X="0" Offset.Y="0" Offset.Z="0" ZLevel="PrePos">
+      <Condition Type="StepReady" Operator="AND" StepId="0" />
+    </Item>
+    <Item Id="eeffc045-73a3-43a0-870c-ee7581932968" Description="" ActionType="GotoStep" StepId="9acf887d-a1e1-4809-bd02-8c4d7d7329d2">
+      <Condition Type="StepReady" Operator="AND" StepId="0" />
+    </Item>
+  </Steps>
+</Root>

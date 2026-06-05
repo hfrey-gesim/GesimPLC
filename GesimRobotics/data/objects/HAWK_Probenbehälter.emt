@@ -1,0 +1,9 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<Item Id="00000000-0000-0000-0000-000000000000" TemplateId="7efea211-6ced-4104-8ca6-26f74abfc51a" Name="HAWK_Probenbehälter" ObjType="Slide" RelPos.X="0" RelPos.Y="0" RelPos.Z="0" Width="15000" Depth="15000" Heigth="5600" FreeHeight="0" Offset.Z="0">
+  <Item Id="00000000-0000-0000-0000-000000000000" TemplateId="31dee62b-b1e5-4a80-95a9-581fd37f6ebb" Name="MessPoint" ObjType="Point" RelPos.X="3500" RelPos.Y="7500" RelPos.Z="0" Width="0" Depth="0" Heigth="0" FreeHeight="0" Offset.Z="0" PType="Regular">
+    <Item Id="00000000-0000-0000-0000-000000000000" TemplateId="31dee62b-b1e5-4a80-95a9-581fd37f6ebb" Name="Point1_25" ObjType="Point" RelPos.X="0" RelPos.Y="-4000" RelPos.Z="-5000" Width="0" Depth="0" Heigth="0" FreeHeight="0" Offset.Z="0" PType="Regular" />
+    <Item Id="00000000-0000-0000-0000-000000000000" TemplateId="31dee62b-b1e5-4a80-95a9-581fd37f6ebb" Name="Point2_50" ObjType="Point" RelPos.X="8000" RelPos.Y="-4000" RelPos.Z="-5000" Width="0" Depth="0" Heigth="0" FreeHeight="0" Offset.Z="0" PType="Regular" />
+    <Item Id="00000000-0000-0000-0000-000000000000" TemplateId="31dee62b-b1e5-4a80-95a9-581fd37f6ebb" Name="Point3_75" ObjType="Point" RelPos.X="0" RelPos.Y="4000" RelPos.Z="-5000" Width="0" Depth="0" Heigth="0" FreeHeight="0" Offset.Z="0" PType="Regular" />
+    <Item Id="00000000-0000-0000-0000-000000000000" TemplateId="31dee62b-b1e5-4a80-95a9-581fd37f6ebb" Name="Point_100" ObjType="Point" RelPos.X="8000" RelPos.Y="4000" RelPos.Z="-5000" Width="0" Depth="0" Heigth="0" FreeHeight="0" Offset.Z="0" PType="Regular" />
+  </Item>
+</Item>

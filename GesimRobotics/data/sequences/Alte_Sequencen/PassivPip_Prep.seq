@@ -1,0 +1,25 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<Root>
+  <Header Version="2.0.18.5057" Id="0" />
+  <Steps>
+    <Item Id="227f0b82-cb09-48b2-ab1a-82eb1d0a1ddb" Description="" ObjectType="Diluter" ObjectId="e4a579e6-0509-469b-a2bf-20c322c92cad" ActionType="DilPrepare" Quantity="2500" Mode="ForAspirate" />
+    <Item Id="495cbcf9-7e30-4833-ba41-f83e5b757a4b" Description="" ObjectType="PassivePip" ObjectId="c6d7eded-8563-4f05-8c75-aba6bf303942" ActionType="MoveToTarget" TargetId="41ad4c84-a7b1-41d3-b8ac-8c6f3907bfeb" TargetRef="Center" SpeedX="115000" SpeedY="115000" SpeedZ="72000" Offset.X="0" Offset.Y="0" Offset.Z="1000" ZLevel="PrePos">
+      <Condition Type="StepReady" Operator="AND" StepId="0" />
+    </Item>
+    <Item Id="f11a6ef0-1409-4fbe-af45-5c00683dc96d" Description="" ObjectType="PassivePip" ObjectId="c6d7eded-8563-4f05-8c75-aba6bf303942" ActionType="Aspirate" Quantity="1500" Flow="100">
+      <Condition Type="StepReady" Operator="AND" StepId="0" />
+    </Item>
+    <Item Id="dbbb6193-388e-4cee-95d1-472a7caacc7d" Description="" ActionType="Wait" Time="10000">
+      <Condition Type="StepReady" Operator="AND" StepId="0" />
+    </Item>
+    <Item Id="48ff81bf-b2b9-4e3f-bdbe-e0688997779b" Description="" ObjectType="PassivePip" ObjectId="c6d7eded-8563-4f05-8c75-aba6bf303942" ActionType="MoveZ" Mode="Relative" SpeedZ="10000" Distance="15000">
+      <Condition Type="StepReady" Operator="AND" StepId="0" />
+    </Item>
+    <Item Id="7f8d943e-123b-4f61-a5c5-2a081d6e6924" Description="" ObjectType="Diluter" ObjectId="e4a579e6-0509-469b-a2bf-20c322c92cad" ActionType="DilPrepare" Quantity="2500" Mode="ForDispense">
+      <Condition Type="StepReady" Operator="AND" StepId="0" />
+    </Item>
+    <Item Id="8c245833-d7af-4180-80b0-a1085faa106a" Description="" ObjectType="PassivePip" ObjectId="c6d7eded-8563-4f05-8c75-aba6bf303942" ActionType="Dispense" Quantity="20" Flow="100">
+      <Condition Type="StepReady" Operator="AND" StepId="0" />
+    </Item>
+  </Steps>
+</Root>

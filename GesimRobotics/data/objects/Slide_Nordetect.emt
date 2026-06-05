@@ -1,0 +1,9 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<Item Id="00000000-0000-0000-0000-000000000000" TemplateId="af984513-8eb1-4597-aade-9977908e4c9b" Name="Slide_Nordetect" ObjType="Slide" ParentSlotNr="1" RelPos.X="0" RelPos.Y="0" RelPos.Z="0" Width="25000" Depth="75000" Heigth="1000" FreeHeight="0" Offset.Z="0">
+  <Item Id="00000000-0000-0000-0000-000000000000" TemplateId="31dee62b-b1e5-4a80-95a9-581fd37f6ebb" Name="Point 1" ObjType="Point" RelPos.X="15034" RelPos.Y="9528" RelPos.Z="974" Width="0" Depth="0" Heigth="0" FreeHeight="0" Offset.Z="0" />
+  <Item Id="00000000-0000-0000-0000-000000000000" TemplateId="31dee62b-b1e5-4a80-95a9-581fd37f6ebb" Name="Point 2" ObjType="Point" RelPos.X="9762" RelPos.Y="9504" RelPos.Z="984" Width="0" Depth="0" Heigth="0" FreeHeight="0" Offset.Z="0" />
+  <Item Id="00000000-0000-0000-0000-000000000000" TemplateId="31dee62b-b1e5-4a80-95a9-581fd37f6ebb" Name="Point 3" ObjType="Point" RelPos.X="6544" RelPos.Y="13537" RelPos.Z="999" Width="0" Depth="0" Heigth="0" FreeHeight="0" Offset.Z="0" />
+  <Item Id="00000000-0000-0000-0000-000000000000" TemplateId="31dee62b-b1e5-4a80-95a9-581fd37f6ebb" Name="Point 4" ObjType="Point" RelPos.X="7692" RelPos.Y="18675" RelPos.Z="661" Width="0" Depth="0" Heigth="0" FreeHeight="0" Offset.Z="0" />
+  <Item Id="00000000-0000-0000-0000-000000000000" TemplateId="31dee62b-b1e5-4a80-95a9-581fd37f6ebb" Name="Point 5" ObjType="Point" RelPos.X="17114" RelPos.Y="18704" RelPos.Z="763" Width="0" Depth="0" Heigth="0" FreeHeight="0" Offset.Z="0" />
+  <Item Id="00000000-0000-0000-0000-000000000000" TemplateId="31dee62b-b1e5-4a80-95a9-581fd37f6ebb" Name="Point 6" ObjType="Point" RelPos.X="18314" RelPos.Y="13681" RelPos.Z="755" Width="0" Depth="0" Heigth="0" FreeHeight="0" Offset.Z="0" />
+</Item>

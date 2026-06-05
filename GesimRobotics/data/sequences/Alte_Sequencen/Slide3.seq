@@ -1,0 +1,33 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<Root>
+  <Header Version="2.0.18.5057" Id="0" />
+  <Steps>
+    <Item Id="d0b925f2-9c27-48f3-b348-3985ec85c4e8" Description="" ObjectType="Diluter" ObjectId="e4a579e6-0509-469b-a2bf-20c322c92cad" ActionType="DilPrepare" Quantity="2500" Mode="ForAspirate" />
+    <Item Id="a9f6db1c-8e30-4324-9ba3-11cdf01499b7" Description="" ObjectType="PassivePip" ObjectId="c6d7eded-8563-4f05-8c75-aba6bf303942" ActionType="MoveToTarget" TargetId="41ad4c84-a7b1-41d3-b8ac-8c6f3907bfeb" TargetRef="Center" SpeedX="115000" SpeedY="115000" SpeedZ="72000" Offset.X="0" Offset.Y="0" Offset.Z="1000" ZLevel="PrePos">
+      <Condition Type="StepReady" Operator="AND" StepId="0" />
+    </Item>
+    <Item Id="6e121968-788f-4879-8514-cf120d06e2b4" Description="" ObjectType="PassivePip" ObjectId="c6d7eded-8563-4f05-8c75-aba6bf303942" ActionType="Aspirate" Quantity="2000" Flow="100">
+      <Condition Type="StepReady" Operator="AND" StepId="0" />
+    </Item>
+    <Item Id="df0b6051-f9c3-4c3d-b7ef-9525315975a9" Description="" ActionType="Wait" Time="5000">
+      <Condition Type="StepReady" Operator="AND" StepId="0" />
+    </Item>
+    <Item Id="095eed5e-e1f0-428f-b2c8-56ca0195940f" Description="" ObjectType="PassivePip" ObjectId="c6d7eded-8563-4f05-8c75-aba6bf303942" ActionType="MoveZ" Mode="Relative" SpeedZ="10000" Distance="15000">
+      <Condition Type="StepReady" Operator="AND" StepId="0" />
+    </Item>
+    <Item Id="e4370ca2-e806-471f-9e1c-c53a1c37fd5d" Description="" ObjectType="PassivePip" ObjectId="c6d7eded-8563-4f05-8c75-aba6bf303942" ActionType="Dispense" Quantity="50" Flow="100">
+      <Condition Type="StepReady" Operator="AND" StepId="0" />
+    </Item>
+    <Item Id="93ef7c53-d3ed-4eec-b042-61d380dc2160" Description="" ObjectType="Diluter" ObjectId="e4a579e6-0509-469b-a2bf-20c322c92cad" ActionType="DilPrepare" Quantity="2500" Mode="ForDispense">
+      <Condition Type="StepReady" Operator="AND" StepId="0" />
+    </Item>
+    <Item Id="acd7201e-2165-4e17-a9b6-8f91646416f5" Description="" ObjectType="PassivePip" ObjectId="c6d7eded-8563-4f05-8c75-aba6bf303942" ActionType="ActionOnArray" TargetId="af229fb0-e22b-4629-9204-f588d86ae188" Order="RowWiseSaw" SpeedX="115000" SpeedY="115000" SpeedZ="72000" SpeedZRelease="72000" ActionOffset.Z="0" ReleaseDistance.Z="0" MoveOffset.Z="2000" ReleaseMoveInstantly="false" ReleaseMoveDelay="0">
+      <SubAction ActionType="Dispense" Quantity="10" Flow="100" />
+      <Condition Type="StepReady" Operator="AND" StepId="0" />
+    </Item>
+    <Item Id="9f2b18a9-3b8b-4696-9180-3c7327b64065" Description="" ObjectType="PassivePip" ObjectId="c6d7eded-8563-4f05-8c75-aba6bf303942" ActionType="ActionOnArray" TargetId="96b9913f-ee4e-445a-8b12-bddc0bc003e7" Order="RowWiseSaw" SpeedX="115000" SpeedY="115000" SpeedZ="72000" SpeedZRelease="72000" ActionOffset.Z="0" ReleaseDistance.Z="0" MoveOffset.Z="2000" ReleaseMoveInstantly="false" ReleaseMoveDelay="0">
+      <SubAction ActionType="Dispense" Quantity="10" Flow="100" />
+      <Condition Type="StepReady" Operator="AND" StepId="0" />
+    </Item>
+  </Steps>
+</Root>

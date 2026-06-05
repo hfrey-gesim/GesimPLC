@@ -1,0 +1,450 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<Root Version="5" Mode="Advanced">
+  <Objects>
+    <Object>
+      <Model Type="ThreeMF" FillRule="Positive">
+        <FileName>\\nas-gesim\gesim3\Richter\GESIM_bunt.3mf</FileName>
+      </Model>
+      <Position Type="CenterOnOrigin">
+        <X>-5725</X>
+        <Y>-676</Y>
+        <Z>0</Z>
+        <Rotate>false</Rotate>
+        <RotationAngle>270000</RotationAngle>
+      </Position>
+      <SpotOrder>AsGiven</SpotOrder>
+      <Materials>
+        <Material Name="Regular">
+          <Infill>
+            <InfillType>Lines</InfillType>
+            <StartAngle>0</StartAngle>
+            <AngleChange>90</AngleChange>
+            <RepeatAngleChange>1</RepeatAngleChange>
+            <InfillOffset>0</InfillOffset>
+            <InfillOffsetRelative>false</InfillOffsetRelative>
+            <StrandDistance>1000</StrandDistance>
+            <MinDistance>500</MinDistance>
+            <MinLength>1000</MinLength>
+          </Infill>
+          <Outline>
+            <OutlineOffset>0</OutlineOffset>
+            <OutlineDistance>400</OutlineDistance>
+            <OutlineMinDistance>0</OutlineMinDistance>
+            <FiniteOutlines>true</FiniteOutlines>
+            <OutlineNumber>2</OutlineNumber>
+          </Outline>
+          <Layers OutlineFirst="false">
+            <Layer>
+              <Infill></Infill>
+              <Outline>2</Outline>
+            </Layer>
+          </Layers>
+        </Material>
+        <Material Name="Regular">
+          <Infill>
+            <InfillType>Lines</InfillType>
+            <StartAngle>0</StartAngle>
+            <AngleChange>90</AngleChange>
+            <RepeatAngleChange>1</RepeatAngleChange>
+            <InfillOffset>0</InfillOffset>
+            <InfillOffsetRelative>false</InfillOffsetRelative>
+            <StrandDistance>1000</StrandDistance>
+            <MinDistance>500</MinDistance>
+            <MinLength>1000</MinLength>
+          </Infill>
+          <Outline>
+            <OutlineOffset>0</OutlineOffset>
+            <OutlineDistance>400</OutlineDistance>
+            <OutlineMinDistance>0</OutlineMinDistance>
+            <FiniteOutlines>true</FiniteOutlines>
+            <OutlineNumber>2</OutlineNumber>
+          </Outline>
+          <Layers OutlineFirst="false">
+            <Layer>
+              <Infill></Infill>
+              <Outline>1</Outline>
+            </Layer>
+          </Layers>
+        </Material>
+        <Material Name="Regular">
+          <Infill>
+            <InfillType>Lines</InfillType>
+            <StartAngle>0</StartAngle>
+            <AngleChange>90</AngleChange>
+            <RepeatAngleChange>1</RepeatAngleChange>
+            <InfillOffset>0</InfillOffset>
+            <InfillOffsetRelative>false</InfillOffsetRelative>
+            <StrandDistance>1000</StrandDistance>
+            <MinDistance>500</MinDistance>
+            <MinLength>1000</MinLength>
+          </Infill>
+          <Outline>
+            <OutlineOffset>0</OutlineOffset>
+            <OutlineDistance>400</OutlineDistance>
+            <OutlineMinDistance>0</OutlineMinDistance>
+            <FiniteOutlines>true</FiniteOutlines>
+            <OutlineNumber>2</OutlineNumber>
+          </Outline>
+          <Layers OutlineFirst="false">
+            <Layer>
+              <Infill></Infill>
+              <Outline>3</Outline>
+            </Layer>
+          </Layers>
+        </Material>
+        <Material Name="Regular">
+          <Infill>
+            <InfillType>Lines</InfillType>
+            <StartAngle>0</StartAngle>
+            <AngleChange>90</AngleChange>
+            <RepeatAngleChange>1</RepeatAngleChange>
+            <InfillOffset>0</InfillOffset>
+            <InfillOffsetRelative>false</InfillOffsetRelative>
+            <StrandDistance>1000</StrandDistance>
+            <MinDistance>500</MinDistance>
+            <MinLength>1000</MinLength>
+          </Infill>
+          <Outline>
+            <OutlineOffset>0</OutlineOffset>
+            <OutlineDistance>400</OutlineDistance>
+            <OutlineMinDistance>0</OutlineMinDistance>
+            <FiniteOutlines>true</FiniteOutlines>
+            <OutlineNumber>2</OutlineNumber>
+          </Outline>
+          <Layers OutlineFirst="false">
+            <Layer>
+              <Infill></Infill>
+              <Outline>5</Outline>
+            </Layer>
+          </Layers>
+        </Material>
+        <Material Name="Regular">
+          <Infill>
+            <InfillType>Lines</InfillType>
+            <StartAngle>0</StartAngle>
+            <AngleChange>90</AngleChange>
+            <RepeatAngleChange>1</RepeatAngleChange>
+            <InfillOffset>0</InfillOffset>
+            <InfillOffsetRelative>false</InfillOffsetRelative>
+            <StrandDistance>1000</StrandDistance>
+            <MinDistance>500</MinDistance>
+            <MinLength>1000</MinLength>
+          </Infill>
+          <Outline>
+            <OutlineOffset>0</OutlineOffset>
+            <OutlineDistance>400</OutlineDistance>
+            <OutlineMinDistance>0</OutlineMinDistance>
+            <FiniteOutlines>true</FiniteOutlines>
+            <OutlineNumber>2</OutlineNumber>
+          </Outline>
+          <Layers OutlineFirst="false">
+            <Layer>
+              <Infill></Infill>
+              <Outline>7</Outline>
+            </Layer>
+          </Layers>
+        </Material>
+      </Materials>
+      <Paths />
+      <Samples />
+    </Object>
+  </Objects>
+  <Tools>
+    <Tool Type="PiezoPip" Nr="1">
+      <Identifier>1</Identifier>
+      <Color>#FF7F2A6A</Color>
+      <Speed>10000</Speed>
+      <ZOffset>1000</ZOffset>
+      <Height>1000</Height>
+      <Width>250</Width>
+      <Connection>None</Connection>
+      <Spotting>true</Spotting>
+      <StartBreak>0</StartBreak>
+      <SpotAlignment>Center</SpotAlignment>
+      <SpotDistance>500</SpotDistance>
+      <Fluid Channel="0">
+        <Quantity>10</Quantity>
+        <Parameter Type="Frequency" Number="1">
+          <Feed>100</Feed>
+        </Parameter>
+        <Parameter Type="Pulse" Number="1">
+          <Feed>90</Feed>
+        </Parameter>
+        <Parameter Type="Voltage" Number="1">
+          <Feed>70</Feed>
+        </Parameter>
+      </Fluid>
+      <RunPrep>false</RunPrep>
+      <RepeatPrep>0</RepeatPrep>
+      <PrepOptions>
+        <SourceName />
+        <WashTime>9000</WashTime>
+        <WashFlow>100</WashFlow>
+        <WashTargetNr>1</WashTargetNr>
+        <WashSpotNr>1</WashSpotNr>
+        <PostWashDryTargetNr>3</PostWashDryTargetNr>
+        <PostWashDryCount>1</PostWashDryCount>
+        <PostWashDryTime>100</PostWashDryTime>
+        <PostAspirateDryTargetNr>0</PostAspirateDryTargetNr>
+        <PostAspirateDryCount>0</PostAspirateDryCount>
+        <PostAspirateDryTime>0</PostAspirateDryTime>
+        <AspirateSampleVolume>0</AspirateSampleVolume>
+        <AspirateSampleFlow>0</AspirateSampleFlow>
+        <AspirateSampleWaitTime>0</AspirateSampleWaitTime>
+        <AspirateSampleTargetNr>0</AspirateSampleTargetNr>
+        <AspirateSampleSpotCol>0</AspirateSampleSpotCol>
+        <AspirateSampleSpotRow>0</AspirateSampleSpotRow>
+        <AspirateSampleAirGap>0</AspirateSampleAirGap>
+        <AspirateSampleDiluterBypass>0</AspirateSampleDiluterBypass>
+        <DispenseSampleVolume>0</DispenseSampleVolume>
+        <DispenseSampleFlow>0</DispenseSampleFlow>
+        <DispenseSampleTargetNr>0</DispenseSampleTargetNr>
+        <DispenseSampleSpotNr>0</DispenseSampleSpotNr>
+        <PreDispenseTest>false</PreDispenseTest>
+        <PreDispenseTestTargetNr>0</PreDispenseTestTargetNr>
+        <PostDispenseTest>false</PostDispenseTest>
+        <PostDispenseTestTargetNr>0</PostDispenseTestTargetNr>
+      </PrepOptions>
+    </Tool>
+    <Tool Type="PiezoPip" Nr="2">
+      <Identifier>2</Identifier>
+      <Color>#FFAC7B39</Color>
+      <Speed>10000</Speed>
+      <ZOffset>1000</ZOffset>
+      <Height>1000</Height>
+      <Width>250</Width>
+      <Connection>None</Connection>
+      <Spotting>true</Spotting>
+      <StartBreak>0</StartBreak>
+      <SpotAlignment>Center</SpotAlignment>
+      <SpotDistance>500</SpotDistance>
+      <Fluid Channel="0">
+        <Quantity>10</Quantity>
+        <Parameter Type="Frequency" Number="1">
+          <Feed>100</Feed>
+        </Parameter>
+        <Parameter Type="Pulse" Number="1">
+          <Feed>90</Feed>
+        </Parameter>
+        <Parameter Type="Voltage" Number="1">
+          <Feed>70</Feed>
+        </Parameter>
+      </Fluid>
+      <RunPrep>false</RunPrep>
+      <RepeatPrep>0</RepeatPrep>
+      <PrepOptions>
+        <SourceName />
+        <WashTime>9000</WashTime>
+        <WashFlow>100</WashFlow>
+        <WashTargetNr>1</WashTargetNr>
+        <WashSpotNr>1</WashSpotNr>
+        <PostWashDryTargetNr>3</PostWashDryTargetNr>
+        <PostWashDryCount>1</PostWashDryCount>
+        <PostWashDryTime>100</PostWashDryTime>
+        <PostAspirateDryTargetNr>0</PostAspirateDryTargetNr>
+        <PostAspirateDryCount>0</PostAspirateDryCount>
+        <PostAspirateDryTime>0</PostAspirateDryTime>
+        <AspirateSampleVolume>0</AspirateSampleVolume>
+        <AspirateSampleFlow>0</AspirateSampleFlow>
+        <AspirateSampleWaitTime>0</AspirateSampleWaitTime>
+        <AspirateSampleTargetNr>0</AspirateSampleTargetNr>
+        <AspirateSampleSpotCol>0</AspirateSampleSpotCol>
+        <AspirateSampleSpotRow>0</AspirateSampleSpotRow>
+        <AspirateSampleAirGap>0</AspirateSampleAirGap>
+        <AspirateSampleDiluterBypass>0</AspirateSampleDiluterBypass>
+        <DispenseSampleVolume>0</DispenseSampleVolume>
+        <DispenseSampleFlow>0</DispenseSampleFlow>
+        <DispenseSampleTargetNr>0</DispenseSampleTargetNr>
+        <DispenseSampleSpotNr>0</DispenseSampleSpotNr>
+        <PreDispenseTest>false</PreDispenseTest>
+        <PreDispenseTestTargetNr>0</PreDispenseTestTargetNr>
+        <PostDispenseTest>false</PostDispenseTest>
+        <PostDispenseTestTargetNr>0</PostDispenseTestTargetNr>
+      </PrepOptions>
+    </Tool>
+    <Tool Type="PiezoPip" Nr="3">
+      <Identifier>3</Identifier>
+      <Color>#FFAC7B39</Color>
+      <Speed>10000</Speed>
+      <ZOffset>1000</ZOffset>
+      <Height>1000</Height>
+      <Width>250</Width>
+      <Connection>None</Connection>
+      <Spotting>true</Spotting>
+      <StartBreak>0</StartBreak>
+      <SpotAlignment>Center</SpotAlignment>
+      <SpotDistance>500</SpotDistance>
+      <Fluid Channel="0">
+        <Quantity>10</Quantity>
+        <Parameter Type="Frequency" Number="1">
+          <Feed>100</Feed>
+        </Parameter>
+        <Parameter Type="Pulse" Number="1">
+          <Feed>90</Feed>
+        </Parameter>
+        <Parameter Type="Voltage" Number="1">
+          <Feed>70</Feed>
+        </Parameter>
+      </Fluid>
+      <RunPrep>false</RunPrep>
+      <RepeatPrep>0</RepeatPrep>
+      <PrepOptions>
+        <SourceName />
+        <WashTime>9000</WashTime>
+        <WashFlow>100</WashFlow>
+        <WashTargetNr>1</WashTargetNr>
+        <WashSpotNr>1</WashSpotNr>
+        <PostWashDryTargetNr>3</PostWashDryTargetNr>
+        <PostWashDryCount>1</PostWashDryCount>
+        <PostWashDryTime>100</PostWashDryTime>
+        <PostAspirateDryTargetNr>0</PostAspirateDryTargetNr>
+        <PostAspirateDryCount>0</PostAspirateDryCount>
+        <PostAspirateDryTime>0</PostAspirateDryTime>
+        <AspirateSampleVolume>0</AspirateSampleVolume>
+        <AspirateSampleFlow>0</AspirateSampleFlow>
+        <AspirateSampleWaitTime>0</AspirateSampleWaitTime>
+        <AspirateSampleTargetNr>0</AspirateSampleTargetNr>
+        <AspirateSampleSpotCol>0</AspirateSampleSpotCol>
+        <AspirateSampleSpotRow>0</AspirateSampleSpotRow>
+        <AspirateSampleAirGap>0</AspirateSampleAirGap>
+        <AspirateSampleDiluterBypass>0</AspirateSampleDiluterBypass>
+        <DispenseSampleVolume>0</DispenseSampleVolume>
+        <DispenseSampleFlow>0</DispenseSampleFlow>
+        <DispenseSampleTargetNr>0</DispenseSampleTargetNr>
+        <DispenseSampleSpotNr>0</DispenseSampleSpotNr>
+        <PreDispenseTest>false</PreDispenseTest>
+        <PreDispenseTestTargetNr>0</PreDispenseTestTargetNr>
+        <PostDispenseTest>false</PostDispenseTest>
+        <PostDispenseTestTargetNr>0</PostDispenseTestTargetNr>
+      </PrepOptions>
+    </Tool>
+    <Tool Type="PiezoPip" Nr="5">
+      <Identifier>5</Identifier>
+      <Color>#FF89A336</Color>
+      <Speed>10000</Speed>
+      <ZOffset>1000</ZOffset>
+      <Height>1000</Height>
+      <Width>250</Width>
+      <Connection>None</Connection>
+      <Spotting>true</Spotting>
+      <StartBreak>0</StartBreak>
+      <SpotAlignment>Center</SpotAlignment>
+      <SpotDistance>500</SpotDistance>
+      <Fluid Channel="0">
+        <Quantity>10</Quantity>
+        <Parameter Type="Frequency" Number="1">
+          <Feed>100</Feed>
+        </Parameter>
+        <Parameter Type="Pulse" Number="1">
+          <Feed>90</Feed>
+        </Parameter>
+        <Parameter Type="Voltage" Number="1">
+          <Feed>70</Feed>
+        </Parameter>
+      </Fluid>
+      <RunPrep>false</RunPrep>
+      <RepeatPrep>0</RepeatPrep>
+      <PrepOptions>
+        <SourceName />
+        <WashTime>9000</WashTime>
+        <WashFlow>100</WashFlow>
+        <WashTargetNr>1</WashTargetNr>
+        <WashSpotNr>1</WashSpotNr>
+        <PostWashDryTargetNr>3</PostWashDryTargetNr>
+        <PostWashDryCount>1</PostWashDryCount>
+        <PostWashDryTime>100</PostWashDryTime>
+        <PostAspirateDryTargetNr>0</PostAspirateDryTargetNr>
+        <PostAspirateDryCount>0</PostAspirateDryCount>
+        <PostAspirateDryTime>0</PostAspirateDryTime>
+        <AspirateSampleVolume>0</AspirateSampleVolume>
+        <AspirateSampleFlow>0</AspirateSampleFlow>
+        <AspirateSampleWaitTime>0</AspirateSampleWaitTime>
+        <AspirateSampleTargetNr>0</AspirateSampleTargetNr>
+        <AspirateSampleSpotCol>0</AspirateSampleSpotCol>
+        <AspirateSampleSpotRow>0</AspirateSampleSpotRow>
+        <AspirateSampleAirGap>0</AspirateSampleAirGap>
+        <AspirateSampleDiluterBypass>0</AspirateSampleDiluterBypass>
+        <DispenseSampleVolume>0</DispenseSampleVolume>
+        <DispenseSampleFlow>0</DispenseSampleFlow>
+        <DispenseSampleTargetNr>0</DispenseSampleTargetNr>
+        <DispenseSampleSpotNr>0</DispenseSampleSpotNr>
+        <PreDispenseTest>false</PreDispenseTest>
+        <PreDispenseTestTargetNr>0</PreDispenseTestTargetNr>
+        <PostDispenseTest>false</PostDispenseTest>
+        <PostDispenseTestTargetNr>0</PostDispenseTestTargetNr>
+      </PrepOptions>
+    </Tool>
+    <Tool Type="PiezoPip" Nr="7">
+      <Identifier>7</Identifier>
+      <Color>#FF2A506E</Color>
+      <Speed>10000</Speed>
+      <ZOffset>1000</ZOffset>
+      <Height>1000</Height>
+      <Width>250</Width>
+      <Connection>None</Connection>
+      <Spotting>true</Spotting>
+      <StartBreak>0</StartBreak>
+      <SpotAlignment>Center</SpotAlignment>
+      <SpotDistance>500</SpotDistance>
+      <Fluid Channel="0">
+        <Quantity>10</Quantity>
+        <Parameter Type="Frequency" Number="1">
+          <Feed>100</Feed>
+        </Parameter>
+        <Parameter Type="Pulse" Number="1">
+          <Feed>90</Feed>
+        </Parameter>
+        <Parameter Type="Voltage" Number="1">
+          <Feed>70</Feed>
+        </Parameter>
+      </Fluid>
+      <RunPrep>false</RunPrep>
+      <RepeatPrep>0</RepeatPrep>
+      <PrepOptions>
+        <SourceName />
+        <WashTime>9000</WashTime>
+        <WashFlow>100</WashFlow>
+        <WashTargetNr>1</WashTargetNr>
+        <WashSpotNr>1</WashSpotNr>
+        <PostWashDryTargetNr>3</PostWashDryTargetNr>
+        <PostWashDryCount>1</PostWashDryCount>
+        <PostWashDryTime>100</PostWashDryTime>
+        <PostAspirateDryTargetNr>0</PostAspirateDryTargetNr>
+        <PostAspirateDryCount>0</PostAspirateDryCount>
+        <PostAspirateDryTime>0</PostAspirateDryTime>
+        <AspirateSampleVolume>0</AspirateSampleVolume>
+        <AspirateSampleFlow>0</AspirateSampleFlow>
+        <AspirateSampleWaitTime>0</AspirateSampleWaitTime>
+        <AspirateSampleTargetNr>0</AspirateSampleTargetNr>
+        <AspirateSampleSpotCol>0</AspirateSampleSpotCol>
+        <AspirateSampleSpotRow>0</AspirateSampleSpotRow>
+        <AspirateSampleAirGap>0</AspirateSampleAirGap>
+        <AspirateSampleDiluterBypass>0</AspirateSampleDiluterBypass>
+        <DispenseSampleVolume>0</DispenseSampleVolume>
+        <DispenseSampleFlow>0</DispenseSampleFlow>
+        <DispenseSampleTargetNr>0</DispenseSampleTargetNr>
+        <DispenseSampleSpotNr>0</DispenseSampleSpotNr>
+        <PreDispenseTest>false</PreDispenseTest>
+        <PreDispenseTestTargetNr>0</PreDispenseTestTargetNr>
+        <PostDispenseTest>false</PostDispenseTest>
+        <PostDispenseTestTargetNr>0</PostDispenseTestTargetNr>
+      </PrepOptions>
+    </Tool>
+  </Tools>
+  <Options>
+    <CustomToolOrder>false</CustomToolOrder>
+    <ToolOrder>3</ToolOrder>
+    <IsPartialPrint>false</IsPartialPrint>
+    <MinZHeight>0</MinZHeight>
+    <MaxZHeight>999</MaxZHeight>
+    <Pausing>false</Pausing>
+    <LayerPause>1000</LayerPause>
+    <RepeatPause>1</RepeatPause>
+    <Smoothing>false</Smoothing>
+    <SmoothingMinAngle>45</SmoothingMinAngle>
+    <SmoothingMaxDistance>100</SmoothingMaxDistance>
+    <DistanceLimit>false</DistanceLimit>
+    <PointMaxDistance>10000</PointMaxDistance>
+    <DoNotSetPrintParms>false</DoNotSetPrintParms>
+  </Options>
+</Root>

@@ -1,0 +1,22 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<Root>
+  <Header Version="2.0.17.2" Id="0" />
+  <Steps>
+    <Item Id="25c85629-141d-4800-9bb5-8f9301f4c25a" Description="print ESB in B1" ObjectType="Root" ObjectId="936f148b-455b-497c-b642-640f2ac1e6a8" ActionType="RunGCode" TargetId="fbb81f6b-4b2c-4847-8890-786f15cd3be1" TargetRef="Center" FileName="ESB2" WaitPointId="c188a84f-5561-45e5-ab6c-7739d4240595" Offset.Z="0" />
+    <Item Id="61130c51-1bf6-4aa6-8527-c16dca31adac" Description="print in A1" ObjectType="Root" ObjectId="936f148b-455b-497c-b642-640f2ac1e6a8" ActionType="RunGCode" TargetId="7bec2787-477e-4f05-9d7b-b342f7cac701" TargetRef="Center" FileName="Spirale" WaitPointId="c188a84f-5561-45e5-ab6c-7739d4240595" Offset.Z="0">
+      <Condition Type="StepReady" Operator="AND" StepId="0" />
+    </Item>
+    <Item Id="525e159f-30a8-4d29-92f0-0365120da124" Description="clean tip1" ObjectType="CartridgeDisp" ObjectId="fc0f461c-3891-4040-9bae-0934676e05a1" ActionType="CleanTip" TargetId="6499bdf7-7198-4a1c-a976-56c348179083">
+      <Condition Type="StepReady" Operator="AND" StepId="0" />
+    </Item>
+    <Item Id="3aa344a4-0e30-4481-90b1-ffc5e436f626" Description="clean tip2" ObjectType="CartridgeDisp" ObjectId="1ac23c7f-1f00-4fd6-bd4f-adbecfdd7a05" ActionType="CleanTip" TargetId="6499bdf7-7198-4a1c-a976-56c348179083">
+      <Condition Type="StepReady" Operator="AND" StepId="0" />
+    </Item>
+    <Item Id="0052349f-e770-41ba-bff1-a32c72a7c489" Description="" ObjectType="Root" ObjectId="936f148b-455b-497c-b642-640f2ac1e6a8" ActionType="RunGCode" TargetId="981501c8-0569-4bf6-b5be-253f22817fc9" TargetRef="Center" FileName="test" WaitPointId="c188a84f-5561-45e5-ab6c-7739d4240595" Offset.Z="0">
+      <Condition Type="StepReady" Operator="AND" StepId="0" />
+    </Item>
+    <Item Id="935c0953-e17e-4f1f-b08e-cd18c104829d" Description="wait for a whole" ActionType="Wait" Time="300000">
+      <Condition Type="StepReady" Operator="AND" StepId="0" />
+    </Item>
+  </Steps>
+</Root>

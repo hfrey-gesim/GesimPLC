@@ -1,0 +1,13 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<Root>
+  <Header Version="2.0.18.5239" Id="0" />
+  <Steps>
+    <Item Id="3acd93e9-ceca-47cf-b7c2-03de4da7393c" Description="" ObjectType="CartridgeDisp" ObjectId="7692f160-1045-4842-9500-d2845357c3b5" ActionType="MoveToTarget" TargetId="3028e89b-673f-4765-9d47-7be4e1cc5e19" TargetRef="Center" SpeedX="115000" SpeedY="115000" SpeedZ="72000" Offset.X="0" Offset.Y="0" Offset.Z="0" ZLevel="PrePos" />
+    <Item Id="d51a5d0f-b821-4fd0-b2fc-cbbb3033f5da" Description="" ObjectType="CartridgeDisp" ObjectId="7692f160-1045-4842-9500-d2845357c3b5" ActionType="MoveToTarget" TargetId="74e00e13-dc87-44e5-9dae-9c539df05ac2" TargetRef="Center" SpeedX="115000" SpeedY="115000" SpeedZ="72000" Offset.X="0" Offset.Y="0" Offset.Z="0" ZLevel="PrePos">
+      <Condition Type="StepReady" Operator="AND" StepId="0" />
+    </Item>
+    <Item Id="26ed69ec-d585-48ea-85a8-5b1fcdadae2e" Description="" ObjectType="Root" ObjectId="e94c0ae7-f5eb-42b3-bf25-c6806131cff7" ActionType="RunSequence" SequenceName="Sequenz rrest">
+      <Condition Type="StepReady" Operator="AND" StepId="0" />
+    </Item>
+  </Steps>
+</Root>

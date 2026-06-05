@@ -1,0 +1,21 @@
+<?xml version="1.0" encoding="utf-8"?>
+<Marker xmlns:xsd="http://www.w3.org/2001/XMLSchema" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance">
+  <Name>Spot_Stift_Marker</Name>
+  <ThresholdPercentageMin>80</ThresholdPercentageMin>
+  <ThresholdPercentageMax>200</ThresholdPercentageMax>
+  <ApplyMedianFilter>false</ApplyMedianFilter>
+  <MedianfilterRadius>4</MedianfilterRadius>
+  <AreaThresholdMin>200</AreaThresholdMin>
+  <AreaThresholdMax>5000</AreaThresholdMax>
+  <ApplyNoiseReduction>true</ApplyNoiseReduction>
+  <NoiseReduction>50</NoiseReduction>
+  <ApplyRatio>false</ApplyRatio>
+  <Ratio>1000</Ratio>
+  <MaxRatioDeviation>200</MaxRatioDeviation>
+  <Negate>false</Negate>
+  <ApplyMarkerRect>false</ApplyMarkerRect>
+  <MarkerRectPercTop>0</MarkerRectPercTop>
+  <MarkerRectPercBot>0</MarkerRectPercBot>
+  <MarkerRectPercLeft>0</MarkerRectPercLeft>
+  <MarkerRectPercRight>0</MarkerRectPercRight>
+</Marker>

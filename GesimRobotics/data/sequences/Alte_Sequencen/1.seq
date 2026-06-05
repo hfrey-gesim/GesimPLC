@@ -1,0 +1,13 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<Root>
+  <Header Version="2.0.17.2" Id="0" />
+  <Steps>
+    <Item Id="6f2d5ce2-362a-42ab-83be-74e8662cc0c3" Description="" ObjectType="Extruder" ObjectId="8d5573c9-40e1-400f-a331-050c84283bbd" ActionType="MoveXY" DistanceX="-50000" DistanceY="0" SpeedX="50000" SpeedY="10000" />
+    <Item Id="29444ef2-619c-4af5-b7db-3804c0d08960" Description="" ObjectType="Extruder" ObjectId="8d5573c9-40e1-400f-a331-050c84283bbd" ActionType="MoveXY" DistanceX="50000" DistanceY="0" SpeedX="50000" SpeedY="10000">
+      <Condition Type="StepReady" Operator="AND" StepId="0" />
+    </Item>
+    <Item Id="5fafefac-7812-46e7-bd21-690c980cdc57" Description="" ActionType="GotoStep" StepId="6f2d5ce2-362a-42ab-83be-74e8662cc0c3">
+      <Condition Type="StepReady" Operator="AND" StepId="0" />
+    </Item>
+  </Steps>
+</Root>

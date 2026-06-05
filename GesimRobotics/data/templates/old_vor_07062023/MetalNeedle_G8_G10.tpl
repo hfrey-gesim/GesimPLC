@@ -1,0 +1,29 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<Root>
+  <Header Id="&#xD;&#xA;17cf7d61-ef05-4c8d-8830-77bcda7c9296" ObjType="Needle" ObjName="Needle G8-G10" Version="V2.0.17" />
+  <Picture File="metalneedle_g12.png" View="Head">
+    <Dimension X="6350" Y="68700" />
+    <Offset X="-3175" Y="0" />
+  </Picture>
+  <Picture File="metalneedle_g12.png" View="Workplate">
+    <Dimension X="6350" Y="6350" />
+    <Offset X="-3175" Y="-3175" />
+  </Picture>
+  <PossibleParentTypes OnlySlots="TRUE">
+    <Item>NeedleRack</Item>
+    <Item>Luer</Item>
+  </PossibleParentTypes>
+  <DefaultProperties>
+    <Width Min="6000" Max="8000" Default="7000" Step="100" />
+    <Depth Min="6000" Max="8000" Default="7000" Step="100" />
+    <Height Min="61500" Max="68000" Default="68000" Step="100" />
+    <SlotDiameter Min="5700" Max="5700" Default="5700" Step="100" />
+    <OverlapTool Min="5000" Max="9000" Default="8000" Step="10" />
+    <OverlapSlot Min="61500" Max="70000" Default="68000" Step="10" />
+    <DockOffset Min="-2000" Max="10000" Default="-1500" Step="100" />
+    <MeasureDistance Min="1000" Max="20000" Default="6000" Step="100" />
+  </DefaultProperties>
+  <Categories>
+    <Item>g8g10</Item>
+  </Categories>
+</Root>

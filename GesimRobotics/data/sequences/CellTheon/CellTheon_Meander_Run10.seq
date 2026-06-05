@@ -1,0 +1,154 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<Root>
+  <Header Version="2.0.18.5239" Id="0" />
+  <Steps>
+    <Item Id="ec29d889-a265-4787-b4d1-3aa76498be2f" Description="" ObjectType="PiezoPip" ObjectId="09eaf504-8211-4f6c-bbe9-ed706b5c0c7f" ActionType="MoveToTarget" TargetId="1b4daff7-8a0f-457a-b2a6-03e989437b8d" TargetRef="ArrayRowCol" Col="25" Row="92" SpeedX="115000" SpeedY="115000" SpeedZ="72000" Offset.X="0" Offset.Y="0" Offset.Z="0" ZLevel="PrePos" />
+    <Item Id="79510af1-0c9f-4782-83ec-5ccc5bbda370" Description="" ObjectType="Root" ObjectId="e94c0ae7-f5eb-42b3-bf25-c6806131cff7" ActionType="RunSequence" SequenceName="Pip1_Pip2_Drop">
+      <Condition Type="StepReady" Operator="AND" StepId="0" />
+    </Item>
+    <Item Id="2a7176de-e925-4c0a-8f07-fa24a4d1bcc8" Description="" ObjectType="PiezoPip" ObjectId="09eaf504-8211-4f6c-bbe9-ed706b5c0c7f" ActionType="MoveToTarget" TargetId="1b4daff7-8a0f-457a-b2a6-03e989437b8d" TargetRef="ArrayRowCol" Col="24" Row="91" SpeedX="115000" SpeedY="115000" SpeedZ="72000" Offset.X="0" Offset.Y="0" Offset.Z="0" ZLevel="PrePos">
+      <Condition Type="StepReady" Operator="AND" StepId="0" />
+    </Item>
+    <Item Id="c7bb6903-23b8-4227-af8a-c4039713b759" Description="" ObjectType="Root" ObjectId="e94c0ae7-f5eb-42b3-bf25-c6806131cff7" ActionType="RunSequence" SequenceName="Pip1_Pip2_Drop">
+      <Condition Type="StepReady" Operator="AND" StepId="0" />
+    </Item>
+    <Item Id="2ebc7f17-09ab-4ce8-8d61-afb119fed3db" Description="" ObjectType="PiezoPip" ObjectId="09eaf504-8211-4f6c-bbe9-ed706b5c0c7f" ActionType="MoveToTarget" TargetId="1b4daff7-8a0f-457a-b2a6-03e989437b8d" TargetRef="ArrayRowCol" Col="23" Row="90" SpeedX="115000" SpeedY="115000" SpeedZ="72000" Offset.X="0" Offset.Y="0" Offset.Z="0" ZLevel="PrePos">
+      <Condition Type="StepReady" Operator="AND" StepId="0" />
+    </Item>
+    <Item Id="1802a314-14d4-4de8-bff6-b2c16f4cb57b" Description="" ObjectType="Root" ObjectId="e94c0ae7-f5eb-42b3-bf25-c6806131cff7" ActionType="RunSequence" SequenceName="Pip1_Pip2_Drop">
+      <Condition Type="StepReady" Operator="AND" StepId="0" />
+    </Item>
+    <Item Id="f99e2268-a62a-409f-8315-39e136b4df28" Description="" ObjectType="PiezoPip" ObjectId="09eaf504-8211-4f6c-bbe9-ed706b5c0c7f" ActionType="MoveToTarget" TargetId="1b4daff7-8a0f-457a-b2a6-03e989437b8d" TargetRef="ArrayRowCol" Col="22" Row="89" SpeedX="115000" SpeedY="115000" SpeedZ="72000" Offset.X="0" Offset.Y="0" Offset.Z="0" ZLevel="PrePos">
+      <Condition Type="StepReady" Operator="AND" StepId="0" />
+    </Item>
+    <Item Id="7c6c1ba1-77a2-4c04-a8e1-2f92778df7f6" Description="" ObjectType="Root" ObjectId="e94c0ae7-f5eb-42b3-bf25-c6806131cff7" ActionType="RunSequence" SequenceName="Pip1_Pip2_Pip3_Drop">
+      <Condition Type="StepReady" Operator="AND" StepId="0" />
+    </Item>
+    <Item Id="ec73af8c-72ce-44bb-99c3-9e1240248dc6" Description="" ObjectType="PiezoPip" ObjectId="09eaf504-8211-4f6c-bbe9-ed706b5c0c7f" ActionType="MoveToTarget" TargetId="1b4daff7-8a0f-457a-b2a6-03e989437b8d" TargetRef="ArrayRowCol" Col="21" Row="88" SpeedX="115000" SpeedY="115000" SpeedZ="72000" Offset.X="0" Offset.Y="0" Offset.Z="0" ZLevel="PrePos">
+      <Condition Type="StepReady" Operator="AND" StepId="0" />
+    </Item>
+    <Item Id="25e7e93d-699f-422a-b2c2-a86c8901fbce" Description="" ObjectType="Root" ObjectId="e94c0ae7-f5eb-42b3-bf25-c6806131cff7" ActionType="RunSequence" SequenceName="Pip1_Pip2_Pip3_Drop">
+      <Condition Type="StepReady" Operator="AND" StepId="0" />
+    </Item>
+    <Item Id="a692732d-121d-4ee8-9064-359e613eee04" Description="" ObjectType="PiezoPip" ObjectId="09eaf504-8211-4f6c-bbe9-ed706b5c0c7f" ActionType="MoveToTarget" TargetId="1b4daff7-8a0f-457a-b2a6-03e989437b8d" TargetRef="ArrayRowCol" Col="20" Row="87" SpeedX="115000" SpeedY="115000" SpeedZ="72000" Offset.X="0" Offset.Y="0" Offset.Z="0" ZLevel="PrePos">
+      <Condition Type="StepReady" Operator="AND" StepId="0" />
+    </Item>
+    <Item Id="a131b34b-95d9-4271-9035-cb0316eca84d" Description="" ObjectType="Root" ObjectId="e94c0ae7-f5eb-42b3-bf25-c6806131cff7" ActionType="RunSequence" SequenceName="Pip1_Pip2_Pip3_Drop">
+      <Condition Type="StepReady" Operator="AND" StepId="0" />
+    </Item>
+    <Item Id="834c9728-7ea6-4ab1-a4c2-d0ea3f702f06" Description="" ObjectType="PiezoPip" ObjectId="09eaf504-8211-4f6c-bbe9-ed706b5c0c7f" ActionType="MoveToTarget" TargetId="1b4daff7-8a0f-457a-b2a6-03e989437b8d" TargetRef="ArrayRowCol" Col="19" Row="86" SpeedX="115000" SpeedY="115000" SpeedZ="72000" Offset.X="0" Offset.Y="0" Offset.Z="0" ZLevel="PrePos">
+      <Condition Type="StepReady" Operator="AND" StepId="0" />
+    </Item>
+    <Item Id="f3c754a7-7fef-46cb-b9d0-f164db318a73" Description="" ObjectType="Root" ObjectId="e94c0ae7-f5eb-42b3-bf25-c6806131cff7" ActionType="RunSequence" SequenceName="Pip1_Pip2_Pip3_Drop">
+      <Condition Type="StepReady" Operator="AND" StepId="0" />
+    </Item>
+    <Item Id="e9a654c4-ed50-4caf-9fdb-ecb600ae3935" Description="" ObjectType="PiezoPip" ObjectId="09eaf504-8211-4f6c-bbe9-ed706b5c0c7f" ActionType="MoveToTarget" TargetId="1b4daff7-8a0f-457a-b2a6-03e989437b8d" TargetRef="ArrayRowCol" Col="18" Row="85" SpeedX="115000" SpeedY="115000" SpeedZ="72000" Offset.X="0" Offset.Y="0" Offset.Z="0" ZLevel="PrePos">
+      <Condition Type="StepReady" Operator="AND" StepId="0" />
+    </Item>
+    <Item Id="19564107-42cf-4b5c-8ac8-bfd30852589f" Description="" ObjectType="Root" ObjectId="e94c0ae7-f5eb-42b3-bf25-c6806131cff7" ActionType="RunSequence" SequenceName="Pip1_Pip2_Pip3_Drop">
+      <Condition Type="StepReady" Operator="AND" StepId="0" />
+    </Item>
+    <Item Id="f8198a3b-a544-4d1a-902c-9477ea7c987b" Description="" ObjectType="PiezoPip" ObjectId="09eaf504-8211-4f6c-bbe9-ed706b5c0c7f" ActionType="MoveToTarget" TargetId="1b4daff7-8a0f-457a-b2a6-03e989437b8d" TargetRef="ArrayRowCol" Col="17" Row="84" SpeedX="115000" SpeedY="115000" SpeedZ="72000" Offset.X="0" Offset.Y="0" Offset.Z="0" ZLevel="PrePos">
+      <Condition Type="StepReady" Operator="AND" StepId="0" />
+    </Item>
+    <Item Id="7b0e8c6a-03cf-426c-b3bb-168539789e2b" Description="" ObjectType="Root" ObjectId="e94c0ae7-f5eb-42b3-bf25-c6806131cff7" ActionType="RunSequence" SequenceName="Pip1_Pip2_Pip3_Drop">
+      <Condition Type="StepReady" Operator="AND" StepId="0" />
+    </Item>
+    <Item Id="38ca7254-cd95-45c5-83e2-3625d8ea72b2" Description="" ObjectType="PiezoPip" ObjectId="09eaf504-8211-4f6c-bbe9-ed706b5c0c7f" ActionType="MoveToTarget" TargetId="1b4daff7-8a0f-457a-b2a6-03e989437b8d" TargetRef="ArrayRowCol" Col="16" Row="83" SpeedX="115000" SpeedY="115000" SpeedZ="72000" Offset.X="0" Offset.Y="0" Offset.Z="0" ZLevel="PrePos">
+      <Condition Type="StepReady" Operator="AND" StepId="0" />
+    </Item>
+    <Item Id="b67f21b2-8a7d-4080-8a1a-0b26e06afbf7" Description="" ObjectType="Root" ObjectId="e94c0ae7-f5eb-42b3-bf25-c6806131cff7" ActionType="RunSequence" SequenceName="Pip1_Pip2_Pip3_Drop">
+      <Condition Type="StepReady" Operator="AND" StepId="0" />
+    </Item>
+    <Item Id="38c5f795-45ee-4426-96b5-e26b232e9814" Description="" ObjectType="PiezoPip" ObjectId="09eaf504-8211-4f6c-bbe9-ed706b5c0c7f" ActionType="MoveToTarget" TargetId="1b4daff7-8a0f-457a-b2a6-03e989437b8d" TargetRef="ArrayRowCol" Col="15" Row="82" SpeedX="115000" SpeedY="115000" SpeedZ="72000" Offset.X="0" Offset.Y="0" Offset.Z="0" ZLevel="PrePos">
+      <Condition Type="StepReady" Operator="AND" StepId="0" />
+    </Item>
+    <Item Id="f7cee2d4-c52f-4d41-8c89-c31a38f7bd6a" Description="" ObjectType="Root" ObjectId="e94c0ae7-f5eb-42b3-bf25-c6806131cff7" ActionType="RunSequence" SequenceName="Pip1_Pip2_Pip3_Drop">
+      <Condition Type="StepReady" Operator="AND" StepId="0" />
+    </Item>
+    <Item Id="f0b47fea-b4a1-4258-b16c-0d7c68bcc3a8" Description="" ObjectType="PiezoPip" ObjectId="09eaf504-8211-4f6c-bbe9-ed706b5c0c7f" ActionType="MoveToTarget" TargetId="1b4daff7-8a0f-457a-b2a6-03e989437b8d" TargetRef="ArrayRowCol" Col="14" Row="81" SpeedX="115000" SpeedY="115000" SpeedZ="72000" Offset.X="0" Offset.Y="0" Offset.Z="0" ZLevel="PrePos">
+      <Condition Type="StepReady" Operator="AND" StepId="0" />
+    </Item>
+    <Item Id="ff5ee195-666a-45db-ac22-d84534013c5c" Description="" ObjectType="Root" ObjectId="e94c0ae7-f5eb-42b3-bf25-c6806131cff7" ActionType="RunSequence" SequenceName="Pip1_Pip2_Pip3_Drop">
+      <Condition Type="StepReady" Operator="AND" StepId="0" />
+    </Item>
+    <Item Id="2a67dde4-6b18-4915-a4ab-0ca75daa0170" Description="" ObjectType="PiezoPip" ObjectId="09eaf504-8211-4f6c-bbe9-ed706b5c0c7f" ActionType="MoveToTarget" TargetId="1b4daff7-8a0f-457a-b2a6-03e989437b8d" TargetRef="ArrayRowCol" Col="13" Row="80" SpeedX="115000" SpeedY="115000" SpeedZ="72000" Offset.X="0" Offset.Y="0" Offset.Z="0" ZLevel="PrePos">
+      <Condition Type="StepReady" Operator="AND" StepId="0" />
+    </Item>
+    <Item Id="128cb460-217b-47bd-9668-71207cce758a" Description="" ObjectType="Root" ObjectId="e94c0ae7-f5eb-42b3-bf25-c6806131cff7" ActionType="RunSequence" SequenceName="Pip1_Pip2_Pip3_Pip4_Drop">
+      <Condition Type="StepReady" Operator="AND" StepId="0" />
+    </Item>
+    <Item Id="e7d1906b-289f-44c8-93d7-35254e2fee0e" Description="" ObjectType="PiezoPip" ObjectId="09eaf504-8211-4f6c-bbe9-ed706b5c0c7f" ActionType="MoveToTarget" TargetId="1b4daff7-8a0f-457a-b2a6-03e989437b8d" TargetRef="ArrayRowCol" Col="12" Row="79" SpeedX="115000" SpeedY="115000" SpeedZ="72000" Offset.X="0" Offset.Y="0" Offset.Z="0" ZLevel="PrePos">
+      <Condition Type="StepReady" Operator="AND" StepId="0" />
+    </Item>
+    <Item Id="fcb4f8bd-990f-4fcf-8140-1a4b942f0bd6" Description="" ObjectType="Root" ObjectId="e94c0ae7-f5eb-42b3-bf25-c6806131cff7" ActionType="RunSequence" SequenceName="Pip1_Pip2_Pip3_Pip4_Drop">
+      <Condition Type="StepReady" Operator="AND" StepId="0" />
+    </Item>
+    <Item Id="556f039b-a473-4efe-b279-3da66194aebe" Description="" ObjectType="PiezoPip" ObjectId="09eaf504-8211-4f6c-bbe9-ed706b5c0c7f" ActionType="MoveToTarget" TargetId="1b4daff7-8a0f-457a-b2a6-03e989437b8d" TargetRef="ArrayRowCol" Col="11" Row="78" SpeedX="115000" SpeedY="115000" SpeedZ="72000" Offset.X="0" Offset.Y="0" Offset.Z="0" ZLevel="PrePos">
+      <Condition Type="StepReady" Operator="AND" StepId="0" />
+    </Item>
+    <Item Id="6e8b9515-e446-4043-9d77-b23a2f65db68" Description="" ObjectType="Root" ObjectId="e94c0ae7-f5eb-42b3-bf25-c6806131cff7" ActionType="RunSequence" SequenceName="Pip1_Pip2_Pip3_Pip4_Drop">
+      <Condition Type="StepReady" Operator="AND" StepId="0" />
+    </Item>
+    <Item Id="346db387-adc9-4cbe-99ad-b1e181b07777" Description="" ObjectType="PiezoPip" ObjectId="09eaf504-8211-4f6c-bbe9-ed706b5c0c7f" ActionType="MoveToTarget" TargetId="1b4daff7-8a0f-457a-b2a6-03e989437b8d" TargetRef="ArrayRowCol" Col="10" Row="77" SpeedX="115000" SpeedY="115000" SpeedZ="72000" Offset.X="0" Offset.Y="0" Offset.Z="0" ZLevel="PrePos">
+      <Condition Type="StepReady" Operator="AND" StepId="0" />
+    </Item>
+    <Item Id="28709b44-6966-46e9-afea-9a2790178df2" Description="" ObjectType="Root" ObjectId="e94c0ae7-f5eb-42b3-bf25-c6806131cff7" ActionType="RunSequence" SequenceName="Pip1_Pip2_Pip3_Pip4_Drop">
+      <Condition Type="StepReady" Operator="AND" StepId="0" />
+    </Item>
+    <Item Id="bc4df23e-64d4-439f-94fd-361ee31317b3" Description="" ObjectType="PiezoPip" ObjectId="09eaf504-8211-4f6c-bbe9-ed706b5c0c7f" ActionType="MoveToTarget" TargetId="1b4daff7-8a0f-457a-b2a6-03e989437b8d" TargetRef="ArrayRowCol" Col="9" Row="76" SpeedX="115000" SpeedY="115000" SpeedZ="72000" Offset.X="0" Offset.Y="0" Offset.Z="0" ZLevel="PrePos">
+      <Condition Type="StepReady" Operator="AND" StepId="0" />
+    </Item>
+    <Item Id="34ecb611-f5bc-4490-bda7-eff12a78a35b" Description="" ObjectType="Root" ObjectId="e94c0ae7-f5eb-42b3-bf25-c6806131cff7" ActionType="RunSequence" SequenceName="Pip1_Pip2_Pip3_Pip4_Drop">
+      <Condition Type="StepReady" Operator="AND" StepId="0" />
+    </Item>
+    <Item Id="e805f825-8e11-4e6f-adb1-f1590fc305f0" Description="" ObjectType="PiezoPip" ObjectId="09eaf504-8211-4f6c-bbe9-ed706b5c0c7f" ActionType="MoveToTarget" TargetId="1b4daff7-8a0f-457a-b2a6-03e989437b8d" TargetRef="ArrayRowCol" Col="8" Row="75" SpeedX="115000" SpeedY="115000" SpeedZ="72000" Offset.X="0" Offset.Y="0" Offset.Z="0" ZLevel="PrePos">
+      <Condition Type="StepReady" Operator="AND" StepId="0" />
+    </Item>
+    <Item Id="4acf8265-f1e0-4bcd-ae74-d87a750f6e6f" Description="" ObjectType="Root" ObjectId="e94c0ae7-f5eb-42b3-bf25-c6806131cff7" ActionType="RunSequence" SequenceName="Pip1_Pip2_Pip3_Pip4_Drop">
+      <Condition Type="StepReady" Operator="AND" StepId="0" />
+    </Item>
+    <Item Id="921549a5-60bd-44e2-badb-22283fc4fe2e" Description="" ObjectType="PiezoPip" ObjectId="09eaf504-8211-4f6c-bbe9-ed706b5c0c7f" ActionType="MoveToTarget" TargetId="1b4daff7-8a0f-457a-b2a6-03e989437b8d" TargetRef="ArrayRowCol" Col="7" Row="74" SpeedX="115000" SpeedY="115000" SpeedZ="72000" Offset.X="0" Offset.Y="0" Offset.Z="0" ZLevel="PrePos">
+      <Condition Type="StepReady" Operator="AND" StepId="0" />
+    </Item>
+    <Item Id="effaee89-72d3-4b10-a27e-dd115da656cd" Description="" ObjectType="Root" ObjectId="e94c0ae7-f5eb-42b3-bf25-c6806131cff7" ActionType="RunSequence" SequenceName="Pip1_Pip2_Pip3_Pip4_Drop">
+      <Condition Type="StepReady" Operator="AND" StepId="0" />
+    </Item>
+    <Item Id="009b1d2b-ae04-4560-9300-124168456ed5" Description="" ObjectType="PiezoPip" ObjectId="09eaf504-8211-4f6c-bbe9-ed706b5c0c7f" ActionType="MoveToTarget" TargetId="1b4daff7-8a0f-457a-b2a6-03e989437b8d" TargetRef="ArrayRowCol" Col="6" Row="73" SpeedX="115000" SpeedY="115000" SpeedZ="72000" Offset.X="0" Offset.Y="0" Offset.Z="0" ZLevel="PrePos">
+      <Condition Type="StepReady" Operator="AND" StepId="0" />
+    </Item>
+    <Item Id="bbf7eee6-0b96-49ca-a570-b25b6d9d967a" Description="" ObjectType="Root" ObjectId="e94c0ae7-f5eb-42b3-bf25-c6806131cff7" ActionType="RunSequence" SequenceName="Pip1_Pip2_Pip3_Pip4_Drop">
+      <Condition Type="StepReady" Operator="AND" StepId="0" />
+    </Item>
+    <Item Id="0ce532da-4687-4c0e-9bd3-ddd035649691" Description="" ObjectType="PiezoPip" ObjectId="09eaf504-8211-4f6c-bbe9-ed706b5c0c7f" ActionType="MoveToTarget" TargetId="1b4daff7-8a0f-457a-b2a6-03e989437b8d" TargetRef="ArrayRowCol" Col="5" Row="72" SpeedX="115000" SpeedY="115000" SpeedZ="72000" Offset.X="0" Offset.Y="0" Offset.Z="0" ZLevel="PrePos">
+      <Condition Type="StepReady" Operator="AND" StepId="0" />
+    </Item>
+    <Item Id="23d3a55d-b8d3-4712-9548-eb9484552e13" Description="" ObjectType="Root" ObjectId="e94c0ae7-f5eb-42b3-bf25-c6806131cff7" ActionType="RunSequence" SequenceName="Pip1_Pip2_Pip3_Pip4_Drop">
+      <Condition Type="StepReady" Operator="AND" StepId="0" />
+    </Item>
+    <Item Id="83b0225b-7126-4dd0-8989-77396f4f5764" Description="" ObjectType="PiezoPip" ObjectId="09eaf504-8211-4f6c-bbe9-ed706b5c0c7f" ActionType="MoveToTarget" TargetId="1b4daff7-8a0f-457a-b2a6-03e989437b8d" TargetRef="ArrayRowCol" Col="4" Row="71" SpeedX="115000" SpeedY="115000" SpeedZ="72000" Offset.X="0" Offset.Y="0" Offset.Z="0" ZLevel="PrePos">
+      <Condition Type="StepReady" Operator="AND" StepId="0" />
+    </Item>
+    <Item Id="9048bba3-291b-41df-b578-e4bb703d940f" Description="" ObjectType="Root" ObjectId="e94c0ae7-f5eb-42b3-bf25-c6806131cff7" ActionType="RunSequence" SequenceName="Pip1_Pip2_Pip3_Pip4_Drop">
+      <Condition Type="StepReady" Operator="AND" StepId="0" />
+    </Item>
+    <Item Id="770b8ea3-ac5f-4b45-8f1e-4c02e873b7c8" Description="" ObjectType="PiezoPip" ObjectId="09eaf504-8211-4f6c-bbe9-ed706b5c0c7f" ActionType="MoveToTarget" TargetId="1b4daff7-8a0f-457a-b2a6-03e989437b8d" TargetRef="ArrayRowCol" Col="3" Row="70" SpeedX="115000" SpeedY="115000" SpeedZ="72000" Offset.X="0" Offset.Y="0" Offset.Z="0" ZLevel="PrePos">
+      <Condition Type="StepReady" Operator="AND" StepId="0" />
+    </Item>
+    <Item Id="d4c04de8-fea9-458d-9a6f-126003527500" Description="" ObjectType="Root" ObjectId="e94c0ae7-f5eb-42b3-bf25-c6806131cff7" ActionType="RunSequence" SequenceName="Pip1_Pip2_Pip3_Pip4_Drop">
+      <Condition Type="StepReady" Operator="AND" StepId="0" />
+    </Item>
+    <Item Id="3704ce81-4d23-4c47-92cb-67679e851fd2" Description="" ObjectType="PiezoPip" ObjectId="09eaf504-8211-4f6c-bbe9-ed706b5c0c7f" ActionType="MoveToTarget" TargetId="1b4daff7-8a0f-457a-b2a6-03e989437b8d" TargetRef="ArrayRowCol" Col="2" Row="69" SpeedX="115000" SpeedY="115000" SpeedZ="72000" Offset.X="0" Offset.Y="0" Offset.Z="0" ZLevel="PrePos">
+      <Condition Type="StepReady" Operator="AND" StepId="0" />
+    </Item>
+    <Item Id="3aa5a8b8-77e5-431a-b8d2-635fdb309bcc" Description="" ObjectType="Root" ObjectId="e94c0ae7-f5eb-42b3-bf25-c6806131cff7" ActionType="RunSequence" SequenceName="Pip1_Pip2_Pip3_Pip4_Drop">
+      <Condition Type="StepReady" Operator="AND" StepId="0" />
+    </Item>
+    <Item Id="0c6d1f90-f957-4114-8214-e1a0f013ad19" Description="" ObjectType="PiezoPip" ObjectId="09eaf504-8211-4f6c-bbe9-ed706b5c0c7f" ActionType="MoveToTarget" TargetId="1b4daff7-8a0f-457a-b2a6-03e989437b8d" TargetRef="ArrayRowCol" Col="1" Row="68" SpeedX="115000" SpeedY="115000" SpeedZ="72000" Offset.X="0" Offset.Y="0" Offset.Z="0" ZLevel="PrePos">
+      <Condition Type="StepReady" Operator="AND" StepId="0" />
+    </Item>
+    <Item Id="e8d348c9-aed1-455c-be2b-d174d66e3414" Description="" ObjectType="Root" ObjectId="e94c0ae7-f5eb-42b3-bf25-c6806131cff7" ActionType="RunSequence" SequenceName="Pip1_Pip2_Pip3_Pip4_Drop">
+      <Condition Type="StepReady" Operator="AND" StepId="0" />
+    </Item>
+  </Steps>
+</Root>

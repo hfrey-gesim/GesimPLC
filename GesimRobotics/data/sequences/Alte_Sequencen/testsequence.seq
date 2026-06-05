@@ -1,0 +1,12 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<Root>
+  <Header Version="2.0.18.5239" Id="0" />
+  <Steps>
+    <Item Id="5979092c-5877-4b1b-b5b3-2dd45eb30d33" Description="" ActionType="CounterStep" Operator="Set" Amount="0" />
+    <Item Id="975eb671-6602-44d0-89dc-c8248502dc93" Description="" ObjectType="CartridgeHolder" ObjectId="a4886ea6-ca4f-4fe1-9fa3-cd9a384b86ef" ActionType="Heating" Temp="300" Activate="true" />
+    <Item Id="c3d11325-8ff2-4868-9dc4-79ee00a110cf" Description="" ActionType="CounterStep" Operator="Add" Amount="1">
+      <Condition Type="StepReady" Operator="AND" StepId="0" />
+    </Item>
+    <Item Id="84b1bb1b-7aea-44ff-937e-8501df61da10" Description="" ObjectType="Exposure" ObjectId="48d4d12f-b7d5-4edf-b3a8-6db617ec50b9" ActionType="MoveXY" DistanceX="2700" DistanceY="0" SpeedX="510" SpeedY="10000" />
+  </Steps>
+</Root>

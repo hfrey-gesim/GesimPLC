@@ -1,0 +1,28 @@
+<?xml version="1.0" encoding="utf-8"?>
+<SpotPattern xmlns:xsd="http://www.w3.org/2001/XMLSchema" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance">
+  <Name>Jen_Spotarray</Name>
+  <Width>1500</Width>
+  <Height>1</Height>
+  <Spots>
+    <Spot>
+      <isSelected>false</isSelected>
+      <Id>0</Id>
+      <Position>
+        <X>0</X>
+        <Y>0</Y>
+      </Position>
+      <Enabled>true</Enabled>
+      <IsSelected>false</IsSelected>
+    </Spot>
+    <Spot>
+      <isSelected>false</isSelected>
+      <Id>1</Id>
+      <Position>
+        <X>1500</X>
+        <Y>0</Y>
+      </Position>
+      <Enabled>true</Enabled>
+      <IsSelected>false</IsSelected>
+    </Spot>
+  </Spots>
+</SpotPattern>

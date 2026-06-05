@@ -1,0 +1,35 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<Item Id="00000000-0000-0000-0000-000000000000" TemplateId="4ef7607c-035b-45d0-9c20-c76d06d02204" Name="targettray berlin" ObjType="TargetTray" ParentSlotNr="1" RelPos.X="0" RelPos.Y="0" RelPos.Z="0" Width="240000" Depth="412000" Heigth="3000" FreeHeight="0">
+  <Slots>
+    <Item Nr="1" Name="Mtp Slot 1" RelPos.X="28600" RelPos.Y="81000" RelPos.Z="0" Dim.X="0" Dim.Y="0" />
+    <Item Nr="2" Name="Mtp Slot 2" RelPos.X="125700" RelPos.Y="81000" RelPos.Z="0" Dim.X="0" Dim.Y="0" />
+    <Item Nr="3" Name="Mtp Slot 3" RelPos.X="28600" RelPos.Y="221000" RelPos.Z="0" Dim.X="0" Dim.Y="0" />
+    <Item Nr="4" Name="Mtp Slot 4" RelPos.X="125700" RelPos.Y="221000" RelPos.Z="0" Dim.X="0" Dim.Y="0" />
+    <Item Nr="5" Name="MtpHolder Slot 1" RelPos.X="17500" RelPos.Y="75000" RelPos.Z="0" Dim.X="0" Dim.Y="0" />
+    <Item Nr="6" Name="MtpHolder Slot 2" RelPos.X="17500" RelPos.Y="197000" RelPos.Z="0" Dim.X="0" Dim.Y="0" />
+    <Item Nr="7" Name="Tray Slot" RelPos.X="-5000" RelPos.Y="12500" RelPos.Z="0" Dim.X="0" Dim.Y="0" />
+  </Slots>
+  <Item Id="00000000-0000-0000-0000-000000000000" TemplateId="31dee62b-b1e5-4a80-95a9-581fd37f6ebb" Name="WAIT" ObjType="Point" RelPos.X="65873" RelPos.Y="288392" RelPos.Z="60000" Width="0" Depth="0" Heigth="0" FreeHeight="0" Offset.Z="0" />
+  <Item Id="00000000-0000-0000-0000-000000000000" TemplateId="7efea211-6ced-4104-8ca6-26f74abfc51a" Name="CustomObject" ObjType="Slide" RelPos.X="115000" RelPos.Y="127000" RelPos.Z="0" Width="50000" Depth="40000" Heigth="68000" FreeHeight="0" Offset.Z="0">
+    <Item Id="00000000-0000-0000-0000-000000000000" TemplateId="31dee62b-b1e5-4a80-95a9-581fd37f6ebb" Name="Point_messung" ObjType="Point" RelPos.X="29900" RelPos.Y="17700" RelPos.Z="0" Width="0" Depth="0" Heigth="0" FreeHeight="0" Offset.Z="-3739" />
+  </Item>
+  <Item Id="00000000-0000-0000-0000-000000000000" TemplateId="31dee62b-b1e5-4a80-95a9-581fd37f6ebb" Name="Point1" ObjType="Point" RelPos.X="72623" RelPos.Y="244224" RelPos.Z="0" Width="0" Depth="0" Heigth="0" FreeHeight="0" Offset.Z="2631" />
+  <Item Id="00000000-0000-0000-0000-000000000000" TemplateId="31dee62b-b1e5-4a80-95a9-581fd37f6ebb" Name="Point2" ObjType="Point" RelPos.X="72321" RelPos.Y="324683" RelPos.Z="2000" Width="0" Depth="0" Heigth="0" FreeHeight="0" Offset.Z="2631" />
+  <Item Id="00000000-0000-0000-0000-000000000000" TemplateId="31dee62b-b1e5-4a80-95a9-581fd37f6ebb" Name="Point-Sensor" ObjType="Point" RelPos.X="145000" RelPos.Y="128070" RelPos.Z="67000" Width="0" Depth="0" Heigth="0" FreeHeight="0" Offset.Z="-147" />
+  <Item Id="00000000-0000-0000-0000-000000000000" TemplateId="69119eba-dd2a-4dfc-8a03-337d81350f35" Name="SingleSubstrateHeater (Internal)" ObjType="SubstHolder" ParentSlotNr="1" RelPos.X="0" RelPos.Y="0" RelPos.Z="0" Width="86000" Depth="128000" Heigth="26000" FreeHeight="0" HeaterChannel="1" HeaterKp="160" HeaterKi="12" HeaterKd="0" HeaterTa="10" ValveNrCooling="3" ValveNrVac="5">
+    <Slots />
+    <Item Id="00000000-0000-0000-0000-000000000000" TemplateId="31dee62b-b1e5-4a80-95a9-581fd37f6ebb" Name="Point" ObjType="Point" RelPos.X="17777" RelPos.Y="83256" RelPos.Z="0" Width="0" Depth="0" Heigth="0" FreeHeight="0" Offset.Z="1079" />
+    <Item Id="00000000-0000-0000-0000-000000000000" TemplateId="31dee62b-b1e5-4a80-95a9-581fd37f6ebb" Name="Visco" ObjType="Point" RelPos.X="15726" RelPos.Y="10419" RelPos.Z="0" Width="0" Depth="0" Heigth="0" FreeHeight="0" Offset.Z="899" />
+    <Item Id="00000000-0000-0000-0000-000000000000" TemplateId="31dee62b-b1e5-4a80-95a9-581fd37f6ebb" Name="Zentrum" ObjType="Point" RelPos.X="43424" RelPos.Y="56583" RelPos.Z="0" Width="0" Depth="0" Heigth="0" FreeHeight="0" Offset.Z="305" />
+    <Item Id="00000000-0000-0000-0000-000000000000" TemplateId="31dee62b-b1e5-4a80-95a9-581fd37f6ebb" Name="Vermessung UL" ObjType="Point" RelPos.X="5467" RelPos.Y="6315" RelPos.Z="0" Width="0" Depth="0" Heigth="0" FreeHeight="0" Offset.Z="208" />
+    <Item Id="00000000-0000-0000-0000-000000000000" TemplateId="31dee62b-b1e5-4a80-95a9-581fd37f6ebb" Name="Vermessung UR" ObjType="Point" RelPos.X="78304" RelPos.Y="7341" RelPos.Z="0" Width="0" Depth="0" Heigth="0" FreeHeight="0" Offset.Z="179" />
+    <Item Id="00000000-0000-0000-0000-000000000000" TemplateId="31dee62b-b1e5-4a80-95a9-581fd37f6ebb" Name="Vermessung OR" ObjType="Point" RelPos.X="76252" RelPos.Y="95567" RelPos.Z="0" Width="0" Depth="0" Heigth="0" FreeHeight="0" Offset.Z="245" />
+    <Item Id="00000000-0000-0000-0000-000000000000" TemplateId="31dee62b-b1e5-4a80-95a9-581fd37f6ebb" Name="Vermessung OL" ObjType="Point" RelPos.X="4441" RelPos.Y="95567" RelPos.Z="0" Width="0" Depth="0" Heigth="0" FreeHeight="0" Offset.Z="257" />
+    <ActionSettings>
+      <Item Name="SwitchPressure" HiddenInManu="True" Time="0" />
+      <Item Name="Heating" Temp="200" Temp2="0" Temp3="0" />
+      <Item Name="Cooling" HiddenInManu="True" Temp="200" />
+      <Item Name="SwitchLight" HiddenInManu="True" />
+    </ActionSettings>
+  </Item>
+</Item>

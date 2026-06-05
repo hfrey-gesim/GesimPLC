@@ -1,0 +1,64 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<Root Version="1">
+  <Nodes>
+    <Node>
+      <Uid>45bac9207b06410d9247c4a7e4ca2be8</Uid>
+      <RepeatedExecutionHandling>Execute</RepeatedExecutionHandling>
+      <PosX>2308</PosX>
+      <PosY>2416</PosY>
+      <ReverseConnectors>false</ReverseConnectors>
+      <Type>Start</Type>
+      <Vars />
+    </Node>
+    <Node>
+      <Uid>f3547e9e62484a548370d65faef3477d</Uid>
+      <RepeatedExecutionHandling>Repair</RepeatedExecutionHandling>
+      <PosX>2774</PosX>
+      <PosY>2353</PosY>
+      <ReverseConnectors>false</ReverseConnectors>
+      <Type>WaterSensitiveTest</Type>
+      <PipGCodeToolNr>3</PipGCodeToolNr>
+      <PrepOptionsFrequency>100</PrepOptionsFrequency>
+      <PrepOptionsPulse>80</PrepOptionsPulse>
+      <PrepOptionsVoltage>45</PrepOptionsVoltage>
+      <ZOffsetAction>2000</ZOffsetAction>
+      <MaxOffsetRadius>500</MaxOffsetRadius>
+      <Drops>10</Drops>
+      <Target>2136b050-2fba-4790-b58b-d30eacfb7dec</Target>
+      <Marker>SpotMarker</Marker>
+      <Delay>3000</Delay>
+    </Node>
+    <Node>
+      <Uid>8ab22af5659344e8b3085de9e7ca5537</Uid>
+      <RepeatedExecutionHandling>Execute</RepeatedExecutionHandling>
+      <PosX>2544</PosX>
+      <PosY>2368</PosY>
+      <ReverseConnectors>false</ReverseConnectors>
+      <Type>StrobTest</Type>
+      <PipGCodeToolNr>3</PipGCodeToolNr>
+      <PrepOptionsFrequency>100</PrepOptionsFrequency>
+      <PrepOptionsPulse>80</PrepOptionsPulse>
+      <PrepOptionsVoltage>45</PrepOptionsVoltage>
+    </Node>
+    <Node>
+      <Uid>85ba9f86ba9047b4afcb112d5a3b7d4d</Uid>
+      <RepeatedExecutionHandling>Execute</RepeatedExecutionHandling>
+      <PosX>3091</PosX>
+      <PosY>2403</PosY>
+      <ReverseConnectors>false</ReverseConnectors>
+      <Type>StrobTest</Type>
+      <PipGCodeToolNr>3</PipGCodeToolNr>
+      <PrepOptionsFrequency>100</PrepOptionsFrequency>
+      <PrepOptionsPulse>80</PrepOptionsPulse>
+      <PrepOptionsVoltage>45</PrepOptionsVoltage>
+    </Node>
+  </Nodes>
+  <Connections>
+    <Connection SourceUid="45bac9207b06410d9247c4a7e4ca2be8" SourceConnectorIndex="0" DestUid="8ab22af5659344e8b3085de9e7ca5537" DestConnectorIndex="0" />
+    <Connection SourceUid="8ab22af5659344e8b3085de9e7ca5537" SourceConnectorIndex="0" DestUid="f3547e9e62484a548370d65faef3477d" DestConnectorIndex="0" />
+    <Connection SourceUid="f3547e9e62484a548370d65faef3477d" SourceConnectorIndex="0" DestUid="85ba9f86ba9047b4afcb112d5a3b7d4d" DestConnectorIndex="0" />
+  </Connections>
+  <Options>
+    <Camera>is_34520796</Camera>
+  </Options>
+</Root>

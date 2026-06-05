@@ -1,0 +1,13 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<Root>
+  <Header Version="2.0.18.5239" Id="0" />
+  <Steps>
+    <Item Id="e4513aec-b8c3-490d-a1d5-bbb81f70561a" Description="Probe aufnehmen" ObjectType="PiezoPip" ObjectId="790117b9-e2ea-4e47-98ac-29c192182770" ActionType="GetPipSample" TargetId="35b6066a-1387-42d1-971a-3ff3a135f28a" Col="5" Row="12" Quantity="50" Flow="10" Delay="5000" QuantityAirGap="0" />
+    <Item Id="3b673a73-3997-41d8-8df4-70bb1473d820" Description="Waschen außen" ObjectType="PiezoPip" ObjectId="790117b9-e2ea-4e47-98ac-29c192182770" ActionType="WashTool" TargetId="7464ef0b-5dbb-4f23-a674-a406df008bed" WashPointNr="1" Mode="WashOutside" Quantity="10000" Flow="100" Time="5000">
+      <Condition Type="StepReady" Operator="AND" StepId="0" />
+    </Item>
+    <Item Id="7db170ea-ee23-431c-be43-fc29f7cfde28" Description="Trocknen" ObjectType="PiezoPip" ObjectId="790117b9-e2ea-4e47-98ac-29c192182770" ActionType="DryPip" TargetId="09643790-c0d6-4435-ae8a-ca2ae375674e" Time="1000" Offset.Z="500">
+      <Condition Type="StepReady" Operator="AND" StepId="0" />
+    </Item>
+  </Steps>
+</Root>

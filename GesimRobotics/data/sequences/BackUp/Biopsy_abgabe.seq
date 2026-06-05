@@ -1,0 +1,13 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<Root>
+  <Header Version="2.0.18.5239" Id="0" />
+  <Steps>
+    <Item Id="58c4271c-8d99-4ac7-baf6-07d94bd7e882" Description="" ActionType="Wait" Time="10" />
+    <Item Id="29a720e8-5f4a-4439-8c40-28137ec6cb03" Description="" ObjectType="PassivePip" ObjectId="869d4cfa-5e99-417b-9916-24634cf7282f" ActionType="MoveZ" Mode="Relative" SpeedZ="1000" Distance="7000">
+      <Condition Type="StepReady" Operator="AND" StepId="0" />
+    </Item>
+    <Item Id="c2c7fe88-dfb3-4899-b146-4f7c5ad9bfa1" Description="" ObjectType="PassivePip" ObjectId="869d4cfa-5e99-417b-9916-24634cf7282f" ActionType="Dispense" Quantity="1000" Flow="500">
+      <Condition Type="StepReady" Operator="AND" StepId="58c4271c-8d99-4ac7-baf6-07d94bd7e882" />
+    </Item>
+  </Steps>
+</Root>

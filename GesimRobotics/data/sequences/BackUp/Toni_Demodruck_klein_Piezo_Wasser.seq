@@ -1,0 +1,13 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<Root>
+  <Header Version="2.0.18.5239" Id="0" />
+  <Steps>
+    <Item Id="3e381a76-b6e9-4fcc-ba22-41aa687b4316" Description="" ObjectType="PiezoPip" ObjectId="70b95c15-a7bf-4184-a92e-40f1bc0b7acc" ActionType="ActionOnArray" TargetId="d4f24458-7385-4d1e-8473-6df62b9d61d2" Order="RowWiseSaw" SpeedX="115000" SpeedY="115000" SpeedZ="72000" SpeedZRelease="100" ActionOffset.Z="2500" ReleaseDistance.Z="500" MoveOffset.Z="10000" ReleaseMoveInstantly="false" ReleaseMoveDelay="2000">
+      <SubAction ActionType="Dispense" Quantity="150" Flow="100" />
+    </Item>
+    <Item Id="5194ff8e-c621-4ae1-a3f0-690b3986a3c9" Description="" ObjectType="PiezoPip" ObjectId="70b95c15-a7bf-4184-a92e-40f1bc0b7acc" ActionType="ActionOnArray" TargetId="bd50be6c-55b5-4161-8b0e-d3a863abf5d5" Order="RowWiseSaw" SpeedX="115000" SpeedY="115000" SpeedZ="72000" SpeedZRelease="100" ActionOffset.Z="2500" ReleaseDistance.Z="500" MoveOffset.Z="10000" ReleaseMoveInstantly="false" ReleaseMoveDelay="2000">
+      <SubAction ActionType="Dispense" Quantity="150" Flow="100" />
+      <Condition Type="StepReady" Operator="AND" StepId="0" />
+    </Item>
+  </Steps>
+</Root>

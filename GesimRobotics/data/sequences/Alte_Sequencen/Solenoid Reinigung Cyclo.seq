@@ -1,0 +1,55 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<Root>
+  <Header Version="2.0.18.5057" Id="0" />
+  <Steps>
+    <Item Id="b49a8671-d3ed-4fde-8c03-6469bbbb0060" Description="" ObjectType="SolenoidPip" ObjectId="ccbd78bd-5697-4283-a6d7-7003476f1c30" ActionType="MoveToTarget" TargetId="c311a29e-78ef-4258-8fcc-1a7b6c023e69" TargetRef="Center" SpeedX="115000" SpeedY="115000" SpeedZ="72000" Offset.X="0" Offset.Y="0" Offset.Z="0" ZLevel="PrePos" />
+    <Item Id="28129956-ed78-4f8e-aa44-11f44e8cc56b" Description="" ObjectType="SolenoidPip" ObjectId="ccbd78bd-5697-4283-a6d7-7003476f1c30" ActionType="Aspirate" Quantity="50" Flow="20">
+      <Condition Type="StepReady" Operator="AND" StepId="0" />
+    </Item>
+    <Item Id="b11a52bb-0b3f-4204-91d5-e4610dd90532" Description="" ActionType="Wait" Time="5000">
+      <Condition Type="StepReady" Operator="AND" StepId="0" />
+    </Item>
+    <Item Id="6fe87ffa-33d2-4e56-90d3-991502e3e5c0" Description="" ObjectType="SolenoidPip" ObjectId="ccbd78bd-5697-4283-a6d7-7003476f1c30" ActionType="Dispense" Quantity="50" Flow="100">
+      <Condition Type="StepReady" Operator="AND" StepId="0" />
+    </Item>
+    <Item Id="b1491e3c-d29a-4349-86f5-01823a19acf5" Description="" ObjectType="SolenoidPip" ObjectId="ccbd78bd-5697-4283-a6d7-7003476f1c30" ActionType="Aspirate" Quantity="50" Flow="20">
+      <Condition Type="StepReady" Operator="AND" StepId="0" />
+    </Item>
+    <Item Id="677c1816-ce4e-41bd-80fc-2bab75438056" Description="" ActionType="Wait" Time="5000">
+      <Condition Type="StepReady" Operator="AND" StepId="0" />
+    </Item>
+    <Item Id="e0c5d0a9-03be-49da-980d-fa5310d131b6" Description="" ObjectType="SolenoidPip" ObjectId="ccbd78bd-5697-4283-a6d7-7003476f1c30" ActionType="Dispense" Quantity="50" Flow="100">
+      <Condition Type="StepReady" Operator="AND" StepId="0" />
+    </Item>
+    <Item Id="71edeaf2-466e-4c21-8c86-b20133c9dfeb" Description="" ObjectType="SolenoidPip" ObjectId="ccbd78bd-5697-4283-a6d7-7003476f1c30" ActionType="Aspirate" Quantity="50" Flow="20">
+      <Condition Type="StepReady" Operator="AND" StepId="0" />
+    </Item>
+    <Item Id="adc9cf44-64a3-43bf-8352-5cc4441f6b4d" Description="" ActionType="Wait" Time="5000">
+      <Condition Type="StepReady" Operator="AND" StepId="0" />
+    </Item>
+    <Item Id="a0e8e32f-5061-48fb-8867-3f69fb60420e" Description="" ObjectType="SolenoidPip" ObjectId="ccbd78bd-5697-4283-a6d7-7003476f1c30" ActionType="Dispense" Quantity="50" Flow="100">
+      <Condition Type="StepReady" Operator="AND" StepId="0" />
+    </Item>
+    <Item Id="00b39005-5a7e-4afd-aeae-8f6d3efcebf5" Description="" ObjectType="SolenoidPip" ObjectId="ccbd78bd-5697-4283-a6d7-7003476f1c30" ActionType="Aspirate" Quantity="50" Flow="20">
+      <Condition Type="StepReady" Operator="AND" StepId="0" />
+    </Item>
+    <Item Id="0a7a2229-1cc6-4467-a521-961242b8f080" Description="" ActionType="Wait" Time="5000">
+      <Condition Type="StepReady" Operator="AND" StepId="0" />
+    </Item>
+    <Item Id="30d46410-52d0-4b36-9e09-577e801cd3e6" Description="" ObjectType="SolenoidPip" ObjectId="ccbd78bd-5697-4283-a6d7-7003476f1c30" ActionType="Dispense" Quantity="50" Flow="100">
+      <Condition Type="StepReady" Operator="AND" StepId="0" />
+    </Item>
+    <Item Id="363c218f-5630-40c4-97d8-6fb788e4c4d6" Description="" ObjectType="SolenoidPip" ObjectId="ccbd78bd-5697-4283-a6d7-7003476f1c30" ActionType="Aspirate" Quantity="50" Flow="20">
+      <Condition Type="StepReady" Operator="AND" StepId="0" />
+    </Item>
+    <Item Id="08e9400a-25f6-4a54-a119-9014f28d574d" Description="" ActionType="Wait" Time="5000">
+      <Condition Type="StepReady" Operator="AND" StepId="0" />
+    </Item>
+    <Item Id="577d07f2-bffe-4505-af45-6e207f29e78f" Description="" ObjectType="SolenoidPip" ObjectId="ccbd78bd-5697-4283-a6d7-7003476f1c30" ActionType="Dispense" Quantity="50" Flow="100">
+      <Condition Type="StepReady" Operator="AND" StepId="0" />
+    </Item>
+    <Item Id="c7e10810-a2b6-462e-af99-31cf5d4130f9" Description="" ObjectType="SolenoidPip" ObjectId="ccbd78bd-5697-4283-a6d7-7003476f1c30" ActionType="MoveZ" Mode="Free" SpeedZ="10000" Distance="10000">
+      <Condition Type="StepReady" Operator="AND" StepId="0" />
+    </Item>
+  </Steps>
+</Root>

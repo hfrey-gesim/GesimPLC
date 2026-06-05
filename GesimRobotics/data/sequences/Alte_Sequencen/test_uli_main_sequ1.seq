@@ -1,0 +1,17 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<Root>
+  <Header Version="2.0.17.2" Id="0" />
+  <Steps>
+    <Item Id="0d3c0115-32ec-462e-be6b-fa64b8c633f1" Description="" ActionType="CounterStep" Operator="Set" Amount="0" />
+    <Item Id="07b91940-577f-4919-bb63-79339cc67e60" Description="" ActionType="CounterStep" Operator="Add" Amount="1">
+      <Condition Type="StepReady" Operator="AND" StepId="0" />
+    </Item>
+    <Item Id="30ba5fa0-a2e7-47cd-a406-01c785dba2f4" Description="" ObjectType="Root" ObjectId="936f148b-455b-497c-b642-640f2ac1e6a8" ActionType="RunSequence" SequenceName="subseq_sprayvalve">
+      <Condition Type="StepReady" Operator="AND" StepId="0" />
+    </Item>
+    <Item Id="7589f705-62cb-4f64-8958-f6c0c9e5e221" Description="" ActionType="GotoStep" StepId="07b91940-577f-4919-bb63-79339cc67e60">
+      <Condition Type="StepReady" Operator="AND" StepId="0" />
+      <Condition Type="StepResult" Operator="AND" StepId="07b91940-577f-4919-bb63-79339cc67e60" CompOperator="LT" CompValue="16" />
+    </Item>
+  </Steps>
+</Root>

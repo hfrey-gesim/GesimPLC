@@ -1,0 +1,102 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<Root Version="1">
+  <Nodes>
+    <Node>
+      <Uid>837527f9ec334e998099411e4fed1a62</Uid>
+      <RepeatedExecutionHandling>Execute</RepeatedExecutionHandling>
+      <PosX>1473</PosX>
+      <PosY>1870</PosY>
+      <ReverseConnectors>false</ReverseConnectors>
+      <Type>Start</Type>
+      <Vars>
+        <Var Name="zheight" VarValueType="System.Int32" InitValue="0" />
+        <Var Name="zgain" VarValueType="System.Int32" InitValue="450" />
+      </Vars>
+    </Node>
+    <Node>
+      <Uid>f5452ed05fcb4397905d88e58926fcd3</Uid>
+      <RepeatedExecutionHandling>Execute</RepeatedExecutionHandling>
+      <PosX>2128</PosX>
+      <PosY>1883</PosY>
+      <ReverseConnectors>false</ReverseConnectors>
+      <Type>StrobTest</Type>
+      <PrepOptionsFrequency>100</PrepOptionsFrequency>
+      <PrepOptionsPulse>80</PrepOptionsPulse>
+      <PrepOptionsVoltage>45</PrepOptionsVoltage>
+    </Node>
+    <Node>
+      <Uid>76df892fbbfe4f7f84ae249ac0e1659e</Uid>
+      <RepeatedExecutionHandling>Execute</RepeatedExecutionHandling>
+      <PosX>2439</PosX>
+      <PosY>1824</PosY>
+      <ReverseConnectors>false</ReverseConnectors>
+      <Type>Sequence</Type>
+    </Node>
+    <Node>
+      <Uid>04042c81988b4aaa880c44304beca31c</Uid>
+      <RepeatedExecutionHandling>Execute</RepeatedExecutionHandling>
+      <PosX>1824</PosX>
+      <PosY>2226</PosY>
+      <ReverseConnectors>true</ReverseConnectors>
+      <Type>Sequence</Type>
+    </Node>
+    <Node>
+      <Uid>8d02068653df403ab3e526626616023c</Uid>
+      <RepeatedExecutionHandling>Repair</RepeatedExecutionHandling>
+      <PosX>1742</PosX>
+      <PosY>1559</PosY>
+      <ReverseConnectors>false</ReverseConnectors>
+      <RepairedBy />
+      <Type>Sequence</Type>
+    </Node>
+    <Node>
+      <Uid>cfb6657b283f4b1da43eb1c7a3b0b7ce</Uid>
+      <RepeatedExecutionHandling>Execute</RepeatedExecutionHandling>
+      <PosX>2174</PosX>
+      <PosY>2233</PosY>
+      <ReverseConnectors>true</ReverseConnectors>
+      <Type>Loop</Type>
+      <MaxCount>30</MaxCount>
+    </Node>
+    <Node>
+      <Uid>2354ab101da442188c15c7190f2797af</Uid>
+      <RepeatedExecutionHandling>Execute</RepeatedExecutionHandling>
+      <PosX>2394</PosX>
+      <PosY>2290</PosY>
+      <ReverseConnectors>true</ReverseConnectors>
+      <Type>SetVar</Type>
+      <Formula>zheight=zheight+zgain</Formula>
+    </Node>
+    <Node>
+      <Uid>1aad56c43bb24e33b8dc360e49156d56</Uid>
+      <RepeatedExecutionHandling>Execute</RepeatedExecutionHandling>
+      <PosX>1923</PosX>
+      <PosY>2068</PosY>
+      <ReverseConnectors>true</ReverseConnectors>
+      <Type>Loop</Type>
+      <MaxCount>30</MaxCount>
+    </Node>
+    <Node>
+      <Uid>9c0ce3c15d8745e9b5c3417b0ff51ef6</Uid>
+      <RepeatedExecutionHandling>Execute</RepeatedExecutionHandling>
+      <PosX>2239</PosX>
+      <PosY>1709</PosY>
+      <ReverseConnectors>false</ReverseConnectors>
+      <Type>DynamicStep</Type>
+      <Targets />
+      <SequenceStep />
+      <Parameters />
+    </Node>
+  </Nodes>
+  <Connections>
+    <Connection SourceUid="f5452ed05fcb4397905d88e58926fcd3" SourceConnectorIndex="0" DestUid="76df892fbbfe4f7f84ae249ac0e1659e" DestConnectorIndex="0" />
+    <Connection SourceUid="04042c81988b4aaa880c44304beca31c" SourceConnectorIndex="0" DestUid="f5452ed05fcb4397905d88e58926fcd3" DestConnectorIndex="0" />
+    <Connection SourceUid="76df892fbbfe4f7f84ae249ac0e1659e" SourceConnectorIndex="0" DestUid="2354ab101da442188c15c7190f2797af" DestConnectorIndex="0" />
+    <Connection SourceUid="2354ab101da442188c15c7190f2797af" SourceConnectorIndex="0" DestUid="cfb6657b283f4b1da43eb1c7a3b0b7ce" DestConnectorIndex="0" />
+    <Connection SourceUid="f5452ed05fcb4397905d88e58926fcd3" SourceConnectorIndex="1" DestUid="1aad56c43bb24e33b8dc360e49156d56" DestConnectorIndex="0" />
+    <Connection SourceUid="1aad56c43bb24e33b8dc360e49156d56" SourceConnectorIndex="0" DestUid="04042c81988b4aaa880c44304beca31c" DestConnectorIndex="0" />
+    <Connection SourceUid="cfb6657b283f4b1da43eb1c7a3b0b7ce" SourceConnectorIndex="0" DestUid="f5452ed05fcb4397905d88e58926fcd3" DestConnectorIndex="0" />
+    <Connection SourceUid="837527f9ec334e998099411e4fed1a62" SourceConnectorIndex="0" DestUid="f5452ed05fcb4397905d88e58926fcd3" DestConnectorIndex="0" />
+  </Connections>
+  <Options />
+</Root>

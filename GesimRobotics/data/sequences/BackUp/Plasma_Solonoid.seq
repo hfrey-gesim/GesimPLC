@@ -1,0 +1,32 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<Root>
+  <Header Version="2.0.18.5239" Id="0" />
+  <Steps>
+    <Item Id="48c4dc4a-00ff-40e0-b62e-563c31677d11" Description="" ObjectType="Exposure" ObjectId="60a35a03-30a6-41de-9e4a-f7ed6bd897e6" ActionType="ActionOnArray" TargetId="af570c14-9d90-452c-909c-6a98bfdf19c7" Order="RowWiseSaw" SpeedX="115000" SpeedY="115000" SpeedZ="72000" SpeedZRelease="72000" ActionOffset.Z="400" ReleaseDistance.Z="0" MoveOffset.Z="1000" ReleaseMoveInstantly="false" ReleaseMoveDelay="0">
+      <SubAction ActionType="Expose" On="true" Brightness="0" Time="1000" />
+    </Item>
+    <Item Id="f222ef41-1b64-4686-9b7c-a17fddb3662f" Description="" ObjectType="Exposure" ObjectId="60a35a03-30a6-41de-9e4a-f7ed6bd897e6" ActionType="ActionOnArray" TargetId="be9a85f6-4ce1-479c-a3a5-4baf3d694cd9" Order="RowWiseSaw" SpeedX="115000" SpeedY="115000" SpeedZ="72000" SpeedZRelease="72000" ActionOffset.Z="400" ReleaseDistance.Z="0" MoveOffset.Z="1000" ReleaseMoveInstantly="false" ReleaseMoveDelay="0">
+      <SubAction ActionType="Expose" On="true" Brightness="0" Time="1000" />
+      <Condition Type="StepReady" Operator="AND" StepId="0" />
+    </Item>
+    <Item Id="7e317650-17ee-403b-aaca-db9365ef3749" Description="" ObjectType="Exposure" ObjectId="60a35a03-30a6-41de-9e4a-f7ed6bd897e6" ActionType="ActionOnArray" TargetId="96a8a6e4-9683-4cb8-b894-8ef871b6dd00" Order="RowWiseSaw" SpeedX="115000" SpeedY="115000" SpeedZ="72000" SpeedZRelease="72000" ActionOffset.Z="400" ReleaseDistance.Z="0" MoveOffset.Z="1000" ReleaseMoveInstantly="false" ReleaseMoveDelay="0">
+      <SubAction ActionType="Expose" On="true" Brightness="0" Time="1000" />
+      <Condition Type="StepReady" Operator="AND" StepId="0" />
+    </Item>
+    <Item Id="1fffe1df-c338-44ae-affa-8df27916afc5" Description="" ObjectType="Exposure" ObjectId="60a35a03-30a6-41de-9e4a-f7ed6bd897e6" ActionType="MoveZ" Mode="Home" SpeedZ="10000" Distance="10000">
+      <Condition Type="StepReady" Operator="AND" StepId="0" />
+    </Item>
+    <Item Id="b036a922-29f7-449d-8e44-cecfea719f58" Description="" ObjectType="SolenoidPip" ObjectId="19517b5a-0ee8-4d9a-91dd-b4cc0540bee2" ActionType="ActionOnArray" TargetId="af570c14-9d90-452c-909c-6a98bfdf19c7" Order="RowWiseSaw" SpeedX="115000" SpeedY="115000" SpeedZ="72000" SpeedZRelease="72000" ActionOffset.Z="5000" ReleaseDistance.Z="0" MoveOffset.Z="5000" ReleaseMoveInstantly="false" ReleaseMoveDelay="0">
+      <SubAction ActionType="DispenseDrops" Ctrl="On" Drops="10" />
+      <Condition Type="StepReady" Operator="AND" StepId="0" />
+    </Item>
+    <Item Id="765b59cd-c365-42b7-a77c-a6b05abc3651" Description="" ObjectType="SolenoidPip" ObjectId="19517b5a-0ee8-4d9a-91dd-b4cc0540bee2" ActionType="ActionOnArray" TargetId="be9a85f6-4ce1-479c-a3a5-4baf3d694cd9" Order="RowWiseSaw" SpeedX="115000" SpeedY="115000" SpeedZ="72000" SpeedZRelease="72000" ActionOffset.Z="5000" ReleaseDistance.Z="0" MoveOffset.Z="5000" ReleaseMoveInstantly="false" ReleaseMoveDelay="0">
+      <SubAction ActionType="DispenseDrops" Ctrl="On" Drops="10" />
+      <Condition Type="StepReady" Operator="AND" StepId="0" />
+    </Item>
+    <Item Id="e20f58d8-c722-452c-b013-042f48ffe866" Description="" ObjectType="SolenoidPip" ObjectId="19517b5a-0ee8-4d9a-91dd-b4cc0540bee2" ActionType="ActionOnArray" TargetId="96a8a6e4-9683-4cb8-b894-8ef871b6dd00" Order="RowWiseSaw" SpeedX="115000" SpeedY="115000" SpeedZ="72000" SpeedZRelease="72000" ActionOffset.Z="5000" ReleaseDistance.Z="0" MoveOffset.Z="5000" ReleaseMoveInstantly="false" ReleaseMoveDelay="0">
+      <SubAction ActionType="DispenseDrops" Ctrl="On" Drops="10" />
+      <Condition Type="StepReady" Operator="AND" StepId="0" />
+    </Item>
+  </Steps>
+</Root>

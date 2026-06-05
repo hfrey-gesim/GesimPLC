@@ -1,0 +1,10 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<Root>
+  <Header Version="2.0.18.5057" Id="0" />
+  <Steps>
+    <Item Id="6b5a4a05-2b7a-4cfc-8321-03add1aaedcd" Description="" ObjectType="PassivePip" ObjectId="c6d7eded-8563-4f05-8c75-aba6bf303942" ActionType="MoveToTarget" TargetId="6f47f067-d87d-483e-99aa-9f26fb6de5d2" TargetRef="Center" SpeedX="115000" SpeedY="115000" SpeedZ="72000" Offset.X="0" Offset.Y="0" Offset.Z="1000" ZLevel="PrePos" />
+    <Item Id="f356e2d1-5406-410a-b3db-b9def7469444" Description="" ObjectType="PassivePip" ObjectId="c6d7eded-8563-4f05-8c75-aba6bf303942" ActionType="Dispense" Quantity="2000" Flow="50">
+      <Condition Type="StepReady" Operator="AND" StepId="0" />
+    </Item>
+  </Steps>
+</Root>
