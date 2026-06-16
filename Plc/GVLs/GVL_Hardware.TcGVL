@@ -1,5 +1,5 @@
 ﻿<?xml version="1.0" encoding="utf-8"?>
-<TcPlcObject Version="1.1.0.1" ProductVersion="3.1.4024.14">
+<TcPlcObject Version="1.1.0.1">
   <GVL Name="GVL_Hardware" Id="{b606a3d5-2d26-4aaf-9b08-3c8a2832d1b3}">
     <Declaration><![CDATA[{attribute 'contextName':='PlcTask'}
 VAR_GLOBAL CONSTANT

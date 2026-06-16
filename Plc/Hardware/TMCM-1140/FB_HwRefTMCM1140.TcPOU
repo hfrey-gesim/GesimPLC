@@ -1,5 +1,5 @@
 ﻿<?xml version="1.0" encoding="utf-8"?>
-<TcPlcObject Version="1.1.0.1" ProductVersion="3.1.4024.14">
+<TcPlcObject Version="1.1.0.1">
   <POU Name="FB_HwRefTMCM1140" Id="{c5eb1d93-7bbb-4586-940d-476c77b762b9}" SpecialFunc="None">
     <Declaration><![CDATA[FUNCTION_BLOCK FB_HwRefTMCM1140 EXTENDS FB_CanNodeBase
 VAR_INPUT
@@ -634,19 +634,7 @@ END_VAR
       <LineId Id="98" Count="0" />
     </LineIds>
     <LineIds Name="FB_HwRefTMCM1140.FB_init">
-      <LineId Id="19" Count="1" />
-      <LineId Id="39" Count="0" />
-      <LineId Id="42" Count="0" />
-      <LineId Id="40" Count="0" />
-      <LineId Id="44" Count="0" />
-      <LineId Id="41" Count="0" />
-      <LineId Id="46" Count="3" />
-      <LineId Id="45" Count="0" />
-      <LineId Id="51" Count="3" />
-      <LineId Id="50" Count="0" />
-      <LineId Id="55" Count="0" />
-      <LineId Id="74" Count="0" />
-      <LineId Id="221" Count="3" />
+      <LineId Id="238" Count="22" />
       <LineId Id="198" Count="0" />
     </LineIds>
     <LineIds Name="FB_HwRefTMCM1140.M_GetDS402State">
@@ -740,9 +728,6 @@ END_VAR
       <LineId Id="2" Count="0" />
       <LineId Id="6" Count="0" />
     </LineIds>
-    <LineIds Name="FB_HwRefTMCM1140.P_nFullStepRevo.Get">
-      <LineId Id="2" Count="0" />
-    </LineIds>
     <LineIds Name="FB_HwRefTMCM1140.P_nHoldCurrent.Get">
       <LineId Id="2" Count="0" />
     </LineIds>
@@ -797,9 +782,6 @@ END_VAR
       <LineId Id="6" Count="0" />
     </LineIds>
     <LineIds Name="FB_HwRefTMCM1140.P_nPulseDivisor.Get">
-      <LineId Id="2" Count="0" />
-    </LineIds>
-    <LineIds Name="FB_HwRefTMCM1140.P_nRampDivisor.Get">
       <LineId Id="2" Count="0" />
     </LineIds>
     <LineIds Name="FB_HwRefTMCM1140.P_nRefPos.Get">

@@ -3,9 +3,9 @@
   <PropertyGroup>
     <FileVersion>1.0.0.0</FileVersion>
     <SchemaVersion>2.0</SchemaVersion>
-    <ProjectGuid>{1b7a0f23-2101-4e14-a800-8ef24a658beb}</ProjectGuid>
+    <ProjectGuid>{4ffa388b-6676-4dc9-b975-45bb0e17394b}</ProjectGuid>
     <Name>SPS1</Name>
-    <ProgramVersion>3.1.4022.7</ProgramVersion>
+    <ProgramVersion>3.1.4022.4</ProgramVersion>
     <Application>{e97ec0bb-653f-4dc8-923f-54540e65ab2c}</Application>
     <TypeSystem>{f2ede3b8-a25f-4701-af2f-4a4dca96a66c}</TypeSystem>
     <Implicit_Task_Info>{b62beedd-e373-482e-a879-f8910a8de40b}</Implicit_Task_Info>
@@ -13,7 +13,7 @@
     <Implicit_Jitter_Distribution>{8a4de1c2-cae3-4bed-ae59-d9fabd3e499f}</Implicit_Jitter_Distribution>
     <LibraryReferences>{bbe6f7d5-1b31-43dc-a72f-96709a5dcd71}</LibraryReferences>
     <Company>Gesim</Company>
-    <Author>U.Seifert (T.Bohatzsch)</Author>
+    <Author>U.Seifert</Author>
     <Released>false</Released>
     <Title>SPS PlattformCD</Title>
     <DeploymentEvents>
@@ -21,8 +21,8 @@
     </DeploymentEvents>
     <CompilerVersion>3.1.4022.22</CompilerVersion>
     <CombineIds>false</CombineIds>
-    <ProjectVersion>2.0.18.19</ProjectVersion>
-    <CompilerDefines>C6015</CompilerDefines>
+    <CompilerDefines>C6015, WIN10</CompilerDefines>
+    <ProjectVersion>2.0.18.17</ProjectVersion>
   </PropertyGroup>
   <ItemGroup>
     <Compile Include="Actions\ActionDispacher.TcPOU">
@@ -409,9 +409,6 @@
     <Compile Include="Functions\F_SynchronizeSpeeds.TcPOU">
       <SubType>Code</SubType>
     </Compile>
-    <Compile Include="GCodeTask.TcTTO">
-      <SubType>Code</SubType>
-    </Compile>
     <Compile Include="GCode\E_SAF_State.TcDUT">
       <SubType>Code</SubType>
     </Compile>
@@ -434,6 +431,9 @@
       <SubType>Code</SubType>
     </Compile>
     <Compile Include="GCode\GCode.TcPOU">
+      <SubType>Code</SubType>
+    </Compile>
+    <Compile Include="GCode\ST_GCodeInfo2.TcDUT">
       <SubType>Code</SubType>
     </Compile>
     <Compile Include="GCode\ST_GCodeRef.TcDUT">
@@ -965,10 +965,13 @@
     <Compile Include="MainProgs\PC_Control.TcPOU">
       <SubType>Code</SubType>
     </Compile>
-    <Compile Include="Objects\Devices\FB_Diluter.TcPOU">
+    <Compile Include="GCodeTask.TcTTO">
       <SubType>Code</SubType>
     </Compile>
     <Compile Include="Objects\Devices\FB_Diluter3Inputs.TcPOU">
+      <SubType>Code</SubType>
+    </Compile>
+    <Compile Include="Objects\Devices\FB_Diluter.TcPOU">
       <SubType>Code</SubType>
     </Compile>
     <Compile Include="Objects\Devices\FB_Stacker.TcPOU">
@@ -1424,9 +1427,9 @@
     <Folder Include="Version" />
   </ItemGroup>
   <ItemGroup>
-    <PlaceholderReference Include="Tc2_MC2">
-      <DefaultResolution>Tc2_MC2, * (Beckhoff Automation GmbH)</DefaultResolution>
-      <Namespace>Tc2_MC2</Namespace>
+    <PlaceholderReference Include="Tc2_Math">
+      <DefaultResolution>Tc2_Math, * (Beckhoff Automation GmbH)</DefaultResolution>
+      <Namespace>Tc2_Math</Namespace>
     </PlaceholderReference>
     <PlaceholderReference Include="Tc2_NCI">
       <DefaultResolution>Tc2_NCI, * (Beckhoff Automation GmbH)</DefaultResolution>
@@ -1448,6 +1451,10 @@
       <DefaultResolution>Tc3_Module, * (Beckhoff Automation GmbH)</DefaultResolution>
       <Namespace>Tc3_Module</Namespace>
     </PlaceholderReference>
+    <PlaceholderReference Include="Tc3_PackML">
+      <DefaultResolution>Tc3_PackML, * (Beckhoff Automation GmbH)</DefaultResolution>
+      <Namespace>Tc3_PackML</Namespace>
+    </PlaceholderReference>
   </ItemGroup>
   <ItemGroup>
     <Content Include="SPS1.tmc">
@@ -1460,6 +1467,9 @@
     </LibraryReference>
     <LibraryReference Include="Tc2_IoFunctions,newest,Beckhoff Automation GmbH">
       <Namespace>Tc2_IoFunctions</Namespace>
+    </LibraryReference>
+    <LibraryReference Include="Tc2_MC2,newest,Beckhoff Automation GmbH">
+      <Namespace>Tc2_MC2</Namespace>
     </LibraryReference>
     <LibraryReference Include="Tc2_SerialCom,newest,Beckhoff Automation GmbH">
       <Namespace>Tc2_SerialCom</Namespace>

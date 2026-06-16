@@ -1,0 +1,53 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<Project Crc="3699656733" DefaultTargets="Build" xmlns="http://schemas.microsoft.com/developer/msbuild/2003" ToolsVersion="4.0">
+  <PropertyGroup>
+    <Configuration Condition=" '$(Configuration)' == '' ">Debug</Configuration>
+    <SchemaVersion>2.0</SchemaVersion>
+    <ProjectGuid>{94356656-9a3f-4b7c-9687-12dc480da1ef}</ProjectGuid>
+    <OutputType>Exe</OutputType>
+    <RootNamespace>TwinCAT3SafePlcProject</RootNamespace>
+    <AssemblyName>TwinCAT3SafePlcProject</AssemblyName>
+    <FileUpgradeFlags />
+    <UpgradeBackupLocation />
+    <OldToolsVersion>2.0</OldToolsVersion>
+    <TargetSystem>EL6900</TargetSystem>
+    <ProgrammingLanguage>Graphical Editor</ProgrammingLanguage>
+    <Worker>useifert</Worker>
+    <IntProjName>Safety1</IntProjName>
+    <IsNewCreated>false</IsNewCreated>
+    <SPlcProjVersion>1.4.0.0</SPlcProjVersion>
+    <NextSdsId>28</NextSdsId>
+    <Name>SafetyGen2</Name>
+  </PropertyGroup>
+  <PropertyGroup Condition=" '$(Configuration)' == 'Release' ">
+    <DebugSymbols>false</DebugSymbols>
+    <OutputPath>bin\Release\</OutputPath>
+    <EnableUnmanagedDebugging>false</EnableUnmanagedDebugging>
+    <CodeAnalysisRuleSet>AllRules.ruleset</CodeAnalysisRuleSet>
+  </PropertyGroup>
+  <ItemGroup>
+    <None Include="TwinSafeGroup1\Alias Devices\ComError.sds" />
+    <None Include="TwinSafeGroup1\Alias Devices\DriveIsSave.sds" />
+    <None Include="TwinSafeGroup1\Alias Devices\Kl3 SafeIn%28EL1918%29 - Module 1 %28FSOE%29.sds" />
+    <None Include="TwinSafeGroup1\Alias Devices\Kl4 SafeOut%28EL2904%29 - Module 1 %28FSOES%29.sds" />
+    <None Include="TwinSafeGroup1\Alias Devices\MesIsSafe.sds" />
+    <None Include="TwinSafeGroup1\Alias Devices\RequUnlock.sds" />
+    <None Include="TwinSafeGroup1\Alias Devices\RequDriveOn.sds" />
+    <None Include="TwinSafeGroup1\Alias Devices\RequMesOn.sds" />
+    <None Include="TwinSafeGroup1\Alias Devices\EmergencyStop.sds" />
+    <None Include="TwinSafeGroup1\Alias Devices\RunStop.sds" />
+    <None Include="TwinSafeGroup1\TwinSafeGroup1.sal" />
+    <None Include="TwinSafeGroup1\TwinSafeGroup1.sal.diagram">
+      <DependentUpon>TwinSafeGroup1\TwinSafeGroup1.sal</DependentUpon>
+      <Visible>false</Visible>
+    </None>
+    <None Include="TargetSystemConfig.xml">
+      <Visible>false</Visible>
+    </None>
+  </ItemGroup>
+  <ItemGroup>
+    <Folder Include="TwinSafeGroup1" />
+    <Folder Include="TwinSafeGroup1\Alias Devices" />
+    <None Include="TwinSafeGroup1\Alias Devices\ErrorAcknowledgement.sds" />
+  </ItemGroup>
+</Project>

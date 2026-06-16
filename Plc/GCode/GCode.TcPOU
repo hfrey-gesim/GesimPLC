@@ -1,5 +1,5 @@
 ﻿<?xml version="1.0" encoding="utf-8"?>
-<TcPlcObject Version="1.1.0.1">
+<TcPlcObject Version="1.1.0.1" ProductVersion="3.1.4024.15">
   <POU Name="GCode" Id="{948e817f-cbf3-4354-82a1-8dc2570a31d8}" SpecialFunc="None">
     <Declaration><![CDATA[PROGRAM GCode
 VAR
@@ -14,6 +14,8 @@ VAR
 	fbItpStepOnAfterEStopEx 	: Tc2_NCI.ItpStepOnAfterEStopEx;
 	fbItpSingleBlock			: Tc2_NCI.ItpSingleBlock;
 	fbItpWriteRParams			: Tc2_NCI.ItpWriteRParamsEx;
+	fbItpEnableDefaultGCode		: Tc2_NCI.ItpEnableDefaultGCode;		//für Rotation der auszuführenden NC- Programme
+	fbItpBlockSearch			: Tc2_NCI.ItpBlockSearch;				//TODO: rauslöchen, wenn im NC Programm der R Parameter nicht mehr auf "0" gesetzt wird. 
 	fbMcPower					: Tc2_MC2.MC_Power;
 	fbAdsWrite					: ADSWRITE;
 	fbEnumFindFileEntry			: FB_EnumFindFileEntry;
@@ -21,11 +23,14 @@ VAR
 	stGCodeRef					: ST_GCodeRef;
 	pXDrive						: POINTER TO FB_XYDriveBase;
 	pYDrive						: POINTER TO FB_XYDriveBase;
+	nCyclCounter				: UINT;
+	nCyclThreshold				: UINT := 1000;
 	
 	//Allgemeine-Variablen
 	nState				: USINT;
 	sGCodeFile			: STRING;
 	stInfo				: ST_GCodeInfo;
+	stInfo2				: ST_GCodeInfo2;
 	aRParamInit			: ARRAY[0..9] OF LREAL;
 	lrAngle				: LREAL;
 	
@@ -609,6 +614,22 @@ CASE nStateA_Common OF
 			fbItpSingleBlock(bExecuteModeChange:= FALSE, bTriggerNext:= FALSE, sNciToPlc:= GCode.stGCodeRef.sNciToPlc);
 		END_IF
 		
+		(*
+	2:  Der Funktionsbaustein ItpEnableDefaultGCode ermöglicht es, aus der SPS einen vom Anwender definierten G-Code vor dem Start jedes NC-Programms auszuführen. 
+		Das Defaultprogramm wird beim Start des eigentlichen NC-Programms vor dem geladenen Programm ausgeführt.
+		Mit diesem Funktionsbaustein ist es zum Beispiel möglich, das Koordinatensystem für alle auszuführenden NC-Programme zu drehen.
+		Der Standard-G-Code muss als „DefaultGCode<Channel-Number>.def“ im TwinCAT\CNC Verzeichnis gespeichert werden
+		fbItpEnableDefaultGCode(bUseDefaultGCode:= TRUE, bExecute:= TRUE, sNciToPlc:= GCode.stGCodeRef.sNciToPlc, tTimeOut:= T#20S);
+		IF NOT fbItpEnableDefaultGCode.bBusy THEN
+			IF fbItpEnableDefaultGCode.bErr THEN
+				stError.ErrorId := UDINT_TO_UINT(fbItpEnableDefaultGCode.nErrId);
+				nStateA_Common := 99;
+			ELSE
+				nStateA_Common := 3;	
+			END_IF
+			fbItpEnableDefaultGCode(bExecute:= FALSE, sNciToPlc:= GCode.stGCodeRef.sNciToPlc);
+		END_IF*)
+		
 	2:	//GCode-File laden (ab hier erfolgt Syntaxüberprüfung)
 		//Langes Timeout bei große Dateien erforderlich
 		fbItpLoadProgEx(bExecute:= TRUE, sNciToPlc:= GCode.stGCodeRef.sNciToPlc, sPrg:= sGCodeFile ,nLength:= INT_TO_UINT(LEN(sGCodeFile)),tTimeOut:= T#120S);
@@ -1079,7 +1100,8 @@ CASE nStateA_Common OF
 		//über den Head und die zugeordnete Workplate
 		stGCodeRef.pHead^.P_pAssignWorkplate^.P_pObjCollectNode^.nodes.M_GetIterator(iterDeep);
 		WHILE iterDeep.pNode > 0 DO
-			IF iterDeep.pNode^.P_pObject > 0 AND_THEN iterDeep.pNode^.P_pObject^.M_bIsGroup(E_ObjectGroup.OBJECTGROUP_Target) THEN
+			(* 1. Finde ein Objekt im Tree 2. Muss ein mögliches Target sein 3. Diese Objekt muss die gleiche Obj Id haben wie der in der GUI ausgewählte Print Point *)
+			IF iterDeep.pNode^.P_pObject > 0  AND_THEN iterDeep.pNode^.P_pObject^.M_bIsGroup(E_ObjectGroup.OBJECTGROUP_Target) AND iterDeep.pNode^.P_pObject^.P_nObjectID = stInfo2.nTargetObjId THEN
 				pTarget := iterDeep.pNode^.P_pObject;
 				IF pTarget^.P_nGCodeTargetNr > 0 THEN
 					//darf nicht größe als 20 sein 
@@ -1188,7 +1210,8 @@ END_IF
 IF nStateA_Common = 99 THEN
 	stError.POUAction := E_POUACT.POUACT_A_Start;
 	fbErrorList.M_Add(stError);
-END_IF]]></ST>
+END_IF
+]]></ST>
       </Implementation>
     </Action>
     <Method Name="M_ClearGroup" Id="{cf339799-8003-4552-888a-bdb8f7133a47}">
@@ -1288,6 +1311,7 @@ END_VAR
 		//als TargetRef wird hier immer Mitte angenommen
 		pTarget := fbObjectDirectory.M_GetObjPointer(nTargetObjId);
 		stGCodeRef.stStartPos := pTarget^.M_GetAbsPos(0,E_TargetRef.TARGETREF_Center,0,0,0,1,nErrorId=> M_SetStartZeroPoint);
+		GCode.stInfo2.nTargetObjId := nTargetObjId;
 		
 	E_ObjectType.OBJECTTYPE_Mtp:
 		pTarget := fbObjectDirectory.M_GetObjPointer(nTargetObjId);
@@ -1443,7 +1467,18 @@ END_VAR
     <LineIds Name="GCode.A_Load">
       <LineId Id="2" Count="8" />
       <LineId Id="82" Count="0" />
-      <LineId Id="11" Count="29" />
+      <LineId Id="11" Count="17" />
+      <LineId Id="99" Count="0" />
+      <LineId Id="125" Count="0" />
+      <LineId Id="83" Count="0" />
+      <LineId Id="87" Count="0" />
+      <LineId Id="85" Count="0" />
+      <LineId Id="29" Count="0" />
+      <LineId Id="88" Count="0" />
+      <LineId Id="117" Count="7" />
+      <LineId Id="97" Count="0" />
+      <LineId Id="116" Count="0" />
+      <LineId Id="30" Count="10" />
       <LineId Id="47" Count="1" />
       <LineId Id="51" Count="0" />
       <LineId Id="62" Count="1" />
@@ -1471,8 +1506,18 @@ END_VAR
       <LineId Id="1" Count="0" />
     </LineIds>
     <LineIds Name="GCode.A_Start">
-      <LineId Id="1103" Count="181" />
-      <LineId Id="1" Count="0" />
+      <LineId Id="1471" Count="72" />
+      <LineId Id="1655" Count="0" />
+      <LineId Id="1544" Count="33" />
+      <LineId Id="1673" Count="0" />
+      <LineId Id="1579" Count="24" />
+      <LineId Id="1661" Count="0" />
+      <LineId Id="1605" Count="7" />
+      <LineId Id="1665" Count="0" />
+      <LineId Id="1614" Count="5" />
+      <LineId Id="1669" Count="0" />
+      <LineId Id="1621" Count="32" />
+      <LineId Id="1287" Count="0" />
     </LineIds>
     <LineIds Name="GCode.M_ClearGroup">
       <LineId Id="18" Count="2" />
@@ -1498,7 +1543,9 @@ END_VAR
       <LineId Id="2" Count="0" />
     </LineIds>
     <LineIds Name="GCode.M_SetStartZeroPoint">
-      <LineId Id="3" Count="19" />
+      <LineId Id="3" Count="4" />
+      <LineId Id="189" Count="0" />
+      <LineId Id="8" Count="14" />
       <LineId Id="72" Count="0" />
       <LineId Id="147" Count="1" />
       <LineId Id="73" Count="0" />

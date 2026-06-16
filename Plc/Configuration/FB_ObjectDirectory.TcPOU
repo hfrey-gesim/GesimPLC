@@ -1,5 +1,5 @@
 ﻿<?xml version="1.0" encoding="utf-8"?>
-<TcPlcObject Version="1.1.0.1" ProductVersion="3.1.4024.11">
+<TcPlcObject Version="1.1.0.1" ProductVersion="3.1.4024.15">
   <POU Name="FB_ObjectDirectory" Id="{d21e24d3-e574-403c-b3f5-9068019773ff}" SpecialFunc="None">
     <Declaration><![CDATA[FUNCTION_BLOCK FB_ObjectDirectory
 
@@ -102,13 +102,13 @@ VAR
 	pSeptum				: POINTER TO FB_Septum;
 	pSlide				: POINTER TO FB_Slide;
 	pSpotArray			: POINTER TO FB_SpotArray;	
-	pSpotPattern		: POINTER TO FB_SpotPattern;		
+	//pSpotPattern		: POINTER TO FB_SpotPattern;		
 	pStamp				: POINTER TO FB_Stamp;
 	pTip				: POINTER TO FB_Tip;
 	pTray				: POINTER TO FB_TargetTray;
 	pVial				: POINTER TO FB_Vial;
 	pVialClosed			: POINTER TO FB_VialClosed;	
-	pWafer				: POINTER TO FB_Wafer;
+	//pWafer				: POINTER TO FB_Wafer;
 	pCleaningBrush		: POINTER TO FB_CleaningBrush;
 END_VAR
 
@@ -727,10 +727,11 @@ E_ObjectType.OBJECTTYPE_CartHolder:
 		pSpotArray^.P_nObjectID := nObjectID;
 		a_pObjects[nObjectID] := pSpotArray;	
 	
+	(*
 	E_ObjectType.OBJECTTYPE_SpotPattern:
 		pSpotPattern := __NEW(FB_SpotPattern);
 		pSpotPattern^.P_nObjectID := nObjectID;
-		a_pObjects[nObjectID] := pSpotPattern;	
+		a_pObjects[nObjectID] := pSpotPattern;	*)
 	
 	E_ObjectType.OBJECTTYPE_Stamp:
 		pStamp := __NEW(FB_Stamp);
@@ -982,10 +983,10 @@ E_ObjectType.OBJECTTYPE_CartHolder:
 			afbVialRack[nCntVialRack].M_OverrideObjectType();
 		END_IF		
 		
-	E_ObjectType.OBJECTTYPE_Wafer:
+	(*E_ObjectType.OBJECTTYPE_Wafer:
 		pWafer := __NEW(FB_Wafer);
 		pWafer^.P_nObjectID := nObjectID;
-		a_pObjects[nObjectID] := pWafer;
+		a_pObjects[nObjectID] := pWafer;*)
 		
 	E_ObjectType.OBJECTTYPE_WashStation:
 		IF nCntWashStation = cMaxWashStations THEN	//maximale Anzahl des spez.Objecttypes erreicht, Object kann nicht angelegt werden
@@ -1220,9 +1221,9 @@ WHILE iter.pNode > 0 AND_THEN iter.pNode^.P_pObject > 0 DO
 		E_ObjectType.OBJECTTYPE_SpotArray:
 			pSpotArray := pObject;
 			__DELETE(pSpotArray);
-		E_ObjectType.OBJECTTYPE_SpotPattern:
+		(*E_ObjectType.OBJECTTYPE_SpotPattern:
 			pSpotPattern := pObject;
-			__DELETE(pSpotPattern);
+			__DELETE(pSpotPattern);*)
 		E_ObjectType.OBJECTTYPE_Stamp:
 			pStamp := pObject;
 			__DELETE(pStamp);
@@ -1238,9 +1239,9 @@ WHILE iter.pNode > 0 AND_THEN iter.pNode^.P_pObject > 0 DO
 		E_ObjectType.OBJECTTYPE_VialClosed:
 			pVialClosed := pObject;
 			__DELETE(pVialClosed);
-		E_ObjectType.OBJECTTYPE_Wafer:
+		(*E_ObjectType.OBJECTTYPE_Wafer:
 			pWafer := pObject;
-			__DELETE(pWafer);	
+			__DELETE(pWafer);	*)
 	END_CASE
 	iter.M_Increment();
 END_WHILE
@@ -1386,9 +1387,9 @@ IF nObjectID > 0 AND nObjectID <= cMaxObjects THEN
 				E_ObjectType.OBJECTTYPE_Slide:
 					pSlide := a_pObjects[nObjectId];
 					__DELETE(pSlide);
-				E_ObjectType.OBJECTTYPE_Wafer:
+				(*E_ObjectType.OBJECTTYPE_Wafer:
 					pWafer := a_pObjects[nObjectId];
-					__DELETE(pWafer);					
+					__DELETE(pWafer);	*)				
 				E_ObjectType.OBJECTTYPE_Point:
 					pPoint := a_pObjects[nObjectId];
 					__DELETE(pPoint);
@@ -1398,9 +1399,9 @@ IF nObjectID > 0 AND nObjectID <= cMaxObjects THEN
 				E_ObjectType.OBJECTTYPE_Diluter3Inputs:
 					fbConfiguration.M_Deactivate();
 					nCntDiluter3Inputs := nCntDiluter3Inputs - 1;
-				E_ObjectType.OBJECTTYPE_SpotPattern:
+				(*E_ObjectType.OBJECTTYPE_SpotPattern:
 					pSpotPattern := a_pObjects[nObjectId];
-					__DELETE(pSpotPattern);
+					__DELETE(pSpotPattern);*)
 				E_ObjectType.OBJECTTYPE_DeloDot:
 					nCntDeloDot := nCntDeloDot - 1;
 				E_ObjectType.OBJECTTYPE_Exposure:
@@ -1942,7 +1943,9 @@ END_VAR
       <LineId Id="11452" Count="11" />
       <LineId Id="10884" Count="12" />
       <LineId Id="11449" Count="0" />
-      <LineId Id="10898" Count="138" />
+      <LineId Id="10898" Count="93" />
+      <LineId Id="11512" Count="0" />
+      <LineId Id="10992" Count="44" />
       <LineId Id="11480" Count="0" />
       <LineId Id="11482" Count="11" />
       <LineId Id="11037" Count="112" />

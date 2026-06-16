@@ -1,16 +1,16 @@
 ﻿<?xml version="1.0" encoding="utf-8"?>
-<TcPlcObject Version="1.1.0.1" ProductVersion="3.1.4024.5">
-  <Task Name="GCodeTask" Id="{0c962932-bdbb-4adc-989c-452ef4937fe2}">
+<TcPlcObject Version="1.1.0.1" ProductVersion="3.1.4022.18">
+  <Task Name="GCodeTask" Id="{e0261d46-6a00-4419-8363-80b1512845dc}">
     <!--CycleTime in micro seconds.-->
     <CycleTime>2000</CycleTime>
     <Priority>6</Priority>
     <PouCall>
       <Name>GCode</Name>
     </PouCall>
-    <TaskFBGuid>{171b9674-d0a8-4688-94f6-0f154d2e0014}</TaskFBGuid>
-    <Fb_init>{7822df14-2e82-4959-bc80-826f80f08e29}</Fb_init>
-    <Fb_exit>{89ec56f7-db39-4921-8f77-29ca2daa382a}</Fb_exit>
-    <CycleUpdate>{508debab-989a-49c4-9323-86f39157f5ff}</CycleUpdate>
-    <PostCycleUpdate>{7879dbc2-5685-4f56-81fb-a4e010ac157e}</PostCycleUpdate>
+    <TaskFBGuid>{fe1b0839-6969-4ede-80c2-7a3d67ab4577}</TaskFBGuid>
+    <Fb_init>{cb5df9dc-b291-4a21-a575-f69db4228284}</Fb_init>
+    <Fb_exit>{a713429f-115c-42c9-a4d2-517a643556ea}</Fb_exit>
+    <CycleUpdate>{95be54af-b9f1-4ae0-b5dc-417e2bf689ca}</CycleUpdate>
+    <PostCycleUpdate>{dc8497bb-f7c8-4952-9b80-4dde83f59709}</PostCycleUpdate>
   </Task>
 </TcPlcObject>

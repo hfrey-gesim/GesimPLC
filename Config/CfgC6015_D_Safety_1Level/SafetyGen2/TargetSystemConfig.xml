@@ -1,0 +1,22 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<TargetSystemConfig Crc="865281768" Version="1.5">
+  <TargetSystemType>HSafetyPLC</TargetSystemType>
+  <TargetSystemSubType>EL1918</TargetSystemSubType>
+  <IsExternalDevice>false</IsExternalDevice>
+  <TargetSystemObjectId>50462739</TargetSystemObjectId>
+  <TargetSystemObjectName>-KL07 (EL1918)</TargetSystemObjectName>
+  <SoftwareVersion />
+  <SerialNumber />
+  <ProjectCRC>56465</ProjectCRC>
+  <MapProjectCRC>false</MapProjectCRC>
+  <MapSerialNumber>false</MapSerialNumber>
+  <VersionNumber>1</VersionNumber>
+  <FSOEAddress>1</FSOEAddress>
+  <DipSwitch />
+  <AmsNetID>192.168.135.178.4.1</AmsNetID>
+  <AmsPort>1002</AmsPort>
+  <ConnectionInfoDataConfigOld>false</ConnectionInfoDataConfigOld>
+  <TakeOverSafetyAliasDeviceNamesInProcessImage>false</TakeOverSafetyAliasDeviceNamesInProcessImage>
+  <TakeOverStandardAliasDeviceNamesInProcessImage>false</TakeOverStandardAliasDeviceNamesInProcessImage>
+  <BackupRestore Needed="0" Activated="false" RestoreUserAdministration="false" />
+</TargetSystemConfig>
