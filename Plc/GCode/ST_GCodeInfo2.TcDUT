@@ -3,7 +3,7 @@
   <DUT Name="ST_GCodeInfo2" Id="{1efabd5d-a247-4244-a5b2-5bcc9fd05d41}">
     <Declaration><![CDATA[TYPE ST_GCodeInfo2 :
 STRUCT
-		nTargetObjId	: UINT;
+		nTargetObjId			: UINT;		//Für mehrere Slides auf dem Target: beim GCode Start soll richtiges Target ausgewählt werden -> Target über OBJId identifiziert
 END_STRUCT
 END_TYPE
 ]]></Declaration>

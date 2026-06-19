@@ -1,5 +1,5 @@
 ﻿<?xml version="1.0" encoding="utf-8"?>
-<TcPlcObject Version="1.1.0.1" ProductVersion="3.1.4024.5">
+<TcPlcObject Version="1.1.0.1" ProductVersion="3.1.4024.15">
   <POU Name="FB_MoveToTarget" Id="{da24ea00-29e7-4073-8e13-4fd7c0055be0}" SpecialFunc="None">
     <Declaration><![CDATA[FUNCTION_BLOCK FB_MoveToTarget
 VAR_INPUT
@@ -28,16 +28,17 @@ VAR
 	bSuppressMoveFree	: BOOL;
 	pCoHead				: POINTER TO FB_MzHead;
 	
-	eTargetRef			: E_TargetRef;
-	nCol				: UINT;
-	nRow				: UINT;
-	nArrayNr			: USINT;
-	nSpeedX				: DINT;
-	nSpeedY				: DINT;
-	nSpeedZ				: DINT;
-	stOffset			: ST_3DPoint;
-	nZLevel				: USINT;
-	stActionData		: ST_ActionData;
+	eTargetRef				: E_TargetRef;
+	nCol					: UINT;
+	nRow					: UINT;
+	nArrayNr				: USINT;
+	nSpeedX					: DINT;
+	nSpeedY					: DINT;
+	nSpeedZ					: DINT;
+	stOffset				: ST_3DPoint;
+	nZLevel					: USINT;
+	nIgnoreSlideAlignment	: USINT;
+	stActionData			: ST_ActionData;
 END_VAR]]></Declaration>
     <Implementation>
       <ST><![CDATA[IF bExecute THEN
@@ -317,6 +318,7 @@ stOffset.X := DINT_TO_REAL(refActionData.aParams[8]);
 stOffset.Y := DINT_TO_REAL(refActionData.aParams[9]);
 stOffset.Z := DINT_TO_REAL(refActionData.aParams[10]);
 nZLevel := DINT_TO_USINT(refActionData.aParams[11]);
+nIgnoreSlideAlignment := DINT_TO_USINT(refActionData.aParams[12]);
 
 IF NOT fbObjectDirectory.M_ObjIsMzTool(refActionData.nObject) THEN //Object gültiges MzTool?
 	M_SetAndCheckParams := E_ErrorIdCmd.ERRORID_UnsuitableObject;  //Error
@@ -347,6 +349,7 @@ stPosition := pTarget^.M_GetAbsPos(pChildPos:= 0, eTargetRef:= eTargetRef,
 									nParam1:= nCol,
 									nParam2:= nRow,
 									nParam3:= nArrayNr,
+									nParam4:= nIgnoreSlideAlignment,
 									nZLevel:= nZLevel, nErrorId=> nErrorId);									
 									
 IF nErrorId > 0 THEN
@@ -424,7 +427,11 @@ pParamsChecked := TRUE;]]></ST>
       <LineId Id="2" Count="0" />
     </LineIds>
     <LineIds Name="FB_MoveToTarget.M_SetAndCheckParams">
-      <LineId Id="244" Count="114" />
+      <LineId Id="244" Count="15" />
+      <LineId Id="372" Count="0" />
+      <LineId Id="260" Count="29" />
+      <LineId Id="371" Count="0" />
+      <LineId Id="290" Count="68" />
       <LineId Id="2" Count="0" />
     </LineIds>
   </POU>

@@ -413,7 +413,7 @@ ELSIF nActionState = 2 THEN
 	//MoveXY
 	IF pArray^.M_GetNextArrayIndex(eOrder:= eActOnArrayOrder, nStartCol:= nTargetCol,nStartRow:= nTargetRow,
 									nCol=>nTargetCol,nRow=>nTargetRow) THEN
-		stPoint1 := pArray^.M_GetAbsPos(pChildPos:= 0, E_TargetRef.TARGETREF_TwoDimArray,nTargetCol,nTargetRow,0,0);
+		stPoint1 := pArray^.M_GetAbsPos(pChildPos:= 0, E_TargetRef.TARGETREF_TwoDimArray,nTargetCol,nTargetRow,0,0,0);
 		nActionState := 3;
 		MEMSET(ADR(stActionData),0,SIZEOF(stActionData));
 		stActionData.eAction := E_Action.ACTION_MoveXY;
@@ -478,7 +478,7 @@ END_IF
 IF nActionState = 7 THEN
 	//Hier entscheiden, ob ZMove erforderlich ist
 	//Falls ZDistanceRelease > 0, dann MoveZ relativ
-	stPoint1 := pArray^.M_GetAbsPos(0,E_TargetRef.TARGETREF_TwoDimArray,nTargetCol,nTargetRow,0,0);
+	stPoint1 := pArray^.M_GetAbsPos(0,E_TargetRef.TARGETREF_TwoDimArray,nTargetCol,nTargetRow,0,0,0);
 	MEMSET(ADR(stActionData),0,SIZEOF(stActionData));
 	stActionData.eAction := E_Action.ACTION_MoveZ;
 	stActionData.aParams[1] := E_MoveMode.MODE_AbsWithOffset;
@@ -495,7 +495,7 @@ END_IF
 		
 IF nActionState = 8 THEN //MoveZ auf ZOffsetRelease
 	nActionState := 9;
-	stPoint1 := pArray^.M_GetAbsPos(0, E_TargetRef.TARGETREF_TwoDimArray,nTargetCol,nTargetRow,0,0);
+	stPoint1 := pArray^.M_GetAbsPos(0, E_TargetRef.TARGETREF_TwoDimArray,nTargetCol,nTargetRow,0,0,0);
 	stActionData.eAction := E_Action.ACTION_MoveZ;
 	stActionData.aParams[1] := E_MoveMode.MODE_Relative;
 	stActionData.aParams[2] := nDistance1;
@@ -518,7 +518,7 @@ END_IF
 	
 IF nActionState = 10 THEN //MoveZ auf ZOffsetXYMove
 	nActionState := 11;
-	stPoint1 := pArray^.M_GetAbsPos(0, E_TargetRef.TARGETREF_TwoDimArray,nTargetCol,nTargetRow,0,0);
+	stPoint1 := pArray^.M_GetAbsPos(0, E_TargetRef.TARGETREF_TwoDimArray,nTargetCol,nTargetRow,0,0,0);
 	stActionData.eAction := E_Action.ACTION_MoveZ;
 	stActionData.aParams[1] := E_MoveMode.MODE_AbsWithOffset;
 	stActionData.aParams[2] := REAL_TO_DINT(stPoint1.Z) + nZOffset2;
@@ -617,8 +617,8 @@ CASE nActionState OF
 		stPoint2 := pMzTool^.P_stOffset;
 		
 		//Startposition und Endposition des X-Moves berechnen
-		stMeasPassIntersect := pTipCalibrator^.M_GetAbsPos(pChildPos:= 0, eTargetRef:= E_TargetRef.TARGETREF_SpecPoint,nParam1:= 1, nParam2:=0, nParam3:=0, nZLevel:=0);
-		stMeasCalibPoint := pTipCalibrator^.M_GetAbsPos(pChildPos:= 0, eTargetRef:= E_TargetRef.TARGETREF_SpecPoint,nParam1:= 2, nParam2:=0, nParam3:=0, nZLevel:=0);
+		stMeasPassIntersect := pTipCalibrator^.M_GetAbsPos(pChildPos:= 0, eTargetRef:= E_TargetRef.TARGETREF_SpecPoint,nParam1:= 1, nParam2:=0, nParam3:=0, nParam4:=0, nZLevel:=0);
+		stMeasCalibPoint := pTipCalibrator^.M_GetAbsPos(pChildPos:= 0, eTargetRef:= E_TargetRef.TARGETREF_SpecPoint,nParam1:= 2, nParam2:=0, nParam3:=0, nParam4:=0, nZLevel:=0);
 		stMeasStartPos := stMeasPassIntersect;
 		stMeasStartPos.X := stMeasCalibPoint.X + rMeasureDistance;
 		stMeasEndPos := stMeasPassIntersect;
@@ -2635,7 +2635,7 @@ CASE nActionState OF
 			END_IF
 		ELSIF pMzTool^.P_eObjectType = E_ObjectType.OBJECTTYPE_Luer THEN
 			//MoveXY zu WastePoint2
-			stPoint1 := pTarget^.M_GetAbsPos(pChildPos:= 0, eTargetRef:= E_TargetRef.TARGETREF_SpecPoint,nParam1 := 2,nParam2 := 0,nParam3 := 0,nZLevel:=0);
+			stPoint1 := pTarget^.M_GetAbsPos(pChildPos:= 0, eTargetRef:= E_TargetRef.TARGETREF_SpecPoint,nParam1 := 2,nParam2 := 0,nParam3 := 0, nParam4:= 0,nZLevel:=0);
 			stActionData.eAction := E_Action.ACTION_MoveXY;
 			stActionData.aParams[1] := E_MoveMode.MODE_AbsWithOffset;
 			stActionData.aParams[2] := REAL_TO_DINT(stPoint1.X); //XPos 
@@ -2699,7 +2699,7 @@ CASE nActionState OF
 		//Septum auf Target übertragen, damit mit Needle auf Oberkante SeptumWaste gefahre werden kann
 		stError.ErrorId := fbObjectDirectory.M_MoveObject(pPiece,pTarget,0);
 		IF stError.ErrorId = 0 THEN
-			stPoint1 := pTarget^.M_GetAbsPos(pChildPos:= 0, eTargetRef:= E_TargetRef.TARGETREF_Center,0,0,0,0);
+			stPoint1 := pTarget^.M_GetAbsPos(pChildPos:= 0, eTargetRef:= E_TargetRef.TARGETREF_Center,0,0,0,0,0);
 			MEMSET(ADR(stActionData),0,SIZEOF(stActionData));
 			stActionData.eAction := E_Action.ACTION_MoveZ;
 			stActionData.aParams[1] := E_MoveMode.MODE_AbsWithOffset;
@@ -2950,6 +2950,7 @@ CASE nActionState OF
 														nParam1 := UINT_TO_USINT(pPieceSlot^.nNr),
 														nParam2 := 0,
 														nParam3 := 0,
+														nParam4 := 0,
 														nZLevel := 0);
 			stPoint2 := pStampMagazine^.P_stOffsetStampDetect;														
 			stActionData.aParams[2] := REAL_TO_DINT(stPoint1.Z + stPoint2.Z);
@@ -4106,7 +4107,7 @@ CASE nActionState OF
 	
 	4:	//Eintauchen in Well
 		stPoint1 := pMtp^.M_GetAbsPos(pChildPos:= 0, eTargetRef:= E_TargetRef.TARGETREF_TwoDimArray, nParam1:= nCol, nParam2:= nRow,
-									nParam3:= 1,nZLevel:= 1);			
+									nParam3:= 1, nParam4 := 0,nZLevel:= 1);			
 		MEMSET(ADR(stActionData),0,SIZEOF(stActionData));
 		stActionData.eAction := E_Action.ACTION_MoveZ;
 		stActionData.aParams[1] := E_MoveMode.MODE_AbsWithOffset;
@@ -4256,7 +4257,7 @@ CASE nActionState OF
 		//muss kann MoveToTarget übersprungen werden
 		//Hilfreich beim Anheben der Needle auf anderes Level ohne dass vorher herausgezogen wird
 		stPoint1 := pMzTool^.P_stCurrentPosPhys;
-		stPoint2 := pTarget^.M_GetAbsPos(pChildPos:= 0, eTargetRef,nTargetCol,nTargetRow,0,0);
+		stPoint2 := pTarget^.M_GetAbsPos(pChildPos:= 0, eTargetRef,nTargetCol,nTargetRow,0,0,0);
 		IF ABS(stPoint1.X - stPoint2.X) <= 5.0 AND ABS(stPoint1.Y - stPoint2.Y) <= 5.0 THEN
 			nActionState := 3; //-> EIntauchen
 			RETURN;
@@ -4340,7 +4341,7 @@ CASE nActionState OF
 		stActionData.aParams[3] := 10000; //Speed (wird ev. überschrieben durch reduzierte Eintauchgeschwindigkeit
 		
 		IF eTargetRef = E_TargetRef.TARGETREF_Slot THEN
-			stPoint1 := pTarget^.M_GetAbsPos(pChildPos:= 0, eTargetRef,nTargetCol,0,0,0);
+			stPoint1 := pTarget^.M_GetAbsPos(pChildPos:= 0, eTargetRef,nTargetCol,0,0,0,0);
 			IF pPieceSlot^.P_pPiece > 0 THEN
 				IF pPieceSlot^.P_pPiece^.P_eObjectType = E_ObjectType.OBJECTTYPE_Vial OR pPieceSlot^.P_pPiece^.P_eObjectType = E_ObjectType.OBJECTTYPE_VialClosed THEN
 					pVial := pPieceSlot^.P_pPiece;
@@ -4365,7 +4366,7 @@ CASE nActionState OF
 				END_IF
 			END_IF
 		ELSIF eTargetRef = E_TargetRef.TARGETREF_TwoDimArray THEN
-			stPoint1 := pTarget^.M_GetAbsPos(pChildPos:= 0, eTargetRef,nTargetCol,nTargetRow,0, nInsertLevel);
+			stPoint1 := pTarget^.M_GetAbsPos(pChildPos:= 0, eTargetRef,nTargetCol,nTargetRow,0,0, nInsertLevel);
 			stActionData.aParams[2] := REAL_TO_DINT(stPoint1.Z);
 		END_IF
 		
@@ -4509,7 +4510,7 @@ CASE nActionState OF
 		
 	6:	//MoveZ-Free und ZOffset eintragen
 		nActionState := 7; 
-		stMeasCalibPoint := pTarget^.M_GetAbsPos(pChildPos:= 0, E_TargetRef.TARGETREF_SpecPoint,1,0,0, nZLevel:=0);
+		stMeasCalibPoint := pTarget^.M_GetAbsPos(pChildPos:= 0, E_TargetRef.TARGETREF_SpecPoint,1,0,0,0, nZLevel:=0);
 		stMeasCurrentPos := pStampSupport^.P_stCurrentPosPhys;
 		stMeasOffset := pPiece^.P_stOffset;
 		stMeasOffset.Z := stMeasOffset.Z + stMeasCalibPoint.Z - stMeasCurrentPos.Z;
@@ -4595,6 +4596,7 @@ CASE nActionState OF
 																		nParam1:= 2,
 																		nParam2:= 0,
 																		nParam3:= 0,
+																		nParam4:= 0,
 																		nZLevel:= 0);
 					ELSE
 						stMeasureTargetTgtPos := pTarget^.P_stAbsPosCenter;	
@@ -4754,8 +4756,8 @@ CASE nActionState OF
 		END_IF
 		
 		//Berechnung Startpos X-Direction
-		stMeasPassIntersect := pTipCalibrator^.M_GetAbsPos(pChildPos:= 0, eTargetRef:= E_TargetRef.TARGETREF_SpecPoint,nParam1:= 1, nParam2:=0, nParam3:=0, nZLevel:=0);
-		stMeasCalibPoint := pTipCalibrator^.M_GetAbsPos(pChildPos:= 0, eTargetRef:= E_TargetRef.TARGETREF_SpecPoint,nParam1:= 2, nParam2:=0, nParam3:=0, nZLevel:=0);
+		stMeasPassIntersect := pTipCalibrator^.M_GetAbsPos(pChildPos:= 0, eTargetRef:= E_TargetRef.TARGETREF_SpecPoint,nParam1:= 1, nParam2:=0, nParam3:=0, nParam4:=0, nZLevel:=0);
+		stMeasCalibPoint := pTipCalibrator^.M_GetAbsPos(pChildPos:= 0, eTargetRef:= E_TargetRef.TARGETREF_SpecPoint,nParam1:= 2, nParam2:=0, nParam3:=0, nParam4:=0, nZLevel:=0);
 		stMeasStartPos := stMeasPassIntersect;
 		stMeasStartPos.X := stMeasStartPos.X + rMeasureDistance;
 		stMeasEndPos := stMeasPassIntersect;
@@ -4812,7 +4814,7 @@ CASE nActionState OF
 					stPoint2 := pTarget^.P_stAbsPosCenter;
 					fbMeasTip.nZFeedMax := -(REAL_TO_DINT(stPoint1.Z - stPoint2.Z + stDimension.Height - pMzTool^.P_pPiece^.P_rZOverlapTool))- 5000;
 				ELSE
-					stPoint2 := pTarget^.M_GetAbsPos(pChildPos:= 0, E_TargetRef.TARGETREF_SpecPoint,2,0,0,0); //CalibPoint
+					stPoint2 := pTarget^.M_GetAbsPos(pChildPos:= 0, E_TargetRef.TARGETREF_SpecPoint,2,0,0,0,0); //CalibPoint
 					fbMeasTip.nZFeedMax := -(REAL_TO_DINT(stPoint1.Z - stPoint2.Z + 5500));
 				END_IF
 			END_IF
@@ -5104,8 +5106,8 @@ CASE nActionState OF
 		END_IF		
 		
 		//Startposition und Endposition des X-Moves berechnen
-		stMeasPassIntersect := pTipCalibrator^.M_GetAbsPos(pChildPos:= 0, eTargetRef:= E_TargetRef.TARGETREF_SpecPoint,nParam1:= 1, nParam2:=0, nParam3:=0, nZLevel:=0);
-		stMeasCalibPoint := pTipCalibrator^.M_GetAbsPos(pChildPos:= 0, eTargetRef:= E_TargetRef.TARGETREF_SpecPoint,nParam1:= 2, nParam2:=0, nParam3:=0, nZLevel:=0);
+		stMeasPassIntersect := pTipCalibrator^.M_GetAbsPos(pChildPos:= 0, eTargetRef:= E_TargetRef.TARGETREF_SpecPoint,nParam1:= 1, nParam2:=0, nParam3:=0, nParam4:=0, nZLevel:=0);
+		stMeasCalibPoint := pTipCalibrator^.M_GetAbsPos(pChildPos:= 0, eTargetRef:= E_TargetRef.TARGETREF_SpecPoint,nParam1:= 2, nParam2:=0, nParam3:=0, nParam4:=0, nZLevel:=0);
 		stMeasStartPos := stMeasPassIntersect;
 		stMeasStartPos.X := stMeasCalibPoint.X + rMeasureDistance;
 		stMeasEndPos := stMeasPassIntersect;
@@ -6580,7 +6582,7 @@ CASE nActionState OF
 			//anhand von den Args von Response wird festgelegt, ob die Werte von X,Y,Z übernommen werden sollen
 			//absolute Position (Sollposition)aus Target holen
 			stPoint1 := pTarget^.M_GetAbsPos(pChildPos:= 0, eTargetRef:= eTargetRef,
-												nParam1:= nCol, nParam2:= nRow, nParam3:= 0,nZLevel:= 0);			
+												nParam1:= nCol, nParam2:= nRow, nParam3:= 0, nParam4:= 0, nZLevel:= 0);			
 			IF stInterResponse.nArg1 = 1 THEN
 				pMzTool^.M_SetCurrentPos(1,stPoint1.X);
 				stInteractRequest.nArg1 := 1;			
@@ -9524,7 +9526,9 @@ END_VAR
       <LineId Id="1" Count="0" />
     </LineIds>
     <LineIds Name="FB_ComplexAction.A_ExchangeStamp">
-      <LineId Id="757" Count="271" />
+      <LineId Id="757" Count="87" />
+      <LineId Id="1029" Count="0" />
+      <LineId Id="845" Count="183" />
       <LineId Id="1" Count="0" />
     </LineIds>
     <LineIds Name="FB_ComplexAction.A_ExchangeTip">
@@ -9564,7 +9568,9 @@ END_VAR
       <LineId Id="1" Count="0" />
     </LineIds>
     <LineIds Name="FB_ComplexAction.A_MeasureTarget">
-      <LineId Id="287" Count="143" />
+      <LineId Id="287" Count="37" />
+      <LineId Id="431" Count="0" />
+      <LineId Id="325" Count="105" />
       <LineId Id="142" Count="0" />
     </LineIds>
     <LineIds Name="FB_ComplexAction.A_MeasureTip">

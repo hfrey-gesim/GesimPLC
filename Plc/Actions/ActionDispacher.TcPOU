@@ -1,5 +1,5 @@
 ﻿<?xml version="1.0" encoding="utf-8"?>
-<TcPlcObject Version="1.1.0.1">
+<TcPlcObject Version="1.1.0.1" ProductVersion="3.1.4024.15">
   <POU Name="ActionDispacher" Id="{3392750a-eeeb-4bea-b76f-89b1771b51a7}" SpecialFunc="None">
     <Declaration><![CDATA[PROGRAM ActionDispacher
 VAR_OUTPUT
@@ -448,7 +448,8 @@ IF refActionData.eAction > 0 AND refActionData.eAction < 50 THEN //ControlAction
 										DINT_TO_UINT(refActionData.aParams[3]),
 										refActionData.aParams[4],
 										DINT_TO_UINT(refActionData.aParams[6]),
-										DINT_TO_REAL(refActionData.aParams[7]));
+										DINT_TO_REAL(refActionData.aParams[7]),
+										DINT_TO_USINT(refActionData.aParams[8]));
 				IF M_ExeAction > 0 THEN
 					RETURN;
 				END_IF
@@ -830,7 +831,9 @@ END_VAR
       <LineId Id="5" Count="0" />
     </LineIds>
     <LineIds Name="ActionDispacher.M_ExeAction">
-      <LineId Id="691" Count="149" />
+      <LineId Id="691" Count="39" />
+      <LineId Id="856" Count="0" />
+      <LineId Id="731" Count="109" />
       <LineId Id="5" Count="0" />
     </LineIds>
     <LineIds Name="ActionDispacher.M_GetActionInfoArray">

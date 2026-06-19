@@ -14,8 +14,6 @@ VAR
 	fbItpStepOnAfterEStopEx 	: Tc2_NCI.ItpStepOnAfterEStopEx;
 	fbItpSingleBlock			: Tc2_NCI.ItpSingleBlock;
 	fbItpWriteRParams			: Tc2_NCI.ItpWriteRParamsEx;
-	fbItpEnableDefaultGCode		: Tc2_NCI.ItpEnableDefaultGCode;		//für Rotation der auszuführenden NC- Programme
-	fbItpBlockSearch			: Tc2_NCI.ItpBlockSearch;				//TODO: rauslöchen, wenn im NC Programm der R Parameter nicht mehr auf "0" gesetzt wird. 
 	fbMcPower					: Tc2_MC2.MC_Power;
 	fbAdsWrite					: ADSWRITE;
 	fbEnumFindFileEntry			: FB_EnumFindFileEntry;
@@ -613,22 +611,6 @@ CASE nStateA_Common OF
 			END_IF
 			fbItpSingleBlock(bExecuteModeChange:= FALSE, bTriggerNext:= FALSE, sNciToPlc:= GCode.stGCodeRef.sNciToPlc);
 		END_IF
-		
-		(*
-	2:  Der Funktionsbaustein ItpEnableDefaultGCode ermöglicht es, aus der SPS einen vom Anwender definierten G-Code vor dem Start jedes NC-Programms auszuführen. 
-		Das Defaultprogramm wird beim Start des eigentlichen NC-Programms vor dem geladenen Programm ausgeführt.
-		Mit diesem Funktionsbaustein ist es zum Beispiel möglich, das Koordinatensystem für alle auszuführenden NC-Programme zu drehen.
-		Der Standard-G-Code muss als „DefaultGCode<Channel-Number>.def“ im TwinCAT\CNC Verzeichnis gespeichert werden
-		fbItpEnableDefaultGCode(bUseDefaultGCode:= TRUE, bExecute:= TRUE, sNciToPlc:= GCode.stGCodeRef.sNciToPlc, tTimeOut:= T#20S);
-		IF NOT fbItpEnableDefaultGCode.bBusy THEN
-			IF fbItpEnableDefaultGCode.bErr THEN
-				stError.ErrorId := UDINT_TO_UINT(fbItpEnableDefaultGCode.nErrId);
-				nStateA_Common := 99;
-			ELSE
-				nStateA_Common := 3;	
-			END_IF
-			fbItpEnableDefaultGCode(bExecute:= FALSE, sNciToPlc:= GCode.stGCodeRef.sNciToPlc);
-		END_IF*)
 		
 	2:	//GCode-File laden (ab hier erfolgt Syntaxüberprüfung)
 		//Langes Timeout bei große Dateien erforderlich
@@ -1290,13 +1272,14 @@ END_VAR
     <Method Name="M_SetStartZeroPoint" Id="{95747826-b9b9-47e8-a614-313c264939fb}">
       <Declaration><![CDATA[METHOD M_SetStartZeroPoint : ERRORID
 VAR_INPUT
-	nTargetObjId 	: UINT;
-	eTargetRef		: E_TargetRef;
-	nCol			: UINT;
-	nRow			: UINT;
-	nZOffset		: DINT;
-	nPausePointObjId: UINT;
-	rHeight			: REAL;
+	nTargetObjId 			: UINT;
+	eTargetRef				: E_TargetRef;
+	nCol					: UINT;
+	nRow					: UINT;
+	nZOffset				: DINT;
+	nPausePointObjId		: UINT;
+	rHeight					: REAL;
+	IgnoreSlideAlignment	: USINT;
 END_VAR
 
 VAR
@@ -1310,7 +1293,7 @@ END_VAR
 	E_ObjectType.OBJECTTYPE_Point, E_ObjectType.OBJECTTYPE_Slide:
 		//als TargetRef wird hier immer Mitte angenommen
 		pTarget := fbObjectDirectory.M_GetObjPointer(nTargetObjId);
-		stGCodeRef.stStartPos := pTarget^.M_GetAbsPos(0,E_TargetRef.TARGETREF_Center,0,0,0,1,nErrorId=> M_SetStartZeroPoint);
+		stGCodeRef.stStartPos := pTarget^.M_GetAbsPos(0,E_TargetRef.TARGETREF_Center,0,0,0,IgnoreSlideAlignment,1,nErrorId=> M_SetStartZeroPoint);	
 		GCode.stInfo2.nTargetObjId := nTargetObjId;
 		
 	E_ObjectType.OBJECTTYPE_Mtp:
@@ -1320,7 +1303,7 @@ END_VAR
 			RETURN;
 		END_IF
 		pMtp := pTarget;
-		stGCodeRef.stStartPos := pMtp^.M_GetAbsPos(0,eTargetRef, nCol, nRow, 0, 1, nErrorId=> M_SetStartZeroPoint);
+		stGCodeRef.stStartPos := pMtp^.M_GetAbsPos(0,eTargetRef, nCol, nRow, 0, 1, 0, nErrorId=> M_SetStartZeroPoint);
 		IF M_SetStartZeroPoint > 0 THEN
 			RETURN;
 		END_IF
@@ -1468,15 +1451,6 @@ END_VAR
       <LineId Id="2" Count="8" />
       <LineId Id="82" Count="0" />
       <LineId Id="11" Count="17" />
-      <LineId Id="99" Count="0" />
-      <LineId Id="125" Count="0" />
-      <LineId Id="83" Count="0" />
-      <LineId Id="87" Count="0" />
-      <LineId Id="85" Count="0" />
-      <LineId Id="29" Count="0" />
-      <LineId Id="88" Count="0" />
-      <LineId Id="117" Count="7" />
-      <LineId Id="97" Count="0" />
       <LineId Id="116" Count="0" />
       <LineId Id="30" Count="10" />
       <LineId Id="47" Count="1" />

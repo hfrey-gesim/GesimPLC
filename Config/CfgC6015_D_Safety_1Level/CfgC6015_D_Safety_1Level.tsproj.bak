@@ -3753,7 +3753,7 @@ External Setpoint Generation:
 		</Motion>
 		<Plc>
 			<Project GUID="{4FFA388B-6676-4DC9-B975-45BB0E17394B}" Name="SPS1" PrjFilePath="..\..\Plc\SPS1.plcproj" TmcFilePath="..\..\Plc\SPS1.tmc" ReloadTmc="true" AmsPort="851" FileArchiveSettings="#x000e">
-				<Instance Id="#x08502000" TcSmClass="TComPlcObjDef" KeepUnrestoredLinks="2" TmcPath="..\..\Plc\SPS1.tmc" TmcHash="{986E74D6-725D-77E4-7657-BFE86735713F}">
+				<Instance Id="#x08502000" TcSmClass="TComPlcObjDef" KeepUnrestoredLinks="2" TmcPath="..\..\Plc\SPS1.tmc" TmcHash="{ABED1924-9BA2-BCB7-1847-E21D799F2662}">
 					<Name>SPS1 Instance</Name>
 					<CLSID ClassFactory="TcPlc30">{08500001-0000-0000-F000-000000000064}</CLSID>
 					<Vars VarGrpType="1">
@@ -3766,13 +3766,13 @@ External Setpoint Generation:
 					<Vars VarGrpType="2" AreaNo="1">
 						<Name>GCodeTask Outputs</Name>
 						<Var>
-							<Name>GCode.stGCodeRef.sPlcToNci</Name>
-							<Type GUID="{48415C2A-E750-483B-A619-8655B2BEA4B8}" Namespace="MC">PLCTONC_NCICHANNEL_REF</Type>
-						</Var>
-						<Var>
 							<Name>GVL_HwRefIO.bTrigger2</Name>
 							<Comment><![CDATA[genutzt von M150/M151 (GCode)]]></Comment>
 							<Type>BOOL</Type>
+						</Var>
+						<Var>
+							<Name>GCode.stGCodeRef.sPlcToNci</Name>
+							<Type GUID="{48415C2A-E750-483B-A619-8655B2BEA4B8}" Namespace="MC">PLCTONC_NCICHANNEL_REF</Type>
 						</Var>
 					</Vars>
 					<Vars VarGrpType="1" ContextId="1" AreaNo="16">
@@ -3870,7 +3870,19 @@ External Setpoint Generation:
 							<Type>BOOL</Type>
 						</Var>
 						<Var>
+							<Name>GVL_Hardware.stTipCalibrator.bXSensor</Name>
+							<Type>BOOL</Type>
+						</Var>
+						<Var>
+							<Name>GVL_Hardware.stTipCalibrator.bYSensor</Name>
+							<Type>BOOL</Type>
+						</Var>
+						<Var>
 							<Name>GVL_Hardware.aSensSysLiquidBottle</Name>
+							<Type GUID="{755E5A76-F569-BAC1-E1E5-80B674E0D8C0}">ARRAY [1..1] OF BOOL</Type>
+						</Var>
+						<Var>
+							<Name>GVL_Hardware.aSensWasteBottle</Name>
 							<Type GUID="{755E5A76-F569-BAC1-E1E5-80B674E0D8C0}">ARRAY [1..1] OF BOOL</Type>
 						</Var>
 						<Var>
@@ -4317,18 +4329,6 @@ External Setpoint Generation:
 							<Type>DINT</Type>
 						</Var>
 						<Var>
-							<Name>GVL_Hardware.stTipCalibrator.bXSensor</Name>
-							<Type>BOOL</Type>
-						</Var>
-						<Var>
-							<Name>GVL_Hardware.stTipCalibrator.bYSensor</Name>
-							<Type>BOOL</Type>
-						</Var>
-						<Var>
-							<Name>GVL_Hardware.aSensWasteBottle</Name>
-							<Type GUID="{755E5A76-F569-BAC1-E1E5-80B674E0D8C0}">ARRAY [1..1] OF BOOL</Type>
-						</Var>
-						<Var>
 							<Name>GVL_Hardware.aFbHwRefMultiPurpIO[1].nNodeState</Name>
 							<Comment><![CDATA[PDO]]></Comment>
 							<Type>USINT</Type>
@@ -4575,6 +4575,11 @@ External Setpoint Generation:
 					</Vars>
 					<Vars VarGrpType="2" ContextId="2" AreaNo="33">
 						<Name>PlcTask Outputs</Name>
+						<Var>
+							<Name>GVL_HwRefIO.bTrigger1</Name>
+							<Comment><![CDATA[genutzt von Exposer oder StampSupport]]></Comment>
+							<Type>BOOL</Type>
+						</Var>
 						<Var>
 							<Name>GVL_Hardware.aFbMultiZRef[1].aFbZAxisRef[1].stOutput.nCtrl</Name>
 							<Comment><![CDATA[PDO]]></Comment>
@@ -4906,11 +4911,6 @@ External Setpoint Generation:
 						<Var>
 							<Name>GVL_Hardware.stTipCleanerRef.bVDD5V</Name>
 							<Comment><![CDATA[Digitaler Ausgang1 5V VDD]]></Comment>
-							<Type>BOOL</Type>
-						</Var>
-						<Var>
-							<Name>GVL_HwRefIO.bTrigger1</Name>
-							<Comment><![CDATA[genutzt von Exposer oder StampSupport]]></Comment>
 							<Type>BOOL</Type>
 						</Var>
 						<Var>

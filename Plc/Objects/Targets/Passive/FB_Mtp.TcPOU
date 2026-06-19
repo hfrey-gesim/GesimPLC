@@ -1,5 +1,5 @@
 ﻿<?xml version="1.0" encoding="utf-8"?>
-<TcPlcObject Version="1.1.0.1" ProductVersion="3.1.4024.9">
+<TcPlcObject Version="1.1.0.1" ProductVersion="3.1.4024.15">
   <POU Name="FB_Mtp" Id="{5eedb9fc-ae80-434a-bb73-5abb37451a20}" SpecialFunc="None">
     <Declaration><![CDATA[{attribute 'enable_dynamic_creation'}
 FUNCTION_BLOCK FB_Mtp EXTENDS FB_Array
@@ -113,7 +113,7 @@ ELSIF nZLevel = 1 THEN //WorkPos
 	//stTempPoint := M_GetAbsPoint(eTargetRef:= E_TargetRef.TARGETREF_TwoDimArray, nParam1:= 1, nParam2:= 1, nParam3:= 0, nZLevel:= 0, nErrorId=> nErrorId);
 	//hier stellt sich die Frage, wie der Offset angegeben wird falls das Parent verdreht ist
 	//vorerst wird das nicht beachtet, da momentan nur Slides gedreht werden
-	stTempPoint := M_GetAbsPos(pchildPos:= 0 ,eTargetRef:= E_TargetRef.TARGETREF_TwoDimArray, nParam1:= 1, nParam2:= 1, nParam3:= 0, nZLevel:= 0(*, nErrorId=> nErrorId*));
+	stTempPoint := M_GetAbsPos(pchildPos:= 0 ,eTargetRef:= E_TargetRef.TARGETREF_TwoDimArray, nParam1:= 1, nParam2:= 1, nParam3:= 0, nParam4:= 0, nZLevel:= 0(*, nErrorId=> nErrorId*));
 	rWellDepth :=  stTempPoint.Z - stAbsPos.Z;
 END_IF]]></ST>
       </Implementation>
@@ -141,6 +141,7 @@ VAR_INPUT
 	nParam1		: UINT;
  	nParam2		: UINT;
 	nParam3		: USINT;
+	nParam4		: USINT;
 	nZLevel		: USINT;
 END_VAR
 VAR_OUTPUT
@@ -178,7 +179,7 @@ END_VAR
 	
 	M_GetAbsPos := pParentTarget^.M_GetAbsPos(pChildPos := ADR(stLocPosLB), eTargetRef:= E_TargetRef.TARGETREF_LeftBottom,
 													nParam1:= 0,
-													nParam2:= 0, nParam3:= 0,nZLevel:= 0,
+													nParam2:= 0, nParam3:= 0, nParam4:= 0, nZLevel:= 0,
 													lrAngle => lrAngle, nErrorId=> nErrorId);
 													
 ELSIF eTargetRef = E_TargetRef.TARGETREF_SequParaToArrayItem THEN
@@ -205,7 +206,7 @@ ELSIF eTargetRef = E_TargetRef.TARGETREF_SequParaToArrayItem THEN
 		
 		M_GetAbsPos := pParentTarget^.M_GetAbsPos(pChildPos := ADR(stLocPosLB), eTargetRef:= E_TargetRef.TARGETREF_LeftBottom,
 														nParam1:= 0,
-														nParam2:= 0, nParam3:= 0,nZLevel:= 0,
+														nParam2:= 0, nParam3:= 0, nParam4:= 0, nZLevel:= 0,
 														lrAngle => lrAngle, nErrorId=> nErrorId);		
 	ELSE
 		nErrorId := E_ErrorIdCmd.ERRORID_InvalidArrayItem;
@@ -213,7 +214,7 @@ ELSIF eTargetRef = E_TargetRef.TARGETREF_SequParaToArrayItem THEN
 ELSE
 	M_GetAbsPos := SUPER^.M_GetAbsPos(pChildPos := pChildPos, eTargetRef:= eTargetRef,
 													nParam1:= nParam1,
-													nParam2:= nParam2, nParam3:= nParam3, nZLevel:= nZLevel,
+													nParam2:= nParam2, nParam3:= nParam3, nParam4:= 0, nZLevel:= nZLevel,
 													lrAngle => lrAngle, nErrorId=> nErrorId);		
 END_IF]]></ST>
       </Implementation>
@@ -271,7 +272,7 @@ END_VAR]]></Declaration>
 //Alle Wells durchlaufen
 FOR nCol := 1 TO nCols BY 1 DO
 	FOR nRow := 1 TO nRows BY 1 DO
-		stPoint := M_GetAbsPos(0,E_TargetRef.TARGETREF_TwoDimArray,nCol,nRow,0,0);
+		stPoint := M_GetAbsPos(0,E_TargetRef.TARGETREF_TwoDimArray,nCol,nRow,0,0,0);
 		stCircle.rX := stPoint.X;
 		stCircle.rY := stPoint.Y;
 		IF F_RectInnerCircle(stRectArea,stCircle) THEN

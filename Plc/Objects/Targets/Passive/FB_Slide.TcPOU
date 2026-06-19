@@ -8,24 +8,12 @@ END_VAR
 VAR_OUTPUT
 END_VAR
 VAR
-	///Spec-Properties TODO: rauslöschen
-	(*
-	nNoOfSpecPoints: USINT;
-	stMark1: ST_3DPoint;
-	stMark2: ST_3DPoint;
-	stMark1Act: ST_3DPoint;
-	stMark2Act: ST_3DPoint;*)
 	
 	//neue Slide Variablen
 	stMarker1Position	: ST_3DPoint;
 	stCamOffsetMarker1	: ST_3DPoint;
 	stCamOffsetMarker2	: ST_3DPoint;
-	rTargetRot			: REAL;			//Winkel * 1000
-	
-	//ALT: 
-	
-	lrAngle				: LREAL;
-	//bIsAligned			: BOOL;	
+	rTargetRot			: REAL;			//Winkel * 1000	
 END_VAR
 ]]></Declaration>
     <Implementation>
@@ -123,6 +111,7 @@ VAR_INPUT
 	nParam1		: UINT;
  	nParam2		: UINT;
 	nParam3		: USINT;
+	nParam4		: USINT;
 	nZLevel		: USINT;
 END_VAR
 VAR_OUTPUT
@@ -134,88 +123,122 @@ VAR
 	stLocPos: ST_3DPoint;
 	stLocPosAligned: ST_3DPoint;
 	stNull: ST_3DPoint;
-
-	nState_SlideGetAbsPos	: USINT;
 END_VAR
 ]]></Declaration>
       <Implementation>
-        <ST><![CDATA[(*stLocPos.Z := stLocPos.Z + stDimension.Height + rZOffset;
-CASE eTargetRef OF
-	E_TargetRef.TARGETREF_LeftBottom:
-		;
-	E_TargetRef.TARGETREF_LeftTop:
-		stLocPos.Y := stLocPos.Y + stDimension.Depth;
-	E_TargetRef.TARGETREF_RightBottom:
-		stLocPos.X := stLocPos.X + stDimension.Width;
-	E_TargetRef.TARGETREF_RightTop:
-		stLocPos.X := stLocPos.X + stDimension.Width;
-		stLocPos.Y := stLocPos.Y + stDimension.Depth;
-	E_TargetRef.TARGETREF_Center:
-		stLocPos.X := stLocPos.X + stDimension.Width / 2.0;
-		stLocPos.Y := stLocPos.Y + stDimension.Depth / 2.0;
-	(*E_TargetRef.TARGETREF_SpecPoint:
-		IF nNoOfSpecPoints = 2 THEN
-			IF nParam1 = 1 THEN	//Mark1
-				stLocPos := F_Add3DPoints(stLocPos,stMark1);
-			ELSIF nParam1 = 2 THEN	//Mark2
-				stLocPos := F_Add3DPoints(stLocPos,stMark2);
-			ELSE
-				nErrorId := E_ErrorIdCmd.ERRORID_InvalidTargetPointNr;
-			END_IF	
-		ELSE
-			nErrorId := E_ErrorIdCmd.ERRORID_InvalidTargetPointNr;	
-		END_IF*)
+        <ST><![CDATA[//Mit Alignment
+IF NOT nParam4 > 0 THEN
+	stLocPos := F_Add3DPoints(stRelPos,F_Add3DPoints(stLocPos,stCamOffsetMarker1));	//Cam Offset 1 von GUI übermittelt
+	stLocPos.Z := stLocPos.Z + stDimension.Height + rZOffset;
+	CASE eTargetRef OF
+		E_TargetRef.TARGETREF_LeftBottom:		//Gcode M_SetStartZeroPoint nimmt immer TARGETREF_LeftBottom 
+			;
+		E_TargetRef.TARGETREF_LeftTop:
+			stLocPos.Y := stLocPos.Y + stDimension.Depth ;
+		E_TargetRef.TARGETREF_RightBottom:
+			stLocPos.X := stLocPos.X + stDimension.Width;
+		E_TargetRef.TARGETREF_RightTop:
+			stLocPos.X := stLocPos.X + stDimension.Width;
+			stLocPos.Y := stLocPos.Y + stDimension.Depth;
+		E_TargetRef.TARGETREF_Center:
+			stLocPos.X := stLocPos.X + stDimension.Width / 2.0;
+			stLocPos.Y := stLocPos.Y + stDimension.Depth / 2.0;
+		
+	ELSE
+		nErrorId := E_ErrorIdCmd.ERRORID_InvalidTargetPointRef;
+	END_CASE
 	
-ELSE
-	nErrorId := E_ErrorIdCmd.ERRORID_InvalidTargetPointRef;
-END_CASE
-
-IF nErrorId > 0 THEN
-	RETURN;
-END_IF
-
-//Marker 1 Position wird noch nicht übermittelt von GUI. TODO: Wenn Übermittlung funktioniert, dann raus löschen
-stMarker1Position.X := 4500;
-stMarker1Position.Y := 4500;
-stLocPosAligned := stLocPos;
-
-IF rTargetRot <> 0  THEN	//Im Grunde müssten sich die Marken genauso drehen lassen
-	//Offset
-	lrAngle := rTargetRot/1000;
-	stLocPosAligned.X := stLocPosAligned.X + stCamOffsetMarker1.X;
-	stLocPosAligned.Y := stLocPosAligned.Y + stCamOffsetMarker1.Y;
-	//Drehen
-	stLocPosAligned := F_RotatePoint(stLocPosAligned,stNull,THIS^.lrAngle);
-END_IF
-
-stLocPos := F_Add3DPoints(stLocPos,stRelPos);
-stLocPosAligned := F_Add3DPoints(stLocPosAligned,stRelPos);
-
-IF pChildPos > 0 THEN
-	IF rTargetRot <> 0 THEN
-		pChildPos^ := F_RotatePoint(pChildPos^,stNull,THIS^.lrAngle);
+	IF nErrorId > 0 THEN
+		RETURN;
 	END_IF
 	
-	pChildPos^.X := pChildPos^.X + stLocPosAligned.X - stLocPos.X;
-	pChildPos^.Y := pChildPos^.Y + stLocPosAligned.Y - stLocPos.Y;
-
-	stLocPos.X := pChildPos^.X + stLocPos.X;
-	stLocPos.Y := pChildPos^.Y + stLocPos.Y;
-	stLocPos.Z := pChildPos^.Z + stLocPos.Z;
-ELSE
-	stLocPos := stLocPosAligned;
+	
+	stLocPosAligned := stLocPos;
+	
+	IF rTargetRot <> 0 THEN	
+		//Drehen
+		stLocPosAligned := F_RotatePoint(stLocPosAligned,F_Add3DPoints(stMarker1Position,stCamOffsetMarker1),rTargetRot/1000);
+	END_IF
+	
+	
+	IF pChildPos > 0 THEN
+			lrAngle := rTargetRot/1000;
+		//IF THIS^.rTargetRot <> 0 THEN
+			pChildPos^ := F_RotatePoint(pChildPos^,stNull,rTargetRot/1000);
+			//END_IF
+			pChildPos^.X := pChildPos^.X + stLocPosAligned.X -stLocPos.X;
+			pChildPos^.Y := pChildPos^.Y + stLocPosAligned.Y -stLocPos.Y;
+		
+		stLocPos.X := pChildPos^.X + stLocPos.X;
+		stLocPos.Y := pChildPos^.Y + stLocPos.Y;
+		stLocPos.Z := pChildPos^.Z + stLocPos.Z;	
+		
+	ELSE
+		stLocPos := stLocPosAligned;
+	END_IF
+	ELSE
+	//Alignment ignorieren
+	stLocPos := F_Sub3DPoints(stRelPos,stLocPos);	//Cam Offset 1 von GUI übermittelt
+	stLocPos.Z := stLocPos.Z + stDimension.Height + rZOffset;
+	CASE eTargetRef OF
+		E_TargetRef.TARGETREF_LeftBottom:		//Gcode M_SetStartZeroPoint nimmt immer TARGETREF_LeftBottom 
+			;
+		E_TargetRef.TARGETREF_LeftTop:
+			stLocPos.Y := stLocPos.Y + stDimension.Depth ;
+		E_TargetRef.TARGETREF_RightBottom:
+			stLocPos.X := stLocPos.X + stDimension.Width;
+		E_TargetRef.TARGETREF_RightTop:
+			stLocPos.X := stLocPos.X + stDimension.Width;
+			stLocPos.Y := stLocPos.Y + stDimension.Depth;
+		E_TargetRef.TARGETREF_Center:
+			stLocPos.X := stLocPos.X + stDimension.Width / 2.0;
+			stLocPos.Y := stLocPos.Y + stDimension.Depth / 2.0;
+		
+	ELSE
+		nErrorId := E_ErrorIdCmd.ERRORID_InvalidTargetPointRef;
+	END_CASE
+	
+	IF nErrorId > 0 THEN
+		RETURN;
+	END_IF
+	
+	
+	stLocPosAligned := stLocPos;
+	
+	IF rTargetRot <> 0 THEN	
+		//Drehen
+		//stLocPosAligned := F_RotatePoint(stLocPosAligned,F_Add3DPoints(stMarker1Position,stCamOffsetMarker1),-rTargetRot/1000);
+	END_IF
+	
+	
+	IF pChildPos > 0 THEN
+			lrAngle := rTargetRot/1000;
+		//IF THIS^.rTargetRot <> 0 THEN
+			//pChildPos^ := F_RotatePoint(pChildPos^,stNull,-rTargetRot/1000);
+			//END_IF
+			pChildPos^.X := pChildPos^.X + stLocPosAligned.X -stLocPos.X;
+			pChildPos^.Y := pChildPos^.Y + stLocPosAligned.Y -stLocPos.Y;
+		
+		stLocPos.X := pChildPos^.X + stLocPos.X;
+		stLocPos.Y := pChildPos^.Y + stLocPos.Y;
+		stLocPos.Z := pChildPos^.Z + stLocPos.Z;	
+		
+	ELSE
+		stLocPos := stLocPosAligned;
+	END_IF
+	
 END_IF
 
 IF pParentTarget > 0 THEN
 	IF pParentSlot > 0 THEN
  		stLocPos := pParentTarget^.M_GetAbsPos(pChildPos := ADR(stLocPos), eTargetRef:= E_TargetRef.TARGETREF_Slot,
 													nParam1:= pParentSlot^.P_nNr,
-													nParam2:= 0, nParam3:= 0,nZLevel:= 0,
+													nParam2:= 0, nParam3:= 0, nParam4:= nParam4 ,nZLevel:= 0,
 													lrAngle => lrAngle, nErrorId=> nErrorId);
 	ELSE
  		stLocPos := pParentTarget^.M_GetAbsPos(pChildPos := ADR(stLocPos), eTargetRef:= E_TargetRef.TARGETREF_LeftBottom,
 													nParam1:= 0,
-													nParam2:= 0, nParam3:= 0,nZLevel:= 0,
+													nParam2:= 0, nParam3:= 0, nParam4:= nParam4, nZLevel:= 0,
 													lrAngle => lrAngle, nErrorId=> nErrorId);
 	END_IF
 END_IF
@@ -224,116 +247,6 @@ IF nErrorId > 0 THEN
 	RETURN;
 END_IF
 
-IF rTargetRot <> 0 THEN
-	lrAngle := lrAngle + THIS^.lrAngle;	
-END_IF
-
-M_GetAbsPos := stLocPos;
-*)
-
-//stLocPos := stRelPos;
-stLocPos := F_Add3DPoints(stRelPos,F_Add3DPoints(stLocPos,stCamOffsetMarker1));
-stLocPos.Z := stLocPos.Z + stDimension.Height + rZOffset;
-CASE eTargetRef OF
-	E_TargetRef.TARGETREF_LeftBottom:
-		;
-	E_TargetRef.TARGETREF_LeftTop:
-		stLocPos.Y := stLocPos.Y + stDimension.Depth ;
-	E_TargetRef.TARGETREF_RightBottom:
-		stLocPos.X := stLocPos.X + stDimension.Width;
-	E_TargetRef.TARGETREF_RightTop:
-		stLocPos.X := stLocPos.X + stDimension.Width;
-		stLocPos.Y := stLocPos.Y + stDimension.Depth;
-	E_TargetRef.TARGETREF_Center:
-		stLocPos.X := stLocPos.X + stDimension.Width / 2.0;
-		stLocPos.Y := stLocPos.Y + stDimension.Depth / 2.0;
-		(*
-	E_TargetRef.TARGETREF_SpecPoint:
-		IF nNoOfSpecPoints = 2 THEN
-			IF nParam1 = 1 THEN	//Mark1
-				stLocPos := F_Add3DPoints(stLocPos,stMark1);
-			ELSIF nParam1 = 2 THEN	//Mark2
-				stLocPos := F_Add3DPoints(stLocPos,stMark2);
-			ELSE
-				nErrorId := E_ErrorIdCmd.ERRORID_InvalidTargetPointNr;
-			END_IF	
-		ELSE
-			nErrorId := E_ErrorIdCmd.ERRORID_InvalidTargetPointNr;	
-		END_IF*)
-	
-ELSE
-	nErrorId := E_ErrorIdCmd.ERRORID_InvalidTargetPointRef;
-END_CASE
-
-IF nErrorId > 0 THEN
-	RETURN;
-END_IF
-
-
-stLocPosAligned := stLocPos;
-
-
-//Marker 1 Position wird noch nicht übermittelt von GUI. TODO: Wenn Übermittlung funktioniert, dann raus löschen
-stMarker1Position.X := 4500;
-stMarker1Position.Y := 4500;
-
-IF rTargetRot <> 0 THEN	//Im Grunde müssten sich die Marken genauso drehen lassen
-	//Offset
-	//stLocPosAligned.X := stLocPosAligned.X - stCamOffsetMarker1.X;	
-	//stLocPosAligned.Y := stLocPosAligned.Y - stCamOffsetMarker1.Y;
-	//Drehen
-	stLocPosAligned := F_RotatePoint(stLocPosAligned,F_Add3DPoints(stMarker1Position,stCamOffsetMarker1),rTargetRot/1000);
-END_IF
-
-//stLocPos := F_Add3DPoints(stLocPos,stRelPos);
-//stLocPosAligned := F_Add3DPoints(stLocPosAligned,stRelPos);
-
-IF pChildPos > 0 THEN
-		lrAngle := rTargetRot/1000;
-	//IF THIS^.rTargetRot <> 0 THEN
-		pChildPos^ := F_RotatePoint(pChildPos^,stNull,rTargetRot/1000);
-		//END_IF
-		pChildPos^.X := pChildPos^.X + stLocPosAligned.X -stLocPos.X;
-		pChildPos^.Y := pChildPos^.Y + stLocPosAligned.Y -stLocPos.Y;
-	
-	stLocPos.X := pChildPos^.X + stLocPos.X;
-	stLocPos.Y := pChildPos^.Y + stLocPos.Y;
-	stLocPos.Z := pChildPos^.Z + stLocPos.Z;
-	(*ELSE
-	pChildPos^.X := pChildPos^.X + stLocPosAligned.X - stLocPos.X;
-	pChildPos^.Y := pChildPos^.Y + stLocPosAligned.Y - stLocPos.Y;
-
-	stLocPos.X := pChildPos^.X + stLocPos.X;
-	stLocPos.Y := pChildPos^.Y + stLocPos.Y;
-	stLocPos.Z := pChildPos^.Z + stLocPos.Z;*)
-
-	
-	
-ELSE
-	stLocPos := stLocPosAligned;
-END_IF
-
-IF pParentTarget > 0 THEN
-	IF pParentSlot > 0 THEN
- 		stLocPos := pParentTarget^.M_GetAbsPos(pChildPos := ADR(stLocPos), eTargetRef:= E_TargetRef.TARGETREF_Slot,
-													nParam1:= pParentSlot^.P_nNr,
-													nParam2:= 0, nParam3:= 0,nZLevel:= 0,
-													lrAngle => lrAngle, nErrorId=> nErrorId);
-	ELSE
- 		stLocPos := pParentTarget^.M_GetAbsPos(pChildPos := ADR(stLocPos), eTargetRef:= E_TargetRef.TARGETREF_LeftBottom,
-													nParam1:= 0,
-													nParam2:= 0, nParam3:= 0,nZLevel:= 0,
-													lrAngle => lrAngle, nErrorId=> nErrorId);
-	END_IF
-END_IF
-
-IF nErrorId > 0 THEN
-	RETURN;
-END_IF
-(*
-IF bIsAligned THEN
-	lrAngle := lrAngle + THIS^.lrAngle;	
-END_IF*)
 
 M_GetAbsPos := stLocPos;
 
@@ -364,11 +277,11 @@ END_VAR
 	nCurrentPropIndex := nCurrentPropIndex + 1;                                 	
 	refCmdData.n32Data[nCurrentPropIndex] := REAL_TO_DINT(stDimension.Height);		//7
 	nCurrentPropIndex := nCurrentPropIndex + 1;                                 	
-	refCmdData.n32Data[nCurrentPropIndex] := REAL_TO_DINT(rFreeHeight);				//8
+	refCmdData.n32Data[nCurrentPropIndex] := REAL_TO_DINT(rZOffset);				//8
 	nCurrentPropIndex := nCurrentPropIndex + 1;                                 	
-	refCmdData.n32Data[nCurrentPropIndex] := REAL_TO_DINT(rZOffset);				//9
+	refCmdData.n32Data[nCurrentPropIndex] := REAL_TO_DINT(stMarker1Position.X );	//9
 	nCurrentPropIndex := nCurrentPropIndex + 1;                                 	
-	refCmdData.n32Data[nCurrentPropIndex] := REAL_TO_DINT(stMarker1Position.X);		//10
+	refCmdData.n32Data[nCurrentPropIndex] := REAL_TO_DINT(stMarker1Position.Y);		//10
 	nCurrentPropIndex := nCurrentPropIndex + 1;
 	refCmdData.n32Data[nCurrentPropIndex] := REAL_TO_DINT(stCamOffsetMarker1.X);	//11
 	nCurrentPropIndex := nCurrentPropIndex + 1;
@@ -379,23 +292,7 @@ END_VAR
 	refCmdData.n32Data[nCurrentPropIndex] := REAL_TO_DINT(rTargetRot);				//14
 	nCurrentPropIndex := nCurrentPropIndex + 1;                                 
 	refCmdData.n32Data[nCurrentPropIndex] := REAL_TO_DINT(stCamOffsetMarker2.X);	//15
-(*
-refCmdData.n32Data[nCurrentPropIndex] := nNoOfSpecPoints;
-IF nNoOfSpecPoints = 2 THEN
-	nCurrentPropIndex := nCurrentPropIndex + 1;
-	refCmdData.n32Data[nCurrentPropIndex] := REAL_TO_DINT(stMark1.X);
-	nCurrentPropIndex := nCurrentPropIndex + 1;
-	refCmdData.n32Data[nCurrentPropIndex] := REAL_TO_DINT(stMark1.Y);
-	nCurrentPropIndex := nCurrentPropIndex + 1;
-	refCmdData.n32Data[nCurrentPropIndex] := REAL_TO_DINT(stMark1.Z);		
-	nCurrentPropIndex := nCurrentPropIndex + 1;
-	refCmdData.n32Data[nCurrentPropIndex] := REAL_TO_DINT(stMark2.X);
-	nCurrentPropIndex := nCurrentPropIndex + 1;
-	refCmdData.n32Data[nCurrentPropIndex] := REAL_TO_DINT(stMark2.Y);
-	nCurrentPropIndex := nCurrentPropIndex + 1;
-	refCmdData.n32Data[nCurrentPropIndex] := REAL_TO_DINT(stMark2.Z);		
-END_IF
-*)
+
 ]]></ST>
       </Implementation>
     </Method>
@@ -453,17 +350,20 @@ IF rTemp <> stDimension.Height THEN
 	bFlag := TRUE;
 END_IF
 nCurrentPropIndex := nCurrentPropIndex + 1;	//8
-rFreeHeight := DINT_TO_REAL(refCmdData.n32Data[nCurrentPropIndex]);
-
-nCurrentPropIndex := nCurrentPropIndex + 1;	//9
 rZOffset := DINT_TO_REAL(refCmdData.n32Data[nCurrentPropIndex]);
-//nNoOfProps := nCurrentPropIndex + 3;
 
 //Marker-Points
-nCurrentPropIndex := nCurrentPropIndex + 1;	//10
+nCurrentPropIndex := nCurrentPropIndex + 1;	//9
 rTemp := DINT_TO_REAL(refCmdData.n32Data[nCurrentPropIndex]);
 IF rTemp <> stMarker1Position.X THEN
 	stMarker1Position.X := rTemp;
+	bFlag := TRUE;
+END_IF
+
+nCurrentPropIndex := nCurrentPropIndex + 1;	//10
+rTemp := DINT_TO_REAL(refCmdData.n32Data[nCurrentPropIndex]);
+IF rTemp <> stMarker1Position.Y THEN
+	stMarker1Position.Y := rTemp;
 	bFlag := TRUE;
 END_IF
 
@@ -501,108 +401,10 @@ IF rTemp <> stCamOffsetMarker2.X THEN
 	stCamOffsetMarker2.X := rTemp;
 	bFlag := TRUE;
 END_IF
-//Alignment-Marken
-(*
-nSpecPropIndex := nCurrentPropIndex;
-nNoOfSpecPoints := DINT_TO_USINT(refCmdData.n32Data[nCurrentPropIndex]);
-IF nNoOfSpecPoints = 0 THEN
-	;
-ELSIF nNoOfSpecPoints = 2 THEN
-	//Wenn sich eine Position (X oder Y) geändert hat, dann Alignment-Flag zurücksetzen
-	nCurrentPropIndex := nCurrentPropIndex + 1;
-	rTemp := DINT_TO_REAL(refCmdData.n32Data[nCurrentPropIndex]);
-	IF rTemp <> stMark1.X THEN
-		stMark1.X := rTemp;
-		bFlag := TRUE;
- 	END_IF
-	nCurrentPropIndex := nCurrentPropIndex + 1;
-	rTemp := DINT_TO_REAL(refCmdData.n32Data[nCurrentPropIndex]);
-	IF rTemp <> stMark1.Y THEN
-		stMark1.Y := rTemp;
-		bFlag := TRUE;
- 	END_IF
-	nCurrentPropIndex := nCurrentPropIndex + 1;
-	stMark1.Z := DINT_TO_REAL(refCmdData.n32Data[nCurrentPropIndex]);
-	nCurrentPropIndex := nCurrentPropIndex + 1;
-	rTemp := DINT_TO_REAL(refCmdData.n32Data[nCurrentPropIndex]);
-	IF rTemp <> stMark2.X THEN
-		stMark2.X := rTemp;
-		bFlag := TRUE;
- 	END_IF
-	nCurrentPropIndex := nCurrentPropIndex + 1;
-	rTemp := DINT_TO_REAL(refCmdData.n32Data[nCurrentPropIndex]);
-	IF rTemp <> stMark2.Y THEN
-		stMark2.Y := rTemp;
-		bFlag := TRUE;
- 	END_IF
-	nCurrentPropIndex := nCurrentPropIndex + 1;
-	stMark2.Z := DINT_TO_REAL(refCmdData.n32Data[nCurrentPropIndex]);
-	IF bFlag AND bIsAligned THEN
-		bIsAligned := FALSE;
-		lrAngle := 0.0;
-	END_IF
-ELSE
-	M_SetAllProps := E_ErrorIdObjMgmt.ERRORID_InvalidNoOfSpecPoints;
-END_IF
-*)
+
 P_pWorkplate^.P_bCalcCollisHeight := TRUE;
 
 ]]></ST>
-      </Implementation>
-    </Method>
-    <Method Name="M_SetMark1Act" Id="{834fad01-4418-45bf-b88c-d5d786bf8c4e}">
-      <Declaration><![CDATA[METHOD M_SetMark1Act	//Auskommentiert, wird nicht mehr genutzt
-VAR_INPUT
-	///ist eine absolute Position
-	stAbsPos: ST_3DPoint;
-END_VAR
-VAR
-	stLeftBottom : ST_3DPoint;
-	stNullPoint : ST_3DPoint;
-	lrAngle : LREAL;
-	bTempIsAligned : BOOL;
-END_VAR]]></Declaration>
-      <Implementation>
-        <ST><![CDATA[//Den aktuellen Wert der Marke 1 setzen
-//Dieser bezieht sich auf die untere linke Ecke
-//Bei einem erneutem Einteachen dürfte es eigentlich kein Problem auftauchen, da hier ja der eigene vorher schon berechnete Winkel
-//noch nicht beachtet wird. Das könnte man bei einem Test mal beweisen
-//doch, in der Methode M_GetAbsPos() wird die bestehende Korrektur schon mit berücksichtigt.
-//es wäre gut, wenn die Methode noch einen Parameter hätte, der bewirkt, das die eigene Korrektur nicht berücksichtigt.
-//warum nicht das bIsAligned mal kurzfristig zurücksetzen?
-(*
-bTempIsAligned := bIsAligned;
-bIsAligned := FALSE;
-stLeftBottom := M_GetAbsPos(0, E_TargetRef.TARGETREF_LeftBottom, 0, 0, 0, 0,lrAngle=>lrAngle);
-bIsAligned := bTempIsAligned;
-stMark1Act.X := stAbsPos.X - stLeftBottom.X;
-stMark1Act.Y := stAbsPos.Y - stLeftBottom.Y;
-
-//Falls das ParentTarget gedreht ist, dann muss diese Marke um den kumulierten Drehwinkel der Parents zurückgedreht werden
-stMark1Act := F_RotatePoint(stMark1Act,stNullPoint,-lrAngle);*)]]></ST>
-      </Implementation>
-    </Method>
-    <Method Name="M_SetMark2Act" Id="{f5c02cfe-44ff-4d77-afc9-a14140086438}">
-      <Declaration><![CDATA[METHOD M_SetMark2Act	//Auskommentiert, wird nicht mehr genutzt
-VAR_INPUT
-	///ist eine absolute Position
-	stAbsPos: ST_3DPoint;
-END_VAR
-VAR
-	stLeftBottom: ST_3DPoint;
-	stNullPoint : ST_3DPoint;
-	lrAngle : LREAL;
-	bTempIsAligned : BOOL;
-END_VAR]]></Declaration>
-      <Implementation>
-        <ST><![CDATA[(*bTempIsAligned := bIsAligned;
-bIsAligned := FALSE;
-stLeftBottom := M_GetAbsPos(0, E_TargetRef.TARGETREF_LeftBottom, 0, 0, 0, 0,lrAngle=>lrAngle);
-bIsAligned := bTempIsAligned;
-stMark2Act.X := stAbsPos.X - stLeftBottom.X;
-stMark2Act.Y := stAbsPos.Y - stLeftBottom.Y;
-//Falls das ParentTarget gedreht ist, dann muss diese Marke um den kumulierten Drehwinkel der Parents zurückgedreht werden
-stMark2Act := F_RotatePoint(stMark2Act,stNullPoint,-lrAngle);*)]]></ST>
       </Implementation>
     </Method>
     <Method Name="M_SetSingleProp" Id="{c5c11bee-3814-4093-9c74-828f9241e9ae}">
@@ -650,19 +452,19 @@ END_VAR]]></Declaration>
 				bFlag := TRUE;
 				P_pWorkplate^.P_bCalcCollisHeight := TRUE; 	
 			END_IF
-		8:	//FreeHeight
+		8:	//ZOffset
 			IF rTemp <> rZOffset THEN
 				rZOffset := rTemp;
 				bFlag := TRUE; 	
 			END_IF
-		9:	//ZOffset
-			IF rTemp <> rFreeHeight THEN
-				rFreeHeight := rTemp;
+		9:	//Marker1Position.X
+			IF rTemp <> stMarker1Position.X  THEN
+				stMarker1Position.X  := rTemp;
 				bFlag := TRUE; 	
 			END_IF
-		10:	//Marker1Position.X
-			IF rTemp <> stMarker1Position.X THEN
-				stMarker1Position.X := rTemp;
+		10:	//Marker1Position.Y
+			IF rTemp <> stMarker1Position.Y THEN
+				stMarker1Position.Y := rTemp;
 				bFlag := TRUE; 	
 			END_IF
 		11:	//stCamOffsetMarker1.X
@@ -704,22 +506,6 @@ ELSE
 END_IF*)]]></ST>
       </Implementation>
     </Method>
-    <Property Name="P_bIsAligned" Id="{ba0f386d-5d69-49c3-bfcb-7626f580487d}">
-      <Declaration><![CDATA[PROPERTY P_bIsAligned : BOOL
-]]></Declaration>
-      <Get Name="Get" Id="{b262d45a-211a-4742-af8c-1f625bfdd7f3}">
-        <Declaration><![CDATA[]]></Declaration>
-        <Implementation>
-          <ST><![CDATA[//P_bIsAligned := bIsAligned;]]></ST>
-        </Implementation>
-      </Get>
-      <Set Name="Set" Id="{2d9f6691-bf6c-46e1-84dc-9bca3a15456b}">
-        <Declaration><![CDATA[]]></Declaration>
-        <Implementation>
-          <ST><![CDATA[//bIsAligned := P_bIsAligned;]]></ST>
-        </Implementation>
-      </Set>
-    </Property>
     <Property Name="P_lrAbsAngle" Id="{fc6d8818-1f1e-4f74-b8ed-785bf728a881}">
       <Declaration><![CDATA[PROPERTY P_lrAbsAngle : LREAL]]></Declaration>
       <Get Name="Get" Id="{aa8a689c-0410-40f4-acf9-750142bb78b0}">
@@ -816,26 +602,31 @@ END_IF*)]]></ST>
       <LineId Id="5" Count="1" />
     </LineIds>
     <LineIds Name="FB_Slide.M_GetAbsPos">
-      <LineId Id="557" Count="33" />
-      <LineId Id="644" Count="2" />
-      <LineId Id="591" Count="4" />
-      <LineId Id="643" Count="0" />
-      <LineId Id="596" Count="46" />
-      <LineId Id="556" Count="0" />
-      <LineId Id="519" Count="0" />
+      <LineId Id="679" Count="0" />
       <LineId Id="513" Count="0" />
       <LineId Id="493" Count="0" />
       <LineId Id="534" Count="0" />
-      <LineId Id="393" Count="36" />
-      <LineId Id="491" Count="0" />
-      <LineId Id="647" Count="0" />
-      <LineId Id="490" Count="0" />
-      <LineId Id="488" Count="1" />
-      <LineId Id="430" Count="12" />
+      <LineId Id="393" Count="12" />
+      <LineId Id="419" Count="12" />
+      <LineId Id="435" Count="1" />
+      <LineId Id="670" Count="0" />
+      <LineId Id="673" Count="0" />
+      <LineId Id="437" Count="0" />
+      <LineId Id="442" Count="0" />
       <LineId Id="648" Count="0" />
       <LineId Id="443" Count="1" />
       <LineId Id="492" Count="0" />
-      <LineId Id="445" Count="42" />
+      <LineId Id="445" Count="5" />
+      <LineId Id="460" Count="3" />
+      <LineId Id="674" Count="0" />
+      <LineId Id="677" Count="0" />
+      <LineId Id="684" Count="46" />
+      <LineId Id="683" Count="0" />
+      <LineId Id="682" Count="0" />
+      <LineId Id="464" Count="0" />
+      <LineId Id="676" Count="0" />
+      <LineId Id="465" Count="16" />
+      <LineId Id="485" Count="2" />
       <LineId Id="494" Count="0" />
       <LineId Id="17" Count="0" />
     </LineIds>
@@ -852,8 +643,7 @@ END_IF*)]]></ST>
       <LineId Id="46" Count="2" />
       <LineId Id="55" Count="6" />
       <LineId Id="54" Count="0" />
-      <LineId Id="32" Count="0" />
-      <LineId Id="11" Count="15" />
+      <LineId Id="26" Count="0" />
       <LineId Id="6" Count="0" />
     </LineIds>
     <LineIds Name="FB_Slide.M_SetAllProps">
@@ -871,9 +661,11 @@ END_IF*)]]></ST>
       <LineId Id="117" Count="18" />
       <LineId Id="90" Count="0" />
       <LineId Id="94" Count="0" />
+      <LineId Id="213" Count="0" />
       <LineId Id="170" Count="2" />
-      <LineId Id="169" Count="0" />
-      <LineId Id="17" Count="1" />
+      <LineId Id="210" Count="2" />
+      <LineId Id="209" Count="0" />
+      <LineId Id="18" Count="0" />
       <LineId Id="20" Count="0" />
       <LineId Id="149" Count="3" />
       <LineId Id="148" Count="0" />
@@ -887,53 +679,14 @@ END_IF*)]]></ST>
       <LineId Id="187" Count="0" />
       <LineId Id="195" Count="5" />
       <LineId Id="194" Count="0" />
-      <LineId Id="153" Count="0" />
-      <LineId Id="147" Count="0" />
-      <LineId Id="21" Count="34" />
-      <LineId Id="136" Count="0" />
-      <LineId Id="72" Count="0" />
-      <LineId Id="57" Count="2" />
-      <LineId Id="137" Count="0" />
       <LineId Id="60" Count="0" />
       <LineId Id="138" Count="0" />
       <LineId Id="61" Count="0" />
       <LineId Id="10" Count="0" />
     </LineIds>
-    <LineIds Name="FB_Slide.M_SetMark1Act">
-      <LineId Id="44" Count="0" />
-      <LineId Id="47" Count="1" />
-      <LineId Id="50" Count="0" />
-      <LineId Id="45" Count="0" />
-      <LineId Id="52" Count="0" />
-      <LineId Id="46" Count="0" />
-      <LineId Id="67" Count="0" />
-      <LineId Id="54" Count="1" />
-      <LineId Id="23" Count="0" />
-      <LineId Id="56" Count="0" />
-      <LineId Id="25" Count="0" />
-      <LineId Id="24" Count="0" />
-      <LineId Id="41" Count="0" />
-      <LineId Id="51" Count="0" />
-      <LineId Id="31" Count="0" />
-    </LineIds>
-    <LineIds Name="FB_Slide.M_SetMark2Act">
-      <LineId Id="37" Count="0" />
-      <LineId Id="36" Count="0" />
-      <LineId Id="13" Count="0" />
-      <LineId Id="38" Count="0" />
-      <LineId Id="14" Count="1" />
-      <LineId Id="5" Count="0" />
-      <LineId Id="25" Count="0" />
-    </LineIds>
     <LineIds Name="FB_Slide.M_SetSingleProp">
       <LineId Id="203" Count="85" />
       <LineId Id="6" Count="0" />
-    </LineIds>
-    <LineIds Name="FB_Slide.P_bIsAligned.Get">
-      <LineId Id="2" Count="0" />
-    </LineIds>
-    <LineIds Name="FB_Slide.P_bIsAligned.Set">
-      <LineId Id="2" Count="0" />
     </LineIds>
     <LineIds Name="FB_Slide.P_lrAbsAngle.Get">
       <LineId Id="3" Count="1" />
