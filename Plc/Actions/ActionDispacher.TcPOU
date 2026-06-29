@@ -454,7 +454,7 @@ IF refActionData.eAction > 0 AND refActionData.eAction < 50 THEN //ControlAction
 					RETURN;
 				END_IF
 				//übergebene SequenceIds checken
-				FOR i := 8 TO 12 BY 1 DO
+				FOR i := 9 TO 13 BY 1 DO
 					IF refActionData.aParams[i] > 0 THEN
 						IF fbSequenceList.M_Get(DINT_TO_UDINT(refActionData.aParams[i])) = 0 THEN
 							M_ExeAction := E_ErrorIdCmd.ERRORID_SequenceNotExists;
@@ -462,7 +462,7 @@ IF refActionData.eAction > 0 AND refActionData.eAction < 50 THEN //ControlAction
 						END_IF
 					END_IF
 				END_FOR
-				GCode.M_SetSequenceIds(ADR(refActionData.aParams[8]));
+				GCode.M_SetSequenceIds(ADR(refActionData.aParams[9]));
 				
 				sGCodeFileNumber := DINT_TO_STRING(refActionData.aParams[5]);
 				GCode.M_Start(sGCodeFileNumber);
@@ -470,6 +470,7 @@ IF refActionData.eAction > 0 AND refActionData.eAction < 50 THEN //ControlAction
 				M_ExeAction := E_ErrorIdGCode.ERRORID_InvalidNciState;
 				RETURN;
 			END_IF
+		
 		E_Action.ACTION_ShiftGCodeZPos:
 			IF NOT GCode.P_bNciAvailable THEN
 				M_ExeAction := E_ErrorIdGCode.ERRORID_NciModuleNotAvailable;
@@ -833,7 +834,9 @@ END_VAR
     <LineIds Name="ActionDispacher.M_ExeAction">
       <LineId Id="691" Count="39" />
       <LineId Id="856" Count="0" />
-      <LineId Id="731" Count="109" />
+      <LineId Id="731" Count="19" />
+      <LineId Id="872" Count="0" />
+      <LineId Id="751" Count="89" />
       <LineId Id="5" Count="0" />
     </LineIds>
     <LineIds Name="ActionDispacher.M_GetActionInfoArray">

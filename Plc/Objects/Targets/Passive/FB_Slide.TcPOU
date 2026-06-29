@@ -14,6 +14,7 @@ VAR
 	stCamOffsetMarker1	: ST_3DPoint;
 	stCamOffsetMarker2	: ST_3DPoint;
 	rTargetRot			: REAL;			//Winkel * 1000	
+	rAngleCorr			: REAL;
 END_VAR
 ]]></Declaration>
     <Implementation>
@@ -117,17 +118,18 @@ END_VAR
 VAR_OUTPUT
 	nErrorId 	: ERRORID;
 	lrAngle		: LREAL;
-
 END_VAR
 VAR
 	stLocPos: ST_3DPoint;
 	stLocPosAligned: ST_3DPoint;
 	stNull: ST_3DPoint;
+
 END_VAR
 ]]></Declaration>
       <Implementation>
         <ST><![CDATA[//Mit Alignment
-IF NOT nParam4 > 0 THEN
+IF nParam4 = 0 THEN
+	rAngleCorr := 0;
 	stLocPos := F_Add3DPoints(stRelPos,F_Add3DPoints(stLocPos,stCamOffsetMarker1));	//Cam Offset 1 von GUI übermittelt
 	stLocPos.Z := stLocPos.Z + stDimension.Height + rZOffset;
 	CASE eTargetRef OF
@@ -163,9 +165,8 @@ IF NOT nParam4 > 0 THEN
 	
 	IF pChildPos > 0 THEN
 			lrAngle := rTargetRot/1000;
-		//IF THIS^.rTargetRot <> 0 THEN
 			pChildPos^ := F_RotatePoint(pChildPos^,stNull,rTargetRot/1000);
-			//END_IF
+
 			pChildPos^.X := pChildPos^.X + stLocPosAligned.X -stLocPos.X;
 			pChildPos^.Y := pChildPos^.Y + stLocPosAligned.Y -stLocPos.Y;
 		
@@ -177,9 +178,11 @@ IF NOT nParam4 > 0 THEN
 		stLocPos := stLocPosAligned;
 	END_IF
 	ELSE
-	//Alignment ignorieren
-	stLocPos := F_Sub3DPoints(stRelPos,stLocPos);	//Cam Offset 1 von GUI übermittelt
+		//Cam Offset Marker ignorieren
+		//Rotation nicht ignorieren
+		stLocPos := F_Add3DPoints(stRelPos,stLocPos);	
 	stLocPos.Z := stLocPos.Z + stDimension.Height + rZOffset;
+	rAngleCorr := -rTargetRot/1000;
 	CASE eTargetRef OF
 		E_TargetRef.TARGETREF_LeftBottom:		//Gcode M_SetStartZeroPoint nimmt immer TARGETREF_LeftBottom 
 			;
@@ -206,16 +209,16 @@ IF NOT nParam4 > 0 THEN
 	stLocPosAligned := stLocPos;
 	
 	IF rTargetRot <> 0 THEN	
-		//Drehen
-		//stLocPosAligned := F_RotatePoint(stLocPosAligned,F_Add3DPoints(stMarker1Position,stCamOffsetMarker1),-rTargetRot/1000);
+		//nicht Drehen -> TODO: löschen und testen
+		stLocPosAligned := F_RotatePoint(stLocPosAligned,stMarker1Position,0);
 	END_IF
 	
 	
 	IF pChildPos > 0 THEN
-			lrAngle := rTargetRot/1000;
-		//IF THIS^.rTargetRot <> 0 THEN
-			//pChildPos^ := F_RotatePoint(pChildPos^,stNull,-rTargetRot/1000);
-			//END_IF
+			lrAngle := 0;
+
+			pChildPos^ := F_RotatePoint(pChildPos^,stNull,0);
+
 			pChildPos^.X := pChildPos^.X + stLocPosAligned.X -stLocPos.X;
 			pChildPos^.Y := pChildPos^.Y + stLocPosAligned.Y -stLocPos.Y;
 		
@@ -226,9 +229,9 @@ IF NOT nParam4 > 0 THEN
 	ELSE
 		stLocPos := stLocPosAligned;
 	END_IF
-	
 END_IF
 
+//Parent Target
 IF pParentTarget > 0 THEN
 	IF pParentSlot > 0 THEN
  		stLocPos := pParentTarget^.M_GetAbsPos(pChildPos := ADR(stLocPos), eTargetRef:= E_TargetRef.TARGETREF_Slot,
@@ -514,7 +517,7 @@ END_VAR
 ]]></Declaration>
         <Implementation>
           <ST><![CDATA[IF pParentTarget > 0 THEN
-	P_lrAbsAngle := pParentTarget^.P_lrAbsAngle + rTargetRot/1000;
+	P_lrAbsAngle := pParentTarget^.P_lrAbsAngle + rTargetRot/1000 + rAngleCorr;
 END_IF]]></ST>
         </Implementation>
       </Get>
@@ -534,40 +537,6 @@ END_IF]]></ST>
           <ST><![CDATA[rTargetRot := P_lrAngle*1000;]]></ST>
         </Implementation>
       </Set>
-    </Property>
-    <Property Name="P_rOffsetX" Id="{1fe7a835-31f8-42c7-a085-4e07fe2efb0e}">
-      <Declaration><![CDATA[PROPERTY P_rOffsetX : REAL
-]]></Declaration>
-      <Get Name="Get" Id="{1c603615-7fbf-4ad1-b6ed-911e1925acb8}">
-        <Declaration><![CDATA[]]></Declaration>
-        <Implementation>
-          <ST><![CDATA[(*IF bIsAligned THEN
-	P_rOffsetX := stMark1Act.X - stMark1.X;
-END_IF*)]]></ST>
-        </Implementation>
-      </Get>
-    </Property>
-    <Property Name="P_rOffsetY" Id="{fa7f0748-c6aa-4535-a70b-4c0d35e8484c}">
-      <Declaration><![CDATA[PROPERTY P_rOffsetY : REAL
-]]></Declaration>
-      <Get Name="Get" Id="{5fdaa1e3-958d-4285-9953-c629f5ba1108}">
-        <Declaration><![CDATA[]]></Declaration>
-        <Implementation>
-          <ST><![CDATA[(*IF bIsAligned THEN
-	P_rOffsetY := stMark1Act.Y - stMark1.Y;
-END_IF*)]]></ST>
-        </Implementation>
-      </Get>
-    </Property>
-    <Property Name="P_stMark1" Id="{314481a6-4a9b-49c9-9deb-1c39931a181c}">
-      <Declaration><![CDATA[PROPERTY P_stMark1 : ST_3DPoint
-]]></Declaration>
-      <Get Name="Get" Id="{6822c0bd-729a-4f75-9d59-2600da50857c}">
-        <Declaration><![CDATA[]]></Declaration>
-        <Implementation>
-          <ST><![CDATA[//P_stMark1 := F_Add3DPoints(stMark1,P_stAbsPosLB);]]></ST>
-        </Implementation>
-      </Get>
     </Property>
     <LineIds Name="FB_Slide">
       <LineId Id="9" Count="0" />
@@ -602,32 +571,10 @@ END_IF*)]]></ST>
       <LineId Id="5" Count="1" />
     </LineIds>
     <LineIds Name="FB_Slide.M_GetAbsPos">
-      <LineId Id="679" Count="0" />
-      <LineId Id="513" Count="0" />
-      <LineId Id="493" Count="0" />
-      <LineId Id="534" Count="0" />
-      <LineId Id="393" Count="12" />
-      <LineId Id="419" Count="12" />
-      <LineId Id="435" Count="1" />
-      <LineId Id="670" Count="0" />
-      <LineId Id="673" Count="0" />
-      <LineId Id="437" Count="0" />
-      <LineId Id="442" Count="0" />
-      <LineId Id="648" Count="0" />
-      <LineId Id="443" Count="1" />
-      <LineId Id="492" Count="0" />
-      <LineId Id="445" Count="5" />
-      <LineId Id="460" Count="3" />
-      <LineId Id="674" Count="0" />
-      <LineId Id="677" Count="0" />
-      <LineId Id="684" Count="46" />
-      <LineId Id="683" Count="0" />
-      <LineId Id="682" Count="0" />
-      <LineId Id="464" Count="0" />
-      <LineId Id="676" Count="0" />
-      <LineId Id="465" Count="16" />
-      <LineId Id="485" Count="2" />
-      <LineId Id="494" Count="0" />
+      <LineId Id="851" Count="37" />
+      <LineId Id="890" Count="16" />
+      <LineId Id="988" Count="0" />
+      <LineId Id="907" Count="69" />
       <LineId Id="17" Count="0" />
     </LineIds>
     <LineIds Name="FB_Slide.M_GetAllProps">
@@ -696,17 +643,6 @@ END_IF*)]]></ST>
       <LineId Id="2" Count="0" />
     </LineIds>
     <LineIds Name="FB_Slide.P_lrAngle.Set">
-      <LineId Id="2" Count="0" />
-    </LineIds>
-    <LineIds Name="FB_Slide.P_rOffsetX.Get">
-      <LineId Id="3" Count="1" />
-      <LineId Id="2" Count="0" />
-    </LineIds>
-    <LineIds Name="FB_Slide.P_rOffsetY.Get">
-      <LineId Id="3" Count="1" />
-      <LineId Id="2" Count="0" />
-    </LineIds>
-    <LineIds Name="FB_Slide.P_stMark1.Get">
       <LineId Id="2" Count="0" />
     </LineIds>
   </POU>

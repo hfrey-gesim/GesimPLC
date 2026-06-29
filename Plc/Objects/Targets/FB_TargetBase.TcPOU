@@ -228,12 +228,12 @@ IF pParentTarget > 0 THEN
 	IF pParentSlot > 0 THEN
  		stLocPos := pParentTarget^.M_GetAbsPos(pChildPos := ADR(stLocPos), eTargetRef:= E_TargetRef.TARGETREF_Slot,
 													nParam1:= pParentSlot^.P_nNr,
-													nParam2:= 0, nParam3:= 0, nParam4:= 0, nZLevel:= 0, lrAngle=> lrAngle,
+													nParam2:= 0, nParam3:= 0, nParam4:= nParam4, nZLevel:= 0, lrAngle=> lrAngle,
 													nErrorId=> nErrorId);
 	ELSE
  		stLocPos := pParentTarget^.M_GetAbsPos(pChildPos := ADR(stLocPos), eTargetRef:= E_TargetRef.TARGETREF_LeftBottom,
 													nParam1:= 0,
-													nParam2:= 0, nParam3:= 0, nParam4:= 0, nZLevel:= 0, lrAngle=> lrAngle,
+													nParam2:= 0, nParam3:= 0, nParam4:= nParam4, nZLevel:= 0, lrAngle=> lrAngle,
 													nErrorId=> nErrorId);
 	END_IF
 END_IF
